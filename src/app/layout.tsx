@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
 import { LanguageProvider } from "@/components/LanguageProvider";
+import { LiffProvider } from "@/components/LiffProvider";
 import "./globals.css";
 
 const prompt = Prompt({
@@ -23,7 +24,9 @@ export default function RootLayout({
   return (
     <html lang="th" className={`${prompt.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-[family-name:var(--font-prompt)]">
-        <LanguageProvider>{children}</LanguageProvider>
+        <LiffProvider>
+          <LanguageProvider>{children}</LanguageProvider>
+        </LiffProvider>
       </body>
     </html>
   );
