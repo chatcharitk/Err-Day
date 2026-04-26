@@ -144,19 +144,42 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
   const u = UI[lang];
   const liff = useLiff();
 
-  const [step, setStep] = useState(0);
+  const STORAGE_KEY = `booking_state_${branch.id}`;
+
+  // Restore state saved before Line login redirect
+  const getSavedState = () => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      sessionStorage.removeItem(STORAGE_KEY);
+      return JSON.parse(raw);
+    } catch { return null; }
+  };
+  const saved = typeof window !== "undefined" ? getSavedState() : null;
+
+  const [step, setStep] = useState<number>(saved?.step ?? 0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(null);
-  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
-  const [noAddons, setNoAddons] = useState(false);
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(
+    saved?.serviceId ? (branchServices.find(s => s.id === saved.serviceId) ?? null) : null
+  );
+  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(
+    new Set(saved?.addonIds ?? [])
+  );
+  const [noAddons, setNoAddons] = useState<boolean>(saved?.noAddons ?? false);
+  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(
+    saved?.staffId ? (staff.find(s => s.id === saved.staffId) ?? null) : null
+  );
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    saved?.date ? new Date(saved.date) : undefined
+  );
+  const [selectedTime, setSelectedTime] = useState<string>(saved?.time ?? "");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
+  const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string }>(
+    saved?.form ?? { name: "", phone: "", email: "", notes: "" }
+  );
 
   // Auto-fill name & email from Line profile when LIFF is ready
   useEffect(() => {
@@ -598,7 +621,22 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
                   </div>
                 ) : (
                   <button
-                    onClick={liff.login}
+                    onClick={() => {
+                      // Save all booking state before Line redirects the page
+                      try {
+                        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+                          step,
+                          serviceId:  selectedService?.id,
+                          staffId:    selectedStaff?.id,
+                          date:       selectedDate?.toISOString(),
+                          time:       selectedTime,
+                          addonIds:   [...selectedAddons],
+                          noAddons,
+                          form,
+                        }));
+                      } catch { /* ignore */ }
+                      liff.login();
+                    }}
                     className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl font-medium text-white text-sm transition-opacity hover:opacity-90"
                     style={{ background: "#06C755" }}
                   >
