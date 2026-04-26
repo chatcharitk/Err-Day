@@ -75,7 +75,7 @@ export default async function CalendarPage({
       nameTh: b.service.nameTh,
       category: b.service.category,
     },
-    customer: { name: b.customer.name, phone: b.customer.phone },
+    customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
     staff: b.staff ? { id: b.staff.id, name: b.staff.name } : null,
   }));
 

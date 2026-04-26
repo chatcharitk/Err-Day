@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
@@ -15,7 +16,7 @@ interface BookingItem {
   notes: string | null;
   serviceId: string;
   service: { name: string; nameTh: string; category: string };
-  customer: { name: string; phone: string };
+  customer: { id: string; name: string; phone: string };
   staff: { id: string; name: string } | null;
 }
 interface StaffItem    { id: string; name: string }
@@ -578,8 +579,24 @@ function EditModal({
         <div className={`px-5 py-4 ${c.bg} border-b ${c.border} flex-shrink-0`}>
           <div className="flex items-start justify-between">
             <div>
-              <div className="font-bold text-sm text-gray-800">
-                {booking.customer.name} · {booking.customer.phone}
+              <div className="font-bold text-sm text-gray-800 flex items-center gap-2 flex-wrap">
+                <Link
+                  href={`/admin/customers?id=${booking.customer.id}`}
+                  className="hover:underline"
+                  style={{ color: "#8B1D24" }}
+                  title="ดูข้อมูลลูกค้า"
+                >
+                  {booking.customer.name}
+                </Link>
+                <span className="text-gray-400 font-normal">·</span>
+                <span className="font-normal text-xs text-gray-600">{booking.customer.phone}</span>
+                <Link
+                  href={`/admin/customers?id=${booking.customer.id}`}
+                  className="text-xs px-2 py-0.5 rounded-full font-medium hover:bg-blue-100 transition-colors"
+                  style={{ color: "#2563EB", border: "1px solid #BFDBFE", background: "#EFF6FF" }}
+                >
+                  ดูข้อมูลลูกค้า →
+                </Link>
               </div>
               <div className="text-xs text-gray-500 mt-0.5">
                 {(() => {

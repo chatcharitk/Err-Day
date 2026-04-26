@@ -29,7 +29,7 @@ export default async function HistoryPage() {
         branch:   { id: b.branch.id,   name: b.branch.name },
         service:  { name: b.service.name, nameTh: b.service.nameTh },
         staff:    b.staff ? { id: b.staff.id, name: b.staff.name } : null,
-        customer: { name: b.customer.name, phone: b.customer.phone },
+        customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
       }))}
       branches={branches.map(b => ({ id: b.id, name: b.name }))}
       allStaff={allStaff.map(s => ({ id: s.id, name: s.name, branchId: s.branchId }))}

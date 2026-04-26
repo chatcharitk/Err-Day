@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Pencil, X, Save, Search, ChevronDown } from "lucide-react";
+import { Pencil, X, Save, Search, ChevronDown, ExternalLink } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ interface SaleRecord {
   branch:   { id: string; name: string };
   service:  { name: string; nameTh: string };
   staff:    { id: string; name: string } | null;
-  customer: { name: string; phone: string };
+  customer: { id: string; name: string; phone: string };
 }
 
 interface Props {
@@ -160,6 +161,17 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
 
           {/* body */}
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            {/* Customer quick link */}
+            <Link
+              href={`/admin/customers?id=${sale.customer.id}`}
+              className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl hover:bg-blue-50 transition-colors"
+              style={{ border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8" }}
+              onClick={onClose}
+            >
+              <span className="text-sm font-medium">ดูข้อมูลลูกค้า: {sale.customer.name}</span>
+              <ExternalLink size={14} />
+            </Link>
+
             {/* read-only info */}
             <div className="rounded-xl p-3 text-xs space-y-1" style={{ background: BG }}>
               <p style={{ color: MUTED }}>{dateLabel}</p>
@@ -529,7 +541,14 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                         <div key={sale.id} className="px-5 py-4 flex items-start justify-between gap-4 hover:bg-amber-50/30 transition-colors">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <p className="font-semibold text-sm" style={{ color: TEXT }}>{sale.customer.name}</p>
+                              <Link
+                                href={`/admin/customers?id=${sale.customer.id}`}
+                                className="font-semibold text-sm hover:underline"
+                                style={{ color: TEXT }}
+                                title="ดูข้อมูลลูกค้า"
+                              >
+                                {sale.customer.name}
+                              </Link>
                               <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: sc.bg, color: sc.color }}>
                                 {STATUS_LABEL[sale.status] ?? sale.status}
                               </span>

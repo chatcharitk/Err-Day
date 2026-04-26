@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   UserPlus, Pencil, Search, ChevronDown, ChevronUp,
@@ -293,11 +293,15 @@ function BookingHistory({ customerId }: { customerId: string }) {
 function CustomerCard({
   customer,
   onEdit,
+  initialExpanded,
+  highlightRef,
 }: {
   customer: Customer;
   onEdit: () => void;
+  initialExpanded?: boolean;
+  highlightRef?: (el: HTMLDivElement | null) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded ?? false);
   const bg = avatarBg(customer.name);
 
   const joinDate = new Date(customer.createdAt).toLocaleDateString("th-TH", {
@@ -305,7 +309,11 @@ function CustomerCard({
   });
 
   return (
-    <div className="rounded-2xl overflow-hidden bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
+    <div
+      ref={highlightRef}
+      className="rounded-2xl overflow-hidden bg-white transition-all"
+      style={{ border: `1.5px solid ${initialExpanded ? "#8B1D24" : BORDER}` }}
+    >
       {/* main row */}
       <div className="flex items-center gap-4 px-5 py-4">
         {/* avatar */}
@@ -420,11 +428,24 @@ type SortKey = "newest" | "oldest" | "name" | "bookings";
 
 export default function CustomersManager({ customers: initial }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusId = searchParams.get("id");
+
   const [customers, setCustomers] = useState<Customer[]>(initial);
   const [showAdd,   setShowAdd]   = useState(false);
   const [editing,   setEditing]   = useState<Customer | null>(null);
   const [search,    setSearch]    = useState("");
   const [sort,      setSort]      = useState<SortKey>("newest");
+
+  // Scroll to & briefly highlight the focused customer (linked from a booking)
+  const focusCardRef = (el: HTMLDivElement | null) => {
+    if (!el) return;
+    setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.boxShadow = "0 0 0 4px rgba(139,29,36,0.15)";
+      setTimeout(() => { el.style.boxShadow = ""; }, 2000);
+    }, 100);
+  };
 
   function handleSaved(saved: Customer) {
     setCustomers(prev => {
@@ -539,6 +560,8 @@ export default function CustomersManager({ customers: initial }: Props) {
               key={c.id}
               customer={c}
               onEdit={() => setEditing(c)}
+              initialExpanded={c.id === focusId}
+              highlightRef={c.id === focusId ? focusCardRef : undefined}
             />
           ))}
         </div>
