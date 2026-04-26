@@ -10,17 +10,19 @@ import {
   History,
   UserCog,
   Scissors,
+  CreditCard,
   ArrowLeft,
 } from "lucide-react";
 
 const MENU = [
-  { href: "/admin",           labelTh: "ภาพรวม",       label: "Dashboard",    icon: LayoutDashboard, exact: true },
-  { href: "/admin/pos",       labelTh: "POS",           label: "POS",          icon: ShoppingCart },
-  { href: "/admin/calendar",  labelTh: "ปฏิทิน",       label: "Calendar",     icon: Calendar },
-  { href: "/admin/customers", labelTh: "ลูกค้า",        label: "Customers",    icon: Users },
-  { href: "/admin/history",   labelTh: "ประวัติการขาย", label: "Sales History", icon: History },
-  { href: "/admin/staff",     labelTh: "พนักงาน",       label: "Staff Mgmt.",  icon: UserCog },
-  { href: "/admin/services",  labelTh: "รายการบริการ",  label: "Services",     icon: Scissors },
+  { href: "/admin",            labelTh: "ภาพรวม",        label: "Dashboard",    icon: LayoutDashboard, exact: true },
+  { href: "/admin/pos",        labelTh: "POS",            label: "POS",          icon: ShoppingCart },
+  { href: "/admin/calendar",   labelTh: "ปฏิทิน",        label: "Calendar",     icon: Calendar },
+  { href: "/admin/customers",  labelTh: "ลูกค้า",         label: "Customers",    icon: Users },
+  { href: "/admin/history",    labelTh: "ประวัติการขาย",  label: "Sales History", icon: History },
+  { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard },
+  { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog },
+  { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors },
 ];
 
 export default function AdminSidebar() {

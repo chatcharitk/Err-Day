@@ -83,24 +83,30 @@ model Customer {
 }
 
 model MembershipTier {
-  id             String  @id @default(cuid())
-  name           String  // e.g. "Silver", "Gold", "Platinum"
-  nameTh         String  // e.g. "ซิลเวอร์", "โกลด์", "แพลทินัม"
-  minPoints      Int     // points required to reach this tier
-  discountPercent Int    @default(0) // discount % for members of this tier
-  color          String  @default("#6b7280") // UI accent color
-  isActive       Boolean @default(true)
+  id              String  @id @default(cuid())
+  name            String  // e.g. "Silver", "Gold", "Platinum"
+  nameTh          String  // e.g. "ซิลเวอร์", "โกลด์", "แพลทินัม"
+  minPoints       Int     // points required to reach this tier
+  discountPercent Int     @default(0) // discount % for members of this tier
+  color           String  @default("#6b7280") // UI accent color
+  validityDays    Int     @default(30) // days until membership expires after activation
+  maxUsages       Int     @default(0)  // 0 = unlimited discount usages
+  isActive        Boolean @default(true)
 
   memberships Membership[]
 }
 
 model Membership {
-  id         String   @id @default(cuid())
-  customerId String   @unique
-  tierId     String
-  points     Int      @default(0)
-  joinedAt   DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String    @id @default(cuid())
+  customerId    String    @unique
+  tierId        String
+  points        Int       @default(0)
+  joinedAt      DateTime  @default(now())
+  activatedAt   DateTime  @default(now()) // when discount period last started
+  expiresAt     DateTime? // null = never expires; set from activatedAt + tier.validityDays
+  usagesUsed    Int       @default(0)
+  usagesAllowed Int       @default(0) // 0 = use tier.maxUsages; override per-membership
+  updatedAt     DateTime  @updatedAt
 
   customer Customer       @relation(fields: [customerId], references: [id])
   tier     MembershipTier @relation(fields: [tierId], references: [id])

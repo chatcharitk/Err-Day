@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X } from "lucide-react";
+import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard } from "lucide-react";
 import type { Branch, BranchService, Service } from "@/generated/prisma/client";
 
 type BS = BranchService & { service: Service };
@@ -38,6 +38,8 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [lastCustomerPhone, setLastCustomerPhone] = useState<string | null>(null);
+  const [showMemberPrompt, setShowMemberPrompt] = useState(false);
 
   const categories = CATEGORY_ORDER.filter((c) =>
     branchServices.some((bs) => bs.service.category === c)
@@ -91,13 +93,17 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
         }),
       });
       if (!res.ok) throw new Error();
+      setLastCustomerPhone(customerPhone.trim() || null);
       setDone(true);
+      setShowMemberPrompt(!!customerPhone.trim());
       setTimeout(() => {
         setDone(false);
+        setShowMemberPrompt(false);
         setCart([]);
         setCustomerName("");
         setCustomerPhone("");
-      }, 2500);
+        setLastCustomerPhone(null);
+      }, 6000);
     } catch {
       setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
     } finally {
@@ -313,8 +319,19 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
             {error && <p className="text-red-500 text-xs mb-2">{error}</p>}
 
             {done ? (
-              <div className="flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: "#22c55e" }}>
-                <Check className="w-4 h-4" /> บันทึกเรียบร้อย!
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: "#22c55e" }}>
+                  <Check className="w-4 h-4" /> บันทึกเรียบร้อย!
+                </div>
+                {showMemberPrompt && lastCustomerPhone && (
+                  <a
+                    href={`/admin/customers?phone=${encodeURIComponent(lastCustomerPhone)}`}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border-2"
+                    style={{ borderColor: "#8B1D24", color: "#8B1D24", background: "white" }}
+                  >
+                    <CreditCard className="w-4 h-4" /> ลงทะเบียนสมาชิก
+                  </a>
+                )}
               </div>
             ) : (
               <button
