@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  phone     String
+  imageUrl  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff    Staff[]
+  services BranchService[]
+  bookings Booking[]
+}
+
+model Service {
+  id                     String  @id @default(cuid())
+  name                   String
+  nameTh                 String  @default("")
+  description            String?
+  descriptionTh          String?
+  imageUrl               String?
+  category               String
+  advanceBookingRequired Boolean @default(false) // e.g. hair color
+  availableFrom          String? // "HH:mm" — null = all day
+  availableTo            String? // "HH:mm"
+  memberPrice            Int?    // optional member-discounted price in satang
+  isActive               Boolean @default(true)
+
+  branches BranchService[]
+  bookings Booking[]
+}
+
+// Pivot: a service can be offered at multiple branches with different prices/durations
+model BranchService {
+  id        String  @id @default(cuid())
+  branchId  String
+  serviceId String
+  price     Int     // stored in satang (THB * 100)
+  duration  Int     // minutes
+  isActive  Boolean @default(true)
+
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([branchId, serviceId])
+}
+
+model Staff {
+  id             String  @id @default(cuid())
+  branchId       String
+  name           String
+  phone          String?
+  avatarUrl      String?
+  commissionRate Float   @default(0) // percentage, e.g. 30 = 30 %
+  isActive       Boolean @default(true)
+
+  branch   Branch    @relation(fields: [branchId], references: [id])
+  bookings Booking[]
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  name       String
+  phone      String   @unique
+  email      String?
+  lineUserId String?  @unique // reserved for Line CRM integration
+  createdAt  DateTime @default(now())
+
+  bookings   Booking[]
+  membership Membership?
+}
+
+model MembershipTier {
+  id             String  @id @default(cuid())
+  name           String  // e.g. "Silver", "Gold", "Platinum"
+  nameTh         String  // e.g. "ซิลเวอร์", "โกลด์", "แพลทินัม"
+  minPoints      Int     // points required to reach this tier
+  discountPercent Int    @default(0) // discount % for members of this tier
+  color          String  @default("#6b7280") // UI accent color
+  isActive       Boolean @default(true)
+
+  memberships Membership[]
+}
+
+model Membership {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  tierId     String
+  points     Int      @default(0)
+  joinedAt   DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer       @relation(fields: [customerId], references: [id])
+  tier     MembershipTier @relation(fields: [tierId], references: [id])
+}
+
+model ServiceAddon {
+  id       String  @id @default(cuid())
+  name     String  // English name
+  nameTh   String  // Thai name
+  price    Int     // in satang
+  isActive Boolean @default(true)
+
+  bookingAddons BookingAddon[]
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  branchId   String
+  serviceId  String
+  staffId    String?
+  customerId String
+  date       DateTime      // date of appointment
+  startTime  String        // "HH:mm"
+  endTime    String        // "HH:mm"
+  status     BookingStatus @default(PENDING)
+  notes      String?
+  totalPrice Int           // in satang
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  branch   Branch         @relation(fields: [branchId], references: [id])
+  service  Service        @relation(fields: [serviceId], references: [id])
+  staff    Staff?         @relation(fields: [staffId], references: [id])
+  customer Customer       @relation(fields: [customerId], references: [id])
+  addons   BookingAddon[]
+}
+
+model BookingAddon {
+  id        String @id @default(cuid())
+  bookingId String
+  addonId   String
+  price     Int    // snapshot at booking time
+
+  booking Booking      @relation(fields: [bookingId], references: [id])
+  addon   ServiceAddon @relation(fields: [addonId], references: [id])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
