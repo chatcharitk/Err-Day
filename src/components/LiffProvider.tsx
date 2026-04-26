@@ -3,29 +3,44 @@
 import { useEffect } from "react";
 
 /**
- * Initializes the LIFF SDK on every page.
+ * Initializes the LIFF SDK on every page and handles the OAuth redirect.
  *
- * Why this is needed:
- *   When a user logs in with Line via `liff.login()` from a deep page like
- *   /book/[branchId], Line's OAuth flow redirects the user back to the LIFF
- *   "Endpoint URL" configured in the Line console — which is the homepage
- *   (/).  The redirect URL contains `?liff.state=/book/branch-xxx&code=...`
- *   parameters.  The LIFF SDK must run `liff.init()` on this landing page
- *   to (1) exchange the OAuth code for tokens, and (2) navigate the user to
- *   the path stored in `liff.state`.
+ * After Line OAuth, the user is redirected to:
+ *   https://book.err-daysalon.com/?liff.state=/book/branch-xxx&code=...
  *
- *   By placing this provider in the root layout, *every* page in the app
- *   runs `liff.init()` on mount.  Whichever page Line redirects to, the
- *   callback completes successfully and the user lands where they intended.
+ * This component:
+ *   1. Runs `liff.init()` to exchange the auth code for tokens (stored in
+ *      localStorage so they persist across page loads).
+ *   2. Reads the `liff.state` query parameter and explicitly navigates the
+ *      user to that path using a hard redirect.  We do this manually because
+ *      LIFF SDK's built-in auto-redirect doesn't always fire correctly
+ *      inside a Next.js App Router context.
  */
 export function LiffProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
     if (!liffId) return;
 
-    import("@line/liff")
-      .then(({ default: liff }) => liff.init({ liffId }))
-      .catch((err) => console.error("LIFF init failed:", err));
+    import("@line/liff").then(async ({ default: liff }) => {
+      try {
+        await liff.init({ liffId });
+
+        // After OAuth, Line sends users to the LIFF endpoint URL with a
+        // `liff.state` query param holding the original path the user came
+        // from.  Read it and navigate the user back there.
+        const params    = new URLSearchParams(window.location.search);
+        const liffState = params.get("liff.state");
+
+        if (liffState) {
+          const targetPath = liffState.startsWith("/") ? liffState : `/${liffState}`;
+          if (window.location.pathname + window.location.search !== targetPath) {
+            window.location.replace(targetPath);
+          }
+        }
+      } catch (err) {
+        console.error("LIFF init failed:", err);
+      }
+    });
   }, []);
 
   return <>{children}</>;
