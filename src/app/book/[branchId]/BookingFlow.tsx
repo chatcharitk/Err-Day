@@ -149,6 +149,7 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [skipLine, setSkipLine] = useState(false);
 
   const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
@@ -280,6 +281,72 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
       setLoading(false);
     }
   };
+
+  // Welcome screen: show when LIFF is ready, user isn't logged in, and they haven't chosen to skip
+  const showWelcome = liff.ready && !liff.isLoggedIn && !skipLine;
+
+  if (showWelcome) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#FDF8F3" }}>
+        <div className="bg-white border-b px-6 py-4" style={{ borderColor: "#D6BCAE" }}>
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <Link href="/" className="transition-colors" style={{ color: "#6B5245" }}>
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div className="flex-1">
+              <p className="text-xs uppercase tracking-widest" style={{ color: "#D6BCAE" }}>{u.bookLabel}</p>
+              <h1 className="text-base font-medium" style={{ color: "#3B2A24" }}>{branch.name}</h1>
+            </div>
+            <button
+              onClick={toggle}
+              className="text-xs font-medium px-3 py-1 rounded-full border-2 transition-colors"
+              style={{ borderColor: "#D6BCAE", color: "#6B5245" }}
+            >
+              {lang === "th" ? "EN" : "TH"}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center px-6 py-12">
+          <div className="max-w-md w-full text-center">
+            <h2 className="text-2xl font-medium mb-3" style={{ color: "#3B2A24" }}>
+              {lang === "th" ? "ยินดีต้อนรับ" : "Welcome"}
+            </h2>
+            <p className="text-sm mb-10" style={{ color: "#A08070" }}>
+              {lang === "th"
+                ? "เข้าสู่ระบบด้วย Line เพื่อจองคิวเร็วขึ้น และรับการแจ้งเตือนผ่าน Line"
+                : "Sign in with Line for faster booking and Line notifications"}
+            </p>
+
+            <button
+              onClick={liff.login}
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-medium text-white text-sm transition-opacity hover:opacity-90 mb-3"
+              style={{ background: "#06C755" }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+              </svg>
+              {lang === "th" ? "เข้าสู่ระบบด้วย Line" : "Continue with Line"}
+            </button>
+
+            <button
+              onClick={() => setSkipLine(true)}
+              className="w-full py-3 rounded-xl font-medium text-sm transition-colors hover:bg-stone-100"
+              style={{ color: "#6B5245", background: "transparent", border: "1.5px solid #D6BCAE" }}
+            >
+              {lang === "th" ? "ดำเนินการต่อโดยไม่เข้าสู่ระบบ" : "Continue without Line"}
+            </button>
+
+            <p className="text-xs mt-6" style={{ color: "#A08070" }}>
+              {lang === "th"
+                ? "การเข้าสู่ระบบช่วยให้เราจดจำคุณ และคุณไม่ต้องกรอกข้อมูลซ้ำในครั้งหน้า"
+                : "Signing in lets us remember you so you don't need to fill in details next time"}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FDF8F3" }}>
@@ -597,55 +664,19 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
               {u.details} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.detailsSub}</span>
             </h2>
 
-            {/* Line login card */}
-            {liff.ready && (
-              <div className="mb-4 rounded-xl border p-4" style={{ borderColor: "#E8D8CC", background: "white" }}>
-                {liff.isLoggedIn && liff.profile ? (
-                  <div className="flex items-center gap-3">
-                    {liff.profile.pictureUrl && (
-                      <img src={liff.profile.pictureUrl} alt="" className="w-9 h-9 rounded-full" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>{liff.profile.displayName}</p>
-                      <p className="text-xs" style={{ color: "#A08070" }}>
-                        {lang === "th" ? "เข้าสู่ระบบด้วย Line แล้ว" : "Signed in with Line"}
-                      </p>
-                    </div>
-                    <button
-                      onClick={liff.logout}
-                      className="text-xs px-3 py-1 rounded-full border"
-                      style={{ borderColor: "#E8D8CC", color: "#A08070" }}
-                    >
-                      {lang === "th" ? "ออก" : "Sign out"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      // Save all booking state before Line redirects the page
-                      try {
-                        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-                          step,
-                          serviceId:  selectedService?.id,
-                          staffId:    selectedStaff?.id,
-                          date:       selectedDate?.toISOString(),
-                          time:       selectedTime,
-                          addonIds:   [...selectedAddons],
-                          noAddons,
-                          form,
-                        }));
-                      } catch { /* ignore */ }
-                      liff.login();
-                    }}
-                    className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl font-medium text-white text-sm transition-opacity hover:opacity-90"
-                    style={{ background: "#06C755" }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                      <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
-                    </svg>
-                    {lang === "th" ? "เข้าสู่ระบบด้วย Line" : "Continue with Line"}
-                  </button>
+            {/* Logged-in profile card (only shown if user came in via Line) */}
+            {liff.ready && liff.isLoggedIn && liff.profile && (
+              <div className="mb-4 rounded-xl border p-4 flex items-center gap-3" style={{ borderColor: "#BBF7D0", background: "#F0FFF4" }}>
+                {liff.profile.pictureUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={liff.profile.pictureUrl} alt="" className="w-9 h-9 rounded-full" />
                 )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>{liff.profile.displayName}</p>
+                  <p className="text-xs" style={{ color: "#166534" }}>
+                    {lang === "th" ? "เข้าสู่ระบบด้วย Line แล้ว" : "Signed in with Line"}
+                  </p>
+                </div>
               </div>
             )}
 
