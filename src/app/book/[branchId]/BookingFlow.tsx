@@ -146,40 +146,40 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
 
   const STORAGE_KEY = `booking_state_${branch.id}`;
 
-  // Restore state saved before Line login redirect
-  const getSavedState = () => {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      sessionStorage.removeItem(STORAGE_KEY);
-      return JSON.parse(raw);
-    } catch { return null; }
-  };
-  const saved = typeof window !== "undefined" ? getSavedState() : null;
-
-  const [step, setStep] = useState<number>(saved?.step ?? 0);
+  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(
-    saved?.serviceId ? (branchServices.find(s => s.id === saved.serviceId) ?? null) : null
-  );
-  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(
-    new Set(saved?.addonIds ?? [])
-  );
-  const [noAddons, setNoAddons] = useState<boolean>(saved?.noAddons ?? false);
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(
-    saved?.staffId ? (staff.find(s => s.id === saved.staffId) ?? null) : null
-  );
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    saved?.date ? new Date(saved.date) : undefined
-  );
-  const [selectedTime, setSelectedTime] = useState<string>(saved?.time ?? "");
+  const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(null);
+  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
+  const [noAddons, setNoAddons] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState("");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string }>(
-    saved?.form ?? { name: "", phone: "", email: "", notes: "" }
+    { name: "", phone: "", email: "", notes: "" }
   );
+
+  // Restore booking state after Line LIFF login redirect (runs client-side only)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(STORAGE_KEY);
+      const s = JSON.parse(raw);
+      if (s.step      !== undefined) setStep(s.step);
+      if (s.serviceId) setSelectedService(branchServices.find(bs => bs.id === s.serviceId) ?? null);
+      if (s.staffId)   setSelectedStaff(staff.find(st => st.id === s.staffId) ?? null);
+      if (s.date)      setSelectedDate(new Date(s.date));
+      if (s.time)      setSelectedTime(s.time);
+      if (s.addonIds)  setSelectedAddons(new Set(s.addonIds));
+      if (s.noAddons)  setNoAddons(s.noAddons);
+      if (s.form)      setForm(s.form);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-fill name & email from Line profile when LIFF is ready
   useEffect(() => {
