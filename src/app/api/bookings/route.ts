@@ -68,7 +68,8 @@ export async function POST(request: Request) {
     const {
       branchId, serviceId, staffId, date, startTime, endTime,
       totalPrice, name, phone, email, notes, addonIds,
-      skipConflictCheck, // trusted flag for POS / admin use
+      lineUserId,         // from Line LIFF — links customer to their Line account
+      skipConflictCheck,  // trusted flag for POS / admin use
     } = body;
 
     if (!branchId || !serviceId || !date || !startTime || !endTime || !name || !phone) {
@@ -85,11 +86,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // Upsert customer by phone
+    // Upsert customer by phone, linking Line account if provided
     const customer = await prisma.customer.upsert({
       where: { phone },
-      update: { name, email: email || undefined },
-      create: { name, phone, email: email || undefined },
+      update: {
+        name,
+        email: email || undefined,
+        ...(lineUserId ? { lineUserId } : {}),
+      },
+      create: {
+        name,
+        phone,
+        email: email || undefined,
+        ...(lineUserId ? { lineUserId } : {}),
+      },
     });
 
     const booking = await prisma.booking.create({

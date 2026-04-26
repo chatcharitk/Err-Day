@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Clock, Tag, AlertCircle, Star, Ban } from "lucide-react";
+import { useLiff } from "@/hooks/useLiff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -141,6 +142,7 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
   const router = useRouter();
   const { lang, toggle } = useLang();
   const u = UI[lang];
+  const liff = useLiff();
 
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -155,6 +157,17 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
+
+  // Auto-fill name & email from Line profile when LIFF is ready
+  useEffect(() => {
+    if (liff.profile) {
+      setForm(f => ({
+        ...f,
+        name:  f.name  || liff.profile!.displayName,
+        email: f.email || liff.profile!.email || "",
+      }));
+    }
+  }, [liff.profile]);
 
   const categories = CATEGORY_ORDER.filter((c) => branchServices.some((bs) => bs.service.category === c));
   const isHairColor = selectedService?.service.advanceBookingRequired ?? false;
@@ -227,6 +240,7 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
           phone: form.phone,
           email: form.email || null,
           notes: form.notes || null,
+          lineUserId: liff.profile?.userId || null,
         }),
       });
 
@@ -559,6 +573,44 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
             <h2 className="text-xl font-medium mb-6" style={{ color: "#3B2A24" }}>
               {u.details} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.detailsSub}</span>
             </h2>
+
+            {/* Line login card */}
+            {liff.ready && (
+              <div className="mb-4 rounded-xl border p-4" style={{ borderColor: "#E8D8CC", background: "white" }}>
+                {liff.isLoggedIn && liff.profile ? (
+                  <div className="flex items-center gap-3">
+                    {liff.profile.pictureUrl && (
+                      <img src={liff.profile.pictureUrl} alt="" className="w-9 h-9 rounded-full" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>{liff.profile.displayName}</p>
+                      <p className="text-xs" style={{ color: "#A08070" }}>
+                        {lang === "th" ? "เข้าสู่ระบบด้วย Line แล้ว" : "Signed in with Line"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={liff.logout}
+                      className="text-xs px-3 py-1 rounded-full border"
+                      style={{ borderColor: "#E8D8CC", color: "#A08070" }}
+                    >
+                      {lang === "th" ? "ออก" : "Sign out"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={liff.login}
+                    className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl font-medium text-white text-sm transition-opacity hover:opacity-90"
+                    style={{ background: "#06C755" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                      <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+                    </svg>
+                    {lang === "th" ? "เข้าสู่ระบบด้วย Line" : "Continue with Line"}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="bg-white rounded-xl border p-6 space-y-4" style={{ borderColor: "#E8D8CC" }}>
               <div className="space-y-1.5">
                 <Label htmlFor="name" style={{ color: "#5C4A42" }}>{u.name} <span className="text-red-500">*</span></Label>
