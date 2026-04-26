@@ -19,6 +19,8 @@ export default async function CustomersPage() {
         name:       c.name,
         phone:      c.phone,
         email:      c.email,
+        gender:     c.gender,
+        pictureUrl: c.pictureUrl,
         lineUserId: c.lineUserId,
         createdAt:  c.createdAt.toISOString(),
         membership: c.membership

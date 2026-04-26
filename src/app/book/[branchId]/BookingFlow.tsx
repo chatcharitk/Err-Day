@@ -264,7 +264,8 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
           phone: form.phone,
           email: form.email || null,
           notes: form.notes || null,
-          lineUserId: liff.profile?.userId || null,
+          lineUserId:     liff.profile?.userId     || null,
+          linePictureUrl: liff.profile?.pictureUrl || null,
         }),
       });
 

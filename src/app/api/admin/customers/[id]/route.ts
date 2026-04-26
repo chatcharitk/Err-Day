@@ -8,7 +8,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const { name, phone, email } = await request.json();
+    const { name, phone, email, gender, pictureUrl } = await request.json();
 
     // If phone is changing, check it isn't taken by someone else
     if (phone) {
@@ -23,9 +23,11 @@ export async function PATCH(
     const customer = await prisma.customer.update({
       where: { id },
       data: {
-        ...(name  !== undefined ? { name:  name.trim()          } : {}),
-        ...(phone !== undefined ? { phone: phone.trim()         } : {}),
-        ...(email !== undefined ? { email: email?.trim() || null } : {}),
+        ...(name       !== undefined ? { name:       name.trim()              } : {}),
+        ...(phone      !== undefined ? { phone:      phone.trim()             } : {}),
+        ...(email      !== undefined ? { email:      email?.trim() || null    } : {}),
+        ...(gender     !== undefined ? { gender:     gender || null           } : {}),
+        ...(pictureUrl !== undefined ? { pictureUrl: pictureUrl?.trim() || null } : {}),
       },
       include: {
         _count:     { select: { bookings: true } },

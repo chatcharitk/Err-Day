@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
-  UserPlus, Pencil, Search, ChevronDown, ChevronUp,
-  X, Save, Phone, Mail, Calendar, Hash,
+  UserPlus, Pencil, Search, ChevronDown, X, Save, Phone, Mail, Calendar,
+  User as UserIcon, CreditCard, Clock, MapPin,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,6 +18,8 @@ interface Customer {
   name:       string;
   phone:      string;
   email:      string | null;
+  gender:     string | null;
+  pictureUrl: string | null;
   lineUserId: string | null;
   createdAt:  string;
   membership: MembershipInfo | null;
@@ -60,11 +62,16 @@ const STATUS_LABEL: Record<string, string> = {
   COMPLETED: "เสร็จสิ้น", CANCELLED: "ยกเลิก", NO_SHOW: "ไม่มา",
 };
 
+const GENDER_LABEL: Record<string, string> = {
+  MALE:   "ชาย",
+  FEMALE: "หญิง",
+  OTHER:  "อื่นๆ",
+};
+
 function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
 }
 
-// Generate a consistent pastel background from name
 function avatarBg(name: string) {
   const palette = ["#F0E4D8","#E4EEF0","#EAE4F0","#E4F0E9","#F0EAE4"];
   let h = 0;
@@ -72,7 +79,7 @@ function avatarBg(name: string) {
   return palette[Math.abs(h) % palette.length];
 }
 
-// ─── Portal wrapper ───────────────────────────────────────────────────────────
+// ─── Portal ───────────────────────────────────────────────────────────────────
 
 function Modal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -81,39 +88,67 @@ function Modal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
-// ─── Customer form modal (add + edit) ─────────────────────────────────────────
+// ─── Customer Avatar ──────────────────────────────────────────────────────────
 
-interface CustomerFormProps {
-  initial?: Customer;
-  onClose: () => void;
-  onSaved: (c: Customer) => void;
+function Avatar({ customer, size = 40 }: { customer: { name: string; pictureUrl: string | null }; size?: number }) {
+  const bg = avatarBg(customer.name);
+  if (customer.pictureUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={customer.pictureUrl}
+        alt={customer.name}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full flex items-center justify-center font-semibold flex-shrink-0"
+      style={{
+        width: size,
+        height: size,
+        background: bg,
+        color: "#6B5245",
+        fontSize: size * 0.4,
+      }}
+    >
+      {customer.name[0]?.toUpperCase()}
+    </div>
+  );
 }
 
-function CustomerFormModal({ initial, onClose, onSaved }: CustomerFormProps) {
-  const isEdit = !!initial;
-  const [name,  setName]  = useState(initial?.name  ?? "");
-  const [phone, setPhone] = useState(initial?.phone ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
+// ─── Quick add customer modal (only for "+ เพิ่มลูกค้า" — minimal form) ────────
+
+function AddCustomerModal({ onClose, onSaved }: {
+  onClose: () => void;
+  onSaved: (c: Customer) => void;
+}) {
+  const [name,   setName]   = useState("");
+  const [phone,  setPhone]  = useState("");
+  const [email,  setEmail]  = useState("");
+  const [gender, setGender] = useState("");
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState("");
 
   async function handleSave() {
     if (!name.trim())  { setError("กรุณากรอกชื่อ"); return; }
     if (!phone.trim()) { setError("กรุณากรอกเบอร์โทร"); return; }
-
     setSaving(true);
     setError("");
     try {
-      const url    = isEdit ? `/api/admin/customers/${initial!.id}` : "/api/admin/customers";
-      const method = isEdit ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
+      const res = await fetch("/api/admin/customers", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim() || null }),
+        body:    JSON.stringify({
+          name: name.trim(), phone: phone.trim(),
+          email: email.trim() || null,
+          gender: gender || null,
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
-      const saved = await res.json();
-      onSaved(saved);
+      onSaved(await res.json());
       onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
@@ -129,92 +164,67 @@ function CustomerFormModal({ initial, onClose, onSaved }: CustomerFormProps) {
         style={{ background: "rgba(0,0,0,0.45)", zIndex: 99999 }}
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
-        <div
-          className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-          style={{ background: "white" }}
-        >
-          {/* header */}
+        <div className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col" style={{ background: "white" }}>
           <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: BORDER }}>
-            <h2 className="font-semibold text-sm" style={{ color: TEXT }}>
-              {isEdit ? "แก้ไขข้อมูลลูกค้า" : "เพิ่มลูกค้าใหม่"}
-            </h2>
+            <h2 className="font-semibold text-sm" style={{ color: TEXT }}>เพิ่มลูกค้าใหม่</h2>
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100">
               <X size={17} color={MUTED} />
             </button>
           </div>
 
-          {/* body */}
           <div className="px-6 py-5 space-y-4">
             <div>
               <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อ-นามสกุล *</label>
               <input
-                autoFocus
-                value={name}
+                autoFocus value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="เช่น สมชาย ใจดี"
                 className="w-full px-3 py-2 text-sm rounded-xl border"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
-
             <div>
               <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>เบอร์โทรศัพท์ *</label>
               <input
-                value={phone}
+                value={phone} type="tel"
                 onChange={e => setPhone(e.target.value)}
                 placeholder="0812345678"
-                type="tel"
                 className="w-full px-3 py-2 text-sm rounded-xl border"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
-
             <div>
               <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>อีเมล (ไม่บังคับ)</label>
               <input
-                value={email}
+                value={email} type="email"
                 onChange={e => setEmail(e.target.value)}
                 placeholder="example@email.com"
-                type="email"
                 className="w-full px-3 py-2 text-sm rounded-xl border"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
-
-            {/* Line LIFF placeholder */}
-            {isEdit && initial?.lineUserId && (
-              <div>
-                <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>Line User ID</label>
-                <div
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                  style={{ background: "#F0FFF4", border: "1px solid #BBF7D0", color: "#166534" }}
-                >
-                  {/* Line icon approximation */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#06C755">
-                    <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
-                  </svg>
-                  <span className="font-mono truncate">{initial.lineUserId}</span>
-                  <span className="ml-auto text-green-700 font-medium">เชื่อมต่อแล้ว</span>
-                </div>
+            <div>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>เพศ (ไม่บังคับ)</label>
+              <div className="grid grid-cols-3 gap-2">
+                {["MALE","FEMALE","OTHER"].map(g => (
+                  <button
+                    key={g} type="button"
+                    onClick={() => setGender(gender === g ? "" : g)}
+                    className="px-3 py-2 text-sm rounded-xl border font-medium"
+                    style={
+                      gender === g
+                        ? { background: PRIMARY, color: "white", borderColor: PRIMARY }
+                        : { background: "white", color: MUTED, borderColor: BORDER }
+                    }
+                  >
+                    {GENDER_LABEL[g]}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {isEdit && !initial?.lineUserId && (
-              <div
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                style={{ background: "#F9F3EE", border: `1px solid ${BORDER}`, color: MUTED }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill={MUTED}>
-                  <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
-                </svg>
-                Line ยังไม่ได้เชื่อมต่อ — จะเชื่อมอัตโนมัติเมื่อลูกค้าล็อกอินผ่าน Line LIFF
-              </div>
-            )}
-
+            </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
 
-          {/* footer */}
           <div className="px-6 py-4 border-t flex justify-end gap-3" style={{ borderColor: BORDER }}>
             <button
               onClick={onClose}
@@ -222,8 +232,7 @@ function CustomerFormModal({ initial, onClose, onSaved }: CustomerFormProps) {
               style={{ borderColor: BORDER, color: MUTED }}
             >ยกเลิก</button>
             <button
-              onClick={handleSave}
-              disabled={saving}
+              onClick={handleSave} disabled={saving}
               className="flex items-center gap-2 px-5 py-2 text-sm rounded-xl font-medium text-white"
               style={{ background: saving ? MUTED : PRIMARY }}
             >
@@ -237,73 +246,388 @@ function CustomerFormModal({ initial, onClose, onSaved }: CustomerFormProps) {
   );
 }
 
-// ─── Expanded booking history panel ──────────────────────────────────────────
+// ─── Customer Detail Modal — the big one ─────────────────────────────────────
 
-function BookingHistory({ customerId }: { customerId: string }) {
-  const [bookings, setBookings] = useState<BookingRecord[] | null>(null);
-  const [loading,  setLoading]  = useState(true);
+function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
+  customer: Customer;
+  onClose: () => void;
+  onSaved: (c: Customer) => void;
+}) {
+  const [customer,  setCustomer]  = useState<Customer>(initial);
+  const [editMode,  setEditMode]  = useState(false);
+  const [bookings,  setBookings]  = useState<BookingRecord[] | null>(null);
 
+  // editable fields
+  const [name,   setName]   = useState(customer.name);
+  const [phone,  setPhone]  = useState(customer.phone);
+  const [email,  setEmail]  = useState(customer.email ?? "");
+  const [gender, setGender] = useState(customer.gender ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState("");
+
+  // Load booking history once on mount
   useEffect(() => {
-    fetch(`/api/admin/customers/${customerId}/bookings`)
+    fetch(`/api/admin/customers/${customer.id}/bookings`)
       .then(r => r.json())
-      .then(data => { setBookings(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [customerId]);
+      .then(setBookings)
+      .catch(() => setBookings([]));
+  }, [customer.id]);
 
-  if (loading) return <p className="text-xs py-3 text-center" style={{ color: MUTED }}>กำลังโหลด...</p>;
-  if (!bookings || bookings.length === 0)
-    return <p className="text-xs py-3 text-center" style={{ color: MUTED }}>ยังไม่มีประวัติการจอง</p>;
+  // Split bookings into upcoming vs past
+  const { upcoming, past } = useMemo(() => {
+    if (!bookings) return { upcoming: [], past: [] };
+    const today = new Date(); today.setHours(0,0,0,0);
+    const up: BookingRecord[] = []; const ps: BookingRecord[] = [];
+    for (const b of bookings) {
+      const d = new Date(b.date);
+      if (d >= today && (b.status === "PENDING" || b.status === "CONFIRMED")) up.push(b);
+      else ps.push(b);
+    }
+    return { upcoming: up.sort((a, b) => a.date.localeCompare(b.date)), past: ps };
+  }, [bookings]);
+
+  const completedTotal = useMemo(() => {
+    if (!bookings) return 0;
+    return bookings.filter(b => b.status === "COMPLETED").reduce((sum, b) => sum + b.totalPrice, 0);
+  }, [bookings]);
+
+  async function handleSave() {
+    if (!name.trim())  { setError("กรุณากรอกชื่อ"); return; }
+    if (!phone.trim()) { setError("กรุณากรอกเบอร์โทร"); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/customers/${customer.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          name: name.trim(), phone: phone.trim(),
+          email: email.trim() || null,
+          gender: gender || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "บันทึกไม่สำเร็จ");
+      const saved: Customer = await res.json();
+      setCustomer(saved);
+      onSaved(saved);
+      setEditMode(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const joinDate = new Date(customer.createdAt).toLocaleDateString("th-TH", {
+    day: "numeric", month: "long", year: "numeric",
+  });
 
   return (
-    <div className="space-y-2">
-      {bookings.map(b => {
-        const sc = STATUS_STYLE[b.status] ?? STATUS_STYLE.PENDING;
-        const dateStr = new Date(b.date + (b.date.length === 10 ? "T12:00:00" : ""))
-          .toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
-        return (
-          <div
-            key={b.id}
-            className="flex items-center justify-between gap-3 py-2 border-b last:border-0 text-xs"
-            style={{ borderColor: BORDER }}
-          >
+    <Modal>
+      <div
+        className="fixed inset-0 flex items-center justify-center p-4"
+        style={{ background: "rgba(0,0,0,0.45)", zIndex: 99999 }}
+        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <div
+          className="w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+          style={{ background: "white", maxHeight: "92vh" }}
+        >
+          {/* ── Header with avatar + name + edit toggle ── */}
+          <div className="px-6 pt-6 pb-5 border-b flex items-start gap-4 flex-shrink-0" style={{ borderColor: BORDER }}>
+            <Avatar customer={customer} size={64} />
+
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate" style={{ color: TEXT }}>
-                {b.service.nameTh || b.service.name}
-              </p>
-              <p style={{ color: MUTED }}>
-                {dateStr} · {b.startTime}–{b.endTime}
-                {b.staff && ` · ${b.staff.name}`} · {b.branch.name}
-              </p>
+              {editMode ? (
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="text-lg font-semibold w-full px-2 py-1 rounded-lg border"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              ) : (
+                <h2 className="text-xl font-semibold" style={{ color: TEXT }}>{customer.name}</h2>
+              )}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {customer.lineUserId && (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: "#F0FFF4", color: "#166534", border: "1px solid #BBF7D0" }}
+                  >
+                    Line ✓
+                  </span>
+                )}
+                {customer.membership?.tier && (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{
+                      background: customer.membership.tier.color + "22",
+                      color: customer.membership.tier.color,
+                    }}
+                  >
+                    {customer.membership.tier.nameTh}
+                  </span>
+                )}
+                <span className="text-xs" style={{ color: MUTED }}>
+                  สมาชิกตั้งแต่ {joinDate}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="px-2 py-0.5 rounded-full font-medium" style={{ background: sc.bg, color: sc.color }}>
-                {STATUS_LABEL[b.status] ?? b.status}
-              </span>
-              <span className="font-semibold" style={{ color: PRIMARY }}>{fmt(b.totalPrice)}</span>
+
+            <div className="flex items-center gap-2">
+              {!editMode && (
+                <button
+                  onClick={() => setEditMode(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
+                  style={{ color: "#2563EB", border: "1px solid #BFDBFE", background: "#EFF6FF" }}
+                >
+                  <Pencil size={12} /> แก้ไข
+                </button>
+              )}
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X size={18} color={MUTED} />
+              </button>
             </div>
           </div>
-        );
-      })}
+
+          {/* ── Scrollable body ── */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+            {/* Quick stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                <p className="text-xs" style={{ color: MUTED }}>การจองทั้งหมด</p>
+                <p className="text-lg font-semibold" style={{ color: TEXT }}>{customer._count.bookings}</p>
+              </div>
+              <div className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                <p className="text-xs" style={{ color: MUTED }}>กำลังจะมาถึง</p>
+                <p className="text-lg font-semibold" style={{ color: "#1D4ED8" }}>{upcoming.length}</p>
+              </div>
+              <div className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                <p className="text-xs" style={{ color: MUTED }}>ยอดสะสม</p>
+                <p className="text-lg font-semibold" style={{ color: PRIMARY }}>{fmt(completedTotal)}</p>
+              </div>
+            </div>
+
+            {/* ── Personal Info ── */}
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: PRIMARY }}>
+                ข้อมูลส่วนตัว
+              </h3>
+              <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: "white" }}>
+                {/* Phone */}
+                <InfoRow icon={<Phone size={14} />} label="เบอร์โทรศัพท์">
+                  {editMode ? (
+                    <input
+                      value={phone} type="tel"
+                      onChange={e => setPhone(e.target.value)}
+                      className="w-full px-2 py-1 text-sm rounded-lg border"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
+                  ) : (
+                    <span className="text-sm" style={{ color: TEXT }}>{customer.phone}</span>
+                  )}
+                </InfoRow>
+
+                {/* Email */}
+                <InfoRow icon={<Mail size={14} />} label="อีเมล">
+                  {editMode ? (
+                    <input
+                      value={email} type="email"
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="example@email.com"
+                      className="w-full px-2 py-1 text-sm rounded-lg border"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
+                  ) : (
+                    <span className="text-sm" style={{ color: customer.email ? TEXT : MUTED }}>
+                      {customer.email || "—"}
+                    </span>
+                  )}
+                </InfoRow>
+
+                {/* Gender */}
+                <InfoRow icon={<UserIcon size={14} />} label="เพศ">
+                  {editMode ? (
+                    <div className="flex gap-2">
+                      {["MALE","FEMALE","OTHER"].map(g => (
+                        <button
+                          key={g} type="button"
+                          onClick={() => setGender(gender === g ? "" : g)}
+                          className="px-3 py-1 text-xs rounded-lg border font-medium"
+                          style={
+                            gender === g
+                              ? { background: PRIMARY, color: "white", borderColor: PRIMARY }
+                              : { background: "white", color: MUTED, borderColor: BORDER }
+                          }
+                        >
+                          {GENDER_LABEL[g]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-sm" style={{ color: customer.gender ? TEXT : MUTED }}>
+                      {customer.gender ? GENDER_LABEL[customer.gender] : "—"}
+                    </span>
+                  )}
+                </InfoRow>
+              </div>
+
+              {editMode && (
+                <div className="flex justify-end gap-2 mt-3">
+                  {error && <p className="text-sm text-red-600 mr-auto">{error}</p>}
+                  <button
+                    onClick={() => {
+                      setEditMode(false);
+                      setName(customer.name);
+                      setPhone(customer.phone);
+                      setEmail(customer.email ?? "");
+                      setGender(customer.gender ?? "");
+                      setError("");
+                    }}
+                    className="px-4 py-2 text-sm rounded-xl border font-medium"
+                    style={{ borderColor: BORDER, color: MUTED }}
+                  >ยกเลิก</button>
+                  <button
+                    onClick={handleSave} disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium text-white"
+                    style={{ background: saving ? MUTED : PRIMARY }}
+                  >
+                    <Save size={13} />
+                    {saving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* ── Membership Status (placeholder) ── */}
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: PRIMARY }}>
+                สถานะสมาชิก
+              </h3>
+              {customer.membership ? (
+                <div
+                  className="rounded-xl border p-4 flex items-center justify-between"
+                  style={{
+                    borderColor: customer.membership.tier.color + "44",
+                    background: customer.membership.tier.color + "10",
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <CreditCard size={18} style={{ color: customer.membership.tier.color }} />
+                    <div>
+                      <p className="font-semibold text-sm" style={{ color: customer.membership.tier.color }}>
+                        {customer.membership.tier.nameTh}
+                      </p>
+                      <p className="text-xs" style={{ color: MUTED }}>
+                        {customer.membership.points} แต้มสะสม
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="rounded-xl border-2 border-dashed p-4 text-center"
+                  style={{ borderColor: BORDER, color: MUTED }}
+                >
+                  <p className="text-sm font-medium">ยังไม่ได้สมัครสมาชิก</p>
+                  <p className="text-xs mt-1">ระบบสมาชิกกำลังจะเปิดใช้งานเร็วๆ นี้</p>
+                </div>
+              )}
+            </section>
+
+            {/* ── Upcoming Bookings ── */}
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: PRIMARY }}>
+                การจองที่กำลังจะมาถึง ({upcoming.length})
+              </h3>
+              {bookings === null ? (
+                <p className="text-xs text-center py-4" style={{ color: MUTED }}>กำลังโหลด...</p>
+              ) : upcoming.length === 0 ? (
+                <div className="rounded-xl border-2 border-dashed p-4 text-center" style={{ borderColor: BORDER, color: MUTED }}>
+                  <p className="text-sm">ไม่มีการจองที่กำลังจะมาถึง</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {upcoming.map(b => <BookingRow key={b.id} booking={b} highlight />)}
+                </div>
+              )}
+            </section>
+
+            {/* ── Transaction History ── */}
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: PRIMARY }}>
+                ประวัติการทำรายการ ({past.length})
+              </h3>
+              {past.length === 0 ? (
+                <p className="text-xs py-4" style={{ color: MUTED }}>ยังไม่มีประวัติ</p>
+              ) : (
+                <div className="space-y-2">
+                  {past.map(b => <BookingRow key={b.id} booking={b} />)}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Reusable rows ───────────────────────────────────────────────────────────
+
+function InfoRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 w-32 flex-shrink-0" style={{ color: MUTED }}>
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 }
 
-// ─── Customer row card ────────────────────────────────────────────────────────
+function BookingRow({ booking, highlight }: { booking: BookingRecord; highlight?: boolean }) {
+  const sc = STATUS_STYLE[booking.status] ?? STATUS_STYLE.PENDING;
+  const dateStr = new Date(booking.date + (booking.date.length === 10 ? "T12:00:00" : ""))
+    .toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
 
-function CustomerCard({
-  customer,
-  onEdit,
-  initialExpanded,
-  highlightRef,
-}: {
+  return (
+    <div
+      className="rounded-xl border p-3 flex items-center justify-between gap-3"
+      style={{
+        borderColor: highlight ? "#BFDBFE" : BORDER,
+        background:  highlight ? "#EFF6FF" : "white",
+      }}
+    >
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm truncate" style={{ color: TEXT }}>
+          {booking.service.nameTh || booking.service.name}
+        </p>
+        <div className="flex items-center gap-3 mt-0.5 text-xs flex-wrap" style={{ color: MUTED }}>
+          <span className="flex items-center gap-1"><Calendar size={11} />{dateStr}</span>
+          <span className="flex items-center gap-1"><Clock size={11} />{booking.startTime}–{booking.endTime}</span>
+          <span className="flex items-center gap-1"><MapPin size={11} />{booking.branch.name}</span>
+          {booking.staff && <span>· {booking.staff.name}</span>}
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: sc.bg, color: sc.color }}>
+          {STATUS_LABEL[booking.status] ?? booking.status}
+        </span>
+        <span className="text-sm font-semibold" style={{ color: PRIMARY }}>{fmt(booking.totalPrice)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Customer card (list row) ────────────────────────────────────────────────
+
+function CustomerCard({ customer, onClick, highlightRef }: {
   customer: Customer;
-  onEdit: () => void;
-  initialExpanded?: boolean;
-  highlightRef?: (el: HTMLDivElement | null) => void;
+  onClick: () => void;
+  highlightRef?: React.Ref<HTMLDivElement>;
 }) {
-  const [expanded, setExpanded] = useState(initialExpanded ?? false);
-  const bg = avatarBg(customer.name);
-
   const joinDate = new Date(customer.createdAt).toLocaleDateString("th-TH", {
     day: "numeric", month: "short", year: "numeric",
   });
@@ -311,91 +635,51 @@ function CustomerCard({
   return (
     <div
       ref={highlightRef}
-      className="rounded-2xl overflow-hidden bg-white transition-all"
-      style={{ border: `1.5px solid ${initialExpanded ? "#8B1D24" : BORDER}` }}
+      onClick={onClick}
+      className="rounded-2xl bg-white px-5 py-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-all"
+      style={{ border: `1.5px solid ${BORDER}` }}
     >
-      {/* main row */}
-      <div className="flex items-center gap-4 px-5 py-4">
-        {/* avatar */}
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
-          style={{ background: bg, color: "#6B5245" }}
-        >
-          {customer.name[0]?.toUpperCase()}
-        </div>
+      <Avatar customer={customer} size={40} />
 
-        {/* info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-sm" style={{ color: TEXT }}>{customer.name}</p>
-            {customer.membership?.tier && (
-              <span
-                className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{
-                  background: customer.membership.tier.color + "22",
-                  color: customer.membership.tier.color,
-                }}
-              >
-                {customer.membership.tier.nameTh}
-                {customer.membership.points > 0 && ` · ${customer.membership.points} pts`}
-              </span>
-            )}
-            {customer.lineUserId && (
-              <span
-                className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{ background: "#F0FFF4", color: "#166534", border: "1px solid #BBF7D0" }}
-              >
-                Line ✓
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            <span className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
-              <Phone size={11} />{customer.phone}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-sm" style={{ color: TEXT }}>{customer.name}</p>
+          {customer.membership?.tier && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{
+                background: customer.membership.tier.color + "22",
+                color: customer.membership.tier.color,
+              }}
+            >
+              {customer.membership.tier.nameTh}
             </span>
-            {customer.email && (
-              <span className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
-                <Mail size={11} />{customer.email}
-              </span>
-            )}
-          </div>
+          )}
+          {customer.lineUserId && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ background: "#F0FFF4", color: "#166534", border: "1px solid #BBF7D0" }}
+            >
+              Line ✓
+            </span>
+          )}
         </div>
-
-        {/* stats + actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="text-right hidden sm:block mr-2">
-            <p className="text-xs font-medium" style={{ color: TEXT }}>{customer._count.bookings} การจอง</p>
-            <p className="text-xs" style={{ color: MUTED }}>{joinDate}</p>
-          </div>
-          <button
-            onClick={onEdit}
-            className="p-2 rounded-xl hover:bg-blue-50 transition-colors"
-            title="แก้ไข"
-          >
-            <Pencil size={14} color="#2563EB" />
-          </button>
-          <button
-            onClick={() => setExpanded(x => !x)}
-            className="p-2 rounded-xl hover:bg-gray-50 transition-colors"
-            title="ประวัติการจอง"
-          >
-            {expanded
-              ? <ChevronUp size={15} color={MUTED} />
-              : <ChevronDown size={15} color={MUTED} />
-            }
-          </button>
+        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
+            <Phone size={11} />{customer.phone}
+          </span>
+          {customer.email && (
+            <span className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
+              <Mail size={11} />{customer.email}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* expanded: booking history */}
-      {expanded && (
-        <div className="border-t px-5 py-4" style={{ borderColor: BORDER, background: BG }}>
-          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: MUTED }}>
-            ประวัติการจอง
-          </p>
-          <BookingHistory customerId={customer.id} />
-        </div>
-      )}
+      <div className="text-right hidden sm:block">
+        <p className="text-xs font-medium" style={{ color: TEXT }}>{customer._count.bookings} การจอง</p>
+        <p className="text-xs" style={{ color: MUTED }}>{joinDate}</p>
+      </div>
     </div>
   );
 }
@@ -427,25 +711,28 @@ function SummaryBar({ customers }: { customers: Customer[] }) {
 type SortKey = "newest" | "oldest" | "name" | "bookings";
 
 export default function CustomersManager({ customers: initial }: Props) {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const focusId = searchParams.get("id");
 
   const [customers, setCustomers] = useState<Customer[]>(initial);
   const [showAdd,   setShowAdd]   = useState(false);
-  const [editing,   setEditing]   = useState<Customer | null>(null);
+  const [openId,    setOpenId]    = useState<string | null>(null);
   const [search,    setSearch]    = useState("");
   const [sort,      setSort]      = useState<SortKey>("newest");
 
-  // Scroll to & briefly highlight the focused customer (linked from a booking)
-  const focusCardRef = (el: HTMLDivElement | null) => {
-    if (!el) return;
-    setTimeout(() => {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.style.boxShadow = "0 0 0 4px rgba(139,29,36,0.15)";
-      setTimeout(() => { el.style.boxShadow = ""; }, 2000);
-    }, 100);
-  };
+  const focusRef = useRef<HTMLDivElement | null>(null);
+
+  // Open the modal automatically when navigated with ?id=xxx
+  useEffect(() => {
+    const id = searchParams.get("id");
+    if (id && customers.some(c => c.id === id)) {
+      setOpenId(id);
+      setTimeout(() => {
+        focusRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleSaved(saved: Customer) {
     setCustomers(prev => {
@@ -479,6 +766,9 @@ export default function CustomersManager({ customers: initial }: Props) {
     });
   }, [customers, search, sort]);
 
+  const focusId   = searchParams.get("id");
+  const openedCustomer = customers.find(c => c.id === openId) ?? null;
+
   return (
     <div className="px-6 py-8 max-w-3xl">
       {/* header */}
@@ -497,7 +787,6 @@ export default function CustomersManager({ customers: initial }: Props) {
         </button>
       </div>
 
-      {/* summary */}
       <SummaryBar customers={customers} />
 
       {/* search + sort */}
@@ -529,23 +818,6 @@ export default function CustomersManager({ customers: initial }: Props) {
         <p className="text-xs" style={{ color: MUTED }}>{filtered.length} คน</p>
       </div>
 
-      {/* Line LIFF notice */}
-      <div
-        className="flex items-start gap-3 px-4 py-3 rounded-2xl mb-5 text-xs"
-        style={{ background: "#F0FFF4", border: "1px solid #BBF7D0", color: "#166534" }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#06C755" className="flex-shrink-0 mt-0.5">
-          <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
-        </svg>
-        <div>
-          <p className="font-semibold mb-0.5">Line LIFF Integration (เร็วๆ นี้)</p>
-          <p style={{ color: "#15803D" }}>
-            เมื่อลูกค้าล็อกอินผ่าน Line LIFF ระบบจะเชื่อม Line User ID เข้ากับโปรไฟล์ลูกค้าอัตโนมัติ
-            พร้อมดึงชื่อและรูปโปรไฟล์จาก Line
-          </p>
-        </div>
-      </div>
-
       {/* customer list */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 rounded-2xl bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
@@ -559,27 +831,26 @@ export default function CustomersManager({ customers: initial }: Props) {
             <CustomerCard
               key={c.id}
               customer={c}
-              onEdit={() => setEditing(c)}
-              initialExpanded={c.id === focusId}
-              highlightRef={c.id === focusId ? focusCardRef : undefined}
+              onClick={() => setOpenId(c.id)}
+              highlightRef={c.id === focusId ? focusRef : undefined}
             />
           ))}
         </div>
       )}
 
-      {/* Add modal */}
+      {/* Add new customer */}
       {showAdd && (
-        <CustomerFormModal
+        <AddCustomerModal
           onClose={() => setShowAdd(false)}
           onSaved={handleSaved}
         />
       )}
 
-      {/* Edit modal */}
-      {editing && (
-        <CustomerFormModal
-          initial={editing}
-          onClose={() => setEditing(null)}
+      {/* Customer detail modal */}
+      {openedCustomer && (
+        <CustomerDetailModal
+          customer={openedCustomer}
+          onClose={() => setOpenId(null)}
           onSaved={handleSaved}
         />
       )}

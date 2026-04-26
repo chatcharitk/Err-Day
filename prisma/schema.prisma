@@ -73,7 +73,9 @@ model Customer {
   name       String
   phone      String   @unique
   email      String?
-  lineUserId String?  @unique // reserved for Line CRM integration
+  gender     String?  // "MALE" | "FEMALE" | "OTHER"
+  pictureUrl String?  // profile picture (auto-pulled from Line, or manually set)
+  lineUserId String?  @unique // Line user ID — set automatically when customer signs in via LIFF
   createdAt  DateTime @default(now())
 
   bookings   Booking[]

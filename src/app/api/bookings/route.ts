@@ -68,8 +68,8 @@ export async function POST(request: Request) {
     const {
       branchId, serviceId, staffId, date, startTime, endTime,
       totalPrice, name, phone, email, notes, addonIds,
-      lineUserId,         // from Line LIFF — links customer to their Line account
-      skipConflictCheck,  // trusted flag for POS / admin use
+      lineUserId, linePictureUrl,  // from Line LIFF — links customer + profile pic
+      skipConflictCheck,            // trusted flag for POS / admin use
     } = body;
 
     if (!branchId || !serviceId || !date || !startTime || !endTime || !name || !phone) {
@@ -86,19 +86,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // Upsert customer by phone, linking Line account if provided
+    // Upsert customer by phone, linking Line account + picture if provided
     const customer = await prisma.customer.upsert({
       where: { phone },
       update: {
         name,
         email: email || undefined,
-        ...(lineUserId ? { lineUserId } : {}),
+        ...(lineUserId     ? { lineUserId }                : {}),
+        ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
       },
       create: {
         name,
         phone,
         email: email || undefined,
-        ...(lineUserId ? { lineUserId } : {}),
+        ...(lineUserId     ? { lineUserId }                : {}),
+        ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
       },
     });
 
