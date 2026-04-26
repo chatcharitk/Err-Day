@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, Save, X, Users, Tag, Clock, Zap } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Save, RefreshCw, Percent, Tag } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const BORDER  = "#E8D8CC";
@@ -10,341 +9,399 @@ const TEXT    = "#3B2A24";
 const MUTED   = "#A08070";
 const BG      = "#FDF7F2";
 
-interface Tier {
-  id:              string;
-  name:            string;
-  nameTh:          string;
-  minPoints:       number;
-  discountPercent: number;
-  color:           string;
-  validityDays:    number;
-  maxUsages:       number;
-  isActive:        boolean;
-  _count:          { memberships: number };
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface BranchPrice { branchId: string; price: number; branch: { name: string } }
+
+interface ServiceRow {
+  id:                    string;
+  nameTh:                string;
+  name:                  string;
+  category:              string;
+  memberDiscountPercent: number;
+  branches:              BranchPrice[];
 }
 
-function Modal({ children }: { children: React.ReactNode }) {
-  const [m, setM] = useState(false);
-  useEffect(() => { setM(true); }, []);
-  if (!m) return null;
-  return createPortal(children, document.body);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtBaht(satang: number) {
+  return (satang / 100).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-const PRESET_COLORS = [
-  "#6b7280", "#8B1D24", "#D97706", "#059669", "#2563EB", "#7C3AED", "#DB2777",
-];
+/** lowest branch price for a service (satang), or null */
+function basePrice(svc: ServiceRow): number | null {
+  if (!svc.branches.length) return null;
+  return Math.min(...svc.branches.map(b => b.price));
+}
 
-function TierForm({
-  initial,
-  onSave,
-  onCancel,
+/** satang → baht display string */
+function satangToDisplay(s: number) { return (s / 100).toFixed(2).replace(/\.00$/, ""); }
+
+// ─── Per-service discount row ─────────────────────────────────────────────────
+
+interface RowState {
+  pct:     string; // discount %
+  net:     string; // net price in baht
+  changed: boolean;
+}
+
+function ServiceDiscountRow({
+  svc,
+  state,
+  onChange,
 }: {
-  initial?: Partial<Tier>;
-  onSave: (data: Omit<Tier, "id" | "_count">) => Promise<void>;
-  onCancel: () => void;
+  svc:      ServiceRow;
+  state:    RowState;
+  onChange: (next: RowState) => void;
 }) {
-  const [name,            setName]            = useState(initial?.name            ?? "");
-  const [nameTh,          setNameTh]          = useState(initial?.nameTh          ?? "");
-  const [discountPercent, setDiscountPercent] = useState(initial?.discountPercent ?? 10);
-  const [color,           setColor]           = useState(initial?.color           ?? "#8B1D24");
-  const [validityDays,    setValidityDays]    = useState(initial?.validityDays    ?? 30);
-  const [maxUsages,       setMaxUsages]       = useState(initial?.maxUsages       ?? 0);
-  const [saving,          setSaving]          = useState(false);
-  const [error,           setError]           = useState("");
+  const base = basePrice(svc); // satang or null
 
-  async function submit() {
-    if (!name.trim() || !nameTh.trim()) { setError("กรุณากรอกชื่อ"); return; }
+  function handlePctChange(raw: string) {
+    const pctNum = parseFloat(raw);
+    if (base !== null && !isNaN(pctNum) && raw !== "") {
+      const netSatang = Math.round(base * (1 - Math.min(100, Math.max(0, pctNum)) / 100));
+      onChange({ pct: raw, net: satangToDisplay(netSatang), changed: true });
+    } else {
+      onChange({ pct: raw, net: state.net, changed: true });
+    }
+  }
+
+  function handleNetChange(raw: string) {
+    const netBaht = parseFloat(raw);
+    if (base !== null && !isNaN(netBaht) && raw !== "" && base > 0) {
+      const netSatang = Math.round(netBaht * 100);
+      const pct = Math.max(0, Math.min(100, ((base - netSatang) / base) * 100));
+      onChange({ pct: pct.toFixed(1).replace(/\.0$/, ""), net: raw, changed: true });
+    } else {
+      onChange({ pct: state.pct, net: raw, changed: true });
+    }
+  }
+
+  const pctNum = parseFloat(state.pct) || 0;
+  const hasDiscount = pctNum > 0;
+
+  return (
+    <tr
+      className="border-b last:border-0 transition-colors"
+      style={{ borderColor: BORDER, background: state.changed ? "#FFFBF5" : "white" }}
+    >
+      {/* Service name */}
+      <td className="px-4 py-3">
+        <p className="text-sm font-medium" style={{ color: TEXT }}>{svc.nameTh || svc.name}</p>
+        <p className="text-xs" style={{ color: MUTED }}>{svc.category}</p>
+      </td>
+
+      {/* Base price */}
+      <td className="px-4 py-3 text-right">
+        {base !== null ? (
+          <div>
+            <p className="text-sm font-medium" style={{ color: TEXT }}>฿{fmtBaht(base)}</p>
+            {svc.branches.length > 1 && (
+              <p className="text-xs" style={{ color: MUTED }}>ราคาต่ำสุด</p>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs" style={{ color: MUTED }}>—</span>
+        )}
+      </td>
+
+      {/* Discount % input */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={state.pct}
+            onChange={e => handlePctChange(e.target.value)}
+            placeholder="0"
+            className="w-16 px-2 py-1.5 text-sm rounded-lg border text-right"
+            style={{
+              borderColor: hasDiscount ? PRIMARY : BORDER,
+              color: hasDiscount ? PRIMARY : TEXT,
+              fontWeight: hasDiscount ? 600 : 400,
+            }}
+          />
+          <span className="text-sm" style={{ color: MUTED }}>%</span>
+        </div>
+      </td>
+
+      {/* Net price input */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm" style={{ color: MUTED }}>฿</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={state.net}
+            onChange={e => handleNetChange(e.target.value)}
+            placeholder={base !== null ? satangToDisplay(base) : "—"}
+            disabled={base === null}
+            className="w-24 px-2 py-1.5 text-sm rounded-lg border text-right"
+            style={{
+              borderColor: hasDiscount ? "#059669" : BORDER,
+              color: hasDiscount ? "#059669" : TEXT,
+              fontWeight: hasDiscount ? 600 : 400,
+              background: base === null ? BG : "white",
+            }}
+          />
+        </div>
+      </td>
+
+      {/* Per-branch breakdown */}
+      <td className="px-4 py-3">
+        {hasDiscount && svc.branches.length > 0 ? (
+          <div className="space-y-0.5">
+            {svc.branches.map(b => {
+              const net = Math.round(b.price * (1 - pctNum / 100));
+              return (
+                <div key={b.branchId} className="flex items-center gap-1.5 text-xs">
+                  <span style={{ color: MUTED }} className="truncate max-w-20">
+                    {b.branch.name.replace("err.day ", "")}
+                  </span>
+                  <span style={{ color: TEXT }}>
+                    <span className="line-through" style={{ color: MUTED }}>
+                      ฿{fmtBaht(b.price)}
+                    </span>
+                    {" → "}
+                    <strong style={{ color: "#059669" }}>฿{fmtBaht(net)}</strong>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <span className="text-xs" style={{ color: MUTED }}>—</span>
+        )}
+      </td>
+
+      {/* Reset */}
+      <td className="px-2 py-3">
+        {(state.changed || pctNum > 0) && (
+          <button
+            onClick={() => onChange({ pct: "0", net: "", changed: true })}
+            title="ล้างส่วนลด"
+            className="p-1.5 rounded-lg hover:bg-gray-100"
+          >
+            <RefreshCw size={13} style={{ color: MUTED }} />
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function MembershipManager() {
+  const [services,  setServices]  = useState<ServiceRow[]>([]);
+  const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [error,     setError]     = useState("");
+  const [category,  setCategory]  = useState("all");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data: ServiceRow[] = await fetch("/api/admin/services/member-discounts").then(r => r.json());
+      setServices(data);
+      const initial: Record<string, RowState> = {};
+      for (const s of data) {
+        const base = s.branches.length ? Math.min(...s.branches.map(b => b.price)) : null;
+        const pct  = s.memberDiscountPercent;
+        const net  = base !== null && pct > 0
+          ? satangToDisplay(Math.round(base * (1 - pct / 100)))
+          : "";
+        initial[s.id] = { pct: pct > 0 ? String(pct) : "", net, changed: false };
+      }
+      setRowStates(initial);
+    } catch {
+      setError("โหลดข้อมูลไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSave() {
     setSaving(true);
     setError("");
     try {
-      await onSave({
-        name: name.trim(), nameTh: nameTh.trim(),
-        minPoints: 0, discountPercent, color,
-        validityDays, maxUsages,
-        isActive: initial?.isActive ?? true,
+      const updates = services.map(s => ({
+        id:                    s.id,
+        memberDiscountPercent: Math.min(100, Math.max(0, parseFloat(rowStates[s.id]?.pct || "0") || 0)),
+      }));
+      const res = await fetch("/api/admin/services/member-discounts", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(updates),
       });
+      if (!res.ok) throw new Error((await res.json()).error ?? "บันทึกไม่สำเร็จ");
+      // Mark all as unchanged
+      setRowStates(prev => Object.fromEntries(
+        Object.entries(prev).map(([k, v]) => [k, { ...v, changed: false }]),
+      ));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
       setSaving(false);
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อภาษาไทย *</label>
-          <input value={nameTh} onChange={e => setNameTh(e.target.value)}
-            placeholder="เช่น โกลด์"
-            className="w-full px-3 py-2 text-sm rounded-xl border"
-            style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-        <div>
-          <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อภาษาอังกฤษ *</label>
-          <input value={name} onChange={e => setName(e.target.value)}
-            placeholder="e.g. Gold"
-            className="w-full px-3 py-2 text-sm rounded-xl border"
-            style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ส่วนลด (%)</label>
-          <input value={discountPercent} type="number" min={0} max={100}
-            onChange={e => setDiscountPercent(Number(e.target.value))}
-            className="w-full px-3 py-2 text-sm rounded-xl border"
-            style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-        <div>
-          <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>
-            อายุสมาชิก (วัน, 0 = ไม่หมดอายุ)
-          </label>
-          <input value={validityDays} type="number" min={0}
-            onChange={e => setValidityDays(Number(e.target.value))}
-            className="w-full px-3 py-2 text-sm rounded-xl border"
-            style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>
-          จำนวนครั้งที่ใช้ส่วนลดได้ (0 = ไม่จำกัด)
-        </label>
-        <input value={maxUsages} type="number" min={0}
-          onChange={e => setMaxUsages(Number(e.target.value))}
-          className="w-full px-3 py-2 text-sm rounded-xl border"
-          style={{ borderColor: BORDER, color: TEXT }} />
-      </div>
-
-      <div>
-        <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>สี</label>
-        <div className="flex gap-2 flex-wrap">
-          {PRESET_COLORS.map(c => (
-            <button key={c} type="button"
-              onClick={() => setColor(c)}
-              className="w-8 h-8 rounded-full border-2 transition-all"
-              style={{
-                background: c,
-                borderColor: color === c ? "#3B2A24" : "transparent",
-                transform: color === c ? "scale(1.2)" : "scale(1)",
-              }}
-            />
-          ))}
-          <input type="color" value={color} onChange={e => setColor(e.target.value)}
-            className="w-8 h-8 rounded-full border cursor-pointer"
-            style={{ padding: 0 }} title="เลือกสีเอง" />
-        </div>
-      </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex justify-end gap-2 pt-2">
-        <button onClick={onCancel}
-          className="px-4 py-2 text-sm rounded-xl border font-medium"
-          style={{ borderColor: BORDER, color: MUTED }}>
-          ยกเลิก
-        </button>
-        <button onClick={submit} disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 text-sm rounded-xl font-medium text-white"
-          style={{ background: saving ? MUTED : PRIMARY }}>
-          <Save size={14} />
-          {saving ? "กำลังบันทึก..." : "บันทึก"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-interface Props {
-  tiers: Tier[];
-}
-
-export default function MembershipManager({ tiers: initial }: Props) {
-  const [tiers,    setTiers]   = useState<Tier[]>(initial);
-  const [showAdd,  setShowAdd] = useState(false);
-  const [editId,   setEditId]  = useState<string | null>(null);
-
-  async function handleCreate(data: Omit<Tier, "id" | "_count">) {
-    const res = await fetch("/api/admin/membership-tiers", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
-    const created = await res.json();
-    setTiers(prev => [...prev, { ...created, _count: { memberships: 0 } }]);
-    setShowAdd(false);
-  }
-
-  async function handleUpdate(id: string, data: Omit<Tier, "id" | "_count">) {
-    const res = await fetch(`/api/admin/membership-tiers/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
-    const updated = await res.json();
-    setTiers(prev => prev.map(t => t.id === id ? { ...t, ...updated } : t));
-    setEditId(null);
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("ต้องการปิดการใช้งานเทียร์นี้ใช่ไหม?")) return;
-    const res = await fetch(`/api/admin/membership-tiers/${id}`, { method: "DELETE" });
-    if (!res.ok) { alert("ไม่สามารถลบได้"); return; }
-    setTiers(prev => prev.map(t => t.id === id ? { ...t, isActive: false } : t));
-  }
-
-  const activeTiers = tiers.filter(t => t.isActive);
+  const categories = ["all", ...Array.from(new Set(services.map(s => s.category))).sort()];
+  const filtered   = category === "all" ? services : services.filter(s => s.category === category);
+  const anyChanged = Object.values(rowStates).some(r => r.changed);
+  const withDiscount = services.filter(s => (parseFloat(rowStates[s.id]?.pct || "0") || 0) > 0).length;
 
   return (
-    <div className="px-6 py-8 max-w-3xl">
+    <div className="px-6 py-8 max-w-5xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Admin</p>
-          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ระดับสมาชิก</h1>
+          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ส่วนลดสมาชิก</h1>
           <p className="text-sm mt-0.5" style={{ color: MUTED }}>
-            จัดการเทียร์, ส่วนลด, และอายุสมาชิก
+            ตั้งส่วนลด (%) หรือราคาสมาชิก (฿) ต่อบริการ — แก้ไขอย่างใดอย่างหนึ่ง อีกค่าคำนวณอัตโนมัติ
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
-          style={{ background: PRIMARY }}>
-          <Plus size={16} /> เพิ่มเทียร์
-        </button>
+
+        <div className="flex items-center gap-3">
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {saved && (
+            <span className="text-sm font-medium" style={{ color: "#059669" }}>✓ บันทึกแล้ว</span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !anyChanged}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            style={{ background: PRIMARY }}
+          >
+            <Save size={15} />
+            {saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
+          </button>
+        </div>
       </div>
 
-      {/* Tiers list */}
-      {activeTiers.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed p-12 text-center" style={{ borderColor: BORDER }}>
-          <Tag className="w-8 h-8 mx-auto mb-3" style={{ color: MUTED }} />
-          <p className="text-sm font-medium" style={{ color: MUTED }}>ยังไม่มีระดับสมาชิก</p>
-          <p className="text-xs mt-1" style={{ color: MUTED }}>กด "+ เพิ่มเทียร์" เพื่อเริ่มต้น</p>
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
+          <p className="text-xs mb-1" style={{ color: MUTED }}>บริการทั้งหมด</p>
+          <p className="text-xl font-semibold" style={{ color: TEXT }}>{services.length}</p>
         </div>
+        <div className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
+          <p className="text-xs mb-1" style={{ color: MUTED }}>มีส่วนลดสมาชิก</p>
+          <p className="text-xl font-semibold" style={{ color: PRIMARY }}>{withDiscount}</p>
+        </div>
+        <div className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
+          <p className="text-xs mb-1" style={{ color: MUTED }}>ยังไม่มีส่วนลด</p>
+          <p className="text-xl font-semibold" style={{ color: MUTED }}>{services.length - withDiscount}</p>
+        </div>
+      </div>
+
+      {/* Category filter */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {categories.map(c => (
+          <button
+            key={c}
+            onClick={() => setCategory(c)}
+            className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors"
+            style={
+              category === c
+                ? { background: PRIMARY, color: "white" }
+                : { background: BG, color: MUTED, border: `1px solid ${BORDER}` }
+            }
+          >
+            {c === "all" ? "ทั้งหมด" : c}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="text-center py-16" style={{ color: MUTED }}>กำลังโหลด...</div>
       ) : (
-        <div className="space-y-4">
-          {activeTiers.map(tier => (
-            <div key={tier.id}>
-              {editId === tier.id ? (
-                <div className="rounded-2xl bg-white p-5" style={{ border: `2px solid ${tier.color}` }}>
-                  <p className="text-sm font-semibold mb-4" style={{ color: TEXT }}>
-                    แก้ไขเทียร์: {tier.nameTh}
-                  </p>
-                  <TierForm
-                    initial={tier}
-                    onSave={data => handleUpdate(tier.id, data)}
-                    onCancel={() => setEditId(null)}
-                  />
-                </div>
+        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1.5px solid ${BORDER}` }}>
+          <table className="w-full">
+            <thead>
+              <tr style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: MUTED }}>บริการ</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: MUTED }}>ราคาปกติ</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: MUTED }}>
+                  <span className="flex items-center gap-1"><Percent size={11} />ส่วนลด</span>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: MUTED }}>
+                  <span className="flex items-center gap-1"><Tag size={11} />ราคาสมาชิก</span>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: MUTED }}>รายละเอียดต่อสาขา</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-10 text-sm" style={{ color: MUTED }}>
+                    ไม่มีบริการ
+                  </td>
+                </tr>
               ) : (
-                <div
-                  className="rounded-2xl bg-white p-5"
-                  style={{ border: `1.5px solid ${BORDER}` }}
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Color dot */}
-                    <div
-                      className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center"
-                      style={{ background: tier.color + "22" }}
-                    >
-                      <span className="text-lg font-bold" style={{ color: tier.color }}>
-                        {tier.nameTh[0]}
-                      </span>
-                    </div>
-
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold" style={{ color: TEXT }}>{tier.nameTh}</h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: tier.color + "22", color: tier.color }}>
-                          {tier.name}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                        <StatChip icon={<Zap size={12} />} label="ส่วนลด" value={`${tier.discountPercent}%`} />
-                        <StatChip icon={<Clock size={12} />} label="อายุ"
-                          value={tier.validityDays > 0 ? `${tier.validityDays} วัน` : "ไม่จำกัด"} />
-                        <StatChip icon={<Tag size={12} />} label="ใช้ได้"
-                          value={tier.maxUsages > 0 ? `${tier.maxUsages} ครั้ง` : "ไม่จำกัด"} />
-                        <StatChip icon={<Users size={12} />} label="สมาชิก"
-                          value={`${tier._count.memberships} คน`} />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-1">
-                      <button onClick={() => setEditId(tier.id)}
-                        className="p-2 rounded-lg hover:bg-gray-100"
-                        title="แก้ไข">
-                        <Pencil size={15} color={MUTED} />
-                      </button>
-                      <button onClick={() => handleDelete(tier.id)}
-                        className="p-2 rounded-lg hover:bg-red-50"
-                        title="ปิดใช้งาน">
-                        <Trash2 size={15} color="#EF4444" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                filtered.map(svc => (
+                  <ServiceDiscountRow
+                    key={svc.id}
+                    svc={svc}
+                    state={rowStates[svc.id] ?? { pct: "", net: "", changed: false }}
+                    onChange={next => setRowStates(prev => ({ ...prev, [svc.id]: next }))}
+                  />
+                ))
               )}
-            </div>
-          ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Link to Line membership status page */}
+      {anyChanged && (
+        <div
+          className="fixed bottom-6 right-6 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-white text-sm font-medium"
+          style={{ background: PRIMARY, zIndex: 50 }}
+        >
+          มีการเปลี่ยนแปลงที่ยังไม่บันทึก
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xl font-semibold"
+            style={{ background: "rgba(255,255,255,0.2)" }}
+          >
+            <Save size={13} /> {saving ? "กำลังบันทึก..." : "บันทึก"}
+          </button>
+        </div>
+      )}
+
+      {/* Line integration */}
       <div className="mt-8 rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
         <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: PRIMARY }}>
           Line Integration
         </p>
         <p className="text-sm mb-2" style={{ color: TEXT }}>
-          ลูกค้าสามารถดูสถานะสมาชิกผ่าน Line ได้ที่:
+          ลูกค้าดูสถานะสมาชิก + ราคาสมาชิกต่อบริการได้ที่:
         </p>
-        <code className="text-xs px-3 py-1.5 rounded-lg block" style={{ background: BG, color: PRIMARY }}>
+        <code className="text-xs px-3 py-1.5 rounded-lg block break-all" style={{ background: BG, color: PRIMARY }}>
           {typeof window !== "undefined" ? window.location.origin : "https://book.err-daysalon.com"}/liff/membership
         </code>
         <p className="text-xs mt-2" style={{ color: MUTED }}>
-          เพิ่ม URL นี้ใน Line Official Account Rich Menu หรือ Messaging API
+          เพิ่ม URL นี้ใน Line Official Account Rich Menu เพื่อให้ลูกค้าเช็กสถานะได้เอง
         </p>
       </div>
-
-      {/* Add tier modal */}
-      {showAdd && (
-        <Modal>
-          <div
-            className="fixed inset-0 flex items-center justify-center p-4"
-            style={{ background: "rgba(0,0,0,0.45)", zIndex: 99999 }}
-            onClick={e => { if (e.target === e.currentTarget) setShowAdd(false); }}
-          >
-            <div className="w-full max-w-md rounded-2xl shadow-2xl bg-white overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b"
-                style={{ borderColor: BORDER }}>
-                <h2 className="font-semibold text-sm" style={{ color: TEXT }}>เพิ่มระดับสมาชิกใหม่</h2>
-                <button onClick={() => setShowAdd(false)} className="p-1 rounded-lg hover:bg-gray-100">
-                  <X size={17} color={MUTED} />
-                </button>
-              </div>
-              <div className="px-6 py-5">
-                <TierForm onSave={handleCreate} onCancel={() => setShowAdd(false)} />
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function StatChip({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-xl px-3 py-2" style={{ background: BG }}>
-      <div className="flex items-center gap-1 mb-0.5" style={{ color: MUTED }}>{icon}
-        <span className="text-xs">{label}</span>
-      </div>
-      <p className="text-sm font-semibold" style={{ color: TEXT }}>{value}</p>
     </div>
   );
 }
