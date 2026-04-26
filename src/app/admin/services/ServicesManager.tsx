@@ -28,6 +28,7 @@ interface ServiceItem {
   category: string;
   advanceBookingRequired: boolean;
   memberPrice: number | null;
+  memberDiscountPercent: number;
   isActive: boolean;
   branches: BranchServiceRow[];
 }
@@ -151,8 +152,8 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
     initial?.category && !CATEGORIES.includes(initial.category) ? initial.category : "",
   );
   const [advance, setAdvance]   = useState(initial?.advanceBookingRequired ?? false);
-  const [memberPrice, setMemberPrice] = useState(
-    initial?.memberPrice ? String(baht(initial.memberPrice)) : "",
+  const [memberDiscountPercent, setMemberDiscountPercent] = useState(
+    initial?.memberDiscountPercent ?? 0,
   );
 
   // build branch pricing state keyed by branchId
@@ -209,7 +210,7 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
             advanceBookingRequired: advance,
-            memberPrice: memberPrice ? Number(memberPrice) : null,
+            memberDiscountPercent,
           }),
         });
         if (!r1.ok) throw new Error((await r1.json()).error);
@@ -233,7 +234,7 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
             advanceBookingRequired: advance,
-            memberPrice: memberPrice ? Number(memberPrice) : null,
+            memberDiscountPercent,
             branchPricing: pricingRows,
           }),
         });
@@ -339,19 +340,43 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
               </label>
             </div>
 
-            {/* Member price */}
+            {/* Member discount */}
             <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ราคาสมาชิก (฿) — เว้นว่างถ้าไม่มี</label>
-              <input
-                type="number"
-                min="0"
-                step="50"
-                value={memberPrice}
-                onChange={e => setMemberPrice(e.target.value)}
-                placeholder="เช่น 350"
-                className="w-40 px-3 py-2 text-sm rounded-lg border"
-                style={{ borderColor: BORDER, color: TEXT }}
-              />
+              <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>
+                ส่วนลดสมาชิก (%)
+              </label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={memberDiscountPercent}
+                    onChange={e => setMemberDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                    className="w-20 px-3 py-2 text-sm rounded-lg border text-right"
+                    style={{ borderColor: BORDER, color: TEXT }}
+                  />
+                  <span className="text-sm font-medium" style={{ color: TEXT }}>%</span>
+                </div>
+                {/* Show net price per branch */}
+                {memberDiscountPercent > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {branches.map(b => {
+                      const p = Number(branchPricing[b.id]?.price);
+                      if (!p) return null;
+                      const net = Math.round(p * (1 - memberDiscountPercent / 100));
+                      return (
+                        <span key={b.id} className="text-xs px-2 py-1 rounded-lg" style={{ background: BG, color: TEXT }}>
+                          {b.name.replace("err.day ", "")}: <strong style={{ color: PRIMARY }}>{fmt(satang(net))}</strong>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {memberDiscountPercent === 0 && (
+                  <span className="text-xs" style={{ color: MUTED }}>ไม่มีส่วนลดสมาชิก</span>
+                )}
+              </div>
             </div>
 
             {/* Per-branch pricing */}

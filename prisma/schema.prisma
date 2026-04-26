@@ -33,7 +33,8 @@ model Service {
   advanceBookingRequired Boolean @default(false) // e.g. hair color
   availableFrom          String? // "HH:mm" — null = all day
   availableTo            String? // "HH:mm"
-  memberPrice            Int?    // optional member-discounted price in satang
+  memberPrice            Int?    // optional member-discounted price in satang (legacy / manual override)
+  memberDiscountPercent  Int     @default(0) // % discount for members on this service
   isActive               Boolean @default(true)
 
   branches BranchService[]
@@ -99,17 +100,18 @@ model MembershipTier {
 model Membership {
   id            String    @id @default(cuid())
   customerId    String    @unique
-  tierId        String
+  tierId        String?   // optional — kept for backward compat, not shown in UI
+  label         String    @default("สมาชิก") // display label
   points        Int       @default(0)
   joinedAt      DateTime  @default(now())
-  activatedAt   DateTime  @default(now()) // when discount period last started
-  expiresAt     DateTime? // null = never expires; set from activatedAt + tier.validityDays
+  activatedAt   DateTime  @default(now())
+  expiresAt     DateTime? // directly editable in admin
   usagesUsed    Int       @default(0)
-  usagesAllowed Int       @default(0) // 0 = use tier.maxUsages; override per-membership
+  usagesAllowed Int       @default(0) // 0 = unlimited
   updatedAt     DateTime  @updatedAt
 
-  customer Customer       @relation(fields: [customerId], references: [id])
-  tier     MembershipTier @relation(fields: [tierId], references: [id])
+  customer Customer        @relation(fields: [customerId], references: [id])
+  tier     MembershipTier? @relation(fields: [tierId], references: [id])
 }
 
 model ServiceAddon {

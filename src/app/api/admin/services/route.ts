@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       name, nameTh, category, description, descriptionTh,
-      advanceBookingRequired, memberPrice,
+      advanceBookingRequired, memberPrice, memberDiscountPercent,
       branchPricing, // [{ branchId, price, duration, isActive }]
     } = body;
 
@@ -36,8 +36,9 @@ export async function POST(request: Request) {
         category,
         description: description || null,
         descriptionTh: descriptionTh || null,
-        advanceBookingRequired: advanceBookingRequired ?? false,
-        memberPrice: memberPrice ? Math.round(Number(memberPrice) * 100) : null,
+        advanceBookingRequired:  advanceBookingRequired ?? false,
+        memberPrice:             memberPrice ? Math.round(Number(memberPrice) * 100) : null,
+        memberDiscountPercent:   memberDiscountPercent ? Number(memberDiscountPercent) : 0,
         isActive: true,
         ...(Array.isArray(branchPricing) && branchPricing.length > 0
           ? {

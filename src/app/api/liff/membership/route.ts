@@ -13,9 +13,7 @@ export async function GET(request: Request) {
 
   const customer = await prisma.customer.findUnique({
     where:   { lineUserId },
-    include: {
-      membership: { include: { tier: true } },
-    },
+    include: { membership: true },
   });
 
   if (!customer) {
@@ -32,28 +30,42 @@ export async function GET(request: Request) {
   const { membership } = customer;
   const now = new Date();
   const isExpired = membership.expiresAt ? membership.expiresAt < now : false;
+  const isUsagesExhausted =
+    membership.usagesAllowed > 0 && membership.usagesUsed >= membership.usagesAllowed;
 
-  const effectiveMax = membership.usagesAllowed > 0
-    ? membership.usagesAllowed
-    : membership.tier.maxUsages;
-
-  const isUsagesExhausted = effectiveMax > 0 && membership.usagesUsed >= effectiveMax;
+  // Fetch services that have a member discount
+  const services = await prisma.service.findMany({
+    where: { isActive: true, memberDiscountPercent: { gt: 0 } },
+    select: {
+      id: true,
+      nameTh: true,
+      name: true,
+      memberDiscountPercent: true,
+      branches: {
+        where: { isActive: true },
+        select: { price: true },
+        orderBy: { price: "asc" },
+        take: 1,
+      },
+    },
+    orderBy: { nameTh: "asc" },
+  });
 
   return NextResponse.json({
-    customerName:      customer.name,
-    tier: {
-      name:            membership.tier.name,
-      nameTh:          membership.tier.nameTh,
-      color:           membership.tier.color,
-      discountPercent: membership.tier.discountPercent,
-    },
-    points:            membership.points,
-    activatedAt:       membership.activatedAt.toISOString(),
-    expiresAt:         membership.expiresAt?.toISOString() ?? null,
-    usagesUsed:        membership.usagesUsed,
-    usagesAllowed:     membership.usagesAllowed,
-    tierMaxUsages:     membership.tier.maxUsages,
+    customerName:   customer.name,
+    label:          membership.label,
+    points:         membership.points,
+    activatedAt:    membership.activatedAt.toISOString(),
+    expiresAt:      membership.expiresAt?.toISOString() ?? null,
+    usagesUsed:     membership.usagesUsed,
+    usagesAllowed:  membership.usagesAllowed,
     isExpired,
     isUsagesExhausted,
+    services: services.map(s => ({
+      id:                   s.id,
+      nameTh:               s.nameTh || s.name,
+      memberDiscountPercent: s.memberDiscountPercent,
+      basePrice:            s.branches[0]?.price ?? null,
+    })),
   });
 }

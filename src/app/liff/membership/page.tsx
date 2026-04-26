@@ -1,19 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CreditCard, Clock, Zap, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Tag } from "lucide-react";
+
+interface ServiceDiscount {
+  id:                    string;
+  nameTh:                string;
+  memberDiscountPercent: number;
+  basePrice:             number | null;
+}
 
 interface MembershipStatus {
-  customerName:   string;
-  tier:           { name: string; nameTh: string; color: string; discountPercent: number };
-  points:         number;
-  activatedAt:    string;
-  expiresAt:      string | null;
-  usagesUsed:     number;
-  usagesAllowed:  number; // 0 = use tier.maxUsages
-  tierMaxUsages:  number; // 0 = unlimited
-  isExpired:      boolean;
+  customerName:      string;
+  label:             string;
+  points:            number;
+  activatedAt:       string;
+  expiresAt:         string | null;
+  usagesUsed:        number;
+  usagesAllowed:     number;
+  isExpired:         boolean;
   isUsagesExhausted: boolean;
+  services:          ServiceDiscount[];
+}
+
+function fmt(satang: number) {
+  return `฿${(satang / 100).toLocaleString("th-TH")}`;
 }
 
 function LoadingScreen() {
@@ -41,17 +52,15 @@ function ErrorScreen({ message }: { message: string }) {
 }
 
 export default function LiffMembershipPage() {
-  const [status, setStatus]   = useState<MembershipStatus | null>(null);
-  const [error,  setError]    = useState<string | null>(null);
+  const [status,  setStatus]  = useState<MembershipStatus | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get lineUserId from URL params (set when opening from Line rich menu / LIFF)
-    const params    = new URLSearchParams(window.location.search);
+    const params     = new URLSearchParams(window.location.search);
     const lineUserId = params.get("lineUserId");
 
     if (!lineUserId) {
-      // Try initialising LIFF to get the ID automatically
       import("@line/liff").then(async ({ default: liff }) => {
         const liffId = process.env.NEXT_PUBLIC_LIFF_ID!;
         await liff.init({ liffId });
@@ -73,8 +82,7 @@ export default function LiffMembershipPage() {
       try {
         const res = await fetch(`/api/liff/membership?lineUserId=${encodeURIComponent(uid)}`);
         if (!res.ok) {
-          const data = await res.json();
-          setError(data.error ?? "ไม่พบข้อมูลสมาชิก");
+          setError((await res.json()).error ?? "ไม่พบข้อมูลสมาชิก");
         } else {
           setStatus(await res.json());
         }
@@ -90,7 +98,7 @@ export default function LiffMembershipPage() {
   if (error)   return <ErrorScreen message={error} />;
   if (!status) return null;
 
-  const { tier, isExpired, isUsagesExhausted } = status;
+  const { isExpired, isUsagesExhausted } = status;
   const isActive = !isExpired && !isUsagesExhausted;
 
   const expiresDate = status.expiresAt
@@ -101,13 +109,9 @@ export default function LiffMembershipPage() {
     day: "numeric", month: "long", year: "numeric",
   });
 
-  const effectiveMax = status.usagesAllowed > 0
-    ? status.usagesAllowed
-    : status.tierMaxUsages;  // 0 means unlimited
-
-  const usagesLeft = effectiveMax > 0
-    ? Math.max(0, effectiveMax - status.usagesUsed)
-    : null; // null = unlimited
+  const usagesLeft = status.usagesAllowed > 0
+    ? Math.max(0, status.usagesAllowed - status.usagesUsed)
+    : null;
 
   return (
     <div className="min-h-screen pb-12" style={{ background: "#FDF7F2" }}>
@@ -121,107 +125,110 @@ export default function LiffMembershipPage() {
       </div>
 
       <div className="px-5 py-6 space-y-4 max-w-sm mx-auto">
-        {/* Tier card */}
+        {/* Status card */}
         <div
-          className="rounded-2xl p-5 text-center shadow-sm"
+          className="rounded-2xl p-5 shadow-sm"
           style={{
-            background: `linear-gradient(135deg, ${tier.color}22, ${tier.color}11)`,
-            border: `2px solid ${tier.color}44`,
+            background: isActive ? "#ECFDF5" : "#FEF2F2",
+            border: `2px solid ${isActive ? "#BBF7D0" : "#FECACA"}`,
           }}
         >
-          <CreditCard className="w-10 h-10 mx-auto mb-2" style={{ color: tier.color }} />
-          <p className="text-2xl font-bold" style={{ color: tier.color }}>{tier.nameTh}</p>
-          <p className="text-sm mt-1" style={{ color: "#6B5245" }}>{tier.name} Membership</p>
-
-          {/* Active / expired badge */}
-          <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium"
-            style={
-              isActive
-                ? { background: "#ECFDF5", color: "#065F46" }
-                : { background: "#FEF2F2", color: "#991B1B" }
+          <div className="flex items-center gap-3 mb-4">
+            {isActive
+              ? <CheckCircle2 className="w-8 h-8 flex-shrink-0" style={{ color: "#059669" }} />
+              : <XCircle     className="w-8 h-8 flex-shrink-0" style={{ color: "#DC2626" }} />
             }
-          >
-            {isActive ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-            {isExpired ? "หมดอายุแล้ว" : isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
-          </div>
-        </div>
-
-        {/* Discount */}
-        <div className="rounded-2xl p-4 bg-white shadow-sm" style={{ border: "1.5px solid #E8D8CC" }}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: "#FFF8E8" }}>
-              <Zap className="w-5 h-5" style={{ color: "#B45309" }} />
-            </div>
             <div>
-              <p className="text-xs" style={{ color: "#A08070" }}>ส่วนลดสมาชิก</p>
-              <p className="text-xl font-bold" style={{ color: "#B45309" }}>
-                {tier.discountPercent}%
+              <p className="font-bold text-lg" style={{ color: isActive ? "#065F46" : "#991B1B" }}>
+                {status.label}
+              </p>
+              <p className="text-sm font-medium" style={{ color: isActive ? "#059669" : "#DC2626" }}>
+                {isExpired ? "สมาชิกหมดอายุ" : isUsagesExhausted ? "ใช้สิทธิ์ครบแล้ว" : "ใช้งานได้"}
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Usage */}
-        <div className="rounded-2xl p-4 bg-white shadow-sm" style={{ border: "1.5px solid #E8D8CC" }}>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#8B1D24" }}>
-            การใช้สิทธิ์
-          </p>
-          {usagesLeft === null ? (
-            <p className="text-sm" style={{ color: "#3B2A24" }}>
-              ใช้แล้ว <strong>{status.usagesUsed}</strong> ครั้ง &nbsp;·&nbsp; ไม่จำกัดครั้ง
-            </p>
-          ) : (
-            <>
-              <div className="flex justify-between text-sm mb-2">
-                <span style={{ color: "#6B5245" }}>ใช้แล้ว {status.usagesUsed} / {effectiveMax} ครั้ง</span>
-                <span style={{ color: "#8B1D24" }}>เหลือ {usagesLeft} ครั้ง</span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F0E4D8" }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(100, (status.usagesUsed / effectiveMax) * 100)}%`,
-                    background: usagesLeft === 0 ? "#EF4444" : "#8B1D24",
-                  }}
-                />
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Dates */}
-        <div className="rounded-2xl p-4 bg-white shadow-sm" style={{ border: "1.5px solid #E8D8CC" }}>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#8B1D24" }}>
-            วันที่
-          </p>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2" style={{ color: "#A08070" }}>
-                <Clock size={13} />วันที่เริ่มต้น
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span style={{ color: "#6B5245" }} className="flex items-center gap-1.5">
+                <Clock size={13} /> วันที่เริ่มต้น
               </span>
               <span style={{ color: "#3B2A24" }}>{activatedDate}</span>
             </div>
             {expiresDate && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2" style={{ color: isExpired ? "#991B1B" : "#A08070" }}>
-                  <Clock size={13} />วันหมดอายุ
+              <div className="flex justify-between">
+                <span style={{ color: "#6B5245" }} className="flex items-center gap-1.5">
+                  <Clock size={13} /> วันหมดอายุ
                 </span>
-                <span style={{ color: isExpired ? "#991B1B" : "#3B2A24" }}>{expiresDate}</span>
+                <span style={{ color: isExpired ? "#DC2626" : "#3B2A24", fontWeight: isExpired ? 600 : 400 }}>
+                  {expiresDate}
+                </span>
               </div>
             )}
+            {!expiresDate && (
+              <div className="flex justify-between">
+                <span style={{ color: "#6B5245" }}>วันหมดอายุ</span>
+                <span style={{ color: "#059669", fontWeight: 600 }}>ไม่หมดอายุ</span>
+              </div>
+            )}
+            {usagesLeft !== null ? (
+              <div className="flex justify-between">
+                <span style={{ color: "#6B5245" }}>สิทธิ์คงเหลือ</span>
+                <span style={{ color: usagesLeft === 0 ? "#DC2626" : "#3B2A24", fontWeight: 600 }}>
+                  {usagesLeft} / {status.usagesAllowed} ครั้ง
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between">
+                <span style={{ color: "#6B5245" }}>จำนวนครั้ง</span>
+                <span style={{ color: "#059669", fontWeight: 600 }}>ไม่จำกัด</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span style={{ color: "#6B5245" }}>แต้มสะสม</span>
+              <span style={{ color: "#8B1D24", fontWeight: 600 }}>{status.points.toLocaleString()} pts</span>
+            </div>
           </div>
         </div>
 
-        {/* Points */}
-        <div className="rounded-2xl p-4 bg-white shadow-sm" style={{ border: "1.5px solid #E8D8CC" }}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm" style={{ color: "#6B5245" }}>แต้มสะสม</p>
-            <p className="text-xl font-bold" style={{ color: "#8B1D24" }}>
-              {status.points.toLocaleString()} pts
-            </p>
+        {/* Per-service discounts */}
+        {status.services.length > 0 && (
+          <div className="rounded-2xl bg-white shadow-sm" style={{ border: "1.5px solid #E8D8CC" }}>
+            <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+              <Tag size={14} style={{ color: "#8B1D24" }} />
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#8B1D24" }}>
+                ส่วนลดสำหรับสมาชิก
+              </p>
+            </div>
+            <div className="divide-y" style={{ borderColor: "#F0E4D8" }}>
+              {status.services.map(s => {
+                const netSatang = s.basePrice
+                  ? Math.round(s.basePrice * (1 - s.memberDiscountPercent / 100))
+                  : null;
+                return (
+                  <div key={s.id} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>{s.nameTh}</p>
+                      {s.basePrice && (
+                        <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>
+                          ปกติ <span style={{ textDecoration: "line-through" }}>{fmt(s.basePrice)}</span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold" style={{ color: "#8B1D24" }}>
+                        {netSatang ? fmt(netSatang) : `ลด ${s.memberDiscountPercent}%`}
+                      </p>
+                      <p className="text-xs" style={{ color: "#059669" }}>
+                        ลด {s.memberDiscountPercent}%
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

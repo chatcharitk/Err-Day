@@ -29,6 +29,7 @@ export default async function ServicesPage() {
         category: s.category,
         advanceBookingRequired: s.advanceBookingRequired,
         memberPrice: s.memberPrice,
+        memberDiscountPercent: s.memberDiscountPercent,
         isActive: s.isActive,
         branches: s.branches.map(bs => ({
           id: bs.id,

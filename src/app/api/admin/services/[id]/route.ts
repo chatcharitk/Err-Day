@@ -11,7 +11,7 @@ export async function PATCH(
     const body = await request.json();
     const {
       name, nameTh, category, description, descriptionTh,
-      advanceBookingRequired, memberPrice, isActive,
+      advanceBookingRequired, memberPrice, memberDiscountPercent, isActive,
     } = body;
 
     const service = await prisma.service.update({
@@ -26,6 +26,7 @@ export async function PATCH(
         ...(memberPrice !== undefined
           ? { memberPrice: memberPrice ? Math.round(Number(memberPrice) * 100) : null }
           : {}),
+        ...(memberDiscountPercent !== undefined ? { memberDiscountPercent: Number(memberDiscountPercent) } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
       },
       include: {

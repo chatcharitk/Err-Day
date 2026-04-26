@@ -10,22 +10,13 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface MembershipTier {
-  id:              string;
-  name:            string;
-  nameTh:          string;
-  color:           string;
-  discountPercent: number;
-  validityDays:    number;
-  maxUsages:       number;
-}
 interface MembershipInfo {
+  label:         string;
   points:        number;
   activatedAt:   string;
   expiresAt:     string | null;
   usagesUsed:    number;
   usagesAllowed: number;
-  tier:          MembershipTier;
 }
 
 interface Customer {
@@ -270,55 +261,70 @@ function MembershipSection({
   customer: Customer;
   onUpdated: (c: Customer) => void;
 }) {
-  const [tiers,      setTiers]      = useState<MembershipTier[] | null>(null);
-  const [showForm,   setShowForm]   = useState(false);
-  const [tierId,     setTierId]     = useState("");
-  const [activatedAt, setActivatedAt] = useState(new Date().toISOString().slice(0, 10));
-  const [usagesAllowed, setUsagesAllowed] = useState(0);
-  const [saving,     setSaving]     = useState(false);
-  const [error,      setError]      = useState("");
-
   const m = customer.membership;
 
-  // Load tiers when form opens
-  useEffect(() => {
-    if (showForm && tiers === null) {
-      fetch("/api/admin/membership-tiers")
-        .then(r => r.json())
-        .then((data: MembershipTier[]) => {
-          setTiers(data.filter(t => (t as unknown as { isActive: boolean }).isActive !== false));
-          if (data.length > 0 && !tierId) setTierId(data[0].id);
-        })
-        .catch(() => setTiers([]));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showForm]);
+  // View vs edit state
+  const [editing,       setEditing]       = useState(false);
+  const [expiresAt,     setExpiresAt]     = useState(m?.expiresAt ? m.expiresAt.slice(0, 10) : "");
+  const [noExpiry,      setNoExpiry]      = useState(!m?.expiresAt);
+  const [usagesAllowed, setUsagesAllowed] = useState(m?.usagesAllowed ?? 0);
+  const [saving,        setSaving]        = useState(false);
+  const [error,         setError]         = useState("");
 
-  // Pre-select existing tier when reopening form
+  // Reset form whenever a different customer opens
   useEffect(() => {
-    if (showForm && m) {
-      setTierId(m.tier.id);
-      setActivatedAt(new Date().toISOString().slice(0, 10));
-      setUsagesAllowed(0);
-    }
+    setExpiresAt(m?.expiresAt ? m.expiresAt.slice(0, 10) : "");
+    setNoExpiry(!m?.expiresAt);
+    setUsagesAllowed(m?.usagesAllowed ?? 0);
+    setEditing(false);
+    setError("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showForm]);
+  }, [customer.id]);
+
+  async function refetch() {
+    const res = await fetch(`/api/admin/customers/${customer.id}`);
+    if (res.ok) onUpdated(await res.json());
+  }
 
   async function handleRegister() {
-    if (!tierId) return;
+    setSaving(true);
+    setError("");
+    try {
+      const payload = {
+        activatedAt:  new Date().toISOString().slice(0, 10),
+        expiresAt:    noExpiry ? null : (expiresAt || null),
+        usagesAllowed,
+      };
+      const res = await fetch(`/api/admin/customers/${customer.id}/membership`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
+      await refetch();
+      setEditing(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveEdit() {
     setSaving(true);
     setError("");
     try {
       const res = await fetch(`/api/admin/customers/${customer.id}/membership`, {
-        method:  "POST",
+        method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ tierId, activatedAt, usagesAllowed }),
+        body:    JSON.stringify({
+          expiresAt:    noExpiry ? null : (expiresAt || null),
+          usagesAllowed,
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
-      // Re-fetch customer to get updated membership
-      const cRes = await fetch(`/api/admin/customers/${customer.id}`);
-      if (cRes.ok) onUpdated(await cRes.json());
-      setShowForm(false);
+      await refetch();
+      setEditing(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
     } finally {
@@ -328,22 +334,21 @@ function MembershipSection({
 
   async function handleDelete() {
     if (!confirm("ต้องการยกเลิกสมาชิกใช่ไหม?")) return;
-    const res = await fetch(`/api/admin/customers/${customer.id}/membership`, { method: "DELETE" });
-    if (!res.ok) { alert("ไม่สามารถลบได้"); return; }
-    const cRes = await fetch(`/api/admin/customers/${customer.id}`);
-    if (cRes.ok) onUpdated(await cRes.json());
+    await fetch(`/api/admin/customers/${customer.id}/membership`, { method: "DELETE" });
+    await refetch();
   }
 
-  // Compute derived status from current membership
+  // Derived status
   const now = new Date();
   const isExpired = m?.expiresAt ? new Date(m.expiresAt) < now : false;
-  const effectiveMax = m ? (m.usagesAllowed > 0 ? m.usagesAllowed : m.tier.maxUsages) : 0;
-  const isUsagesExhausted = effectiveMax > 0 && m ? m.usagesUsed >= effectiveMax : false;
+  const isUsagesExhausted = (m?.usagesAllowed ?? 0) > 0 && m ? m.usagesUsed >= m.usagesAllowed : false;
   const isActive = !!m && !isExpired && !isUsagesExhausted;
 
   const expiresLabel = m?.expiresAt
     ? new Date(m.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
     : "ไม่หมดอายุ";
+
+  const activeColor = isActive ? PRIMARY : "#EF4444";
 
   return (
     <section>
@@ -354,162 +359,141 @@ function MembershipSection({
         {m ? (
           <div className="flex gap-1">
             <button
-              onClick={() => setShowForm(v => !v)}
+              onClick={() => { setEditing(v => !v); setError(""); }}
               className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium"
               style={{ color: "#2563EB", background: "#EFF6FF", border: "1px solid #BFDBFE" }}
             >
-              <Pencil size={11} /> {showForm ? "ยกเลิก" : "ต่ออายุ/เปลี่ยนเทียร์"}
+              <Pencil size={11} /> {editing ? "ยกเลิก" : "แก้ไข"}
             </button>
-            <button
-              onClick={handleDelete}
-              className="p-1 rounded-lg hover:bg-red-50"
-              title="ยกเลิกสมาชิก"
-            >
+            <button onClick={handleDelete} className="p-1 rounded-lg hover:bg-red-50" title="ยกเลิกสมาชิก">
               <Trash2 size={13} color="#EF4444" />
             </button>
           </div>
-        ) : (
+        ) : !editing ? (
           <button
-            onClick={() => setShowForm(v => !v)}
+            onClick={() => setEditing(true)}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white"
             style={{ background: PRIMARY }}
           >
             <Plus size={11} /> ลงทะเบียนสมาชิก
           </button>
-        )}
+        ) : null}
       </div>
 
-      {/* Current membership card */}
-      {m && !showForm && (
+      {/* ── Current membership card (view mode) ── */}
+      {m && !editing && (
         <div
           className="rounded-xl border p-4"
           style={{
-            borderColor: isActive ? m.tier.color + "44" : BORDER,
-            background: isActive ? m.tier.color + "10" : "#FEF2F2",
+            borderColor: activeColor + "44",
+            background:  activeColor + "10",
           }}
         >
-          <div className="flex items-start gap-3">
-            <CreditCard size={18} style={{ color: isActive ? m.tier.color : "#EF4444", marginTop: 2 }} />
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-sm" style={{ color: isActive ? m.tier.color : "#EF4444" }}>
-                  {m.tier.nameTh}
-                </p>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={
-                    isActive
-                      ? { background: "#ECFDF5", color: "#065F46" }
-                      : { background: "#FEF2F2", color: "#991B1B" }
-                  }
-                >
-                  {isExpired ? "หมดอายุ" : isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs" style={{ color: MUTED }}>
-                <span className="flex items-center gap-1">
-                  <Zap size={10} /> ส่วนลด {m.tier.discountPercent}%
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock size={10} /> หมดอายุ {expiresLabel}
-                </span>
-                <span className="flex items-center gap-1">
-                  <CreditCard size={10} /> {m.points} แต้มสะสม
-                </span>
-                <span className="flex items-center gap-1">
-                  <UserIcon size={10} />
-                  ใช้แล้ว {m.usagesUsed}
-                  {effectiveMax > 0 ? ` / ${effectiveMax} ครั้ง` : " ครั้ง (ไม่จำกัด)"}
-                </span>
-              </div>
-            </div>
+          <div className="flex items-center gap-3 mb-3">
+            <CreditCard size={16} style={{ color: activeColor }} />
+            <span className="font-semibold text-sm" style={{ color: activeColor }}>
+              {m.label}
+            </span>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium ml-auto"
+              style={
+                isActive
+                  ? { background: "#ECFDF5", color: "#065F46" }
+                  : { background: "#FEF2F2", color: "#991B1B" }
+              }
+            >
+              {isExpired ? "หมดอายุ" : isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs" style={{ color: MUTED }}>
+            <span className="flex items-center gap-1.5">
+              <Clock size={11} />
+              <span>หมดอายุ</span>
+              <strong style={{ color: isExpired ? "#EF4444" : TEXT }}>{expiresLabel}</strong>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <UserIcon size={11} />
+              ใช้แล้ว {m.usagesUsed}
+              {m.usagesAllowed > 0 ? ` / ${m.usagesAllowed} ครั้ง` : " ครั้ง (ไม่จำกัด)"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <CreditCard size={11} />
+              {m.points} แต้มสะสม
+            </span>
           </div>
         </div>
       )}
 
-      {/* No membership */}
-      {!m && !showForm && (
-        <div
-          className="rounded-xl border-2 border-dashed p-4 text-center"
-          style={{ borderColor: BORDER, color: MUTED }}
-        >
+      {/* ── No membership ── */}
+      {!m && !editing && (
+        <div className="rounded-xl border-2 border-dashed p-4 text-center" style={{ borderColor: BORDER, color: MUTED }}>
           <p className="text-sm font-medium">ยังไม่ได้สมัครสมาชิก</p>
           <p className="text-xs mt-1">กด &quot;ลงทะเบียนสมาชิก&quot; เพื่อเริ่มต้น</p>
         </div>
       )}
 
-      {/* Register / renew form */}
-      {showForm && (
-        <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: "#FAFAFA" }}>
+      {/* ── Edit / register form ── */}
+      {editing && (
+        <div className="rounded-xl border p-4 space-y-4" style={{ borderColor: BORDER, background: "#FAFAFA" }}>
           <p className="text-sm font-semibold" style={{ color: TEXT }}>
-            {m ? "ต่ออายุ / เปลี่ยนระดับสมาชิก" : "ลงทะเบียนสมาชิกใหม่"}
+            {m ? "แก้ไขข้อมูลสมาชิก" : "ลงทะเบียนสมาชิกใหม่"}
           </p>
 
+          {/* Expiry */}
           <div>
-            <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ระดับสมาชิก</label>
-            {tiers === null ? (
-              <p className="text-xs" style={{ color: MUTED }}>กำลังโหลด...</p>
-            ) : tiers.length === 0 ? (
-              <p className="text-xs text-red-600">ยังไม่มีระดับสมาชิก — กรุณาเพิ่มใน Admin &gt; ระดับสมาชิก</p>
-            ) : (
-              <select
-                value={tierId}
-                onChange={e => setTierId(e.target.value)}
+            <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>วันหมดอายุ</label>
+            <div className="flex items-center gap-3 mb-2">
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: TEXT }}>
+                <input
+                  type="checkbox"
+                  checked={noExpiry}
+                  onChange={e => setNoExpiry(e.target.checked)}
+                  className="rounded"
+                />
+                ไม่หมดอายุ
+              </label>
+            </div>
+            {!noExpiry && (
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={e => setExpiresAt(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border"
-                style={{ borderColor: BORDER, color: TEXT, background: "white" }}
-              >
-                {tiers.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.nameTh} — ส่วนลด {t.discountPercent}%,{" "}
-                    {t.validityDays > 0 ? `${t.validityDays} วัน` : "ไม่หมดอายุ"},{" "}
-                    {t.maxUsages > 0 ? `${t.maxUsages} ครั้ง` : "ไม่จำกัดครั้ง"}
-                  </option>
-                ))}
-              </select>
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>วันที่เริ่มต้น</label>
-              <input
-                type="date"
-                value={activatedAt}
-                onChange={e => setActivatedAt(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border"
-                style={{ borderColor: BORDER, color: TEXT }}
-              />
-            </div>
-            <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>
-                จำนวนครั้ง (0 = ใช้ค่าเทียร์)
-              </label>
-              <input
-                type="number" min={0}
-                value={usagesAllowed}
-                onChange={e => setUsagesAllowed(Number(e.target.value))}
-                className="w-full px-3 py-2 text-sm rounded-xl border"
-                style={{ borderColor: BORDER, color: TEXT }}
-              />
-            </div>
+          {/* Usages */}
+          <div>
+            <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>
+              จำนวนครั้งที่ใช้สิทธิ์ได้ (0 = ไม่จำกัด)
+            </label>
+            <input
+              type="number" min={0}
+              value={usagesAllowed}
+              onChange={e => setUsagesAllowed(Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm rounded-xl border"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex justify-end gap-2">
             <button
-              onClick={() => { setShowForm(false); setError(""); }}
+              onClick={() => { setEditing(false); setError(""); }}
               className="px-4 py-2 text-sm rounded-xl border font-medium"
               style={{ borderColor: BORDER, color: MUTED }}
             >ยกเลิก</button>
             <button
-              onClick={handleRegister} disabled={saving || !tierId}
+              onClick={m ? handleSaveEdit : handleRegister}
+              disabled={saving}
               className="flex items-center gap-2 px-5 py-2 text-sm rounded-xl font-medium text-white"
               style={{ background: saving ? MUTED : PRIMARY }}
             >
               <Save size={14} />
-              {saving ? "กำลังบันทึก..." : m ? "ต่ออายุ" : "ลงทะเบียน"}
+              {saving ? "กำลังบันทึก..." : m ? "บันทึก" : "ลงทะเบียน"}
             </button>
           </div>
         </div>
@@ -629,15 +613,12 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
                     Line ✓
                   </span>
                 )}
-                {customer.membership?.tier && (
+                {customer.membership && (
                   <span
                     className="text-xs px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      background: customer.membership.tier.color + "22",
-                      color: customer.membership.tier.color,
-                    }}
+                    style={{ background: PRIMARY + "18", color: PRIMARY }}
                   >
-                    {customer.membership.tier.nameTh}
+                    {customer.membership.label}
                   </span>
                 )}
                 <span className="text-xs" style={{ color: MUTED }}>
@@ -883,15 +864,12 @@ function CustomerCard({ customer, onClick, highlightRef }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-semibold text-sm" style={{ color: TEXT }}>{customer.name}</p>
-          {customer.membership?.tier && (
+          {customer.membership && (
             <span
               className="text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{
-                background: customer.membership.tier.color + "22",
-                color: customer.membership.tier.color,
-              }}
+              style={{ background: PRIMARY + "18", color: PRIMARY }}
             >
-              {customer.membership.tier.nameTh}
+              {customer.membership.label}
             </span>
           )}
           {customer.lineUserId && (
