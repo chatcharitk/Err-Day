@@ -319,7 +319,11 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
             </p>
 
             <button
-              onClick={liff.login}
+              onClick={() => {
+                // Save where to return after Line OAuth — the /book page reads this
+                try { sessionStorage.setItem("liff_return_to", window.location.pathname); } catch {}
+                liff.login();
+              }}
               className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-medium text-white text-sm transition-opacity hover:opacity-90 mb-3"
               style={{ background: "#06C755" }}
             >
