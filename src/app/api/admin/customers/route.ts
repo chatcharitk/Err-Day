@@ -1,6 +1,30 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// GET /api/admin/customers?q=search — search customers by name or phone
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get("q")?.trim() ?? "";
+
+  if (q.length < 1) {
+    return NextResponse.json([]);
+  }
+
+  const customers = await prisma.customer.findMany({
+    where: {
+      OR: [
+        { name:  { contains: q, mode: "insensitive" } },
+        { phone: { contains: q } },
+      ],
+    },
+    orderBy: { name: "asc" },
+    take: 10,
+    select: { id: true, name: true, phone: true },
+  });
+
+  return NextResponse.json(customers);
+}
+
 // POST /api/admin/customers — register a new customer
 export async function POST(request: Request) {
   try {
