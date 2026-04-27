@@ -90,6 +90,9 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
       <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#8B1D24" }}>
         <span className="font-medium tracking-tight text-white text-lg">err.day</span>
         <div className="flex items-center gap-5">
+          <Link href="/my-bookings" className="text-white/80 hover:text-white text-sm transition-colors">
+            การจองของฉัน
+          </Link>
           <Link href="/membership" className="text-white/80 hover:text-white text-sm transition-colors">
             สมาชิก
           </Link>

@@ -146,18 +146,18 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
 
         <div className="flex flex-col gap-3">
           <Link
-            href="/"
+            href="/my-bookings"
             className="flex items-center justify-center w-full py-3 rounded-xl text-white font-medium transition-opacity hover:opacity-90"
             style={{ backgroundColor: "#8B1D24" }}
           >
-            จองคิวอีกครั้ง
+            จัดการการจองของฉัน
           </Link>
           <Link
-            href={`/book/${booking.branchId}`}
+            href="/"
             className="flex items-center justify-center w-full py-3 rounded-xl font-medium border-2 transition-colors"
             style={{ borderColor: "#D6BCAE", color: "#6B5245" }}
           >
-            กลับไปที่ {booking.branch.name}
+            จองคิวอีกครั้ง
           </Link>
         </div>
 
