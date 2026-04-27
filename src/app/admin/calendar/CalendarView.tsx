@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface BookingItem {
@@ -719,11 +720,13 @@ function AddBookingModal({
   const [staffId,   setStaffId]   = useState("");
   const [startTime, setStartTime] = useState("10:00");
   const [endTime,   setEndTime]   = useState("11:00");
-  const [name,      setName]      = useState("");
-  const [phone,     setPhone]     = useState("");
+  const [customer,  setCustomer]  = useState<CustomerValue>({ id: null, name: "", phone: "" });
   const [notesVal,  setNotesVal]  = useState("");
   const [saving,    setSaving]    = useState(false);
   const [error,     setError]     = useState("");
+
+  const name  = customer.name;
+  const phone = customer.phone;
 
   useEffect(() => {
     fetch(`/api/services?branchId=${branchId}`)
@@ -825,17 +828,9 @@ function AddBookingModal({
           </div>
 
           {/* Customer */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">ชื่อลูกค้า *</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อ-นามสกุล"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">เบอร์โทร *</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="0812345678"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30" />
-            </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">ลูกค้า *</label>
+            <CustomerSearch value={customer} onChange={setCustomer} requirePhoneOnCreate />
           </div>
 
           {/* Notes */}

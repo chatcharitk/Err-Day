@@ -1,16 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Search, User } from "lucide-react";
+import { useState } from "react";
+import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard } from "lucide-react";
 import type { Branch, BranchService, Service } from "@/generated/prisma/client";
+import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
 type BS = BranchService & { service: Service };
-
-interface CustomerSuggestion {
-  id: string;
-  name: string;
-  phone: string | null;
-}
 
 interface CartItem {
   id: string;
@@ -34,8 +29,7 @@ const CATEGORY_ORDER = ["บริการทั่วไป", "แพ็กเ
 
 export default function PosTerminal({ branches, activeBranchId, branchServices }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [customer, setCustomer] = useState<CustomerValue>({ id: null, name: "", phone: "" });
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -45,57 +39,9 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
   const [lastCustomerPhone, setLastCustomerPhone] = useState<string | null>(null);
   const [showMemberPrompt, setShowMemberPrompt] = useState(false);
 
-  // Customer search
-  const [searchQuery, setSearchQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<CustomerSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const fetchSuggestions = useCallback((q: string) => {
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    if (q.trim().length === 0) { setSuggestions([]); setShowSuggestions(false); return; }
-    searchDebounce.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/admin/customers?q=${encodeURIComponent(q)}`);
-        if (res.ok) {
-          const data: CustomerSuggestion[] = await res.json();
-          setSuggestions(data);
-          setShowSuggestions(true);
-        }
-      } catch { /* ignore */ }
-    }, 250);
-  }, []);
-
-  const selectCustomer = (c: CustomerSuggestion) => {
-    setSelectedCustomerId(c.id);
-    setCustomerName(c.name);
-    setCustomerPhone(c.phone ?? "");
-    setSearchQuery(c.name);
-    setShowSuggestions(false);
-    setSuggestions([]);
-  };
-
-  const clearCustomer = () => {
-    setSelectedCustomerId(null);
-    setCustomerName("");
-    setCustomerPhone("");
-    setSearchQuery("");
-    setSuggestions([]);
-    setShowSuggestions(false);
-  };
+  const customerName  = customer.name;
+  const customerPhone = customer.phone;
+  const clearCustomer = () => setCustomer({ id: null, name: "", phone: "" });
 
   const categories = CATEGORY_ORDER.filter((c) =>
     branchServices.some((bs) => bs.service.category === c)
@@ -294,86 +240,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
           {/* Customer */}
           <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid #F0E4D8" }}>
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#8B1D24" }}>ลูกค้า</p>
-
-            {/* Search / autocomplete */}
-            <div className="relative mb-2" ref={searchRef}>
-              <div className="flex items-center border rounded-lg px-3 py-2 gap-2" style={{ borderColor: selectedCustomerId ? "#22c55e" : "#D6BCAE", backgroundColor: selectedCustomerId ? "#F0FFF4" : "white" }}>
-                {selectedCustomerId
-                  ? <User className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#22c55e" }} />
-                  : <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#A08070" }} />
-                }
-                <input
-                  type="text"
-                  placeholder="ค้นหาลูกค้า (ชื่อ / เบอร์)"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSearchQuery(v);
-                    setSelectedCustomerId(null);
-                    setCustomerName(v);
-                    setCustomerPhone("");
-                    fetchSuggestions(v);
-                  }}
-                  onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                  className="flex-1 text-sm outline-none bg-transparent"
-                  style={{ color: "#3B2A24" }}
-                />
-                {(searchQuery || selectedCustomerId) && (
-                  <button onClick={clearCustomer} style={{ color: "#A08070" }}>
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Suggestions dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl border shadow-lg overflow-hidden" style={{ borderColor: "#E8D8CC", backgroundColor: "white" }}>
-                  {suggestions.map((c) => (
-                    <button
-                      key={c.id}
-                      onMouseDown={(e) => { e.preventDefault(); selectCustomer(c); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 text-left"
-                    >
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 text-white" style={{ backgroundColor: "#8B1D24" }}>
-                        {c.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: "#3B2A24" }}>{c.name}</p>
-                        {c.phone && <p className="text-xs" style={{ color: "#A08070" }}>{c.phone}</p>}
-                      </div>
-                    </button>
-                  ))}
-                  {/* New customer option */}
-                  <button
-                    onMouseDown={(e) => { e.preventDefault(); setShowSuggestions(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 text-left border-t"
-                    style={{ borderColor: "#F0E4D8" }}
-                  >
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#F0E4D8" }}>
-                      <Plus className="w-3.5 h-3.5" style={{ color: "#8B1D24" }} />
-                    </div>
-                    <p className="text-sm" style={{ color: "#8B1D24" }}>ลูกค้าใหม่ &quot;{searchQuery}&quot;</p>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Selected customer info or manual phone entry */}
-            {selectedCustomerId ? (
-              <div className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "#F0FFF4", border: "1px solid #BBF7D0" }}>
-                <p className="font-medium" style={{ color: "#166534" }}>{customerName}</p>
-                {customerPhone && <p className="text-xs mt-0.5" style={{ color: "#15803d" }}>{customerPhone}</p>}
-              </div>
-            ) : (
-              <input
-                type="tel"
-                placeholder="เบอร์โทร (ไม่บังคับ)"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "#D6BCAE" }}
-              />
-            )}
+            <CustomerSearch value={customer} onChange={setCustomer} />
           </div>
 
           {/* Cart items */}
