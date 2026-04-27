@@ -13,6 +13,9 @@ model Branch {
   address   String
   phone     String
   imageUrl  String?
+  mapUrl    String?  // Google Maps link shown to customers (e.g. maps.app.goo.gl short link)
+  mapLat    Float?   // Latitude for precise embed pin
+  mapLng    Float?   // Longitude for precise embed pin
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
