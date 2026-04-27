@@ -3,20 +3,24 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MapPin, ArrowRight } from "lucide-react";
+import { MapPin, Phone, ArrowRight, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
+import { LangSwitcher } from "@/components/LangSwitcher";
 
-interface Branch { id: string; name: string; address: string }
+interface Branch {
+  id:      string;
+  name:    string;
+  address: string;
+  phone?:  string | null;
+}
 
-const RETURN_KEY = "liff_return_to";
-const LIFF_ID    = process.env.NEXT_PUBLIC_LIFF_ID ?? "";
-
-// Deep-link that opens this LIFF inside the LINE app (no verification code)
+const RETURN_KEY   = "liff_return_to";
+const LIFF_ID      = process.env.NEXT_PUBLIC_LIFF_ID ?? "";
 const LINE_APP_URL = `https://liff.line.me/${LIFF_ID}`;
 
 const LINE_SVG = (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-    <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
+    <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
   </svg>
 );
 
@@ -26,7 +30,7 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
   const [skipLine,     setSkipLine]     = useState(false);
   const [showBranches, setShowBranches] = useState(false);
 
-  // After LIFF init: either redirect back to a saved path, or show the UI
+  // After LIFF init: redirect back to a saved path if present, otherwise show the page.
   useEffect(() => {
     if (!liff.ready) return;
     try {
@@ -53,97 +57,168 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
     );
   }
 
-  // ── Welcome / Login screen ───────────────────────────────────────────────────
-  // Show ONLY when:
-  //  • NOT inside the LINE app (isInClient = false) — if inside LINE, LIFF auto-authenticates
-  //  • NOT already logged in
-  //  • User hasn't chosen "Continue without LINE"
-  const showWelcome = !liff.isInClient && !liff.isLoggedIn && !skipLine;
+  // Show the login choice ONLY when:
+  // • NOT inside the LINE app (LIFF auto-authenticates inside LINE)
+  // • NOT already logged in
+  // • User hasn't tapped "Continue without LINE"
+  const showLogin = !liff.isInClient && !liff.isLoggedIn && !skipLine;
 
-  if (showWelcome) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6"
-        style={{ background: "#FDF8F3" }}>
-
-        {/* Logo / brand */}
-        <div className="text-center mb-10">
-          <p className="text-xs uppercase tracking-widest mb-2" style={{ color: "#A08070" }}>err.day salon</p>
-          <h1 className="text-3xl font-medium" style={{ color: "#3B2A24" }}>จองคิว</h1>
-          <p className="text-sm mt-2" style={{ color: "#A08070" }}>
-            เข้าสู่ระบบด้วย LINE เพื่อรับการแจ้งเตือนและจองได้เร็วขึ้น
-          </p>
-        </div>
-
-        <div className="w-full max-w-sm space-y-3">
-          {/* Open in LINE app — safest login (no verification code) */}
-          <a
-            href={LINE_APP_URL}
-            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-semibold text-white text-sm transition-opacity hover:opacity-90"
-            style={{ background: "#06C755" }}
-          >
-            {LINE_SVG}
-            เข้าสู่ระบบด้วย LINE
-          </a>
-
-          {/* Continue without LINE */}
-          <button
-            onClick={() => setSkipLine(true)}
-            className="w-full py-4 rounded-2xl font-medium text-sm transition-colors hover:bg-stone-100"
-            style={{ color: "#6B5245", border: "1.5px solid #D6BCAE", background: "transparent" }}
-          >
-            ดำเนินการต่อโดยไม่เข้าสู่ระบบ
-          </button>
-        </div>
-
-        <p className="text-xs text-center mt-8 max-w-xs" style={{ color: "#C4B0A4" }}>
-          การเข้าสู่ระบบช่วยให้เราจดจำคุณ และคุณไม่ต้องกรอกข้อมูลซ้ำในครั้งหน้า
-        </p>
-      </div>
-    );
-  }
-
-  // ── Branch picker ────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen" style={{ background: "#FDF8F3" }}>
-      <div className="max-w-lg mx-auto px-6 py-12">
-        <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#A08070" }}>Book an appointment</p>
-        <h1 className="text-2xl font-medium mb-8" style={{ color: "#3B2A24" }}>เลือกสาขา</h1>
-
-        {/* Profile bar (when logged in via LINE) */}
-        {liff.isLoggedIn && liff.profile && (
-          <div className="mb-6 rounded-2xl border p-4 flex items-center gap-3"
-            style={{ borderColor: "#BBF7D0", background: "#F0FFF4" }}>
-            {liff.profile.pictureUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={liff.profile.pictureUrl} alt="" className="w-10 h-10 rounded-full" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold" style={{ color: "#3B2A24" }}>{liff.profile.displayName}</p>
-              <p className="text-xs" style={{ color: "#166534" }}>เชื่อมต่อ LINE แล้ว ✓</p>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {branches.map(b => (
-            <Link
-              key={b.id}
-              href={`/book/${b.id}`}
-              className="block rounded-2xl bg-white p-5 transition-all hover:shadow-md"
-              style={{ border: "1.5px solid #E8D8CC" }}
-            >
-              <div className="flex items-center gap-4">
-                <MapPin className="w-5 h-5 flex-shrink-0" style={{ color: "#8B1D24" }} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm" style={{ color: "#3B2A24" }}>{b.name}</p>
-                  <p className="text-xs mt-0.5 truncate" style={{ color: "#A08070" }}>{b.address}</p>
-                </div>
-                <ArrowRight className="w-4 h-4 flex-shrink-0" style={{ color: "#D6BCAE" }} />
-              </div>
-            </Link>
-          ))}
+    <main className="min-h-screen" style={{ backgroundColor: "#FDF8F3" }}>
+      {/* ── Top nav ── */}
+      <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#8B1D24" }}>
+        <span className="font-medium tracking-tight text-white text-lg">err.day</span>
+        <div className="flex items-center gap-5">
+          <Link href="/membership" className="text-white/80 hover:text-white text-sm transition-colors">
+            สมาชิก
+          </Link>
+          <Link href="/admin" className="text-white/40 hover:text-white/70 text-xs transition-colors">
+            Admin
+          </Link>
+          <LangSwitcher />
         </div>
+      </nav>
+
+      {/* ── Hero ── */}
+      <section className="px-6 py-16 text-center" style={{ backgroundColor: "#8B1D24" }}>
+        <p className="text-sm tracking-widest uppercase mb-3" style={{ color: "#D6BCAE" }}>ยินดีต้อนรับสู่</p>
+        <h1 className="text-5xl font-light tracking-tight mb-4 text-white">err.day</h1>
+        <p className="text-lg max-w-md mx-auto" style={{ color: "rgba(255,255,255,0.85)" }}>
+          ประสบการณ์ความงามระดับพรีเมียม
+        </p>
+      </section>
+
+      {/* Wave divider */}
+      <div style={{ backgroundColor: "#8B1D24", lineHeight: 0 }}>
+        <svg viewBox="0 0 1440 40" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"
+          style={{ display: "block", width: "100%", height: 40 }}>
+          <path d="M0,40 C360,0 1080,0 1440,40 L1440,40 L0,40 Z" fill="#FDF8F3" />
+        </svg>
       </div>
+
+      <section className="max-w-lg mx-auto px-6 pt-8 pb-16">
+
+        {/* ── Either show login choice OR proceed to branches ── */}
+        {showLogin ? (
+          <div className="text-center">
+            <h2 className="text-xl font-medium mb-1" style={{ color: "#3B2A24" }}>เริ่มจองคิว</h2>
+            <p className="text-sm mb-8" style={{ color: "#A08070" }}>
+              เข้าสู่ระบบด้วย LINE เพื่อรับการแจ้งเตือนและจองได้เร็วขึ้น
+            </p>
+
+            <div className="space-y-3">
+              <a
+                href={LINE_APP_URL}
+                className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-semibold text-white text-sm transition-opacity hover:opacity-90"
+                style={{ background: "#06C755" }}
+              >
+                {LINE_SVG}
+                เข้าสู่ระบบด้วย LINE
+              </a>
+
+              <button
+                onClick={() => setSkipLine(true)}
+                className="w-full py-4 rounded-2xl font-medium text-sm transition-colors hover:bg-stone-100"
+                style={{ color: "#6B5245", border: "1.5px solid #D6BCAE", background: "transparent" }}
+              >
+                ดำเนินการต่อโดยไม่เข้าสู่ระบบ
+              </button>
+            </div>
+
+            <p className="text-xs text-center mt-8 max-w-xs mx-auto" style={{ color: "#C4B0A4" }}>
+              การเข้าสู่ระบบช่วยให้เราจดจำคุณ และคุณไม่ต้องกรอกข้อมูลซ้ำในครั้งหน้า
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* LINE status card (shown when logged in) */}
+            {liff.isLoggedIn && liff.profile && (
+              <div className="mb-6 rounded-2xl border p-4 flex items-center gap-3"
+                style={{ borderColor: "#BBF7D0", background: "#F0FFF4" }}>
+                {liff.profile.pictureUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={liff.profile.pictureUrl} alt="" className="w-10 h-10 rounded-full" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: "#3B2A24" }}>
+                    {liff.profile.displayName}
+                  </p>
+                  <p className="text-xs" style={{ color: "#166534" }}>เชื่อมต่อ LINE แล้ว ✓</p>
+                </div>
+                {!liff.isInClient && (
+                  <button
+                    onClick={liff.logout}
+                    className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-colors hover:bg-white"
+                    style={{ color: "#166534", border: "1px solid #BBF7D0" }}
+                  >
+                    <LogOut className="w-3 h-3" />
+                    ออกจากระบบ
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Branch picker */}
+            <h2 className="text-2xl font-medium mb-1" style={{ color: "#3B2A24" }}>เลือกสาขา</h2>
+            <p className="text-sm mb-6" style={{ color: "#A08070" }}>
+              Our Locations — เลือกสาขาเพื่อดูบริการและจองคิว
+            </p>
+
+            <div className="grid gap-4">
+              {branches.map((branch) => (
+                <div
+                  key={branch.id}
+                  className="rounded-2xl bg-white overflow-hidden transition-shadow hover:shadow-md"
+                  style={{ border: "1.5px solid #E8D8CC" }}
+                >
+                  <div className="px-6 pt-6 pb-4">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <h3 className="text-lg font-medium" style={{ color: "#3B2A24" }}>{branch.name}</h3>
+                      <span className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: "#FFF0E8", color: "#8B1D24" }}>
+                        เปิดให้บริการ
+                      </span>
+                    </div>
+                    <p className="flex items-start gap-1.5 text-sm mb-1" style={{ color: "#6B5245" }}>
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      {branch.address}
+                    </p>
+                    {branch.phone && (
+                      <p className="flex items-center gap-1.5 text-sm" style={{ color: "#6B5245" }}>
+                        <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                        {branch.phone}
+                      </p>
+                    )}
+                  </div>
+                  <div className="px-6 pb-6">
+                    <Link
+                      href={`/book/${branch.id}`}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-medium text-sm transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: "#8B1D24" }}
+                    >
+                      จองคิวที่สาขานี้ <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Re-show LINE login as a soft option for users who skipped */}
+            {skipLine && !liff.isLoggedIn && (
+              <a
+                href={LINE_APP_URL}
+                className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium border-2 transition-colors"
+                style={{ borderColor: "#06C755", color: "#06C755", background: "white" }}
+              >
+                <span className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "#06C755" }}>
+                  <span className="block w-2.5 h-2.5">{/* small LINE icon */}</span>
+                </span>
+                เปลี่ยนใจอยากเข้าสู่ระบบด้วย LINE
+              </a>
+            )}
+          </>
+        )}
+      </section>
     </main>
   );
 }
