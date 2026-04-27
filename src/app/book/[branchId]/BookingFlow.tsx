@@ -189,15 +189,33 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-fill name & email from Line profile when LIFF is ready
+  // Auto-fill name & email from Line profile, then look up returning customer for phone
   useEffect(() => {
-    if (liff.profile) {
-      setForm(f => ({
-        ...f,
-        name:  f.name  || liff.profile!.displayName,
-        email: f.email || liff.profile!.email || "",
-      }));
-    }
+    if (!liff.profile) return;
+
+    // Always fill name/email from LINE profile
+    setForm(f => ({
+      ...f,
+      name:  f.name  || liff.profile!.displayName,
+      email: f.email || liff.profile!.email || "",
+    }));
+
+    // Look up by LINE user ID — if they've booked before, pre-fill their phone too
+    const uid = liff.profile.userId;
+    if (!uid) return;
+    fetch(`/api/customer/me?lineUserId=${encodeURIComponent(uid)}`)
+      .then(r => r.json())
+      .then((customer: { name: string; phone: string; email: string | null } | null) => {
+        if (!customer) return;
+        setForm(f => ({
+          ...f,
+          // Only overwrite if the field is still empty (don't stomp restored session state)
+          name:  f.name  || customer.name,
+          phone: f.phone || customer.phone,
+          email: f.email || customer.email || "",
+        }));
+      })
+      .catch(() => {});
   }, [liff.profile]);
 
   const categories = CATEGORY_ORDER.filter((c) => branchServices.some((bs) => bs.service.category === c));
@@ -636,7 +654,9 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>{liff.profile.displayName}</p>
                   <p className="text-xs" style={{ color: "#166534" }}>
-                    {lang === "th" ? "เข้าสู่ระบบด้วย Line แล้ว" : "Signed in with Line"}
+                    {form.phone
+                      ? (lang === "th" ? "ยินดีต้อนรับกลับ — กรอกข้อมูลให้แล้ว ✓" : "Welcome back — details pre-filled ✓")
+                      : (lang === "th" ? "เข้าสู่ระบบด้วย LINE แล้ว" : "Signed in with LINE")}
                   </p>
                 </div>
               </div>

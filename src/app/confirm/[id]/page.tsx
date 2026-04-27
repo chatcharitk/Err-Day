@@ -48,6 +48,32 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
         <p className="mb-2" style={{ color: "#6B5245" }}>เราตั้งตารอต้อนรับคุณ</p>
         <p className="text-sm mb-8" style={{ color: "#A08070" }}>Booking Confirmed — เราจะแจ้งเตือนคุณก่อนวันนัด</p>
 
+        {/* ── Branch map ── */}
+        <div className="rounded-2xl overflow-hidden mb-6" style={{ border: "1.5px solid #E8D8CC" }}>
+          <iframe
+            title={`แผนที่ ${booking.branch.name}`}
+            width="100%"
+            height="200"
+            style={{ border: 0, display: "block" }}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            src={`https://maps.google.com/maps?q=${encodeURIComponent(booking.branch.address)}&output=embed&hl=th&z=16`}
+          />
+          <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: "#FFF8F4" }}>
+            <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#8B1D24" }} />
+            <p className="text-xs flex-1 truncate" style={{ color: "#6B5245" }}>{booking.branch.address}</p>
+            <a
+              href={`https://maps.google.com/maps?q=${encodeURIComponent(booking.branch.address)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium flex-shrink-0"
+              style={{ color: "#8B1D24" }}
+            >
+              เปิดใน Google Maps →
+            </a>
+          </div>
+        </div>
+
         <div className="rounded-2xl bg-white text-left mb-6 overflow-hidden" style={{ border: "1.5px solid #E8D8CC" }}>
           {/* Card header strip */}
           <div className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#8B1D24" }}>
