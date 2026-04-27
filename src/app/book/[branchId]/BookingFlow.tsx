@@ -159,7 +159,6 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [skipLine, setSkipLine] = useState(false);
 
   const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
@@ -290,72 +289,20 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     }
   };
 
-  // Show welcome screen only when:
-  // • LIFF is ready
-  // • NOT inside LINE app (isInClient = true means auto-authenticated, never prompt manually)
-  // • NOT already logged in
-  // • User hasn't chosen to skip
-  const LIFF_URL    = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID ?? ""}`;
-  const showWelcome = liff.ready && !liff.isInClient && !liff.isLoggedIn && !skipLine;
+  const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID ?? ""}`;
 
-  // Logout brings the welcome screen back so user can re-decide
   const handleLineLogout = () => {
     liff.logout();
-    setSkipLine(false);
+    // Send user back to /book so the login prompt there can re-appear
+    router.replace("/book");
   };
-
-  if (showWelcome) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6"
-        style={{ backgroundColor: "#FDF8F3" }}>
-
-        <div className="text-center mb-10">
-          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#A08070" }}>err.day salon</p>
-          <h1 className="text-2xl font-medium" style={{ color: "#3B2A24" }}>{branch.name}</h1>
-          <p className="text-sm mt-2" style={{ color: "#A08070" }}>
-            {lang === "th"
-              ? "เข้าสู่ระบบด้วย LINE เพื่อจองคิวเร็วขึ้น และรับการแจ้งเตือน"
-              : "Sign in with LINE for faster booking and notifications"}
-          </p>
-        </div>
-
-        <div className="w-full max-w-sm space-y-3">
-          {/* Open LIFF in LINE app — seamless login, no verification code */}
-          <a
-            href={LIFF_URL}
-            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-semibold text-white text-sm hover:opacity-90 transition-opacity"
-            style={{ background: "#06C755" }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-              <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
-            </svg>
-            {lang === "th" ? "เข้าสู่ระบบด้วย LINE" : "Continue with LINE"}
-          </a>
-
-          <button
-            onClick={() => setSkipLine(true)}
-            className="w-full py-4 rounded-2xl font-medium text-sm transition-colors hover:bg-stone-100"
-            style={{ color: "#6B5245", border: "1.5px solid #D6BCAE", background: "transparent" }}
-          >
-            {lang === "th" ? "ดำเนินการต่อโดยไม่เข้าสู่ระบบ" : "Continue without LINE"}
-          </button>
-        </div>
-
-        <p className="text-xs text-center mt-8 max-w-xs" style={{ color: "#C4B0A4" }}>
-          {lang === "th"
-            ? "การเข้าสู่ระบบช่วยให้เราจดจำคุณ และคุณไม่ต้องกรอกข้อมูลซ้ำในครั้งหน้า"
-            : "Signing in lets us remember you so you don't need to fill in details next time"}
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FDF8F3" }}>
       {/* Top bar */}
       <div className="bg-white border-b px-6 py-4" style={{ borderColor: "#D6BCAE" }}>
         <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <Link href="/" className="transition-colors" style={{ color: "#6B5245" }}>
+          <Link href="/book" className="transition-colors" style={{ color: "#6B5245" }}>
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">
