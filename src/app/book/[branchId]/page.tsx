@@ -18,10 +18,10 @@ export default async function BookPage({ params }: { params: Promise<{ branchId:
     orderBy: { service: { category: "asc" } },
   });
 
-  const [staff, addons] = await Promise.all([
-    prisma.staff.findMany({ where: { branchId, isActive: true }, orderBy: { name: "asc" } }),
-    prisma.serviceAddon.findMany({ where: { isActive: true }, orderBy: { price: "asc" } }),
-  ]);
+  const addons = await prisma.serviceAddon.findMany({
+    where: { isActive: true },
+    orderBy: { price: "asc" },
+  });
 
-  return <BookingFlow branch={branch} branchServices={branchServices} staff={staff} addons={addons} />;
+  return <BookingFlow branch={branch} branchServices={branchServices} addons={addons} />;
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Clock, Tag, AlertCircle, Star, Ban } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, Tag, AlertCircle, Star, Ban, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,17 +13,21 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/components/LanguageProvider";
-import { LangSwitcher } from "@/components/LangSwitcher";
-import type { Branch, Staff, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
+import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
 
 type BranchServiceWithService = BranchService & { service: Service };
 
 interface Props {
   branch: Branch;
   branchServices: BranchServiceWithService[];
-  staff: Staff[];
   addons: ServiceAddon[];
 }
+
+const LINE_SVG = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+    <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+  </svg>
+);
 
 const HAIR_COLOR_SLOTS = ["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00"];
 const ALL_SLOTS = [
@@ -59,7 +63,10 @@ const CAT_EN: Record<string, string> = {
 
 const UI = {
   th: {
-    steps: ["บริการ", "บริการเสริม", "ช่างผม", "วันเวลา", "ข้อมูล", "ยืนยัน"],
+    steps: ["บริการ", "บริการเสริม", "วันเวลา", "ข้อมูล", "ยืนยัน"],
+    lineStatus:    "เชื่อมต่อ LINE แล้ว",
+    lineLogin:     "เข้าสู่ระบบ LINE",
+    lineLogout:    "ออกจากระบบ",
     bookLabel: "จองคิว",
     chooseService: "เลือกบริการ", chooseServiceSub: "Choose a Service",
     chooseServiceHint: "เลือกบริการที่ต้องการ",
@@ -98,7 +105,10 @@ const UI = {
     errorGeneral: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
   },
   en: {
-    steps: ["Service", "Add-Ons", "Stylist", "Date & Time", "Details", "Confirm"],
+    steps: ["Service", "Add-Ons", "Date & Time", "Details", "Confirm"],
+    lineStatus:    "Connected with LINE",
+    lineLogin:     "Sign in with LINE",
+    lineLogout:    "Sign out",
     bookLabel: "Book",
     chooseService: "Select a Service", chooseServiceSub: "เลือกบริการ",
     chooseServiceHint: "Choose the service you want",
@@ -138,7 +148,7 @@ const UI = {
   },
 };
 
-export default function BookingFlow({ branch, branchServices, staff, addons }: Props) {
+export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const router = useRouter();
   const { lang, toggle } = useLang();
   const u = UI[lang];
@@ -154,7 +164,6 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
   const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
   const [noAddons, setNoAddons] = useState(false);
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
@@ -172,7 +181,6 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
       const s = JSON.parse(raw);
       if (s.step      !== undefined) setStep(s.step);
       if (s.serviceId) setSelectedService(branchServices.find(bs => bs.id === s.serviceId) ?? null);
-      if (s.staffId)   setSelectedStaff(staff.find(st => st.id === s.staffId) ?? null);
       if (s.date)      setSelectedDate(new Date(s.date));
       if (s.time)      setSelectedTime(s.time);
       if (s.addonIds)  setSelectedAddons(new Set(s.addonIds));
@@ -207,14 +215,13 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
       branchId: branch.id,
       date: localDate,
       duration: String(selectedService.duration),
-      ...(selectedStaff ? { staffId: selectedStaff.id } : {}),
     });
     fetch(`/api/availability?${params}`)
       .then((r) => r.json())
       .then((data) => setTakenSlots(data.taken ?? []))
       .catch(() => {})
       .finally(() => setLoadingSlots(false));
-  }, [selectedDate, selectedStaff?.id, selectedService?.duration, branch.id]);
+  }, [selectedDate, selectedService?.duration, branch.id]);
 
   const toggleAddon = (id: string) => {
     setNoAddons(false);
@@ -237,8 +244,8 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
 
   const canProceed = () => {
     if (step === 0) return !!selectedService;
-    if (step === 3) return !!selectedDate && !!selectedTime;
-    if (step === 4) return form.name.trim() !== "" && form.phone.trim() !== "";
+    if (step === 2) return !!selectedDate && !!selectedTime;
+    if (step === 3) return form.name.trim() !== "" && form.phone.trim() !== "";
     return true;
   };
 
@@ -254,7 +261,7 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
         body: JSON.stringify({
           branchId: branch.id,
           serviceId: selectedService.serviceId,
-          staffId: selectedStaff?.id || null,
+          staffId: null,
           date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,"0")}-${String(selectedDate.getDate()).padStart(2,"0")}`,
           startTime: selectedTime,
           endTime: addMinutes(selectedTime, selectedService.duration),
@@ -290,6 +297,12 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
   // • User hasn't chosen to skip
   const LIFF_URL    = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID ?? ""}`;
   const showWelcome = liff.ready && !liff.isInClient && !liff.isLoggedIn && !skipLine;
+
+  // Logout brings the welcome screen back so user can re-decide
+  const handleLineLogout = () => {
+    liff.logout();
+    setSkipLine(false);
+  };
 
   if (showWelcome) {
     return (
@@ -359,6 +372,59 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
           </button>
         </div>
       </div>
+
+      {/* Persistent LINE status bar */}
+      {liff.ready && (
+        <div className="border-b" style={{
+          background:  liff.isLoggedIn ? "#F0FFF4" : "#FFF8F4",
+          borderColor: liff.isLoggedIn ? "#BBF7D0" : "#F0E4D8",
+        }}>
+          <div className="max-w-2xl mx-auto px-6 py-2 flex items-center gap-3">
+            {liff.isLoggedIn && liff.profile ? (
+              <>
+                {liff.profile.pictureUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={liff.profile.pictureUrl} alt="" className="w-7 h-7 rounded-full flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate" style={{ color: "#166534" }}>
+                    {liff.profile.displayName}
+                  </p>
+                  <p className="text-[10px] leading-tight" style={{ color: "#15803D" }}>
+                    {u.lineStatus} ✓
+                  </p>
+                </div>
+                {!liff.isInClient && (
+                  <button
+                    onClick={handleLineLogout}
+                    className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-colors hover:bg-white"
+                    style={{ color: "#166534", border: "1px solid #BBF7D0" }}
+                  >
+                    <LogOut className="w-3 h-3" />
+                    {u.lineLogout}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#06C755" }}>
+                  {LINE_SVG}
+                </div>
+                <p className="flex-1 text-xs" style={{ color: "#6B5245" }}>
+                  {lang === "th" ? "ยังไม่ได้เข้าสู่ระบบ LINE" : "Not signed in with LINE"}
+                </p>
+                <a
+                  href={LIFF_URL}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full text-white transition-opacity hover:opacity-90"
+                  style={{ background: "#06C755" }}
+                >
+                  {u.lineLogin}
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="bg-white border-b" style={{ borderColor: "#F0E4D8" }}>
@@ -543,58 +609,8 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
           </div>
         )}
 
-        {/* ── Step 2: Staff selection ── */}
+        {/* ── Step 2: Date & Time ── */}
         {step === 2 && (
-          <div>
-            <h2 className="text-xl font-medium mb-1" style={{ color: "#3B2A24" }}>
-              {u.chooseStaff} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.chooseStaffSub}</span>
-            </h2>
-            <p className="text-sm mb-6" style={{ color: "#A08070" }}>{u.chooseStaffHint}</p>
-            <div className="grid gap-3">
-              <button
-                onClick={() => setSelectedStaff(null)}
-                className="w-full text-left p-4 rounded-xl border-2 transition-all"
-                style={selectedStaff === null
-                  ? { borderColor: "#8B1D24", backgroundColor: "#8B1D24", color: "white" }
-                  : { borderColor: "#E8D8CC", backgroundColor: "white" }}
-              >
-                <p className="font-medium" style={selectedStaff !== null ? { color: "#3B2A24" } : {}}>{u.anyStaff}</p>
-                <p className="text-sm" style={selectedStaff !== null ? { color: "#A08070" } : { color: "rgba(255,255,255,0.75)" }}>{u.anyStaffSub}</p>
-              </button>
-              {staff.map((s) => {
-                const isSelected = selectedStaff?.id === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setSelectedStaff(s)}
-                    className="w-full text-left p-4 rounded-xl border-2 transition-all"
-                    style={isSelected
-                      ? { borderColor: "#8B1D24", backgroundColor: "#8B1D24", color: "white" }
-                      : { borderColor: "#E8D8CC", backgroundColor: "white" }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center font-semibold flex-shrink-0"
-                        style={isSelected
-                          ? { backgroundColor: "rgba(255,255,255,0.2)", color: "white" }
-                          : { backgroundColor: "#F0E4D8", color: "#6B5245" }}
-                      >
-                        {s.name[0]}
-                      </div>
-                      <div>
-                        <p className="font-medium" style={!isSelected ? { color: "#3B2A24" } : {}}>{s.name}</p>
-                        {s.phone && <p className="text-sm" style={!isSelected ? { color: "#A08070" } : { color: "rgba(255,255,255,0.75)" }}>{s.phone}</p>}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 3: Date & Time ── */}
-        {step === 3 && (
           <div>
             <h2 className="text-xl font-medium mb-1" style={{ color: "#3B2A24" }}>
               {u.dateTime} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.dateTimeSub}</span>
@@ -646,8 +662,8 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
           </div>
         )}
 
-        {/* ── Step 4: Customer details ── */}
-        {step === 4 && (
+        {/* ── Step 3: Customer details ── */}
+        {step === 3 && (
           <div>
             <h2 className="text-xl font-medium mb-6" style={{ color: "#3B2A24" }}>
               {u.details} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.detailsSub}</span>
@@ -690,8 +706,8 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
           </div>
         )}
 
-        {/* ── Step 5: Confirm ── */}
-        {step === 5 && selectedService && selectedDate && (
+        {/* ── Step 4: Confirm ── */}
+        {step === 4 && selectedService && selectedDate && (
           <div>
             <h2 className="text-xl font-medium mb-6" style={{ color: "#3B2A24" }}>
               {u.confirm} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.confirmSub}</span>
@@ -701,7 +717,6 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
                 {[
                   [u.branch, branch.name],
                   [u.service, lang === "th" ? selectedService.service.nameTh : (selectedService.service.name || selectedService.service.nameTh)],
-                  [u.stylist, selectedStaff?.name ?? u.anyStaff],
                   [u.date, selectedDate.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })],
                   [u.time, `${selectedTime} — ${addMinutes(selectedTime, selectedService.duration)} น.`],
                   [u.duration, `${selectedService.duration} ${u.minutes}`],
@@ -764,7 +779,7 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
         )}
 
         {/* Navigation buttons */}
-        {step < 5 && (
+        {step < 4 && (
           <div className="flex gap-3 mt-8">
             {step > 0 && (
               <Button variant="outline" onClick={() => setStep((s) => s - 1)} className="flex-1" style={{ borderColor: "#D6BCAE", color: "#6B5245" }}>
@@ -777,13 +792,13 @@ export default function BookingFlow({ branch, branchServices, staff, addons }: P
               className="flex-1 h-8 rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-40 flex items-center justify-center gap-1"
               style={{ backgroundColor: "#8B1D24" }}
             >
-              {step === 4 ? u.review : u.next} <ArrowRight className="w-4 h-4" />
+              {step === 3 ? u.review : u.next} <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {/* Sticky summary strip */}
-        {selectedService && step > 0 && step < 5 && (
+        {selectedService && step > 0 && step < 4 && (
           <div className="mt-6 p-4 rounded-xl flex items-center justify-between text-sm" style={{ backgroundColor: "#FFF0E8" }}>
             <div>
               <p className="font-medium" style={{ color: "#3B2A24" }}>{lang === "th" ? selectedService.service.nameTh : (selectedService.service.name || selectedService.service.nameTh)}</p>
