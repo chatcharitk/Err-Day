@@ -24,11 +24,32 @@ const LINE_SVG = (
   </svg>
 );
 
+/**
+ * On mobile we use the deep link `https://liff.line.me/{LIFF_ID}` which opens
+ * the LINE app and auto-authenticates seamlessly. On desktop the deep link
+ * has nowhere to open, so we call `liff.login()` to use LINE's web OAuth flow
+ * (email/password or QR code login).
+ */
+function isMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export default function BookCallback({ branches }: { branches: Branch[] }) {
   const router = useRouter();
   const liff   = useLiff();
   const [skipLine,     setSkipLine]     = useState(false);
   const [showBranches, setShowBranches] = useState(false);
+
+  // Mobile → deep link to LINE app (seamless auth, no code).
+  // Desktop → liff.login() web OAuth (no LINE app available).
+  const handleLineLogin = () => {
+    if (isMobileDevice()) {
+      window.location.href = LINE_APP_URL;
+    } else {
+      liff.login();
+    }
+  };
 
   // After LIFF init: redirect back to a saved path if present, otherwise show the page.
   useEffect(() => {
@@ -107,14 +128,14 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
             </p>
 
             <div className="space-y-3">
-              <a
-                href={LINE_APP_URL}
+              <button
+                onClick={handleLineLogin}
                 className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-semibold text-white text-sm transition-opacity hover:opacity-90"
                 style={{ background: "#06C755" }}
               >
                 {LINE_SVG}
                 เข้าสู่ระบบด้วย LINE
-              </a>
+              </button>
 
               <button
                 onClick={() => setSkipLine(true)}
@@ -205,16 +226,13 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
 
             {/* Re-show LINE login as a soft option for users who skipped */}
             {skipLine && !liff.isLoggedIn && (
-              <a
-                href={LINE_APP_URL}
+              <button
+                onClick={handleLineLogin}
                 className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium border-2 transition-colors"
                 style={{ borderColor: "#06C755", color: "#06C755", background: "white" }}
               >
-                <span className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "#06C755" }}>
-                  <span className="block w-2.5 h-2.5">{/* small LINE icon */}</span>
-                </span>
                 เปลี่ยนใจอยากเข้าสู่ระบบด้วย LINE
-              </a>
+              </button>
             )}
           </>
         )}

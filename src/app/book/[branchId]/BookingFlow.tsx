@@ -291,6 +291,16 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
   const LIFF_URL = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID ?? ""}`;
 
+  const handleLineLogin = () => {
+    const isMobile = typeof navigator !== "undefined"
+      && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = LIFF_URL;
+    } else {
+      liff.login();
+    }
+  };
+
   const handleLineLogout = () => {
     liff.logout();
     // Send user back to /book so the login prompt there can re-appear
@@ -360,13 +370,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 <p className="flex-1 text-xs" style={{ color: "#6B5245" }}>
                   {lang === "th" ? "ยังไม่ได้เข้าสู่ระบบ LINE" : "Not signed in with LINE"}
                 </p>
-                <a
-                  href={LIFF_URL}
+                <button
+                  onClick={handleLineLogin}
                   className="text-xs font-medium px-3 py-1.5 rounded-full text-white transition-opacity hover:opacity-90"
                   style={{ background: "#06C755" }}
                 >
                   {u.lineLogin}
-                </a>
+                </button>
               </>
             )}
           </div>
