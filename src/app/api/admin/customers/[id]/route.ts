@@ -44,6 +44,36 @@ export async function GET(
   }
 }
 
+// DELETE /api/admin/customers/[id] — remove customer (and cascade their bookings + membership)
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+
+    await prisma.$transaction(async (tx) => {
+      // Booking → BookingAddon FK requires deleting addons first
+      const bookings = await tx.booking.findMany({
+        where:  { customerId: id },
+        select: { id: true },
+      });
+      const bookingIds = bookings.map(b => b.id);
+      if (bookingIds.length > 0) {
+        await tx.bookingAddon.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.booking.deleteMany({ where: { id: { in: bookingIds } } });
+      }
+      await tx.membership.deleteMany({ where: { customerId: id } });
+      await tx.customer.delete({ where: { id } });
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "ลบลูกค้าไม่สำเร็จ" }, { status: 500 });
+  }
+}
+
 // PATCH /api/admin/customers/[id] — update customer info
 export async function PATCH(
   request: Request,

@@ -504,10 +504,11 @@ function MembershipSection({
 
 // ─── Customer Detail Modal — the big one ─────────────────────────────────────
 
-function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
+function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }: {
   customer: Customer;
   onClose: () => void;
   onSaved: (c: Customer) => void;
+  onDeleted: (id: string) => void;
 }) {
   const [customer,  setCustomer]  = useState<Customer>(initial);
   const [editMode,  setEditMode]  = useState(false);
@@ -520,6 +521,10 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
   const [gender, setGender] = useState(customer.gender ?? "");
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState("");
+
+  // delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting,          setDeleting]          = useState(false);
 
   // Load booking history once on mount
   useEffect(() => {
@@ -574,6 +579,21 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
     }
   }
 
+  async function handleDeleteCustomer() {
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/customers/${customer.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "ลบไม่สำเร็จ");
+      onDeleted(customer.id);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   const joinDate = new Date(customer.createdAt).toLocaleDateString("th-TH", {
     day: "numeric", month: "long", year: "numeric",
   });
@@ -586,7 +606,7 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div
-          className="w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+          className="w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col relative"
           style={{ background: "white", maxHeight: "92vh" }}
         >
           {/* ── Header with avatar + name + edit toggle ── */}
@@ -629,13 +649,23 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
 
             <div className="flex items-center gap-2">
               {!editMode && (
-                <button
-                  onClick={() => setEditMode(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
-                  style={{ color: "#2563EB", border: "1px solid #BFDBFE", background: "#EFF6FF" }}
-                >
-                  <Pencil size={12} /> แก้ไข
-                </button>
+                <>
+                  <button
+                    onClick={() => setEditMode(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
+                    style={{ color: "#2563EB", border: "1px solid #BFDBFE", background: "#EFF6FF" }}
+                  >
+                    <Pencil size={12} /> แก้ไข
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
+                    style={{ color: "#DC2626", border: "1px solid #FECACA", background: "#FEF2F2" }}
+                    title="ลบลูกค้า"
+                  >
+                    <Trash2 size={12} /> ลบ
+                  </button>
+                </>
               )}
               <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
                 <X size={18} color={MUTED} />
@@ -787,6 +817,53 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved }: {
               )}
             </section>
           </div>
+
+          {/* ── Delete confirmation overlay ── */}
+          {showDeleteConfirm && (
+            <div
+              className="absolute inset-0 flex items-center justify-center p-6"
+              style={{ background: "rgba(0,0,0,0.55)", zIndex: 10 }}
+              onClick={(e) => { if (e.target === e.currentTarget && !deleting) setShowDeleteConfirm(false); }}
+            >
+              <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: "white" }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#FEF2F2" }}>
+                    <Trash2 size={20} color="#DC2626" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold" style={{ color: TEXT }}>ลบลูกค้า?</h3>
+                    <p className="text-xs" style={{ color: MUTED }}>{customer.name}</p>
+                  </div>
+                </div>
+                <p className="text-sm mb-2" style={{ color: TEXT }}>
+                  การลบจะลบลูกค้ารายนี้ <b>พร้อมประวัติการจองทั้งหมด</b> ({bookings?.length ?? 0} รายการ)
+                  {customer.membership && " และข้อมูลสมาชิก"} ถาวร
+                </p>
+                <p className="text-xs mb-5" style={{ color: "#DC2626" }}>
+                  การกระทำนี้ไม่สามารถย้อนกลับได้
+                </p>
+                {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="flex-1 py-2 rounded-xl border text-sm font-medium"
+                    style={{ borderColor: BORDER, color: MUTED }}
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={handleDeleteCustomer}
+                    disabled={deleting}
+                    className="flex-1 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ background: "#DC2626" }}
+                  >
+                    {deleting ? "กำลังลบ..." : "ลบถาวร"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Modal>
@@ -956,6 +1033,11 @@ export default function CustomersManager({ customers: initial }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function handleDeleted(id: string) {
+    setCustomers(prev => prev.filter(c => c.id !== id));
+    router.refresh();
+  }
+
   function handleSaved(saved: Customer) {
     setCustomers(prev => {
       const idx = prev.findIndex(c => c.id === saved.id);
@@ -1074,6 +1156,7 @@ export default function CustomersManager({ customers: initial }: Props) {
           customer={openedCustomer}
           onClose={() => setOpenId(null)}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
     </div>
