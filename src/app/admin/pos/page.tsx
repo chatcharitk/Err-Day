@@ -44,19 +44,26 @@ export default async function PosPage({
   const activeBranchId =
     branchId ?? prefillBooking?.branchId ?? branches[0]?.id ?? "";
 
-  const branchServices = activeBranchId
-    ? await prisma.branchService.findMany({
-        where: { branchId: activeBranchId, isActive: true },
-        include: { service: true },
-        orderBy: [{ service: { category: "asc" } }],
-      })
-    : [];
+  const [branchServices, addons] = await Promise.all([
+    activeBranchId
+      ? prisma.branchService.findMany({
+          where: { branchId: activeBranchId, isActive: true },
+          include: { service: true },
+          orderBy: [{ service: { category: "asc" } }],
+        })
+      : Promise.resolve([]),
+    prisma.serviceAddon.findMany({
+      where: { isActive: true },
+      orderBy: { price: "asc" },
+    }),
+  ]);
 
   return (
     <PosTerminal
       branches={branches}
       activeBranchId={activeBranchId}
       branchServices={branchServices}
+      addons={addons}
       prefillBooking={prefillBooking}
     />
   );

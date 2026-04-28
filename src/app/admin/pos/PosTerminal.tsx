@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard } from "lucide-react";
-import type { Branch, BranchService, Service } from "@/generated/prisma/client";
+import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
 type BS = BranchService & { service: Service };
@@ -27,6 +27,7 @@ interface Props {
   branches: Branch[];
   activeBranchId: string;
   branchServices: BS[];
+  addons: ServiceAddon[];
   prefillBooking?: PrefillBooking | null;
 }
 
@@ -36,7 +37,7 @@ function formatPrice(satang: number) {
 
 const CATEGORY_ORDER = ["บริการทั่วไป", "แพ็กเกจ", "Davines Spa", "ย้อมผม NIGAO"];
 
-export default function PosTerminal({ branches, activeBranchId, branchServices, prefillBooking }: Props) {
+export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking }: Props) {
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (prefillBooking) {
       return [{
@@ -71,8 +72,9 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const customerPhone = customer.phone;
   const clearCustomer = () => setCustomer({ id: null, name: "", phone: "" });
 
+  // Exclude walk-in placeholder from the visible service grid (same as booking page)
   const categories = CATEGORY_ORDER.filter((c) =>
-    branchServices.some((bs) => bs.service.category === c)
+    branchServices.some((bs) => bs.service.category === c && bs.serviceId !== "svc-walkin")
   );
 
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -82,6 +84,14 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
       const existing = prev.find((i) => i.id === bs.id);
       if (existing) return prev.map((i) => i.id === bs.id ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { id: bs.id, name: bs.service.nameTh, price: bs.price, qty: 1 }];
+    });
+  };
+
+  const addAddon = (addon: ServiceAddon) => {
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === `addon-${addon.id}`);
+      if (existing) return prev.map((i) => i.id === `addon-${addon.id}` ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: `addon-${addon.id}`, name: addon.nameTh, price: addon.price, qty: 1 }];
     });
   };
 
@@ -235,7 +245,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {branchServices
-                  .filter((bs) => bs.service.category === cat)
+                  .filter((bs) => bs.service.category === cat && bs.serviceId !== "svc-walkin")
                   .map((bs) => {
                     const inCart = cart.some((i) => i.id === bs.id);
                     return (
@@ -259,6 +269,43 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
               </div>
             </div>
           ))}
+
+          {/* Add-Ons section */}
+          {addons.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-px flex-1" style={{ backgroundColor: "#D6BCAE" }} />
+                <p className="text-xs font-semibold uppercase tracking-widest px-2" style={{ color: "#8B1D24" }}>
+                  บริการเสริม / Add-Ons
+                </p>
+                <div className="h-px flex-1" style={{ backgroundColor: "#D6BCAE" }} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {addons.map((addon) => {
+                  const inCart = cart.some((i) => i.id === `addon-${addon.id}`);
+                  return (
+                    <button
+                      key={addon.id}
+                      onClick={() => addAddon(addon)}
+                      className="text-left p-3 rounded-xl border-2 transition-all hover:border-[#8B1D24]"
+                      style={{
+                        borderColor: inCart ? "#8B1D24" : "#E8D8CC",
+                        backgroundColor: inCart ? "#FFF0E8" : "white",
+                      }}
+                    >
+                      <p className="text-sm font-medium leading-tight" style={{ color: "#3B2A24" }}>
+                        {addon.nameTh}
+                      </p>
+                      {addon.name !== addon.nameTh && (
+                        <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>{addon.name}</p>
+                      )}
+                      <p className="font-semibold mt-1" style={{ color: "#8B1D24" }}>{formatPrice(addon.price)}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── RIGHT: Order ── */}

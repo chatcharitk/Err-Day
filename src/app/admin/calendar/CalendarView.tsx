@@ -11,6 +11,12 @@ interface ShiftInfo   { startTime: string; endTime: string }
 /** staffId → shift for the day (null = staff exists but is off-shift) */
 type StaffShiftMap = Record<string, ShiftInfo | null>;
 
+interface BookingAddon {
+  id: string;
+  nameTh: string;
+  name: string;
+  price: number;
+}
 interface BookingItem {
   id: string;
   date: string;
@@ -23,6 +29,7 @@ interface BookingItem {
   service: { name: string; nameTh: string; category: string };
   customer: { id: string; name: string; phone: string };
   staff: { id: string; name: string } | null;
+  addons: BookingAddon[];
 }
 interface StaffItem    { id: string; name: string }
 interface BranchItem   { id: string; name: string }
@@ -321,6 +328,11 @@ function VerticalGantt({
                           {b.service.nameTh || b.service.name}
                         </div>
                       )}
+                      {height > 68 && b.addons.length > 0 && (
+                        <div className="opacity-60 truncate text-[10px]" style={{ color: "#8B1D24" }}>
+                          +{b.addons.length} เสริม
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -482,6 +494,11 @@ function ListView({ weekBookings, onClickBooking }: {
                       <div className="text-xs text-gray-500 truncate">
                         {b.service.nameTh || b.service.name} · {b.customer.phone}
                       </div>
+                      {b.addons.length > 0 && (
+                        <div className="text-xs truncate mt-0.5" style={{ color: "#8B1D24" }}>
+                          + {b.addons.map(a => a.nameTh || a.name).join(", ")}
+                        </div>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500 flex-shrink-0 hidden sm:block w-24 truncate text-center">
                       {b.staff?.name ?? "—"}
@@ -698,6 +715,20 @@ function EditModal({
               {STATUS_LABEL[currentStatus] ?? currentStatus}
             </span>
           </div>
+
+          {booking.addons.length > 0 && (
+            <div className="rounded-xl p-3 space-y-1" style={{ background: "#FFF8F4", border: "1px solid #E8D8CC" }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#8B1D24" }}>
+                บริการเสริม / Add-Ons
+              </p>
+              {booking.addons.map((a) => (
+                <div key={a.id} className="flex justify-between text-xs" style={{ color: "#5C4A42" }}>
+                  <span>{a.nameTh || a.name}</span>
+                  <span className="font-medium">+฿{formatPrice(a.price)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {checkedOut && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center text-green-700 font-medium text-sm">

@@ -56,7 +56,7 @@ export default async function CalendarPage({
         date: { gte: monday, lte: sunday },
         status: { notIn: ["CANCELLED"] },
       },
-      include: { service: true, customer: true, staff: true },
+      include: { service: true, customer: true, staff: true, addons: { include: { addon: true } } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
   ]);
@@ -77,6 +77,7 @@ export default async function CalendarPage({
     },
     customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
     staff: b.staff ? { id: b.staff.id, name: b.staff.name } : null,
+    addons: b.addons.map((a) => ({ id: a.addonId, nameTh: a.addon.nameTh, name: a.addon.name, price: a.price })),
   }));
 
   return (
