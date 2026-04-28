@@ -566,6 +566,7 @@ function EditModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const router = useRouter();
   const [services,      setServices]      = useState<ServiceOption[]>([]);
   // serviceId here = BranchService.id (different from booking.serviceId = Service.id)
   const [bsId,          setBsId]          = useState("");
@@ -764,7 +765,9 @@ function EditModal({
         {/* Footer */}
         <div className="flex gap-2 px-5 pb-5 flex-shrink-0">
           {!checkedOut && (
-            <button onClick={() => patchStatus("COMPLETED")} disabled={saving}
+            <button
+              onClick={() => router.push(`/admin/pos?bookingId=${booking.id}&branchId=${branchId}`)}
+              disabled={saving}
               className="flex-1 py-2.5 rounded-xl bg-green-600 text-white font-semibold text-sm hover:bg-green-700 disabled:opacity-50">
               💳 เช็คเอาท์
             </button>
@@ -935,7 +938,7 @@ export default function CalendarView({
   weekBookings, staff, selectedDate, branches, activeBranchId,
 }: Props) {
   const router = useRouter();
-  const [view,         setView]         = useState<ViewMode>("vertical");
+  const [view,         setView]         = useState<ViewMode>("list");
   const [period,       setPeriod]       = useState<PeriodType>("week");
   const [editItem,     setEditItem]     = useState<BookingItem | null>(null);
   const [addOpen,      setAddOpen]      = useState(false);
@@ -1077,9 +1080,9 @@ export default function CalendarView({
 
       {/* ── View toggle ── */}
       <div className="flex items-center gap-2">
-        {(["vertical","horizontal","list"] as ViewMode[]).map(v => {
-          const labels: Record<ViewMode,string> = {
-            vertical:"⬇ แนวตั้ง", horizontal:"➡ แนวนอน", list:"☰ รายการ",
+        {(["list","vertical"] as ViewMode[]).map(v => {
+          const labels: Record<string,string> = {
+            list:"☰ รายการ", vertical:"⬇ แนวตั้ง",
           };
           return (
             <button key={v} onClick={() => setView(v)}
@@ -1104,11 +1107,6 @@ export default function CalendarView({
           <VerticalGantt
             dayBookings={dayBookings} staff={staff}
             selectedDate={selectedDate} onClickBooking={setEditItem}
-            staffShiftMap={staffShiftMap} hasShifts={hasShifts}
-          />
-        )}
-        {view === "horizontal" && (
-          <HorizontalGantt dayBookings={dayBookings} staff={staff} onClickBooking={setEditItem}
             staffShiftMap={staffShiftMap} hasShifts={hasShifts}
           />
         )}

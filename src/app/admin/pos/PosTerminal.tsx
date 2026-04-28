@@ -15,10 +15,19 @@ interface CartItem {
   isCustom?: boolean;
 }
 
+interface PrefillBooking {
+  id: string;
+  branchId: string;
+  customer: { name: string; phone: string };
+  serviceName: string;
+  totalPrice: number;
+}
+
 interface Props {
   branches: Branch[];
   activeBranchId: string;
   branchServices: BS[];
+  prefillBooking?: PrefillBooking | null;
 }
 
 function formatPrice(satang: number) {
@@ -27,9 +36,28 @@ function formatPrice(satang: number) {
 
 const CATEGORY_ORDER = ["บริการทั่วไป", "แพ็กเกจ", "Davines Spa", "ย้อมผม NIGAO"];
 
-export default function PosTerminal({ branches, activeBranchId, branchServices }: Props) {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [customer, setCustomer] = useState<CustomerValue>({ id: null, name: "", phone: "" });
+export default function PosTerminal({ branches, activeBranchId, branchServices, prefillBooking }: Props) {
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (prefillBooking) {
+      return [{
+        id: `prefill-${prefillBooking.id}`,
+        name: prefillBooking.serviceName,
+        price: prefillBooking.totalPrice,
+        qty: 1,
+        isCustom: true,
+      }];
+    }
+    return [];
+  });
+  const [customer, setCustomer] = useState<CustomerValue>(() => {
+    if (prefillBooking) {
+      return { id: null, name: prefillBooking.customer.name, phone: prefillBooking.customer.phone };
+    }
+    return { id: null, name: "", phone: "" };
+  });
+
+  // Keep fromBookingId in state so checkout can reference it
+  const [fromBookingId] = useState<string | null>(prefillBooking?.id ?? null);
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -92,6 +120,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
           items: cart.flatMap((i) =>
             Array.from({ length: i.qty }, () => ({ name: i.name, price: i.price }))
           ),
+          ...(fromBookingId ? { fromBookingId } : {}),
         }),
       });
       if (!res.ok) throw new Error();
@@ -237,6 +266,16 @@ export default function PosTerminal({ branches, activeBranchId, branchServices }
           className="w-80 flex flex-col border-l"
           style={{ borderColor: "#E8D8CC", backgroundColor: "white" }}
         >
+          {/* Prefill banner — shown when redirected from calendar */}
+          {fromBookingId && (
+            <div className="px-5 pt-4 pb-0">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium"
+                style={{ background: "#FFF0E8", color: "#8B1D24", border: "1px solid #E8D8CC" }}>
+                📅 เช็คเอาท์จากการจอง — ข้อมูลถูกกรอกอัตโนมัติแล้ว
+              </div>
+            </div>
+          )}
+
           {/* Customer */}
           <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid #F0E4D8" }}>
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#8B1D24" }}>ลูกค้า</p>

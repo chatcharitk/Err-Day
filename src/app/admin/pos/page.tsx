@@ -6,16 +6,43 @@ export const dynamic = "force-dynamic";
 export default async function PosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string }>;
+  searchParams: Promise<{ branchId?: string; bookingId?: string }>;
 }) {
-  const { branchId } = await searchParams;
+  const { branchId, bookingId } = await searchParams;
 
   const branches = await prisma.branch.findMany({
     where: { isActive: true },
     orderBy: { name: "asc" },
   });
 
-  const activeBranchId = branchId ?? branches[0]?.id ?? "";
+  // If redirected from a calendar booking, load it for pre-fill
+  let prefillBooking: {
+    id: string;
+    branchId: string;
+    customer: { name: string; phone: string };
+    serviceName: string;
+    totalPrice: number;
+  } | null = null;
+
+  if (bookingId) {
+    const b = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { customer: true, service: true },
+    });
+    if (b) {
+      prefillBooking = {
+        id: b.id,
+        branchId: b.branchId,
+        customer: { name: b.customer.name, phone: b.customer.phone },
+        serviceName: b.service.nameTh || b.service.name,
+        totalPrice: b.totalPrice,
+      };
+    }
+  }
+
+  // Use the booking's branch if no explicit branchId was given
+  const activeBranchId =
+    branchId ?? prefillBooking?.branchId ?? branches[0]?.id ?? "";
 
   const branchServices = activeBranchId
     ? await prisma.branchService.findMany({
@@ -30,6 +57,7 @@ export default async function PosPage({
       branches={branches}
       activeBranchId={activeBranchId}
       branchServices={branchServices}
+      prefillBooking={prefillBooking}
     />
   );
 }
