@@ -1,66 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-function timeToMins(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
-  return timeToMins(aStart) < timeToMins(bEnd) && timeToMins(aEnd) > timeToMins(bStart);
-}
-
-async function checkCapacity(
-  branchId: string,
-  date: string,
-  startTime: string,
-  endTime: string,
-  staffId: string | null,
-  excludeBookingId?: string,
-) {
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  if (staffId) {
-    // Specific staff: reject if that staff has any overlapping booking
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        staffId,
-        date: { gte: dayStart, lte: dayEnd },
-        status: { notIn: ["CANCELLED"] },
-        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
-      },
-      select: { startTime: true, endTime: true },
-    });
-    return conflict && overlaps(startTime, endTime, conflict.startTime, conflict.endTime)
-      ? "selected_staff"
-      : null;
-  }
-
-  // No specific staff: reject if all staff at the branch are simultaneously booked
-  const [staffCount, existing] = await Promise.all([
-    prisma.staff.count({ where: { branchId } }),
-    prisma.booking.findMany({
-      where: {
-        branchId,
-        date: { gte: dayStart, lte: dayEnd },
-        status: { notIn: ["CANCELLED"] },
-        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
-      },
-      select: { startTime: true, endTime: true, staffId: true },
-    }),
-  ]);
-
-  if (staffCount === 0) return null; // no staff configured — allow
-
-  const conflicting = existing.filter((b) => overlaps(startTime, endTime, b.startTime, b.endTime));
-  const uniqueStaff = new Set(conflicting.filter((b) => b.staffId).map((b) => b.staffId)).size;
-  const nullStaff = conflicting.filter((b) => !b.staffId).length;
-
-  return uniqueStaff + nullStaff >= staffCount ? "no_staff_available" : null;
-}
+import { checkCapacity } from "@/lib/capacity";
 
 export async function POST(request: Request) {
   try {
@@ -77,12 +17,18 @@ export async function POST(request: Request) {
     }
 
     if (!skipConflictCheck) {
-      const conflict = await checkCapacity(branchId, date, startTime, endTime, staffId ?? null);
-      if (conflict === "selected_staff") {
-        return NextResponse.json({ error: "Time slot not available for selected staff" }, { status: 409 });
-      }
-      if (conflict === "no_staff_available") {
-        return NextResponse.json({ error: "No available staff at this time. Please choose a different time." }, { status: 409 });
+      const result = await checkCapacity({
+        branchId, date, startTime, endTime, staffId: staffId ?? null,
+      });
+      if (!result.ok) {
+        const msg =
+          result.reason === "selected_staff_busy"      ? "Time slot not available for selected staff"
+        : result.reason === "selected_staff_off_shift" ? "Selected staff is not on shift at this time"
+        :                                                "No available staff at this time. Please choose a different time.";
+        return NextResponse.json(
+          { error: msg, scheduledCount: result.scheduledCount, occupiedCount: result.occupiedCount },
+          { status: 409 },
+        );
       }
     }
 

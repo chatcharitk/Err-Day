@@ -68,8 +68,24 @@ model Staff {
   commissionRate Float   @default(0) // percentage, e.g. 30 = 30 %
   isActive       Boolean @default(true)
 
-  branch   Branch    @relation(fields: [branchId], references: [id])
+  branch   Branch       @relation(fields: [branchId], references: [id])
   bookings Booking[]
+  shifts   StaffShift[]
+}
+
+model StaffShift {
+  id        String   @id @default(cuid())
+  staffId   String
+  date      DateTime // day of the shift (stored at noon local)
+  startTime String   // "HH:mm"
+  endTime   String   // "HH:mm" (exclusive end)
+  createdAt DateTime @default(now())
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date, startTime])
+  @@index([date])
+  @@index([staffId, date])
 }
 
 model Customer {

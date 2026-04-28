@@ -1,58 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-function timeToMins(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
-  return timeToMins(aStart) < timeToMins(bEnd) && timeToMins(aEnd) > timeToMins(bStart);
-}
-
-function addMinutes(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
-/**
- * Capacity check: returns null when the slot is free, or a reason string when blocked.
- * Excludes the booking being rescheduled so it doesn't conflict with itself.
- */
-async function checkCapacity(
-  branchId: string,
-  date: string,
-  startTime: string,
-  endTime: string,
-  excludeBookingId: string,
-) {
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  const [staffCount, existing] = await Promise.all([
-    prisma.staff.count({ where: { branchId } }),
-    prisma.booking.findMany({
-      where: {
-        branchId,
-        date: { gte: dayStart, lte: dayEnd },
-        status: { notIn: ["CANCELLED"] },
-        id: { not: excludeBookingId },
-      },
-      select: { startTime: true, endTime: true, staffId: true },
-    }),
-  ]);
-
-  if (staffCount === 0) return null;
-
-  const conflicting = existing.filter((b) => overlaps(startTime, endTime, b.startTime, b.endTime));
-  const uniqueStaff = new Set(conflicting.filter((b) => b.staffId).map((b) => b.staffId)).size;
-  const nullStaff = conflicting.filter((b) => !b.staffId).length;
-
-  return uniqueStaff + nullStaff >= staffCount ? "no_staff_available" : null;
-}
+import { addMinutes, checkCapacity } from "@/lib/capacity";
 
 /**
  * Verifies that the booking belongs to the customer with the given LINE user ID.
@@ -109,9 +57,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const newEndTime = addMinutes(newStartTime, bs.duration);
 
-    const conflict = await checkCapacity(newBranchId, newDate, newStartTime, newEndTime, id);
-    if (conflict) {
-      return NextResponse.json({ error: "Time slot not available" }, { status: 409 });
+    const result = await checkCapacity({
+      branchId: newBranchId,
+      date: newDate,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      excludeBookingId: id,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "Time slot not available", scheduledCount: result.scheduledCount, occupiedCount: result.occupiedCount },
+        { status: 409 },
+      );
     }
 
     // Recompute total: new service price + existing addon prices (snapshots)
