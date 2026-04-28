@@ -1095,9 +1095,7 @@ export default function CalendarView({
           );
         })}
         <span className="ml-auto text-xs text-gray-400">
-          {view === "list"
-            ? `${weekBookings.length} การจองสัปดาห์นี้`
-            : `${dayBookings.length} การจองวันที่เลือก`}
+          {dayBookings.length} การจองวันที่เลือก
         </span>
       </div>
 
@@ -1111,7 +1109,7 @@ export default function CalendarView({
           />
         )}
         {view === "list" && (
-          <ListView weekBookings={weekBookings} onClickBooking={setEditItem} />
+          <ListView weekBookings={dayBookings} onClickBooking={setEditItem} />
         )}
       </div>
 
