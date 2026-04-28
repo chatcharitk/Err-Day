@@ -13,13 +13,17 @@ export async function POST(request: Request) {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
 
-    // Store date as local noon (consistent with all other bookings in this app)
-    const localDateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const date = new Date(localDateStr + "T12:00:00");
+    // Server runs in UTC — shift to Asia/Bangkok (UTC+7) for correct local time
+    const bangkokNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const bkHr  = bangkokNow.getUTCHours();
+    const bkMin = bangkokNow.getUTCMinutes();
 
-    const startTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const endHour = now.getHours() + 1;
-    const endTime = `${pad(endHour % 24)}:${pad(now.getMinutes())}`;
+    // Store date as UTC noon of the Bangkok calendar day
+    const localDateStr = `${bangkokNow.getUTCFullYear()}-${pad(bangkokNow.getUTCMonth() + 1)}-${pad(bangkokNow.getUTCDate())}`;
+    const date = new Date(localDateStr + "T12:00:00Z");
+
+    const startTime = `${pad(bkHr)}:${pad(bkMin)}`;
+    const endTime   = `${pad((bkHr + 1) % 24)}:${pad(bkMin)}`;
 
     const totalPrice = items.reduce((s: number, i: { price: number }) => s + i.price, 0);
 
