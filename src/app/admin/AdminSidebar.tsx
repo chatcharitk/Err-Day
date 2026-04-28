@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ShoppingCart,
   Calendar,
+  CalendarClock,
   Users,
   History,
   UserCog,
@@ -22,6 +23,7 @@ const MENU = [
   { href: "/admin/history",    labelTh: "ประวัติการขาย",  label: "Sales History", icon: History },
   { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard },
   { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog },
+  { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock },
   { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors },
 ];
 
