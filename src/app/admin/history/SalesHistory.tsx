@@ -22,6 +22,7 @@ interface SaleRecord {
   notes: string | null;
   branchId: string;
   serviceId: string;
+  completedAt: string | null; // ISO UTC — when payment was processed via POS
   branch:   { id: string; name: string };
   service:  { name: string; nameTh: string };
   staff:    { id: string; name: string } | null;
@@ -58,6 +59,18 @@ const ALL_STATUSES = ["PENDING","CONFIRMED","COMPLETED","CANCELLED","NO_SHOW"];
 
 function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
+}
+
+/** Format a UTC ISO string as Bangkok local date+time, e.g. "28 เม.ย. 14:36 น." */
+function fmtInvoiceTime(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok", day: "numeric", month: "short",
+  });
+  const time = d.toLocaleTimeString("th-TH", {
+    timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  return `${date} · ${time} น.`;
 }
 
 function toLocalStr(d: Date) {
@@ -561,6 +574,12 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                               {sale.staff && ` · ${sale.staff.name}`}
                               {" · "}{sale.branch.name}
                             </p>
+                            {sale.completedAt && (
+                              <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#16a34a" }}>
+                                <span>💳</span>
+                                <span>ชำระเงิน {fmtInvoiceTime(sale.completedAt)}</span>
+                              </p>
+                            )}
                             <p className="text-xs" style={{ color: MUTED }}>{sale.customer.phone}</p>
                             {sale.notes && (
                               <p className="text-xs mt-1 italic" style={{ color: MUTED }}>"{sale.notes}"</p>

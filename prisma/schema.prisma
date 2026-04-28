@@ -151,14 +151,15 @@ model Booking {
   serviceId  String
   staffId    String?
   customerId String
-  date       DateTime      // date of appointment
-  startTime  String        // "HH:mm"
-  endTime    String        // "HH:mm"
-  status     BookingStatus @default(PENDING)
-  notes      String?
-  totalPrice Int           // in satang
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  date        DateTime      // date of appointment
+  startTime   String        // "HH:mm"
+  endTime     String        // "HH:mm"
+  status      BookingStatus @default(PENDING)
+  notes       String?
+  totalPrice  Int           // in satang
+  completedAt DateTime?     // set when payment is processed via POS (UTC)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   branch   Branch         @relation(fields: [branchId], references: [id])
   service  Service        @relation(fields: [serviceId], references: [id])

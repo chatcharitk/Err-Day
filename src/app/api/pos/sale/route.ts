@@ -45,8 +45,7 @@ export async function POST(request: Request) {
           status: "COMPLETED",
           totalPrice,
           notes: fullNotes || existing.notes,
-          startTime,
-          endTime,
+          completedAt: now,
         },
         include: { branch: true, customer: true },
       });
@@ -80,6 +79,7 @@ export async function POST(request: Request) {
         totalPrice,
         notes: fullNotes || null,
         status: "COMPLETED",
+        completedAt: now,
       },
       include: { branch: true, customer: true },
     });
