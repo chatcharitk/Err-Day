@@ -7,6 +7,10 @@ import { createPortal } from "react-dom";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
 /* ─── Types ─────────────────────────────────────────────── */
+interface ShiftInfo   { startTime: string; endTime: string }
+/** staffId → shift for the day (null = staff exists but is off-shift) */
+type StaffShiftMap = Record<string, ShiftInfo | null>;
+
 interface BookingItem {
   id: string;
   date: string;
@@ -150,14 +154,55 @@ function makeTimeSlots(step = 30): string[] {
 }
 function todayStr(): string { return toLocalStr(new Date()); }
 
+/* ─── Off-shift shade helper ─────────────────────────────── */
+const SHADE_STYLE: React.CSSProperties = {
+  position: "absolute", left: 0, right: 0, pointerEvents: "none", zIndex: 1,
+  background: "repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(0,0,0,0.035) 5px,rgba(0,0,0,0.035) 6px)",
+  backgroundColor: "rgba(0,0,0,0.03)",
+};
+
+function OffShiftShade({
+  shiftInfo, hasShifts, totalHeight, dayStart, hourPx,
+}: {
+  shiftInfo:   ShiftInfo | null | undefined;
+  hasShifts:   boolean;
+  totalHeight: number;
+  dayStart:    number;
+  hourPx:      number;
+}) {
+  if (!hasShifts) return null; // legacy mode — no shading
+  if (shiftInfo === undefined) return null; // staff not in map yet
+
+  // Full column shaded (staff is off today)
+  if (shiftInfo === null) {
+    return <div style={{ ...SHADE_STYLE, top: 0, height: totalHeight }} />;
+  }
+
+  const shiftStartPx = ((timeToMins(shiftInfo.startTime) - dayStart * 60) / 60) * hourPx;
+  const shiftEndPx   = ((timeToMins(shiftInfo.endTime)   - dayStart * 60) / 60) * hourPx;
+
+  return (
+    <>
+      {shiftStartPx > 0 && (
+        <div style={{ ...SHADE_STYLE, top: 0, height: shiftStartPx }} />
+      )}
+      {shiftEndPx < totalHeight && (
+        <div style={{ ...SHADE_STYLE, top: shiftEndPx, height: totalHeight - shiftEndPx }} />
+      )}
+    </>
+  );
+}
+
 /* ─── Vertical Gantt — staff columns, one day ───────────── */
 function VerticalGantt({
-  dayBookings, staff, selectedDate, onClickBooking,
+  dayBookings, staff, selectedDate, onClickBooking, staffShiftMap, hasShifts,
 }: {
-  dayBookings: BookingItem[];
-  staff: StaffItem[];
+  dayBookings:  BookingItem[];
+  staff:        StaffItem[];
   selectedDate: string;
   onClickBooking: (b: BookingItem) => void;
+  staffShiftMap:  StaffShiftMap;
+  hasShifts:      boolean;
 }) {
   const totalHours = DAY_END - DAY_START;
   const gridHeight = totalHours * HOUR_PX;
@@ -230,6 +275,7 @@ function VerticalGantt({
           const colBkgs = dayBookings.filter(b =>
             col.id === null ? b.staff === null : b.staff?.id === col.id
           );
+          const shiftInfo = col.id !== null ? (staffShiftMap[col.id] ?? null) : undefined;
           return (
             <div key={col.id ?? "__none__"}
               className="flex-shrink-0 relative border-r border-gray-100 last:border-r-0"
@@ -244,6 +290,14 @@ function VerticalGantt({
                 <div key={`${h}h`} className="absolute left-0 right-0 border-t border-dashed border-gray-50"
                   style={{ top: (h - DAY_START) * HOUR_PX + HOUR_PX / 2 }} />
               ))}
+              {/* Off-shift shading */}
+              <OffShiftShade
+                shiftInfo={shiftInfo}
+                hasShifts={hasShifts}
+                totalHeight={gridHeight}
+                dayStart={DAY_START}
+                hourPx={HOUR_PX}
+              />
               {/* Now line — spans all columns via first column */}
               {colIdx === 0 && nowTop !== null && nowTop >= 0 && nowTop <= gridHeight && (
                 <div className="absolute left-0 border-t-2 border-red-400/60 pointer-events-none z-10"
@@ -281,11 +335,13 @@ function VerticalGantt({
 
 /* ─── Horizontal Gantt — staff rows, time X-axis ─────────── */
 function HorizontalGantt({
-  dayBookings, staff, onClickBooking,
+  dayBookings, staff, onClickBooking, staffShiftMap, hasShifts,
 }: {
-  dayBookings: BookingItem[];
-  staff: StaffItem[];
+  dayBookings:    BookingItem[];
+  staff:          StaffItem[];
   onClickBooking: (b: BookingItem) => void;
+  staffShiftMap:  StaffShiftMap;
+  hasShifts:      boolean;
 }) {
   const totalHours = DAY_END - DAY_START;
   const gridWidth  = totalHours * HOUR_PX_H;
@@ -316,6 +372,7 @@ function HorizontalGantt({
           const rowBkgs = dayBookings.filter(b =>
             row.id === null ? b.staff === null : b.staff?.id === row.id
           );
+          const shiftInfo = row.id !== null ? (staffShiftMap[row.id] ?? null) : undefined;
           return (
             <div key={row.id ?? "__none__"} className="flex border-b border-gray-100 last:border-b-0"
               style={{ height: ROW_H, minWidth: NAME_COL + gridWidth }}>
@@ -328,6 +385,25 @@ function HorizontalGantt({
                   <div key={h} className="absolute top-0 bottom-0 border-l border-gray-100"
                     style={{ left: (h - DAY_START) * HOUR_PX_H }} />
                 ))}
+                {/* Off-shift shading (horizontal — shade left/right outside shift) */}
+                {hasShifts && shiftInfo !== undefined && (() => {
+                  if (shiftInfo === null) {
+                    return <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+                      background:"repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(0,0,0,0.035) 5px,rgba(0,0,0,0.035) 6px)",
+                      backgroundColor:"rgba(0,0,0,0.03)" }} />;
+                  }
+                  const startPx = ((timeToMins(shiftInfo.startTime) - DAY_START*60) / 60) * HOUR_PX_H;
+                  const endPx   = ((timeToMins(shiftInfo.endTime)   - DAY_START*60) / 60) * HOUR_PX_H;
+                  const shadeStyle: React.CSSProperties = {
+                    position:"absolute", top:0, bottom:0, pointerEvents:"none",
+                    background:"repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(0,0,0,0.035) 5px,rgba(0,0,0,0.035) 6px)",
+                    backgroundColor:"rgba(0,0,0,0.03)",
+                  };
+                  return (<>
+                    {startPx > 0    && <div style={{ ...shadeStyle, left:0, width: startPx }} />}
+                    {endPx < gridWidth && <div style={{ ...shadeStyle, left: endPx, width: gridWidth - endPx }} />}
+                  </>);
+                })()}
                 {rowBkgs.map(b => {
                   const startMins = timeToMins(b.startTime) - DAY_START * 60;
                   const endMins   = timeToMins(b.endTime)   - DAY_START * 60;
@@ -859,10 +935,31 @@ export default function CalendarView({
   weekBookings, staff, selectedDate, branches, activeBranchId,
 }: Props) {
   const router = useRouter();
-  const [view,     setView]     = useState<ViewMode>("vertical");
-  const [period,   setPeriod]   = useState<PeriodType>("week");
-  const [editItem, setEditItem] = useState<BookingItem | null>(null);
-  const [addOpen,  setAddOpen]  = useState(false);
+  const [view,         setView]         = useState<ViewMode>("vertical");
+  const [period,       setPeriod]       = useState<PeriodType>("week");
+  const [editItem,     setEditItem]     = useState<BookingItem | null>(null);
+  const [addOpen,      setAddOpen]      = useState(false);
+  const [staffShiftMap, setStaffShiftMap] = useState<StaffShiftMap>({});
+  const [hasShifts,    setHasShifts]    = useState(false);
+
+  // Fetch shifts for the selected date whenever date or branch changes
+  useEffect(() => {
+    if (!activeBranchId) return;
+    fetch(`/api/admin/branches/${activeBranchId}/shifts?from=${selectedDate}&to=${selectedDate}`)
+      .then(r => r.json())
+      .then((data: { staff: { id: string; shifts: { startTime: string; endTime: string }[] }[] }) => {
+        const map: StaffShiftMap = {};
+        let anyShifts = false;
+        for (const s of data.staff ?? []) {
+          const shift = s.shifts[0] ?? null; // at most 1 shift per staff per day
+          map[s.id] = shift;
+          if (shift) anyShifts = true;
+        }
+        setStaffShiftMap(map);
+        setHasShifts(anyShifts);
+      })
+      .catch(() => {});
+  }, [selectedDate, activeBranchId]);
 
   const monday   = getWeekMonday(selectedDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -1007,10 +1104,13 @@ export default function CalendarView({
           <VerticalGantt
             dayBookings={dayBookings} staff={staff}
             selectedDate={selectedDate} onClickBooking={setEditItem}
+            staffShiftMap={staffShiftMap} hasShifts={hasShifts}
           />
         )}
         {view === "horizontal" && (
-          <HorizontalGantt dayBookings={dayBookings} staff={staff} onClickBooking={setEditItem} />
+          <HorizontalGantt dayBookings={dayBookings} staff={staff} onClickBooking={setEditItem}
+            staffShiftMap={staffShiftMap} hasShifts={hasShifts}
+          />
         )}
         {view === "list" && (
           <ListView weekBookings={weekBookings} onClickBooking={setEditItem} />

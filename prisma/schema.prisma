@@ -16,6 +16,8 @@ model Branch {
   mapUrl    String?  // Google Maps link shown to customers (e.g. maps.app.goo.gl short link)
   mapLat    Float?   // Latitude for precise embed pin
   mapLng    Float?   // Longitude for precise embed pin
+  openTime  String?  // Daily open time "HH:mm", e.g. "10:00"
+  closeTime String?  // Daily close time "HH:mm", e.g. "20:00"
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

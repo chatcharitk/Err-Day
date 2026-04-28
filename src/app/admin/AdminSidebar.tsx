@@ -12,6 +12,7 @@ import {
   UserCog,
   Scissors,
   CreditCard,
+  Settings,
   ArrowLeft,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ const MENU = [
   { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog },
   { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock },
   { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors },
+  { href: "/admin/settings",  labelTh: "ตั้งค่าร้าน",    label: "Shop Settings", icon: Settings },
 ];
 
 export default function AdminSidebar() {
