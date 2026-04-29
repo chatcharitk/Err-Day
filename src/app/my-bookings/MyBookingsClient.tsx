@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, X, Edit3, Trash2, Check, AlertCircle, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Calendar } from "@/components/ui/calendar";
+import { UserCheck, CreditCard as CardIcon } from "lucide-react";
 
 const ALL_SLOTS = [
   "10:00","10:30","11:00","11:30","12:00","12:30",
@@ -13,6 +14,16 @@ const ALL_SLOTS = [
 ];
 
 type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
+
+interface MembershipStatus {
+  label:             string;
+  activatedAt:       string;
+  expiresAt:         string | null;
+  usagesUsed:        number;
+  usagesAllowed:     number;
+  isExpired:         boolean;
+  isUsagesExhausted: boolean;
+}
 
 interface Booking {
   id:         string;
@@ -73,23 +84,30 @@ function isUpcoming(b: Booking): boolean {
 
 export default function MyBookingsClient() {
   const liff = useLiff();
-  const [bookings, setBookings] = useState<Booking[] | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading,  setLoading]  = useState(false);
-  const [editing,  setEditing]  = useState<Booking | null>(null);
+  const [bookings,    setBookings]    = useState<Booking[] | null>(null);
+  const [membership,  setMembership]  = useState<MembershipStatus | null | "none">(null);
+  const [branches,    setBranches]    = useState<Branch[]>([]);
+  const [loading,     setLoading]     = useState(false);
+  const [editing,     setEditing]     = useState<Booking | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Booking | null>(null);
 
   const fetchBookings = useCallback(async (uid: string) => {
     setLoading(true);
     try {
-      const [bookingsRes, branchesRes] = await Promise.all([
+      const [bookingsRes, branchesRes, membershipRes] = await Promise.all([
         fetch(`/api/customer/bookings?lineUserId=${encodeURIComponent(uid)}`),
         fetch("/api/branches"),
+        fetch(`/api/liff/membership?lineUserId=${encodeURIComponent(uid)}`),
       ]);
       const data = await bookingsRes.json();
       const branchData = await branchesRes.json();
       setBookings(data.bookings ?? []);
       setBranches(branchData);
+      if (membershipRes.ok) {
+        setMembership(await membershipRes.json());
+      } else {
+        setMembership("none");
+      }
     } catch (e) {
       console.error(e);
       setBookings([]);
@@ -202,6 +220,11 @@ export default function MyBookingsClient() {
           </div>
         )}
 
+        {/* Membership status card */}
+        {membership !== null && (
+          <MembershipCard membership={membership} />
+        )}
+
         {bookings === null || loading ? (
           <div className="text-center py-16">
             <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto mb-3"
@@ -294,6 +317,78 @@ export default function MyBookingsClient() {
         </div>
       )}
     </main>
+  );
+}
+
+// ── Membership card ───────────────────────────────────────────────────────────
+function MembershipCard({ membership }: { membership: MembershipStatus | "none" }) {
+  if (membership === "none") {
+    return (
+      <div
+        className="rounded-2xl mb-6 p-4 flex items-center gap-3"
+        style={{ background: "#FFF8F4", border: "1.5px dashed #E8D8CC" }}
+      >
+        <CardIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#D6BCAE" }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>ยังไม่ได้เป็นสมาชิก</p>
+          <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>สมัครสมาชิกรับสิทธิ์ราคาพิเศษ 30 วัน เพียง ฿990</p>
+        </div>
+        <a
+          href="/liff/membership/signup"
+          className="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
+          style={{ background: "#8B1D24" }}
+        >
+          สมัคร
+        </a>
+      </div>
+    );
+  }
+
+  const isActive = !membership.isExpired && !membership.isUsagesExhausted;
+  const expiresDate = membership.expiresAt
+    ? new Date(membership.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
+    : null;
+  const usagesLeft = membership.usagesAllowed > 0
+    ? Math.max(0, membership.usagesAllowed - membership.usagesUsed)
+    : null;
+
+  return (
+    <div
+      className="rounded-2xl mb-6 p-4"
+      style={{
+        background: isActive ? "#ECFDF5" : "#FEF2F2",
+        border: `1.5px solid ${isActive ? "#BBF7D0" : "#FECACA"}`,
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <UserCheck className="w-8 h-8 flex-shrink-0" style={{ color: isActive ? "#059669" : "#DC2626" }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold" style={{ color: isActive ? "#065F46" : "#991B1B" }}>
+              {membership.label}
+            </p>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={isActive
+                ? { background: "#D1FAE5", color: "#065F46" }
+                : { background: "#FEE2E2", color: "#991B1B" }
+              }
+            >
+              {membership.isExpired ? "หมดอายุ" : membership.isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs flex-wrap" style={{ color: isActive ? "#059669" : "#DC2626" }}>
+            {expiresDate && (
+              <span>หมดอายุ {expiresDate}</span>
+            )}
+            {!expiresDate && <span>ไม่หมดอายุ</span>}
+            {usagesLeft !== null && (
+              <span>· เหลือ {usagesLeft}/{membership.usagesAllowed} ครั้ง</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

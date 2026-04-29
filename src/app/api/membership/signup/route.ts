@@ -4,6 +4,7 @@ import { PDPA_VERSION } from "@/lib/pdpa";
 
 interface SignupBody {
   name:        string;
+  nickname?:   string;  // ชื่อเล่น — optional
   phone:       string;
   email?:      string;
   gender?:     string;
@@ -21,7 +22,7 @@ interface SignupBody {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as SignupBody;
-    const { name, phone, email, gender, pdpaConsent, lineUserId, pictureUrl } = body;
+    const { name, nickname, phone, email, gender, pdpaConsent, lineUserId, pictureUrl } = body;
     const source = body.source ?? "signup";
 
     // Validate
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
       where:  { phone: phoneClean },
       update: {
         name:          name.trim(),
+        ...(nickname   ? { nickname: nickname.trim() } : {}),
         email:         email?.trim() || undefined,
         gender:        gender || undefined,
         pdpaConsentAt: new Date(),
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
       },
       create: {
         name:          name.trim(),
+        ...(nickname   ? { nickname: nickname.trim() } : {}),
         phone:         phoneClean,
         email:         email?.trim() || undefined,
         gender:        gender || undefined,

@@ -37,11 +37,12 @@ export default function CustomerSearch({
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Add-customer form state
-  const [newName,    setNewName]    = useState("");
-  const [newPhone,   setNewPhone]   = useState("");
-  const [newGender,  setNewGender]  = useState("");
-  const [creating,   setCreating]   = useState(false);
-  const [createErr,  setCreateErr]  = useState("");
+  const [newName,     setNewName]     = useState("");
+  const [newNickname, setNewNickname] = useState("");
+  const [newPhone,    setNewPhone]    = useState("");
+  const [newGender,   setNewGender]   = useState("");
+  const [creating,    setCreating]    = useState(false);
+  const [createErr,   setCreateErr]   = useState("");
 
   const wrapRef     = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,6 +90,7 @@ export default function CustomerSearch({
 
   const openAddForm = () => {
     setNewName(query.trim());
+    setNewNickname("");
     setNewPhone("");
     setNewGender("");
     setCreateErr("");
@@ -109,9 +111,10 @@ export default function CustomerSearch({
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name:   newName.trim(),
-          phone:  newPhone.trim() || `pos-${Date.now()}`, // backend requires phone — synthesize for walk-ins
-          gender: newGender || undefined,
+          name:     newName.trim(),
+          nickname: newNickname.trim() || undefined,
+          phone:    newPhone.trim() || `pos-${Date.now()}`, // backend requires phone — synthesize for walk-ins
+          gender:   newGender || undefined,
         }),
       });
       const data = await res.json();
@@ -218,6 +221,14 @@ export default function CustomerSearch({
             placeholder="ชื่อ-นามสกุล *"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm outline-none"
+            style={{ borderColor: "#D6BCAE" }}
+          />
+          <input
+            type="text"
+            placeholder="ชื่อเล่น (ไม่บังคับ)"
+            value={newNickname}
+            onChange={(e) => setNewNickname(e.target.value)}
             className="w-full border rounded-lg px-3 py-2 text-sm outline-none"
             style={{ borderColor: "#D6BCAE" }}
           />

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Check, Search, UserPlus, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, UserPlus, Sparkles } from "lucide-react";
 
 export const metadata = {
   title: "สมาชิก err.day",
@@ -80,26 +80,17 @@ export default function MembershipLandingPage() {
         {/* CTAs */}
         <div className="space-y-2.5">
           <Link
-            href="/membership/signup"
+            href="/liff/membership/signup"
             className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-white font-semibold transition-opacity hover:opacity-90"
             style={{ background: PRIMARY }}
           >
             <UserPlus size={18} />
-            สมัครสมาชิกใหม่
-          </Link>
-
-          <Link
-            href="/membership/lookup"
-            className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl border-2 font-semibold transition-colors hover:bg-stone-50"
-            style={{ borderColor: PRIMARY, color: PRIMARY, background: "white" }}
-          >
-            <Search size={18} />
-            เช็กสถานะสมาชิก
+            สมัครสมาชิกใหม่ (ผ่าน LINE)
           </Link>
         </div>
 
         <p className="text-xs text-center mt-6" style={{ color: MUTED }}>
-          เป็นสมาชิกอยู่แล้ว? เช็กสถานะหรือต่ออายุได้ที่หน้าร้าน
+          เป็นสมาชิกอยู่แล้ว? ดูสถานะได้ที่ &ldquo;การจองของฉัน&rdquo; ใน LINE
         </p>
 
         <p className="text-xs text-center mt-3" style={{ color: MUTED }}>

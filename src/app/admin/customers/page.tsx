@@ -17,6 +17,7 @@ export default async function CustomersPage() {
       customers={customers.map(c => ({
         id:         c.id,
         name:       c.name,
+        nickname:   c.nickname,
         phone:      c.phone,
         email:      c.email,
         gender:     c.gender,

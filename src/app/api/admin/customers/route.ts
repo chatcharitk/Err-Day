@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 // POST /api/admin/customers — register a new customer
 export async function POST(request: Request) {
   try {
-    const { name, phone, email, gender, pictureUrl } = await request.json();
+    const { name, nickname, phone, email, gender, pictureUrl } = await request.json();
 
     if (!name?.trim() || !phone?.trim()) {
       return NextResponse.json({ error: "ชื่อและเบอร์โทรจำเป็น" }, { status: 400 });
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     const customer = await prisma.customer.create({
       data: {
         name:       name.trim(),
+        nickname:   nickname?.trim() || null,
         phone:      phone.trim(),
         email:      email?.trim() || null,
         gender:     gender || null,

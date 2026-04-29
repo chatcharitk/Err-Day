@@ -27,11 +27,12 @@ export default function LiffMembershipSignupPage() {
   const [profile,  setProfile]  = useState<LineProfile | null>(null);
 
   // Form state
-  const [name,   setName]   = useState("");
-  const [phone,  setPhone]  = useState("");
-  const [email,  setEmail]  = useState("");
-  const [gender, setGender] = useState("");
-  const [pdpa,   setPdpa]   = useState(false);
+  const [name,     setName]     = useState("");
+  const [nickname, setNickname] = useState("");
+  const [phone,    setPhone]    = useState("");
+  const [email,    setEmail]    = useState("");
+  const [gender,   setGender]   = useState("");
+  const [pdpa,     setPdpa]     = useState(false);
   const [formErr, setFormErr] = useState("");
 
   // Init LIFF and login
@@ -77,6 +78,7 @@ export default function LiffMembershipSignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name:        name.trim(),
+          nickname:    nickname.trim() || undefined,
           phone:       phone.trim(),
           email:       email.trim() || undefined,
           gender:      gender || undefined,
@@ -90,8 +92,8 @@ export default function LiffMembershipSignupPage() {
       if (!res.ok) { setFormErr(data.error ?? "เกิดข้อผิดพลาด"); setStep("form"); return; }
 
       if (data.status === "already_member") {
-        // Already a member — show status page
-        router.replace(`/liff/membership`);
+        // Already a member — redirect to การจองของฉัน which shows membership status
+        router.replace(`/my-bookings`);
         return;
       }
       // pending_payment
@@ -100,7 +102,7 @@ export default function LiffMembershipSignupPage() {
       setFormErr("เกิดข้อผิดพลาด กรุณาลองใหม่");
       setStep("form");
     }
-  }, [name, phone, email, gender, pdpa, profile, router]);
+  }, [name, nickname, phone, email, gender, pdpa, profile, router]);
 
   // ── Loading ──
   if (step === "loading") {
@@ -172,6 +174,19 @@ export default function LiffMembershipSignupPage() {
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="เช่น ชัชจรินทร์ ใจดี"
+              className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none bg-white"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </div>
+
+          {/* Nickname */}
+          <div>
+            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>ชื่อเล่น (ไม่บังคับ)</label>
+            <input
+              type="text"
+              value={nickname}
+              onChange={e => setNickname(e.target.value)}
+              placeholder="เช่น แอม, บิ๊ก, นุ้ย"
               className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none bg-white"
               style={{ borderColor: BORDER, color: TEXT }}
             />

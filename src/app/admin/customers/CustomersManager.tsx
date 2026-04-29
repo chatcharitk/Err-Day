@@ -22,6 +22,7 @@ interface MembershipInfo {
 interface Customer {
   id:         string;
   name:       string;
+  nickname:   string | null;
   phone:      string;
   email:      string | null;
   gender:     string | null;
@@ -131,12 +132,13 @@ function AddCustomerModal({ onClose, onSaved }: {
   onClose: () => void;
   onSaved: (c: Customer) => void;
 }) {
-  const [name,   setName]   = useState("");
-  const [phone,  setPhone]  = useState("");
-  const [email,  setEmail]  = useState("");
-  const [gender, setGender] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState("");
+  const [name,     setName]     = useState("");
+  const [nickname, setNickname] = useState("");
+  const [phone,    setPhone]    = useState("");
+  const [email,    setEmail]    = useState("");
+  const [gender,   setGender]   = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState("");
 
   async function handleSave() {
     if (!name.trim())  { setError("กรุณากรอกชื่อ"); return; }
@@ -148,9 +150,11 @@ function AddCustomerModal({ onClose, onSaved }: {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          name: name.trim(), phone: phone.trim(),
-          email: email.trim() || null,
-          gender: gender || null,
+          name:     name.trim(),
+          nickname: nickname.trim() || null,
+          phone:    phone.trim(),
+          email:    email.trim() || null,
+          gender:   gender || null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
@@ -185,6 +189,16 @@ function AddCustomerModal({ onClose, onSaved }: {
                 autoFocus value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="เช่น สมชาย ใจดี"
+                className="w-full px-3 py-2 text-sm rounded-xl border"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อเล่น (ไม่บังคับ)</label>
+              <input
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                placeholder="เช่น แอม, บิ๊ก, นุ้ย"
                 className="w-full px-3 py-2 text-sm rounded-xl border"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
@@ -515,12 +529,13 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
   const [bookings,  setBookings]  = useState<BookingRecord[] | null>(null);
 
   // editable fields
-  const [name,   setName]   = useState(customer.name);
-  const [phone,  setPhone]  = useState(customer.phone);
-  const [email,  setEmail]  = useState(customer.email ?? "");
-  const [gender, setGender] = useState(customer.gender ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState("");
+  const [name,     setName]     = useState(customer.name);
+  const [nickname, setNickname] = useState(customer.nickname ?? "");
+  const [phone,    setPhone]    = useState(customer.phone);
+  const [email,    setEmail]    = useState(customer.email ?? "");
+  const [gender,   setGender]   = useState(customer.gender ?? "");
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState("");
 
   // delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -562,9 +577,11 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          name: name.trim(), phone: phone.trim(),
-          email: email.trim() || null,
-          gender: gender || null,
+          name:     name.trim(),
+          nickname: nickname.trim() || null,
+          phone:    phone.trim(),
+          email:    email.trim() || null,
+          gender:   gender || null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "บันทึกไม่สำเร็จ");
@@ -615,14 +632,29 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
 
             <div className="flex-1 min-w-0">
               {editMode ? (
-                <input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="text-lg font-semibold w-full px-2 py-1 rounded-lg border"
-                  style={{ borderColor: BORDER, color: TEXT }}
-                />
+                <div className="space-y-1.5">
+                  <input
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="ชื่อ-นามสกุล *"
+                    className="text-lg font-semibold w-full px-2 py-1 rounded-lg border"
+                    style={{ borderColor: BORDER, color: TEXT }}
+                  />
+                  <input
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    placeholder="ชื่อเล่น (ไม่บังคับ)"
+                    className="text-sm w-full px-2 py-1 rounded-lg border"
+                    style={{ borderColor: BORDER, color: TEXT }}
+                  />
+                </div>
               ) : (
-                <h2 className="text-xl font-semibold" style={{ color: TEXT }}>{customer.name}</h2>
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: TEXT }}>{customer.name}</h2>
+                  {customer.nickname && (
+                    <p className="text-sm" style={{ color: MUTED }}>ชื่อเล่น: {customer.nickname}</p>
+                  )}
+                </div>
               )}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {customer.lineUserId && (
@@ -762,6 +794,7 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
                     onClick={() => {
                       setEditMode(false);
                       setName(customer.name);
+                      setNickname(customer.nickname ?? "");
                       setPhone(customer.phone);
                       setEmail(customer.email ?? "");
                       setGender(customer.gender ?? "");
@@ -940,7 +973,12 @@ function CustomerCard({ customer, onClick, highlightRef }: {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-sm" style={{ color: TEXT }}>{customer.name}</p>
+          <p className="font-semibold text-sm" style={{ color: TEXT }}>
+            {customer.name}
+            {customer.nickname && (
+              <span className="font-normal text-xs ml-1.5" style={{ color: MUTED }}>({customer.nickname})</span>
+            )}
+          </p>
           {customer.membership && (
             <span
               className="text-xs px-2 py-0.5 rounded-full font-medium"
