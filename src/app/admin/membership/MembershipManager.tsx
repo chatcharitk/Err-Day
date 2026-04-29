@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Users, CheckCircle, XCircle, Clock, Hourglass, History as HistoryIcon, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { RefreshCw, Users, CheckCircle, XCircle, Clock, Hourglass, History as HistoryIcon, Search, ShoppingCart, Pencil, Trash2, Save, X } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const BORDER  = "#E8D8CC";
@@ -228,36 +229,152 @@ function CustomerCard({
   );
 }
 
-// ─── Pending row ──────────────────────────────────────────────────────────────
+// ─── Pending card ─────────────────────────────────────────────────────────────
 
-function PendingCard({ row }: { row: PendingRow }) {
+function PendingCard({
+  row,
+  onEdit,
+  onDelete,
+  deleting,
+}: {
+  row:      PendingRow;
+  onEdit:   (id: string, data: { name: string; phone: string; email: string }) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  deleting: boolean;
+}) {
+  const router = useRouter();
+  const [editing,  setEditing]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [editName, setEditName] = useState(row.name);
+  const [editPhone, setEditPhone] = useState(row.phone ?? "");
+  const [editEmail, setEditEmail] = useState(row.email ?? "");
+  const [err, setErr] = useState("");
+
+  async function handleSave() {
+    if (!editName.trim() || !editPhone.trim()) { setErr("ชื่อและเบอร์โทรจำเป็น"); return; }
+    setSaving(true);
+    setErr("");
+    await onEdit(row.id, { name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim() });
+    setSaving(false);
+    setEditing(false);
+  }
+
   return (
     <div
-      className="rounded-2xl bg-white p-4 flex items-center gap-4"
+      className="rounded-2xl bg-white p-4 space-y-3"
       style={{ border: `1.5px dashed ${BORDER}` }}
     >
-      <div
-        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-        style={{ backgroundColor: "#f59e0b" }}
-      >
-        <Hourglass size={16} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm" style={{ color: TEXT }}>{row.name}</p>
-        <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: MUTED }}>
-          {row.phone && <span>{row.phone}</span>}
-          {row.email && <span>· {row.email}</span>}
+      {/* Header row */}
+      <div className="flex items-start gap-3">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+          style={{ backgroundColor: "#f59e0b" }}
+        >
+          <Hourglass size={16} />
         </div>
-        <p className="text-xs mt-1" style={{ color: MUTED }}>
-          ลงทะเบียน {fmtDateTime(row.consentedAt)}
-        </p>
+        <div className="flex-1 min-w-0">
+          {editing ? (
+            <div className="space-y-1.5">
+              <input
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                placeholder="ชื่อ *"
+                className="w-full border rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+              <input
+                value={editPhone}
+                onChange={e => setEditPhone(e.target.value)}
+                placeholder="เบอร์โทร *"
+                className="w-full border rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+              <input
+                value={editEmail}
+                onChange={e => setEditEmail(e.target.value)}
+                placeholder="อีเมล (ไม่บังคับ)"
+                className="w-full border rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+              {err && <p className="text-xs text-red-600">{err}</p>}
+            </div>
+          ) : (
+            <>
+              <p className="font-semibold text-sm" style={{ color: TEXT }}>{row.name}</p>
+              <div className="flex items-center gap-2 text-xs mt-0.5 flex-wrap" style={{ color: MUTED }}>
+                {row.phone && <span>{row.phone}</span>}
+                {row.email && <span>· {row.email}</span>}
+              </div>
+              <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                ลงทะเบียน {fmtDateTime(row.consentedAt)}
+              </p>
+            </>
+          )}
+        </div>
+        <span
+          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0"
+          style={{ backgroundColor: "#FFFBEB", color: "#92400e" }}
+        >
+          รอชำระ
+        </span>
       </div>
-      <span
-        className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0"
-        style={{ backgroundColor: "#FFFBEB", color: "#92400e" }}
-      >
-        รอชำระ
-      </span>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        {editing ? (
+          <>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+              style={{ background: PRIMARY }}
+            >
+              <Save size={12} />
+              {saving ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setEditName(row.name); setEditPhone(row.phone ?? ""); setEditEmail(row.email ?? ""); setErr(""); }}
+              className="px-3 py-2 rounded-xl text-xs border"
+              style={{ borderColor: BORDER, color: MUTED }}
+            >
+              <X size={12} />
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Go to POS — opens POS with this customer pre-selected */}
+            <button
+              onClick={() => router.push(
+                `/admin/pos?customerPhone=${encodeURIComponent(row.phone ?? "")}&customerName=${encodeURIComponent(row.name)}`
+              )}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-white"
+              style={{ background: PRIMARY }}
+            >
+              <ShoppingCart size={12} />
+              ไปยัง POS ชำระเงิน
+            </button>
+            <button
+              onClick={() => setEditing(true)}
+              className="px-3 py-2 rounded-xl text-xs border hover:bg-stone-50 transition-colors"
+              style={{ borderColor: BORDER, color: MUTED }}
+              title="แก้ไขข้อมูล"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`ลบ ${row.name} ออกจากรายการรอชำระ?`)) onDelete(row.id);
+              }}
+              disabled={deleting}
+              className="px-3 py-2 rounded-xl text-xs border hover:bg-red-50 transition-colors disabled:opacity-50"
+              style={{ borderColor: "#FECACA", color: "#991b1b" }}
+              title="ลบ"
+            >
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -307,10 +424,11 @@ export default function MembershipManager() {
   const [data,     setData]     = useState<ApiResponse>({ members: [], pending: [], history: [] });
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
-  const [renewing, setRenewing] = useState<string | null>(null);
-  const [tab,      setTab]      = useState<Tab>("members");
-  const [filter,   setFilter]   = useState<"all" | "active" | "expired">("all");
-  const [search,   setSearch]   = useState("");
+  const [renewing,  setRenewing]  = useState<string | null>(null);
+  const [deletingP, setDeletingP] = useState<string | null>(null);
+  const [tab,       setTab]       = useState<Tab>("members");
+  const [filter,    setFilter]    = useState<"all" | "active" | "expired">("all");
+  const [search,    setSearch]    = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -342,6 +460,33 @@ export default function MembershipManager() {
       setError("ต่ออายุไม่สำเร็จ");
     } finally {
       setRenewing(null);
+    }
+  }
+
+  async function handlePendingEdit(customerId: string, data: { name: string; phone: string; email: string }) {
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "แก้ไขไม่สำเร็จ");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "แก้ไขไม่สำเร็จ");
+    }
+  }
+
+  async function handlePendingDelete(customerId: string) {
+    setDeletingP(customerId);
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      await load();
+    } catch {
+      setError("ลบไม่สำเร็จ");
+    } finally {
+      setDeletingP(null);
     }
   }
 
@@ -528,7 +673,13 @@ export default function MembershipManager() {
                 </div>
                 <div className="space-y-2">
                   {pendingFiltered.map(p => (
-                    <PendingCard key={p.id} row={p} />
+                    <PendingCard
+                      key={p.id}
+                      row={p}
+                      onEdit={handlePendingEdit}
+                      onDelete={handlePendingDelete}
+                      deleting={deletingP === p.id}
+                    />
                   ))}
                 </div>
               </>

@@ -9,6 +9,8 @@ interface SignupBody {
   gender?:     string;
   pdpaConsent: boolean;
   source?:     "signup" | "liff" | "staff" | "booking";
+  lineUserId?: string;  // provided when signing up via LIFF
+  pictureUrl?: string;  // LINE profile picture
 }
 
 /** POST /api/membership/signup
@@ -19,7 +21,7 @@ interface SignupBody {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as SignupBody;
-    const { name, phone, email, gender, pdpaConsent } = body;
+    const { name, phone, email, gender, pdpaConsent, lineUserId, pictureUrl } = body;
     const source = body.source ?? "signup";
 
     // Validate
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Upsert customer with PDPA consent
+    // Upsert customer with PDPA consent (and optional LINE identity)
     const customer = await prisma.customer.upsert({
       where:  { phone: phoneClean },
       update: {
@@ -68,6 +70,8 @@ export async function POST(request: Request) {
         pdpaConsentAt: new Date(),
         pdpaVersion:   PDPA_VERSION,
         pdpaSource:    source,
+        ...(lineUserId ? { lineUserId } : {}),
+        ...(pictureUrl ? { pictureUrl } : {}),
       },
       create: {
         name:          name.trim(),
@@ -77,6 +81,8 @@ export async function POST(request: Request) {
         pdpaConsentAt: new Date(),
         pdpaVersion:   PDPA_VERSION,
         pdpaSource:    source,
+        ...(lineUserId ? { lineUserId } : {}),
+        ...(pictureUrl ? { pictureUrl } : {}),
       },
     });
 

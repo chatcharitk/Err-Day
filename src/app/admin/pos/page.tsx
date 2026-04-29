@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 export default async function PosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; bookingId?: string }>;
+  searchParams: Promise<{ branchId?: string; bookingId?: string; customerPhone?: string; customerName?: string }>;
 }) {
-  const { branchId, bookingId } = await searchParams;
+  const { branchId, bookingId, customerPhone, customerName } = await searchParams;
 
   const branches = await prisma.branch.findMany({
     where: { isActive: true },
@@ -58,6 +58,18 @@ export default async function PosPage({
     }),
   ]);
 
+  // Pre-fill customer from ?customerPhone param (e.g. navigating from pending tab)
+  let prefillCustomer: { id: string | null; name: string; phone: string } | null = null;
+  if (customerPhone && !prefillBooking) {
+    const c = await prisma.customer.findUnique({
+      where: { phone: customerPhone },
+      select: { id: true, name: true, phone: true },
+    });
+    prefillCustomer = c
+      ? { id: c.id, name: c.name, phone: c.phone }
+      : { id: null, name: customerName ?? "", phone: customerPhone };
+  }
+
   return (
     <PosTerminal
       branches={branches}
@@ -65,6 +77,7 @@ export default async function PosPage({
       branchServices={branchServices}
       addons={addons}
       prefillBooking={prefillBooking}
+      prefillCustomer={prefillCustomer}
     />
   );
 }

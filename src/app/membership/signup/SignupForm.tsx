@@ -79,6 +79,25 @@ export default function SignupForm() {
           กลับ
         </Link>
 
+        {/* LINE signup suggestion banner */}
+        <div
+          className="flex items-center gap-3 rounded-2xl p-3 mb-5 text-sm"
+          style={{ background: "#F0FFF4", border: "1.5px solid #BBF7D0", color: "#166534" }}
+        >
+          <span className="text-2xl">💚</span>
+          <div className="flex-1 text-xs">
+            <p className="font-semibold mb-0.5">สมัครผ่าน LINE ได้เลย!</p>
+            <p style={{ color: "#14532d" }}>ล็อกอิน LINE เพื่อเชื่อมบัญชีและรับสิทธิ์แจ้งเตือนอัตโนมัติ</p>
+          </div>
+          <a
+            href="/liff/membership/signup"
+            className="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
+            style={{ background: "#22c55e" }}
+          >
+            LINE
+          </a>
+        </div>
+
         <header className="mb-6">
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Membership Signup</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>สมัครสมาชิก</h1>

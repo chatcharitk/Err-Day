@@ -63,6 +63,8 @@ export async function DELETE(
         await tx.bookingAddon.deleteMany({ where: { bookingId: { in: bookingIds } } });
         await tx.booking.deleteMany({ where: { id: { in: bookingIds } } });
       }
+      // MembershipCycle has FK to both membership and customer — delete before membership
+      await tx.membershipCycle.deleteMany({ where: { customerId: id } });
       await tx.membership.deleteMany({ where: { customerId: id } });
       await tx.customer.delete({ where: { id } });
     });

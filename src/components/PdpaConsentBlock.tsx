@@ -13,14 +13,15 @@ const BG      = "#FDF7F2";
 interface Props {
   checked: boolean;
   onChange: (checked: boolean) => void;
-  /** "signup" | "booking" | "staff" — affects copy */
-  context?: "signup" | "booking" | "staff";
+  /** "signup" | "booking" | "staff" | "liff" — affects copy */
+  context?: "signup" | "booking" | "staff" | "liff";
 }
 
 const SUMMARY_BY_CONTEXT: Record<NonNullable<Props["context"]>, string> = {
   signup:  "ข้อมูลของท่านจะถูกใช้เพื่อจัดการสมาชิก ส่งโปรโมชั่น และยืนยันการชำระเงิน",
   booking: "ข้อมูลของท่านจะถูกใช้เพื่อยืนยันการจองและติดต่อกลับ",
   staff:   "ลูกค้าได้ให้ความยินยอมด้วยวาจาที่หน้าร้าน — เก็บข้อมูลตามนโยบาย PDPA",
+  liff:    "บัญชี LINE ของท่านจะเชื่อมโยงกับข้อมูลสมาชิก เพื่อจัดการสิทธิ์และส่งโปรโมชั่น",
 };
 
 export default function PdpaConsentBlock({ checked, onChange, context = "signup" }: Props) {

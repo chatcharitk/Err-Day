@@ -33,12 +33,20 @@ interface MemberInfo {
   tierDiscountPct: number;
 }
 
+interface PrefillCustomer {
+  id:    string | null;
+  name:  string;
+  phone: string;
+}
+
 interface Props {
   branches: Branch[];
   activeBranchId: string;
   branchServices: BS[];
   addons: ServiceAddon[];
   prefillBooking?: PrefillBooking | null;
+  /** Pre-select a customer (e.g. from the pending membership tab). */
+  prefillCustomer?: PrefillCustomer | null;
 }
 
 function formatPrice(satang: number) {
@@ -64,7 +72,7 @@ const CATS_BEFORE_ADDONS = ["Membership", "บริการทั่วไป"
 // Categories rendered AFTER add-ons
 const CATS_AFTER_ADDONS  = ["Davines Spa", "ย้อมผม NIGAO"];
 
-export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking }: Props) {
+export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer }: Props) {
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (prefillBooking) {
       return [{
@@ -82,6 +90,9 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const [customer, setCustomer] = useState<CustomerValue>(() => {
     if (prefillBooking) {
       return { id: null, name: prefillBooking.customer.name, phone: prefillBooking.customer.phone };
+    }
+    if (prefillCustomer) {
+      return { id: prefillCustomer.id, name: prefillCustomer.name, phone: prefillCustomer.phone };
     }
     return { id: null, name: "", phone: "" };
   });
