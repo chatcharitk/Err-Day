@@ -10,10 +10,11 @@ type BS = BranchService & { service: Service };
 interface CartItem {
   id: string;
   name: string;
-  basePrice: number;      // original price before any discount
-  price: number;          // actual price (may be member-discounted)
+  basePrice: number;      // original price before any discount (satang)
+  price: number;          // actual price (may be member-discounted) (satang)
   qty: number;
-  memberDiscountPct: number; // per-item discount % (0 for custom / add-ons with no discount)
+  /** The price to use when member is active (satang). Equals basePrice if no discount. */
+  memberPrice: number;
   isCustom?: boolean;
 }
 
@@ -49,6 +50,15 @@ function applyDiscount(basePrice: number, pct: number): number {
   return Math.round(basePrice * (1 - pct / 100));
 }
 
+/** Returns the effective member price for a branch service (satang).
+ *  Prefers the net fixed memberPrice over the percentage discount. */
+function getServiceMemberPrice(bs: BS): number {
+  const svc = bs.service as Service & { memberPrice?: number | null };
+  if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;
+  const pct = svc.memberDiscountPercent ?? 0;
+  return applyDiscount(bs.price, pct);
+}
+
 // Categories rendered BEFORE add-ons
 const CATS_BEFORE_ADDONS = ["บริการทั่วไป", "แพ็กเกจ"];
 // Categories rendered AFTER add-ons
@@ -63,7 +73,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         basePrice: prefillBooking.totalPrice,
         price: prefillBooking.totalPrice,
         qty: 1,
-        memberDiscountPct: 0,
+        memberPrice: prefillBooking.totalPrice,
         isCustom: true,
       }];
     }
@@ -118,13 +128,11 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   }, [customer.id, customer.phone]);
 
   // ── Re-price cart items when member status changes ──
-  // Services use their own memberDiscountPct; add-ons use tier discount.
   useEffect(() => {
-    const memberActive = memberInfo?.isValid ?? false;
+    const active = memberInfo?.isValid ?? false;
     setCart(prev => prev.map(item => {
       if (item.isCustom) return item;
-      const pct = memberActive ? item.memberDiscountPct : 0;
-      return { ...item, price: applyDiscount(item.basePrice, pct) };
+      return { ...item, price: active ? item.memberPrice : item.basePrice };
     }));
   }, [memberInfo]);
 
@@ -141,8 +149,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
   // ── Cart operations ──
   const addService = (bs: BS) => {
-    // Per-service member discount (set in admin /membership page)
-    const svcDiscountPct = memberActive ? (bs.service.memberDiscountPercent ?? 0) : 0;
+    const mPrice = getServiceMemberPrice(bs);
     setCart(prev => {
       const existing = prev.find(i => i.id === bs.id);
       if (existing) return prev.map(i => i.id === bs.id ? { ...i, qty: i.qty + 1 } : i);
@@ -150,17 +157,18 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         id: bs.id,
         name: bs.service.nameTh,
         basePrice: bs.price,
-        price: applyDiscount(bs.price, svcDiscountPct),
+        price: memberActive ? mPrice : bs.price,
         qty: 1,
-        memberDiscountPct: bs.service.memberDiscountPercent ?? 0,
+        memberPrice: mPrice,
       }];
     });
   };
 
   const addAddon = (addon: ServiceAddon) => {
     const aid = `addon-${addon.id}`;
-    // Add-ons use tier-level discount (if any); no per-addon member discount field
-    const addonDiscountPct = memberActive ? (memberInfo?.tierDiscountPct ?? 0) : 0;
+    // Add-ons use tier-level discount (if any); no per-addon net price
+    const addonPct = memberInfo?.tierDiscountPct ?? 0;
+    const addonMemberPrice = applyDiscount(addon.price, addonPct);
     setCart(prev => {
       const existing = prev.find(i => i.id === aid);
       if (existing) return prev.map(i => i.id === aid ? { ...i, qty: i.qty + 1 } : i);
@@ -168,9 +176,9 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         id: aid,
         name: addon.nameTh,
         basePrice: addon.price,
-        price: applyDiscount(addon.price, addonDiscountPct),
+        price: memberActive ? addonMemberPrice : addon.price,
         qty: 1,
-        memberDiscountPct: addonDiscountPct,
+        memberPrice: addonMemberPrice,
       }];
     });
   };
@@ -179,7 +187,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
     const price = Math.round(parseFloat(customPrice) * 100);
     if (!customName.trim() || isNaN(price) || price <= 0) return;
     const id = `custom-${Date.now()}`;
-    setCart(prev => [...prev, { id, name: customName.trim(), basePrice: price, price, qty: 1, memberDiscountPct: 0, isCustom: true }]);
+    setCart(prev => [...prev, { id, name: customName.trim(), basePrice: price, price, qty: 1, memberPrice: price, isCustom: true }]);
     setCustomName("");
     setCustomPrice("");
     setShowCustomForm(false);
@@ -243,10 +251,9 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         <div className="grid grid-cols-2 gap-2">
           {items.map(bs => {
             const inCart = cart.some(i => i.id === bs.id);
-            // Use per-service member discount when member is active
-            const svcPct = memberActive ? (bs.service.memberDiscountPercent ?? 0) : 0;
-            const discPrice = applyDiscount(bs.price, svcPct);
-            const hasDiscount = svcPct > 0 && discPrice < bs.price;
+            const memberPriceNet = getServiceMemberPrice(bs);
+            const discPrice = memberActive ? memberPriceNet : bs.price;
+            const hasDiscount = memberActive && memberPriceNet < bs.price;
             return (
               <button
                 key={bs.id}

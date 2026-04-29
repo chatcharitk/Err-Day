@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Save, RefreshCw, Percent, Tag } from "lucide-react";
+import { RefreshCw, Users, CheckCircle, XCircle, Clock } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const BORDER  = "#E8D8CC";
@@ -11,214 +11,216 @@ const BG      = "#FDF7F2";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface BranchPrice { branchId: string; price: number; branch: { name: string } }
+interface MemberTier {
+  id: string;
+  name: string;
+  discountPercent: number;
+}
 
-interface ServiceRow {
-  id:                    string;
-  nameTh:                string;
-  name:                  string;
-  category:              string;
-  memberDiscountPercent: number;
-  branches:              BranchPrice[];
+interface MembershipInfo {
+  id: string;
+  label: string | null;
+  isValid: boolean;
+  expired: boolean;
+  usedUp: boolean;
+  expiresAt: string | null;
+  activatedAt: string | null;
+  usagesAllowed: number;
+  usagesUsed: number;
+  points: number;
+  tier: MemberTier | null;
+}
+
+interface CustomerRow {
+  id: string;
+  name: string;
+  phone: string | null;
+  membership: MembershipInfo;
+  cycleBookings: number;
+  totalBookings: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtBaht(satang: number) {
-  return (satang / 100).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+  });
 }
 
-/** lowest branch price for a service (satang), or null */
-function basePrice(svc: ServiceRow): number | null {
-  if (!svc.branches.length) return null;
-  return Math.min(...svc.branches.map(b => b.price));
+function daysLeft(iso: string | null): number | null {
+  if (!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-/** satang → baht display string */
-function satangToDisplay(s: number) { return (s / 100).toFixed(2).replace(/\.00$/, ""); }
+// ─── Customer membership card ─────────────────────────────────────────────────
 
-// ─── Per-service discount row ─────────────────────────────────────────────────
-
-interface RowState {
-  pct:     string; // discount %
-  net:     string; // net price in baht
-  changed: boolean;
-}
-
-function ServiceDiscountRow({
-  svc,
-  state,
-  onChange,
+function CustomerCard({
+  row,
+  onRenew,
+  renewing,
 }: {
-  svc:      ServiceRow;
-  state:    RowState;
-  onChange: (next: RowState) => void;
+  row: CustomerRow;
+  onRenew: (id: string) => void;
+  renewing: boolean;
 }) {
-  const base = basePrice(svc); // satang or null
+  const m    = row.membership;
+  const days = daysLeft(m.expiresAt);
 
-  function handlePctChange(raw: string) {
-    const pctNum = parseFloat(raw);
-    if (base !== null && !isNaN(pctNum) && raw !== "") {
-      const netSatang = Math.round(base * (1 - Math.min(100, Math.max(0, pctNum)) / 100));
-      onChange({ pct: raw, net: satangToDisplay(netSatang), changed: true });
-    } else {
-      onChange({ pct: raw, net: state.net, changed: true });
-    }
+  let statusColor = "#166534";
+  let statusBg    = "#F0FFF4";
+  let statusText  = "ใช้งานได้";
+
+  if (m.expired) {
+    statusColor = "#991b1b"; statusBg = "#FEF2F2"; statusText = "หมดอายุ";
+  } else if (m.usedUp) {
+    statusColor = "#92400e"; statusBg = "#FFFBEB"; statusText = "ใช้ครบแล้ว";
+  } else if (days !== null && days <= 5) {
+    statusColor = "#b45309"; statusBg = "#FFFBEB"; statusText = `เหลือ ${days} วัน`;
   }
 
-  function handleNetChange(raw: string) {
-    const netBaht = parseFloat(raw);
-    if (base !== null && !isNaN(netBaht) && raw !== "" && base > 0) {
-      const netSatang = Math.round(netBaht * 100);
-      const pct = Math.max(0, Math.min(100, ((base - netSatang) / base) * 100));
-      onChange({ pct: pct.toFixed(1).replace(/\.0$/, ""), net: raw, changed: true });
-    } else {
-      onChange({ pct: state.pct, net: raw, changed: true });
-    }
-  }
-
-  const pctNum = parseFloat(state.pct) || 0;
-  const hasDiscount = pctNum > 0;
+  // Cycle usage bar (if usagesAllowed > 0)
+  const hasCycleLimit = m.usagesAllowed > 0;
+  const cycleUsedPct  = hasCycleLimit ? Math.min(100, Math.round((row.cycleBookings / m.usagesAllowed) * 100)) : null;
 
   return (
-    <tr
-      className="border-b last:border-0 transition-colors"
-      style={{ borderColor: BORDER, background: state.changed ? "#FFFBF5" : "white" }}
+    <div
+      className="rounded-2xl bg-white p-4 flex flex-col gap-3"
+      style={{ border: `1.5px solid ${m.isValid ? BORDER : "#FECACA"}` }}
     >
-      {/* Service name */}
-      <td className="px-4 py-3">
-        <p className="text-sm font-medium" style={{ color: TEXT }}>{svc.nameTh || svc.name}</p>
-        <p className="text-xs" style={{ color: MUTED }}>{svc.category}</p>
-      </td>
-
-      {/* Base price */}
-      <td className="px-4 py-3 text-right">
-        {base !== null ? (
-          <div>
-            <p className="text-sm font-medium" style={{ color: TEXT }}>฿{fmtBaht(base)}</p>
-            {svc.branches.length > 1 && (
-              <p className="text-xs" style={{ color: MUTED }}>ราคาต่ำสุด</p>
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Avatar */}
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+            style={{ backgroundColor: m.isValid ? PRIMARY : MUTED }}
+          >
+            {row.name.charAt(0)}
+          </div>
+          {/* Name + phone */}
+          <div className="min-w-0">
+            <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{row.name}</p>
+            {row.phone && (
+              <p className="text-xs" style={{ color: MUTED }}>{row.phone}</p>
             )}
           </div>
-        ) : (
-          <span className="text-xs" style={{ color: MUTED }}>—</span>
+        </div>
+
+        {/* Status badge */}
+        <span
+          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 flex items-center gap-1"
+          style={{ backgroundColor: statusBg, color: statusColor }}
+        >
+          {m.isValid
+            ? <CheckCircle size={11} />
+            : m.expired
+              ? <XCircle size={11} />
+              : <Clock size={11} />
+          }
+          {statusText}
+        </span>
+      </div>
+
+      {/* Membership label + tier */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {m.label && (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F9F0E8", color: PRIMARY }}>
+            {m.label}
+          </span>
         )}
-      </td>
+        {m.tier && (
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: BG, color: MUTED }}>
+            {m.tier.name}
+            {m.tier.discountPercent > 0 && ` (${m.tier.discountPercent}%)`}
+          </span>
+        )}
+        {m.points > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#EFF6FF", color: "#1d4ed8" }}>
+            {m.points} แต้ม
+          </span>
+        )}
+      </div>
 
-      {/* Discount % input */}
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            value={state.pct}
-            onChange={e => handlePctChange(e.target.value)}
-            placeholder="0"
-            className="w-16 px-2 py-1.5 text-sm rounded-lg border text-right"
-            style={{
-              borderColor: hasDiscount ? PRIMARY : BORDER,
-              color: hasDiscount ? PRIMARY : TEXT,
-              fontWeight: hasDiscount ? 600 : 400,
-            }}
-          />
-          <span className="text-sm" style={{ color: MUTED }}>%</span>
+      {/* Expiry + cycle stats */}
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p style={{ color: MUTED }}>หมดอายุ</p>
+          <p className="font-medium mt-0.5" style={{ color: m.expired ? "#991b1b" : TEXT }}>
+            {fmtDate(m.expiresAt)}
+          </p>
         </div>
-      </td>
-
-      {/* Net price input */}
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm" style={{ color: MUTED }}>฿</span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={state.net}
-            onChange={e => handleNetChange(e.target.value)}
-            placeholder={base !== null ? satangToDisplay(base) : "—"}
-            disabled={base === null}
-            className="w-24 px-2 py-1.5 text-sm rounded-lg border text-right"
-            style={{
-              borderColor: hasDiscount ? "#059669" : BORDER,
-              color: hasDiscount ? "#059669" : TEXT,
-              fontWeight: hasDiscount ? 600 : 400,
-              background: base === null ? BG : "white",
-            }}
-          />
+        <div>
+          <p style={{ color: MUTED }}>ครั้งที่ใช้ (รอบนี้)</p>
+          <p className="font-medium mt-0.5" style={{ color: TEXT }}>
+            {row.cycleBookings}
+            {hasCycleLimit && ` / ${m.usagesAllowed} ครั้ง`}
+          </p>
         </div>
-      </td>
+        <div>
+          <p style={{ color: MUTED }}>เริ่มรอบปัจจุบัน</p>
+          <p className="font-medium mt-0.5" style={{ color: TEXT }}>{fmtDate(m.activatedAt)}</p>
+        </div>
+        <div>
+          <p style={{ color: MUTED }}>ทั้งหมด (ตลอดกาล)</p>
+          <p className="font-medium mt-0.5" style={{ color: TEXT }}>{row.totalBookings} ครั้ง</p>
+        </div>
+      </div>
 
-      {/* Per-branch breakdown */}
-      <td className="px-4 py-3">
-        {hasDiscount && svc.branches.length > 0 ? (
-          <div className="space-y-0.5">
-            {svc.branches.map(b => {
-              const net = Math.round(b.price * (1 - pctNum / 100));
-              return (
-                <div key={b.branchId} className="flex items-center gap-1.5 text-xs">
-                  <span style={{ color: MUTED }} className="truncate max-w-20">
-                    {b.branch.name.replace("err.day ", "")}
-                  </span>
-                  <span style={{ color: TEXT }}>
-                    <span className="line-through" style={{ color: MUTED }}>
-                      ฿{fmtBaht(b.price)}
-                    </span>
-                    {" → "}
-                    <strong style={{ color: "#059669" }}>฿{fmtBaht(net)}</strong>
-                  </span>
-                </div>
-              );
-            })}
+      {/* Cycle usage progress bar */}
+      {hasCycleLimit && cycleUsedPct !== null && (
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1" style={{ color: MUTED }}>
+            <span>การใช้งานรอบนี้</span>
+            <span style={{ color: cycleUsedPct >= 100 ? "#991b1b" : TEXT }}>{cycleUsedPct}%</span>
           </div>
-        ) : (
-          <span className="text-xs" style={{ color: MUTED }}>—</span>
-        )}
-      </td>
+          <div className="w-full h-1.5 rounded-full" style={{ background: BORDER }}>
+            <div
+              className="h-1.5 rounded-full transition-all"
+              style={{
+                width: `${cycleUsedPct}%`,
+                backgroundColor: cycleUsedPct >= 100 ? "#ef4444" : cycleUsedPct >= 80 ? "#f59e0b" : "#22c55e",
+              }}
+            />
+          </div>
+        </div>
+      )}
 
-      {/* Reset */}
-      <td className="px-2 py-3">
-        {(state.changed || pctNum > 0) && (
-          <button
-            onClick={() => onChange({ pct: "0", net: "", changed: true })}
-            title="ล้างส่วนลด"
-            className="p-1.5 rounded-lg hover:bg-gray-100"
-          >
-            <RefreshCw size={13} style={{ color: MUTED }} />
-          </button>
-        )}
-      </td>
-    </tr>
+      {/* Renew button */}
+      <button
+        onClick={() => onRenew(row.id)}
+        disabled={renewing}
+        className="w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+        style={{ background: m.isValid ? BG : PRIMARY, color: m.isValid ? PRIMARY : "white", border: m.isValid ? `1px solid ${BORDER}` : "none" }}
+      >
+        <RefreshCw size={12} className={renewing ? "animate-spin" : ""} />
+        {renewing ? "กำลังต่ออายุ..." : "ต่ออายุ (+30 วัน)"}
+      </button>
+    </div>
   );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MembershipManager() {
-  const [services,  setServices]  = useState<ServiceRow[]>([]);
-  const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [loading,   setLoading]   = useState(true);
-  const [saving,    setSaving]    = useState(false);
-  const [saved,     setSaved]     = useState(false);
   const [error,     setError]     = useState("");
-  const [category,  setCategory]  = useState("all");
+  const [renewing,  setRenewing]  = useState<string | null>(null);
+  const [filter,    setFilter]    = useState<"all" | "active" | "expired">("all");
+  const [search,    setSearch]    = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
-      const data: ServiceRow[] = await fetch("/api/admin/services/member-discounts").then(r => r.json());
-      setServices(data);
-      const initial: Record<string, RowState> = {};
-      for (const s of data) {
-        const base = s.branches.length ? Math.min(...s.branches.map(b => b.price)) : null;
-        const pct  = s.memberDiscountPercent;
-        const net  = base !== null && pct > 0
-          ? satangToDisplay(Math.round(base * (1 - pct / 100)))
-          : "";
-        initial[s.id] = { pct: pct > 0 ? String(pct) : "", net, changed: false };
-      }
-      setRowStates(initial);
+      const data = await fetch("/api/admin/membership/customers").then(r => r.json());
+      setCustomers(data);
     } catch {
       setError("โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -228,37 +230,35 @@ export default function MembershipManager() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleSave() {
-    setSaving(true);
-    setError("");
+  async function handleRenew(customerId: string) {
+    setRenewing(customerId);
     try {
-      const updates = services.map(s => ({
-        id:                    s.id,
-        memberDiscountPercent: Math.min(100, Math.max(0, parseFloat(rowStates[s.id]?.pct || "0") || 0)),
-      }));
-      const res = await fetch("/api/admin/services/member-discounts", {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(updates),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? "บันทึกไม่สำเร็จ");
-      // Mark all as unchanged
-      setRowStates(prev => Object.fromEntries(
-        Object.entries(prev).map(([k, v]) => [k, { ...v, changed: false }]),
-      ));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      const res = await fetch(
+        `/api/admin/membership/customers/${customerId}/renew`,
+        { method: "POST" }
+      );
+      if (!res.ok) throw new Error();
+      await load();
+    } catch {
+      setError("ต่ออายุไม่สำเร็จ");
     } finally {
-      setSaving(false);
+      setRenewing(null);
     }
   }
 
-  const categories = ["all", ...Array.from(new Set(services.map(s => s.category))).sort()];
-  const filtered   = category === "all" ? services : services.filter(s => s.category === category);
-  const anyChanged = Object.values(rowStates).some(r => r.changed);
-  const withDiscount = services.filter(s => (parseFloat(rowStates[s.id]?.pct || "0") || 0) > 0).length;
+  // Filter + search
+  const filtered = customers.filter(c => {
+    if (filter === "active"  && !c.membership.isValid)  return false;
+    if (filter === "expired" &&  c.membership.isValid)  return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q);
+    }
+    return true;
+  });
+
+  const activeCount  = customers.filter(c =>  c.membership.isValid).length;
+  const expiredCount = customers.filter(c => !c.membership.isValid).length;
 
   return (
     <div className="px-6 py-8 max-w-5xl">
@@ -266,134 +266,95 @@ export default function MembershipManager() {
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Admin</p>
-          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ส่วนลดสมาชิก</h1>
+          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>สมาชิก</h1>
           <p className="text-sm mt-0.5" style={{ color: MUTED }}>
-            ตั้งส่วนลด (%) หรือราคาสมาชิก (฿) ต่อบริการ — แก้ไขอย่างใดอย่างหนึ่ง อีกค่าคำนวณอัตโนมัติ
+            ลูกค้าที่มีสมาชิก — ดูสถานะ ประวัติการใช้งาน และต่ออายุ
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {saved && (
-            <span className="text-sm font-medium" style={{ color: "#059669" }}>✓ บันทึกแล้ว</span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving || !anyChanged}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium text-white transition-opacity disabled:opacity-40"
-            style={{ background: PRIMARY }}
-          >
-            <Save size={15} />
-            {saving ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
-          </button>
-        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border transition-colors hover:bg-stone-50"
+          style={{ borderColor: BORDER, color: MUTED }}
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          รีเฟรช
+        </button>
       </div>
 
-      {/* Summary stats */}
+      {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
-          <p className="text-xs mb-1" style={{ color: MUTED }}>บริการทั้งหมด</p>
-          <p className="text-xl font-semibold" style={{ color: TEXT }}>{services.length}</p>
-        </div>
-        <div className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
-          <p className="text-xs mb-1" style={{ color: MUTED }}>มีส่วนลดสมาชิก</p>
-          <p className="text-xl font-semibold" style={{ color: PRIMARY }}>{withDiscount}</p>
-        </div>
-        <div className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
-          <p className="text-xs mb-1" style={{ color: MUTED }}>ยังไม่มีส่วนลด</p>
-          <p className="text-xl font-semibold" style={{ color: MUTED }}>{services.length - withDiscount}</p>
-        </div>
-      </div>
-
-      {/* Category filter */}
-      <div className="flex gap-2 flex-wrap mb-4">
-        {categories.map(c => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            className="px-3 py-1.5 text-xs rounded-full font-medium transition-colors"
-            style={
-              category === c
-                ? { background: PRIMARY, color: "white" }
-                : { background: BG, color: MUTED, border: `1px solid ${BORDER}` }
-            }
-          >
-            {c === "all" ? "ทั้งหมด" : c}
-          </button>
+        {[
+          { label: "สมาชิกทั้งหมด", value: customers.length, color: TEXT },
+          { label: "ใช้งานได้",     value: activeCount,      color: "#166534" },
+          { label: "หมดอายุ / ใช้ครบ", value: expiredCount, color: "#991b1b" },
+        ].map(s => (
+          <div key={s.label} className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
+            <p className="text-xs mb-1" style={{ color: MUTED }}>{s.label}</p>
+            <p className="text-xl font-semibold" style={{ color: s.color }}>{s.value}</p>
+          </div>
         ))}
       </div>
 
-      {/* Table */}
+      {/* Filter + Search */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <div className="flex gap-1 p-1 rounded-xl" style={{ background: BG }}>
+          {(["all", "active", "expired"] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{
+                background: filter === f ? PRIMARY    : "transparent",
+                color:      filter === f ? "white"    : MUTED,
+              }}
+            >
+              {f === "all" ? `ทั้งหมด (${customers.length})` : f === "active" ? `ใช้งานได้ (${activeCount})` : `หมดอายุ (${expiredCount})`}
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="text"
+          placeholder="ค้นหาชื่อ / เบอร์..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="flex-1 min-w-48 px-3 py-2 text-sm rounded-xl border outline-none"
+          style={{ borderColor: BORDER, color: TEXT }}
+        />
+      </div>
+
+      {/* Error */}
+      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+
+      {/* List */}
       {loading ? (
         <div className="text-center py-16" style={{ color: MUTED }}>กำลังโหลด...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 flex flex-col items-center gap-3" style={{ color: MUTED }}>
+          <Users size={36} style={{ color: BORDER }} />
+          <p className="text-sm">ไม่พบสมาชิก</p>
+        </div>
       ) : (
-        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1.5px solid ${BORDER}` }}>
-          <table className="w-full">
-            <thead>
-              <tr style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: MUTED }}>บริการ</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: MUTED }}>ราคาปกติ</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: MUTED }}>
-                  <span className="flex items-center gap-1"><Percent size={11} />ส่วนลด</span>
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: MUTED }}>
-                  <span className="flex items-center gap-1"><Tag size={11} />ราคาสมาชิก</span>
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: MUTED }}>รายละเอียดต่อสาขา</th>
-                <th className="w-8" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-sm" style={{ color: MUTED }}>
-                    ไม่มีบริการ
-                  </td>
-                </tr>
-              ) : (
-                filtered.map(svc => (
-                  <ServiceDiscountRow
-                    key={svc.id}
-                    svc={svc}
-                    state={rowStates[svc.id] ?? { pct: "", net: "", changed: false }}
-                    onChange={next => setRowStates(prev => ({ ...prev, [svc.id]: next }))}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(row => (
+            <CustomerCard
+              key={row.id}
+              row={row}
+              onRenew={handleRenew}
+              renewing={renewing === row.id}
+            />
+          ))}
         </div>
       )}
 
-      {anyChanged && (
-        <div
-          className="fixed bottom-6 right-6 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-white text-sm font-medium"
-          style={{ background: PRIMARY, zIndex: 50 }}
-        >
-          มีการเปลี่ยนแปลงที่ยังไม่บันทึก
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xl font-semibold"
-            style={{ background: "rgba(255,255,255,0.2)" }}
-          >
-            <Save size={13} /> {saving ? "กำลังบันทึก..." : "บันทึก"}
-          </button>
-        </div>
-      )}
-
-      {/* Line integration */}
+      {/* Line integration note */}
       <div className="mt-8 rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
         <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: PRIMARY }}>
           Line Integration
         </p>
         <p className="text-sm mb-2" style={{ color: TEXT }}>
-          ลูกค้าดูสถานะสมาชิก + ราคาสมาชิกต่อบริการได้ที่:
+          ลูกค้าดูสถานะสมาชิกได้ที่:
         </p>
         <code className="text-xs px-3 py-1.5 rounded-lg block break-all" style={{ background: BG, color: PRIMARY }}>
           {typeof window !== "undefined" ? window.location.origin : "https://book.err-daysalon.com"}/liff/membership

@@ -152,8 +152,18 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
     initial?.category && !CATEGORIES.includes(initial.category) ? initial.category : "",
   );
   const [advance, setAdvance]   = useState(initial?.advanceBookingRequired ?? false);
-  const [memberDiscountPercent, setMemberDiscountPercent] = useState(
-    initial?.memberDiscountPercent ?? 0,
+
+  // Member discount: two modes — percent OR net fixed price
+  const [memberMode, setMemberMode] = useState<"percent" | "net">(
+    initial?.memberPrice ? "net" : "percent",
+  );
+  const [memberPercent, setMemberPercent] = useState(
+    initial?.memberDiscountPercent && initial.memberDiscountPercent > 0
+      ? String(initial.memberDiscountPercent)
+      : "",
+  );
+  const [memberNetBaht, setMemberNetBaht] = useState(
+    initial?.memberPrice ? String(initial.memberPrice / 100) : "",
   );
 
   // build branch pricing state keyed by branchId
@@ -210,7 +220,8 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
             advanceBookingRequired: advance,
-            memberDiscountPercent,
+            memberDiscountPercent: memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
+            memberPrice: memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
           }),
         });
         if (!r1.ok) throw new Error((await r1.json()).error);
@@ -234,7 +245,8 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
             advanceBookingRequired: advance,
-            memberDiscountPercent,
+            memberDiscountPercent: memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
+            memberPrice: memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
             branchPricing: pricingRows,
           }),
         });
@@ -343,40 +355,98 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
             {/* Member discount */}
             <div>
               <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>
-                ส่วนลดสมาชิก (%)
+                ราคาสมาชิก
               </label>
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={memberDiscountPercent}
-                    onChange={e => setMemberDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
-                    className="w-20 px-3 py-2 text-sm rounded-lg border text-right"
-                    style={{ borderColor: BORDER, color: TEXT }}
-                  />
-                  <span className="text-sm font-medium" style={{ color: TEXT }}>%</span>
-                </div>
-                {/* Show net price per branch */}
-                {memberDiscountPercent > 0 && (
-                  <div className="flex gap-2 flex-wrap">
-                    {branches.map(b => {
-                      const p = Number(branchPricing[b.id]?.price);
-                      if (!p) return null;
-                      const net = Math.round(p * (1 - memberDiscountPercent / 100));
-                      return (
-                        <span key={b.id} className="text-xs px-2 py-1 rounded-lg" style={{ background: BG, color: TEXT }}>
-                          {b.name.replace("err.day ", "")}: <strong style={{ color: PRIMARY }}>{fmt(satang(net))}</strong>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-                {memberDiscountPercent === 0 && (
-                  <span className="text-xs" style={{ color: MUTED }}>ไม่มีส่วนลดสมาชิก</span>
-                )}
+
+              {/* Mode toggle */}
+              <div className="flex gap-1 mb-3 p-1 rounded-xl" style={{ background: BG, width: "fit-content" }}>
+                {(["percent", "net"] as const).map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMemberMode(m)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background:   memberMode === m ? PRIMARY    : "transparent",
+                      color:        memberMode === m ? "white"    : MUTED,
+                    }}
+                  >
+                    {m === "percent" ? "% ส่วนลด" : "฿ ราคาสุทธิ"}
+                  </button>
+                ))}
               </div>
+
+              {memberMode === "percent" ? (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="0"
+                      value={memberPercent}
+                      onChange={e => setMemberPercent(e.target.value)}
+                      className="w-20 px-3 py-2 text-sm rounded-lg border text-right"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
+                    <span className="text-sm font-medium" style={{ color: TEXT }}>%</span>
+                  </div>
+                  {/* Show net price per branch */}
+                  {parseFloat(memberPercent) > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {branches.map(b => {
+                        const p = Number(branchPricing[b.id]?.price);
+                        if (!p) return null;
+                        const net = Math.round(p * (1 - parseFloat(memberPercent) / 100));
+                        return (
+                          <span key={b.id} className="text-xs px-2 py-1 rounded-lg" style={{ background: "#F0FFF4", color: "#166534" }}>
+                            {b.name.replace("err.day ", "")}: <strong>{fmt(satang(net))}</strong>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {!parseFloat(memberPercent) && (
+                    <span className="text-xs" style={{ color: MUTED }}>ไม่มีส่วนลดสมาชิก</span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm" style={{ color: MUTED }}>฿</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="10"
+                      placeholder="ราคาสุทธิสมาชิก"
+                      value={memberNetBaht}
+                      onChange={e => setMemberNetBaht(e.target.value)}
+                      className="w-32 px-3 py-2 text-sm rounded-lg border text-right"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
+                  </div>
+                  {/* Show % saved per branch */}
+                  {parseFloat(memberNetBaht) > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {branches.map(b => {
+                        const p = Number(branchPricing[b.id]?.price);
+                        if (!p) return null;
+                        const net = parseFloat(memberNetBaht);
+                        const pct = Math.round((1 - net / p) * 100);
+                        if (pct <= 0) return null;
+                        return (
+                          <span key={b.id} className="text-xs px-2 py-1 rounded-lg" style={{ background: "#F0FFF4", color: "#166534" }}>
+                            {b.name.replace("err.day ", "")}: ลด <strong>{pct}%</strong> ({fmt(satang(p))} → <strong>{fmt(satang(net))}</strong>)
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {!parseFloat(memberNetBaht) && (
+                    <span className="text-xs" style={{ color: MUTED }}>ระบุราคาสุทธิที่สมาชิกจ่าย</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Per-branch pricing */}
@@ -501,6 +571,16 @@ function ServiceCard({
             {service.advanceBookingRequired && (
               <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF3E0", color: "#E67E22" }}>
                 จองล่วงหน้า
+              </span>
+            )}
+            {service.memberPrice != null && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F0FFF4", color: "#166534" }}>
+                สมาชิก {fmt(service.memberPrice)}
+              </span>
+            )}
+            {service.memberPrice == null && service.memberDiscountPercent > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F0FFF4", color: "#166534" }}>
+                สมาชิกลด {service.memberDiscountPercent}%
               </span>
             )}
             {!service.isActive && (
