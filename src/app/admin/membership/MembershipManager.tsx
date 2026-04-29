@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Users, CheckCircle, XCircle, Clock } from "lucide-react";
+import { RefreshCw, Users, CheckCircle, XCircle, Clock, Hourglass, History as HistoryIcon, Search } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const BORDER  = "#E8D8CC";
@@ -31,7 +31,7 @@ interface MembershipInfo {
   tier: MemberTier | null;
 }
 
-interface CustomerRow {
+interface MemberRow {
   id: string;
   name: string;
   phone: string | null;
@@ -40,16 +40,56 @@ interface CustomerRow {
   totalBookings: number;
 }
 
+interface PendingRow {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  consentedAt: string | null;
+  source: string;
+}
+
+interface CycleRow {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string | null;
+  startedAt: string;
+  endedAt: string;
+  closedAt: string | null;
+  paidAmount: number;
+  paymentMethod: string | null;
+  bookingsUsed: number;
+}
+
+interface ApiResponse {
+  members: MemberRow[];
+  pending: PendingRow[];
+  history: CycleRow[];
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("th-TH", {
     timeZone: "Asia/Bangkok",
-    day: "numeric",
+    day:   "numeric",
     month: "short",
-    year: "2-digit",
+    year:  "2-digit",
   });
+}
+
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${date} · ${time}`;
+}
+
+function fmtBaht(satang: number): string {
+  return `฿${(satang / 100).toLocaleString("th-TH")}`;
 }
 
 function daysLeft(iso: string | null): number | null {
@@ -58,14 +98,14 @@ function daysLeft(iso: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-// ─── Customer membership card ─────────────────────────────────────────────────
+// ─── Member card ──────────────────────────────────────────────────────────────
 
 function CustomerCard({
   row,
   onRenew,
   renewing,
 }: {
-  row: CustomerRow;
+  row: MemberRow;
   onRenew: (id: string) => void;
   renewing: boolean;
 }) {
@@ -84,7 +124,6 @@ function CustomerCard({
     statusColor = "#b45309"; statusBg = "#FFFBEB"; statusText = `เหลือ ${days} วัน`;
   }
 
-  // Cycle usage bar (if usagesAllowed > 0)
   const hasCycleLimit = m.usagesAllowed > 0;
   const cycleUsedPct  = hasCycleLimit ? Math.min(100, Math.round((row.cycleBookings / m.usagesAllowed) * 100)) : null;
 
@@ -93,51 +132,33 @@ function CustomerCard({
       className="rounded-2xl bg-white p-4 flex flex-col gap-3"
       style={{ border: `1.5px solid ${m.isValid ? BORDER : "#FECACA"}` }}
     >
-      {/* Top row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          {/* Avatar */}
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
             style={{ backgroundColor: m.isValid ? PRIMARY : MUTED }}
           >
             {row.name.charAt(0)}
           </div>
-          {/* Name + phone */}
           <div className="min-w-0">
             <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{row.name}</p>
-            {row.phone && (
-              <p className="text-xs" style={{ color: MUTED }}>{row.phone}</p>
-            )}
+            {row.phone && <p className="text-xs" style={{ color: MUTED }}>{row.phone}</p>}
           </div>
         </div>
 
-        {/* Status badge */}
         <span
           className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 flex items-center gap-1"
           style={{ backgroundColor: statusBg, color: statusColor }}
         >
-          {m.isValid
-            ? <CheckCircle size={11} />
-            : m.expired
-              ? <XCircle size={11} />
-              : <Clock size={11} />
-          }
+          {m.isValid ? <CheckCircle size={11} /> : m.expired ? <XCircle size={11} /> : <Clock size={11} />}
           {statusText}
         </span>
       </div>
 
-      {/* Membership label + tier */}
       <div className="flex items-center gap-2 flex-wrap">
         {m.label && (
           <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F9F0E8", color: PRIMARY }}>
             {m.label}
-          </span>
-        )}
-        {m.tier && (
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: BG, color: MUTED }}>
-            {m.tier.name}
-            {m.tier.discountPercent > 0 && ` (${m.tier.discountPercent}%)`}
           </span>
         )}
         {m.points > 0 && (
@@ -147,7 +168,6 @@ function CustomerCard({
         )}
       </div>
 
-      {/* Expiry + cycle stats */}
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div>
           <p style={{ color: MUTED }}>หมดอายุ</p>
@@ -172,7 +192,6 @@ function CustomerCard({
         </div>
       </div>
 
-      {/* Cycle usage progress bar */}
       {hasCycleLimit && cycleUsedPct !== null && (
         <div>
           <div className="flex items-center justify-between text-xs mb-1" style={{ color: MUTED }}>
@@ -191,36 +210,115 @@ function CustomerCard({
         </div>
       )}
 
-      {/* Renew button */}
       <button
         onClick={() => onRenew(row.id)}
         disabled={renewing}
         className="w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-        style={{ background: m.isValid ? BG : PRIMARY, color: m.isValid ? PRIMARY : "white", border: m.isValid ? `1px solid ${BORDER}` : "none" }}
+        style={{
+          background: m.isValid ? BG : PRIMARY,
+          color:      m.isValid ? PRIMARY : "white",
+          border:     m.isValid ? `1px solid ${BORDER}` : "none",
+        }}
+        title="ใช้สำหรับกรณีพิเศษ — ปกติต่ออายุผ่าน POS"
       >
         <RefreshCw size={12} className={renewing ? "animate-spin" : ""} />
-        {renewing ? "กำลังต่ออายุ..." : "ต่ออายุ (+30 วัน)"}
+        {renewing ? "กำลังต่ออายุ..." : "ต่ออายุ (Manual)"}
       </button>
     </div>
   );
 }
 
+// ─── Pending row ──────────────────────────────────────────────────────────────
+
+function PendingCard({ row }: { row: PendingRow }) {
+  return (
+    <div
+      className="rounded-2xl bg-white p-4 flex items-center gap-4"
+      style={{ border: `1.5px dashed ${BORDER}` }}
+    >
+      <div
+        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+        style={{ backgroundColor: "#f59e0b" }}
+      >
+        <Hourglass size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm" style={{ color: TEXT }}>{row.name}</p>
+        <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: MUTED }}>
+          {row.phone && <span>{row.phone}</span>}
+          {row.email && <span>· {row.email}</span>}
+        </div>
+        <p className="text-xs mt-1" style={{ color: MUTED }}>
+          ลงทะเบียน {fmtDateTime(row.consentedAt)}
+        </p>
+      </div>
+      <span
+        className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0"
+        style={{ backgroundColor: "#FFFBEB", color: "#92400e" }}
+      >
+        รอชำระ
+      </span>
+    </div>
+  );
+}
+
+// ─── History row ──────────────────────────────────────────────────────────────
+
+function HistoryRow({ row }: { row: CycleRow }) {
+  const isOpen = !row.closedAt;
+  return (
+    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+      <td className="px-3 py-2.5">
+        <p className="text-sm font-medium" style={{ color: TEXT }}>{row.customerName}</p>
+        {row.customerPhone && <p className="text-xs" style={{ color: MUTED }}>{row.customerPhone}</p>}
+      </td>
+      <td className="px-3 py-2.5 text-xs" style={{ color: TEXT }}>
+        {fmtDate(row.startedAt)} → {fmtDate(row.endedAt)}
+      </td>
+      <td className="px-3 py-2.5 text-right text-sm font-medium" style={{ color: TEXT }}>
+        {fmtBaht(row.paidAmount)}
+      </td>
+      <td className="px-3 py-2.5 text-xs" style={{ color: MUTED }}>
+        {row.paymentMethod ?? "—"}
+      </td>
+      <td className="px-3 py-2.5 text-center text-sm" style={{ color: TEXT }}>
+        {row.bookingsUsed}
+      </td>
+      <td className="px-3 py-2.5">
+        {isOpen ? (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F0FFF4", color: "#166534" }}>
+            กำลังใช้
+          </span>
+        ) : (
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: BG, color: MUTED }}>
+            ปิดรอบ
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
+type Tab = "members" | "pending" | "history";
+
 export default function MembershipManager() {
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState("");
-  const [renewing,  setRenewing]  = useState<string | null>(null);
-  const [filter,    setFilter]    = useState<"all" | "active" | "expired">("all");
-  const [search,    setSearch]    = useState("");
+  const [data,     setData]     = useState<ApiResponse>({ members: [], pending: [], history: [] });
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState("");
+  const [renewing, setRenewing] = useState<string | null>(null);
+  const [tab,      setTab]      = useState<Tab>("members");
+  const [filter,   setFilter]   = useState<"all" | "active" | "expired">("all");
+  const [search,   setSearch]   = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await fetch("/api/admin/membership/customers").then(r => r.json());
-      setCustomers(data);
+      const res = await fetch("/api/admin/membership/customers");
+      const json: ApiResponse = await res.json();
+      setData(json);
     } catch {
       setError("โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -231,6 +329,7 @@ export default function MembershipManager() {
   useEffect(() => { load(); }, [load]);
 
   async function handleRenew(customerId: string) {
+    if (!confirm("ต่ออายุสมาชิก 30 วัน (Manual)? ใช้สำหรับกรณีพิเศษเท่านั้น — ปกติควรต่ออายุผ่าน POS")) return;
     setRenewing(customerId);
     try {
       const res = await fetch(
@@ -246,8 +345,8 @@ export default function MembershipManager() {
     }
   }
 
-  // Filter + search
-  const filtered = customers.filter(c => {
+  // ── Members filter / search ──
+  const memberFiltered = data.members.filter(c => {
     if (filter === "active"  && !c.membership.isValid)  return false;
     if (filter === "expired" &&  c.membership.isValid)  return false;
     if (search.trim()) {
@@ -257,18 +356,32 @@ export default function MembershipManager() {
     return true;
   });
 
-  const activeCount  = customers.filter(c =>  c.membership.isValid).length;
-  const expiredCount = customers.filter(c => !c.membership.isValid).length;
+  const activeCount  = data.members.filter(c =>  c.membership.isValid).length;
+  const expiredCount = data.members.filter(c => !c.membership.isValid).length;
+
+  const pendingFiltered = data.pending.filter(p => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return p.name.toLowerCase().includes(q) || (p.phone ?? "").includes(q);
+  });
+
+  const historyFiltered = data.history.filter(h => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return h.customerName.toLowerCase().includes(q) || (h.customerPhone ?? "").includes(q);
+  });
+
+  const totalRevenue = data.history.reduce((s, h) => s + h.paidAmount, 0);
 
   return (
-    <div className="px-6 py-8 max-w-5xl">
+    <div className="px-6 py-8 max-w-6xl">
       {/* Header */}
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Admin</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>สมาชิก</h1>
           <p className="text-sm mt-0.5" style={{ color: MUTED }}>
-            ลูกค้าที่มีสมาชิก — ดูสถานะ ประวัติการใช้งาน และต่ออายุ
+            จัดการสมาชิก ดูผู้รอชำระ และประวัติรอบสมาชิก
           </p>
         </div>
         <button
@@ -283,86 +396,176 @@ export default function MembershipManager() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "สมาชิกทั้งหมด", value: customers.length, color: TEXT },
-          { label: "ใช้งานได้",     value: activeCount,      color: "#166534" },
-          { label: "หมดอายุ / ใช้ครบ", value: expiredCount, color: "#991b1b" },
+          { label: "ใช้งานได้",        value: activeCount,            color: "#166534" },
+          { label: "หมดอายุ / ใช้ครบ", value: expiredCount,           color: "#991b1b" },
+          { label: "รอชำระ",           value: data.pending.length,    color: "#92400e" },
+          { label: "รายได้รวม (ประวัติ)", value: fmtBaht(totalRevenue), color: PRIMARY,   isText: true },
         ].map(s => (
           <div key={s.label} className="rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
             <p className="text-xs mb-1" style={{ color: MUTED }}>{s.label}</p>
-            <p className="text-xl font-semibold" style={{ color: s.color }}>{s.value}</p>
+            <p className={s.isText ? "text-base font-semibold" : "text-xl font-semibold"} style={{ color: s.color }}>
+              {s.value}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Filter + Search */}
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <div className="flex gap-1 p-1 rounded-xl" style={{ background: BG }}>
-          {(["all", "active", "expired"] as const).map(f => (
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl mb-5" style={{ background: BG, width: "fit-content" }}>
+        {([
+          { id: "members", label: "สมาชิกปัจจุบัน", icon: Users,        count: data.members.length },
+          { id: "pending", label: "รอชำระ",       icon: Hourglass,     count: data.pending.length },
+          { id: "history", label: "ประวัติรอบ",    icon: HistoryIcon,   count: data.history.length },
+        ] as const).map(t => {
+          const Icon = t.icon;
+          return (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
               style={{
-                background: filter === f ? PRIMARY    : "transparent",
-                color:      filter === f ? "white"    : MUTED,
+                background: tab === t.id ? PRIMARY : "transparent",
+                color:      tab === t.id ? "white" : MUTED,
               }}
             >
-              {f === "all" ? `ทั้งหมด (${customers.length})` : f === "active" ? `ใช้งานได้ (${activeCount})` : `หมดอายุ (${expiredCount})`}
+              <Icon size={14} />
+              {t.label}
+              <span
+                className="text-xs px-1.5 rounded-full"
+                style={{
+                  background: tab === t.id ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.05)",
+                  color:      tab === t.id ? "white" : MUTED,
+                }}
+              >
+                {t.count}
+              </span>
             </button>
-          ))}
-        </div>
-
-        <input
-          type="text"
-          placeholder="ค้นหาชื่อ / เบอร์..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 min-w-48 px-3 py-2 text-sm rounded-xl border outline-none"
-          style={{ borderColor: BORDER, color: TEXT }}
-        />
+          );
+        })}
       </div>
 
-      {/* Error */}
+      {/* Search + filter (filter only on members tab) */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        {tab === "members" && (
+          <div className="flex gap-1 p-1 rounded-xl" style={{ background: BG }}>
+            {(["all", "active", "expired"] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{
+                  background: filter === f ? PRIMARY : "transparent",
+                  color:      filter === f ? "white" : MUTED,
+                }}
+              >
+                {f === "all" ? "ทั้งหมด" : f === "active" ? "ใช้งานได้" : "หมดอายุ"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div
+          className="flex-1 min-w-48 flex items-center gap-2 px-3 py-2 rounded-xl border bg-white"
+          style={{ borderColor: BORDER }}
+        >
+          <Search size={14} style={{ color: MUTED }} />
+          <input
+            type="text"
+            placeholder="ค้นหาชื่อ / เบอร์..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 text-sm outline-none bg-transparent"
+            style={{ color: TEXT }}
+          />
+        </div>
+      </div>
+
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-      {/* List */}
+      {/* Tab content */}
       {loading ? (
         <div className="text-center py-16" style={{ color: MUTED }}>กำลังโหลด...</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 flex flex-col items-center gap-3" style={{ color: MUTED }}>
-          <Users size={36} style={{ color: BORDER }} />
-          <p className="text-sm">ไม่พบสมาชิก</p>
-        </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(row => (
-            <CustomerCard
-              key={row.id}
-              row={row}
-              onRenew={handleRenew}
-              renewing={renewing === row.id}
-            />
-          ))}
-        </div>
-      )}
+        <>
+          {/* MEMBERS TAB */}
+          {tab === "members" && (
+            memberFiltered.length === 0 ? (
+              <div className="text-center py-16 flex flex-col items-center gap-3" style={{ color: MUTED }}>
+                <Users size={36} style={{ color: BORDER }} />
+                <p className="text-sm">ไม่พบสมาชิก</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {memberFiltered.map(row => (
+                  <CustomerCard
+                    key={row.id}
+                    row={row}
+                    onRenew={handleRenew}
+                    renewing={renewing === row.id}
+                  />
+                ))}
+              </div>
+            )
+          )}
 
-      {/* Line integration note */}
-      <div className="mt-8 rounded-2xl p-4 bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
-        <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: PRIMARY }}>
-          Line Integration
-        </p>
-        <p className="text-sm mb-2" style={{ color: TEXT }}>
-          ลูกค้าดูสถานะสมาชิกได้ที่:
-        </p>
-        <code className="text-xs px-3 py-1.5 rounded-lg block break-all" style={{ background: BG, color: PRIMARY }}>
-          {typeof window !== "undefined" ? window.location.origin : "https://book.err-daysalon.com"}/liff/membership
-        </code>
-        <p className="text-xs mt-2" style={{ color: MUTED }}>
-          เพิ่ม URL นี้ใน Line Official Account Rich Menu เพื่อให้ลูกค้าเช็กสถานะได้เอง
-        </p>
-      </div>
+          {/* PENDING TAB */}
+          {tab === "pending" && (
+            pendingFiltered.length === 0 ? (
+              <div className="text-center py-16 flex flex-col items-center gap-3" style={{ color: MUTED }}>
+                <Hourglass size={36} style={{ color: BORDER }} />
+                <p className="text-sm">ยังไม่มีคนรอชำระสมาชิก</p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl p-3 mb-4 text-xs flex items-start gap-2" style={{ background: "#FFFBEB", color: "#92400e" }}>
+                  <Hourglass size={14} className="flex-shrink-0 mt-0.5" />
+                  <p>
+                    คนเหล่านี้ลงทะเบียนผ่านหน้าเว็บแล้ว แต่ยังไม่ชำระเงิน — ค้นหาด้วยเบอร์โทรใน POS
+                    เพื่อขายรายการ &ldquo;สมาชิก 30 วัน&rdquo; ฿990 ระบบจะเปิดสมาชิกอัตโนมัติ
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {pendingFiltered.map(p => (
+                    <PendingCard key={p.id} row={p} />
+                  ))}
+                </div>
+              </>
+            )
+          )}
+
+          {/* HISTORY TAB */}
+          {tab === "history" && (
+            historyFiltered.length === 0 ? (
+              <div className="text-center py-16 flex flex-col items-center gap-3" style={{ color: MUTED }}>
+                <HistoryIcon size={36} style={{ color: BORDER }} />
+                <p className="text-sm">ยังไม่มีประวัติรอบสมาชิก</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1.5px solid ${BORDER}` }}>
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ background: BG }}>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>ลูกค้า</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>รอบ</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>จำนวน</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>วิธีชำระ</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>ใช้ไป</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyFiltered.map(h => (
+                      <HistoryRow key={h.id} row={h} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </>
+      )}
     </div>
   );
 }

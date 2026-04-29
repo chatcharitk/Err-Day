@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { MEMBERSHIP_SKU, activateOrRenewMembership } from "@/lib/membership";
+
+interface SaleItem {
+  name:             string;
+  price:            number;
+  branchServiceId?: string; // for service items, the BranchService row id
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { branchId, customerName, customerPhone, items, notes, fromBookingId } = body;
+    const { branchId, customerName, customerPhone, items, notes, fromBookingId } = body as {
+      branchId:       string;
+      customerName:   string;
+      customerPhone?: string;
+      items:          SaleItem[];
+      notes?:         string;
+      fromBookingId?: string;
+    };
 
     if (!branchId || !customerName || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -25,15 +39,36 @@ export async function POST(request: Request) {
     const startTime = `${pad(bkHr)}:${pad(bkMin)}`;
     const endTime   = `${pad((bkHr + 1) % 24)}:${pad(bkMin)}`;
 
-    const totalPrice = items.reduce((s: number, i: { price: number }) => s + i.price, 0);
+    const totalPrice = items.reduce((s, i) => s + i.price, 0);
 
     // Encode the actual items in notes
     const itemSummary = items
-      .map((i: { name: string; price: number }) => `${i.name}: ฿${(i.price / 100).toLocaleString()}`)
+      .map(i => `${i.name}: ฿${(i.price / 100).toLocaleString()}`)
       .join("\n");
     const fullNotes = [itemSummary, notes].filter(Boolean).join("\n---\n");
 
-    // If fromBookingId provided: update the existing booking to COMPLETED (no duplicate)
+    // ── Detect membership SKU in cart ──────────────────────────────────
+    // We resolve serviceIds from the BranchService rows referenced in items.
+    let membershipItem: { branchServiceId: string; price: number } | null = null;
+    const branchServiceIds = items
+      .map(i => i.branchServiceId)
+      .filter((x): x is string => !!x);
+
+    if (branchServiceIds.length > 0) {
+      const bsRows = await prisma.branchService.findMany({
+        where:  { id: { in: branchServiceIds } },
+        select: { id: true, serviceId: true },
+      });
+      const bsMap = new Map(bsRows.map(r => [r.id, r.serviceId]));
+      for (const it of items) {
+        if (it.branchServiceId && bsMap.get(it.branchServiceId) === MEMBERSHIP_SKU) {
+          membershipItem = { branchServiceId: it.branchServiceId, price: it.price };
+          break;
+        }
+      }
+    }
+
+    // ── If continuing from a booking ───────────────────────────────────
     if (fromBookingId) {
       const existing = await prisma.booking.findUnique({ where: { id: fromBookingId } });
       if (!existing) {
@@ -42,17 +77,28 @@ export async function POST(request: Request) {
       const booking = await prisma.booking.update({
         where: { id: fromBookingId },
         data: {
-          status: "COMPLETED",
+          status:     "COMPLETED",
           totalPrice,
-          notes: fullNotes || existing.notes,
+          notes:      fullNotes || existing.notes,
           completedAt: now,
         },
         include: { branch: true, customer: true },
       });
+
+      // If the cart contains a membership SKU, activate / renew
+      if (membershipItem) {
+        await activateOrRenewMembership({
+          customerId:    booking.customerId,
+          paidAmount:    membershipItem.price,
+          paymentMethod: "POS",
+          bookingId:     booking.id,
+        });
+      }
+
       return NextResponse.json(booking, { status: 200 });
     }
 
-    // New walk-in sale — create a fresh booking record
+    // ── New walk-in sale ────────────────────────────────────────────────
     const walkinBs = await prisma.branchService.findFirst({
       where: { branchId, serviceId: "svc-walkin", isActive: true },
     });
@@ -62,7 +108,7 @@ export async function POST(request: Request) {
 
     const phone = customerPhone?.trim() || `pos-${Date.now()}`;
     const customer = await prisma.customer.upsert({
-      where: { phone },
+      where:  { phone },
       update: { name: customerName },
       create: { name: customerName, phone },
     });
@@ -70,19 +116,28 @@ export async function POST(request: Request) {
     const booking = await prisma.booking.create({
       data: {
         branchId,
-        serviceId: walkinBs.serviceId,
-        staffId: null,
-        customerId: customer.id,
+        serviceId:   walkinBs.serviceId,
+        staffId:     null,
+        customerId:  customer.id,
         date,
         startTime,
         endTime,
         totalPrice,
-        notes: fullNotes || null,
-        status: "COMPLETED",
+        notes:       fullNotes || null,
+        status:      "COMPLETED",
         completedAt: now,
       },
       include: { branch: true, customer: true },
     });
+
+    if (membershipItem) {
+      await activateOrRenewMembership({
+        customerId:    customer.id,
+        paidAmount:    membershipItem.price,
+        paymentMethod: "POS",
+        bookingId:     booking.id,
+      });
+    }
 
     return NextResponse.json(booking, { status: 201 });
   } catch (error) {

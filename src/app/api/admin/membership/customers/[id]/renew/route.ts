@@ -1,35 +1,40 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { activateOrRenewMembership, MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
 
 /** POST /api/admin/membership/customers/[id]/renew
- *  Renews a customer's membership: extend expiresAt 30 days from today,
- *  reset usagesUsed to 0, and update activatedAt to now.
+ *  Manual admin renewal — extends membership +30 days, resets cycle counter,
+ *  and writes a MembershipCycle row marked as "Manual" (no payment captured).
+ *
+ *  Use this for edge cases (free renewal, fixing mistakes). The primary path
+ *  for renewal is the POS — staff sells the membership SKU.
  */
 export async function POST(
-  _req: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: customerId } = await params;
 
-  const membership = await prisma.membership.findUnique({
-    where: { customerId },
-  });
-  if (!membership) {
+  const existing = await prisma.membership.findUnique({ where: { customerId } });
+  if (!existing) {
     return NextResponse.json({ error: "Membership not found" }, { status: 404 });
   }
 
-  const now = new Date();
-  const newExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
+  // Optional override: { paidAmount, notes } in body
+  let paidAmount = 0; // manual renewals default to ฿0 (no payment captured)
+  let notes: string | undefined;
+  try {
+    const body = await request.json();
+    if (typeof body.paidAmount === "number") paidAmount = body.paidAmount;
+    if (typeof body.notes === "string")      notes      = body.notes;
+  } catch { /* no body */ }
 
-  const updated = await prisma.membership.update({
-    where: { customerId },
-    data: {
-      expiresAt:   newExpiry,
-      activatedAt: now,
-      usagesUsed:  0,
-    },
-    include: { tier: true },
+  const { membership, cycle } = await activateOrRenewMembership({
+    customerId,
+    paidAmount,
+    paymentMethod: "Manual",
+    notes:         notes ?? "Manual renew via admin",
   });
 
-  return NextResponse.json(updated);
+  return NextResponse.json({ membership, cycle, defaultPrice: MEMBERSHIP_PRICE_SATANG });
 }

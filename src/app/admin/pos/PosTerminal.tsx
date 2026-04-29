@@ -59,8 +59,8 @@ function getServiceMemberPrice(bs: BS): number {
   return applyDiscount(bs.price, pct);
 }
 
-// Categories rendered BEFORE add-ons
-const CATS_BEFORE_ADDONS = ["บริการทั่วไป", "แพ็กเกจ"];
+// Categories rendered BEFORE add-ons (Membership shown first as a highlighted CTA)
+const CATS_BEFORE_ADDONS = ["Membership", "บริการทั่วไป", "แพ็กเกจ"];
 // Categories rendered AFTER add-ons
 const CATS_AFTER_ADDONS  = ["Davines Spa", "ย้อมผม NIGAO"];
 
@@ -214,7 +214,14 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || undefined,
           items: cart.flatMap(i =>
-            Array.from({ length: i.qty }, () => ({ name: i.name, price: i.price }))
+            Array.from({ length: i.qty }, () => ({
+              name:      i.name,
+              price:     i.price,
+              // For service items, `i.id` is the BranchService.id — the API will
+              // resolve it to a serviceId. Add-ons / custom items have prefixed ids.
+              branchServiceId: !i.isCustom && !i.id.startsWith("addon-") && !i.id.startsWith("prefill-")
+                ? i.id : undefined,
+            }))
           ),
           ...(fromBookingId ? { fromBookingId } : {}),
         }),

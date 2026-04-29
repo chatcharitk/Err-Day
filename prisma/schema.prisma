@@ -100,8 +100,14 @@ model Customer {
   lineUserId String?  @unique // Line user ID — set automatically when customer signs in via LIFF
   createdAt  DateTime @default(now())
 
-  bookings   Booking[]
-  membership Membership?
+  // PDPA consent — captured at signup, only set when customer explicitly agrees
+  pdpaConsentAt DateTime?
+  pdpaVersion   String?    // policy version at time of consent (e.g. "2025-04-29")
+  pdpaSource    String?    // "signup" | "booking" | "staff" | "liff"
+
+  bookings        Booking[]
+  membership      Membership?
+  membershipCycles MembershipCycle[]
 }
 
 model MembershipTier {
@@ -133,6 +139,30 @@ model Membership {
 
   customer Customer        @relation(fields: [customerId], references: [id])
   tier     MembershipTier? @relation(fields: [tierId], references: [id])
+  cycles   MembershipCycle[]
+}
+
+/// One row per membership "cycle" (each 30-day period the customer pays for).
+/// Created when staff sells the membership SKU in POS, or when admin uses
+/// the manual renew button. Lets us keep history across renewals.
+model MembershipCycle {
+  id            String    @id @default(cuid())
+  customerId    String
+  membershipId  String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime  // = startedAt + tier.validityDays
+  closedAt      DateTime? // set when the next cycle starts (or when expired)
+  paidAmount    Int       @default(0)        // satang — what they paid for this cycle
+  paymentMethod String?   // "POS" | "PromptPay" | "Manual"
+  bookingsUsed  Int       @default(0)        // snapshotted at close
+  bookingId     String?   // link to the POS Booking that activated this cycle
+  notes         String?
+
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@index([customerId, startedAt])
+  @@index([membershipId])
 }
 
 model ServiceAddon {
