@@ -113,6 +113,9 @@ export default function LiffMembershipSignupPage() {
     if (!phone.trim()) { setFormErr("กรุณาระบุเบอร์โทร");  return; }
     if (!pdpa)         { setFormErr("กรุณายอมรับนโยบาย PDPA"); return; }
 
+    // Nickname is required — fall back to first word of name if left blank
+    const finalNickname = nickname.trim() || name.trim().split(/\s+/)[0];
+
     setStep("submitting");
     try {
       const res = await fetch("/api/membership/signup", {
@@ -120,7 +123,7 @@ export default function LiffMembershipSignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name:        name.trim(),
-          nickname:    nickname.trim() || undefined,
+          nickname:    finalNickname,
           phone:       phone.trim(),
           email:       email.trim() || undefined,
           gender:      gender || undefined,
@@ -265,15 +268,27 @@ export default function LiffMembershipSignupPage() {
 
           {/* Nickname */}
           <div>
-            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>ชื่อเล่น (ไม่บังคับ)</label>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <label className="text-xs font-medium" style={{ color: MUTED }}>
+                ชื่อเล่น <span style={{ color: PRIMARY }}>*</span>
+              </label>
+              <span className="text-[10px]" style={{ color: MUTED }}>
+                พนักงานจะใช้ชื่อนี้เรียกคุณ
+              </span>
+            </div>
             <input
               type="text"
               value={nickname}
               onChange={e => setNickname(e.target.value)}
-              placeholder="เช่น แอม, บิ๊ก, นุ้ย"
+              placeholder={name.trim().split(/\s+/)[0] || "เช่น แอม, บิ๊ก, นุ้ย"}
               className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none bg-white"
               style={{ borderColor: BORDER, color: TEXT }}
             />
+            {!nickname.trim() && name.trim() && (
+              <p className="text-[10px] mt-1" style={{ color: MUTED }}>
+                หากเว้นว่างจะใช้ &ldquo;{name.trim().split(/\s+/)[0]}&rdquo; แทน
+              </p>
+            )}
           </div>
 
           {/* Phone */}
