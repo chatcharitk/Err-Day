@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ChevronDown, Plus, Search, MoreVertical, LogOut,
+  ChevronDown, Plus, Search, MoreVertical, LogOut, RefreshCw,
   Phone, Clock, User, Check, X, Sparkles,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
@@ -74,6 +74,12 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   const router = useRouter();
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const [showMenu,         setShowMenu]         = useState(false);
+  const [isRefreshing, startRefresh] = useTransition();
+
+  const handleRefresh = () => {
+    // Server component re-fetches; useTransition gives us a pending flag
+    startRefresh(() => router.refresh());
+  };
 
   const activeBranch = branches.find((b) => b.id === activeBranchId);
 
@@ -136,6 +142,15 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
             <span className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>Admin</span>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              aria-label="รีเฟรช"
+              className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-60"
+              style={{ color: TEXT }}
+            >
+              <RefreshCw size={17} className={isRefreshing ? "animate-spin" : ""} />
+            </button>
             <Link
               href="/admin/m/search"
               aria-label="ค้นหา"

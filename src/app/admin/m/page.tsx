@@ -22,31 +22,44 @@ export default async function MobileHomePage({
 }) {
   const { branchId, date } = await searchParams;
 
-  const branches = await prisma.branch.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  });
-
   const today        = toLocalDateStr(new Date());
   const selectedDate = date ?? today;
-  const activeBranchId = branchId ?? branches[0]?.id ?? "";
+
+  // Fetch branches and bookings in parallel — the booking query depends on
+  // activeBranchId, but we can speculatively run it against the requested branch
+  // and short-circuit if none was provided.
+  const [branches, branchToUse] = await Promise.all([
+    prisma.branch.findMany({
+      where:   { isActive: true },
+      orderBy: { name: "asc" },
+      select:  { id: true, name: true },
+    }),
+    Promise.resolve(branchId),
+  ]);
+  const activeBranchId = branchToUse ?? branches[0]?.id ?? "";
 
   const { start, end } = dayBounds(selectedDate);
 
+  // Slim select: only the columns the UI actually renders
   const bookings = activeBranchId
     ? await prisma.booking.findMany({
         where: {
           branchId: activeBranchId,
           date:     { gte: start, lte: end },
         },
-        include: {
-          service:  true,
-          customer: true,
-          staff:    true,
-          addons:   { include: { addon: true } },
+        select: {
+          id:         true,
+          startTime:  true,
+          endTime:    true,
+          status:     true,
+          totalPrice: true,
+          notes:      true,
+          service:    { select: { nameTh: true } },
+          customer:   { select: { name: true, nickname: true, phone: true } },
+          staff:      { select: { name: true } },
+          _count:     { select: { addons: true } },
         },
-        orderBy: [{ startTime: "asc" }],
+        orderBy: { startTime: "asc" },
       })
     : [];
 
@@ -61,7 +74,7 @@ export default async function MobileHomePage({
     customerName: b.customer.nickname || b.customer.name,
     customerPhone:b.customer.phone,
     staffName:    b.staff?.name ?? null,
-    addonCount:   b.addons.length,
+    addonCount:   b._count.addons,
   }));
 
   return (

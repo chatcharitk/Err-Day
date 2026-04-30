@@ -12,22 +12,21 @@ const BORDER  = "#E8D8CC";
 
 type Status = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 
+interface BookingHit {
+  id:          string;
+  date:        string;       // ISO
+  startTime:   string;
+  status:      Status;
+  serviceName: string;
+  branchName:  string;
+}
+
 interface CustomerHit {
   id:        string;
   name:      string;
   nickname:  string | null;
   phone:     string;
-}
-
-interface BookingHit {
-  id:           string;
-  date:         string;       // ISO
-  startTime:    string;
-  status:       Status;
-  serviceName:  string;
-  customerName: string;
-  customerPhone:string;
-  branchName:   string;
+  upcoming:  BookingHit[];
 }
 
 const STATUS_META: Record<Status, { label: string; bg: string; fg: string }> = {
@@ -43,32 +42,28 @@ export default function SearchView() {
   const [q, setQ] = useState("");
   const [customers, setCustomers] = useState<CustomerHit[]>([]);
   const [loading,   setLoading]   = useState(false);
-  const [bookings,  setBookings]  = useState<Record<string, BookingHit[]>>({});
 
   const debRef = useRef<NodeJS.Timeout | null>(null);
+  const reqRef = useRef(0); // ignores stale responses
 
   useEffect(() => {
     if (debRef.current) clearTimeout(debRef.current);
-    if (q.trim().length < 1) { setCustomers([]); setBookings({}); return; }
+    if (q.trim().length < 1) { setCustomers([]); return; }
 
     debRef.current = setTimeout(async () => {
+      const reqId = ++reqRef.current;
       setLoading(true);
       try {
-        const r = await fetch(`/api/admin/customers?q=${encodeURIComponent(q.trim())}&limit=8`);
+        // Single round-trip endpoint: customers + their upcoming bookings
+        const r = await fetch(`/api/admin/search?q=${encodeURIComponent(q.trim())}&limit=8`);
+        if (reqId !== reqRef.current) return; // a newer query is in flight
         if (r.ok) {
           const list: CustomerHit[] = await r.json();
           setCustomers(list);
-          // Fetch upcoming bookings for each customer in parallel
-          const map: Record<string, BookingHit[]> = {};
-          await Promise.all(list.map(async (c) => {
-            try {
-              const br = await fetch(`/api/admin/customers/${c.id}/bookings?upcoming=true&limit=2`);
-              if (br.ok) map[c.id] = await br.json();
-            } catch {}
-          }));
-          setBookings(map);
         }
-      } finally { setLoading(false); }
+      } finally {
+        if (reqId === reqRef.current) setLoading(false);
+      }
     }, 200);
 
     return () => { if (debRef.current) clearTimeout(debRef.current); };
@@ -113,7 +108,7 @@ export default function SearchView() {
         ) : (
           <ul className="space-y-3">
             {customers.map((c) => {
-              const upcoming = bookings[c.id] ?? [];
+              const upcoming = c.upcoming;
               return (
                 <li key={c.id} className="rounded-2xl bg-white" style={{ border: `1px solid ${BORDER}` }}>
                   <div className="px-4 py-3 flex items-center gap-3">

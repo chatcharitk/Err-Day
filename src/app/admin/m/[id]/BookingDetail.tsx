@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, Clock, User, Plus, Trash2, Check, X,
   CheckCircle2, XCircle, Calendar, Pencil, Loader2, CreditCard,
-  AlertCircle, Sparkles,
+  AlertCircle, Sparkles, RefreshCw,
 } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
@@ -74,6 +74,8 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const [b, setB] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");
+  const [isRefreshing, startRefresh] = useTransition();
+  const handleRefresh = () => startRefresh(() => router.refresh());
 
   const [showAddonSheet, setShowAddonSheet] = useState(false);
   const [showStaffSheet, setShowStaffSheet] = useState(false);
@@ -217,6 +219,15 @@ export default function BookingDetail({ booking: initial, branchServices, branch
               {b.customerNickname || b.customerName}
             </p>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            aria-label="รีเฟรช"
+            className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-60"
+            style={{ color: TEXT }}
+          >
+            <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+          </button>
           <span
             className="text-[10px] px-2 py-1 rounded-full font-medium"
             style={{ background: meta.bg, color: meta.fg }}

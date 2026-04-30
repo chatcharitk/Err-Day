@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, User, AlertCircle, Loader2 } from "lucide-react";
+import { Lock, User, AlertCircle, Loader2, Monitor, Smartphone } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
 const PRIMARY = "#8B1D24";
@@ -10,15 +10,40 @@ const TEXT    = "#3B2A24";
 const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 
+const LS_LAST_MODE = "admin_login_mode";  // "desktop" | "mobile"
+
 export default function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const next         = searchParams.get("next") || "/admin";
+  const nextParam    = searchParams.get("next");
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [mode,     setMode]     = useState<"desktop" | "mobile">("desktop");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
+
+  // Auto-pick mode based on viewport width and last-used preference on first load
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LS_LAST_MODE) as "desktop" | "mobile" | null;
+      if (saved === "desktop" || saved === "mobile") {
+        setMode(saved);
+        return;
+      }
+    } catch { /* ignore */ }
+    // No saved preference — default to mobile if the screen is narrow
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setMode("mobile");
+    }
+  }, []);
+
+  // If `next` was set explicitly (e.g. proxy redirect), respect it. Otherwise
+  // we route based on the user's mode pick.
+  const computeRedirect = () => {
+    if (nextParam) return nextParam;
+    return mode === "mobile" ? "/admin/m" : "/admin";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +60,8 @@ export default function LoginForm() {
         setError(data.error ?? "เข้าสู่ระบบไม่สำเร็จ");
         return;
       }
-      router.replace(next);
+      try { localStorage.setItem(LS_LAST_MODE, mode); } catch { /* ignore */ }
+      router.replace(computeRedirect());
       router.refresh();
     } catch {
       setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
@@ -102,6 +128,46 @@ export default function LoginForm() {
               />
             </div>
           </div>
+
+          {/* Mode toggle */}
+          {!nextParam && (
+            <div>
+              <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>
+                เข้าสู่โหมด
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("desktop")}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  style={{
+                    background: mode === "desktop" ? PRIMARY : "white",
+                    color:      mode === "desktop" ? "white" : TEXT,
+                    border:     `1.5px solid ${mode === "desktop" ? PRIMARY : BORDER}`,
+                  }}
+                >
+                  <Monitor size={14} /> เดสก์ท็อป
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("mobile")}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  style={{
+                    background: mode === "mobile" ? PRIMARY : "white",
+                    color:      mode === "mobile" ? "white" : TEXT,
+                    border:     `1.5px solid ${mode === "mobile" ? PRIMARY : BORDER}`,
+                  }}
+                >
+                  <Smartphone size={14} /> มือถือ
+                </button>
+              </div>
+              <p className="text-[10px] mt-1.5" style={{ color: MUTED }}>
+                {mode === "mobile"
+                  ? "เข้าหน้าจัดการการจองแบบกะทัดรัด เหมาะกับมือถือ"
+                  : "เข้าระบบจัดการเต็มรูปแบบ"}
+              </p>
+            </div>
+          )}
 
           {error && (
             <div
