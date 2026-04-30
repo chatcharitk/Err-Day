@@ -8,11 +8,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { UserCheck, CreditCard as CardIcon, Package as PackageIcon } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
-const ALL_SLOTS = [
-  "10:00","10:30","11:00","11:30","12:00","12:30",
-  "13:00","13:30","14:00","14:30","15:00","15:30",
-  "16:00","16:30","17:00","17:30","18:00","18:30",
-];
+// Full slot range matching branch hours (Mon–Sat 08:00–20:30)
+// The availability API will still mark taken slots correctly for Sunday (10:00–20:30).
+const ALL_SLOTS: string[] = (() => {
+  const slots: string[] = [];
+  for (let t = 8 * 60; t <= 20 * 60 + 30; t += 30) {
+    slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
+  }
+  return slots;
+})();
 
 type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 

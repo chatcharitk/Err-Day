@@ -54,13 +54,28 @@ function dayBounds(date: string): { start: Date; end: Date } {
   return { start, end };
 }
 
-// ── Default open slot grid ────────────────────────────────────────────────────
+// ── Slot grid helpers ─────────────────────────────────────────────────────────
 
-export const ALL_SLOTS = [
-  "10:00","10:30","11:00","11:30","12:00","12:30",
-  "13:00","13:30","14:00","14:30","15:00","15:30",
-  "16:00","16:30","17:00","17:30","18:00","18:30",
-];
+/**
+ * Build a 30-minute slot list from openTime up to (closeTime − 30 min).
+ * E.g. generateTimeSlots("08:00","21:00") → ["08:00","08:30",…,"20:30"]
+ */
+export function generateTimeSlots(openTime: string, closeTime: string): string[] {
+  const [oh, om] = openTime.split(":").map(Number);
+  const [ch, cm] = closeTime.split(":").map(Number);
+  const openMin  = oh * 60 + om;
+  const closeMin = ch * 60 + cm;
+  const slots: string[] = [];
+  for (let t = openMin; t <= closeMin - 30; t += 30) {
+    slots.push(
+      `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`
+    );
+  }
+  return slots;
+}
+
+/** Full default slot grid (Mon–Sat hours). Exported for admin schedule views. */
+export const ALL_SLOTS = generateTimeSlots("08:00", "21:00"); // 08:00 … 20:30
 
 // ── Day snapshot — fetch shifts + bookings + active staff for one branch/day ──
 
@@ -186,12 +201,15 @@ export async function getTakenSlots(
   duration: number,
   staffId: string | null = null,
   excludeBookingId?: string,
+  openTime  = "08:00",   // Mon–Sat default; caller passes "10:00" for Sunday
+  closeTime = "21:00",
 ): Promise<string[]> {
   const snapshot = await loadDaySnapshot(branchId, date, excludeBookingId);
+  const slots  = generateTimeSlots(openTime, closeTime);
   const taken: string[] = [];
-  for (const slot of ALL_SLOTS) {
+  for (const slot of slots) {
     const slotEnd = addMinutes(slot, duration);
-    const result = evaluateCapacity(snapshot, slot, slotEnd, staffId);
+    const result  = evaluateCapacity(snapshot, slot, slotEnd, staffId);
     if (!result.ok) taken.push(slot);
   }
   return taken;
