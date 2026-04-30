@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2, MapPin, Phone, AlertCircle } from "lucide-react";
-import PendingActions from "./PendingActions";
-
+import { ArrowLeft, CheckCircle2, MapPin, Phone, AlertCircle, CalendarDays } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 const PRIMARY = "#8B1D24";
@@ -57,11 +55,12 @@ export default async function PendingPage({
             <h1 className="text-xl font-medium mb-1">คุณเป็นสมาชิกอยู่แล้ว</h1>
             <p className="text-sm opacity-90">{customer.name}</p>
             <Link
-              href={`/membership/lookup?phone=${encodeURIComponent(customer.phone)}`}
-              className="inline-block mt-5 px-5 py-2.5 rounded-xl text-sm font-semibold"
+              href="/my-bookings"
+              className="inline-flex items-center gap-1.5 mt-5 px-5 py-2.5 rounded-xl text-sm font-semibold"
               style={{ background: "white", color: "#166534" }}
             >
-              ดูสถานะสมาชิก
+              <CalendarDays size={14} />
+              ดูสถานะที่การจองของฉัน
             </Link>
           </div>
         ) : (
@@ -139,7 +138,6 @@ export default async function PendingPage({
               </p>
             </div>
 
-            <PendingActions phone={customer.phone} />
           </>
         )}
 
