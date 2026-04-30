@@ -42,11 +42,25 @@ interface MembershipInfo {
   tier: MemberTier | null;
 }
 
+interface PackageInfo {
+  id:         string;
+  sku:        string;
+  nameTh:     string;
+  startedAt:  string;
+  expiresAt:  string;
+  usagesUsed: number;
+  usageLimit: number;
+  usagesLeft: number | null;
+  isActive:   boolean;
+}
+
 interface MemberRow {
-  id: string;
-  name: string;
-  phone: string | null;
-  membership: MembershipInfo;
+  id:           string;
+  name:         string;
+  phone:        string | null;
+  kind:         "membership" | "package";
+  membership:   MembershipInfo | null;
+  packages:     PackageInfo[];
   cycleBookings: number;
   totalBookings: number;
 }
@@ -116,7 +130,7 @@ function CustomerCard({
   onRenew,
   renewing,
 }: {
-  row: MemberRow;
+  row: MemberRow & { membership: MembershipInfo };
   onRenew: (id: string) => void;
   renewing: boolean;
 }) {
@@ -235,6 +249,91 @@ function CustomerCard({
         <RefreshCw size={12} className={renewing ? "animate-spin" : ""} />
         {renewing ? "กำลังต่ออายุ..." : "ต่ออายุ (Manual)"}
       </button>
+    </div>
+  );
+}
+
+// ─── Package member card ──────────────────────────────────────────────────────
+
+function PackageMemberCard({ row }: { row: MemberRow }) {
+  const PKG_BLUE = "#1d4ed8";
+  const PKG_BG   = "#EFF6FF";
+  const PKG_BORDER = "#BFDBFE";
+
+  return (
+    <div
+      className="rounded-2xl bg-white p-4 flex flex-col gap-3"
+      style={{ border: `1.5px solid ${PKG_BORDER}` }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+            style={{ backgroundColor: PKG_BLUE }}
+          >
+            {row.name.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{row.name}</p>
+            {row.phone && <p className="text-xs" style={{ color: MUTED }}>{row.phone}</p>}
+          </div>
+        </div>
+        <span
+          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 flex items-center gap-1"
+          style={{ backgroundColor: PKG_BG, color: PKG_BLUE }}
+        >
+          <CheckCircle size={11} />
+          แพ็กเกจ
+        </span>
+      </div>
+
+      {row.packages.map(pkg => {
+        const days  = daysLeft(pkg.expiresAt);
+        const isUnlimited = pkg.usageLimit === 0;
+        const usedPct = isUnlimited ? null : Math.min(100, Math.round((pkg.usagesUsed / pkg.usageLimit) * 100));
+        return (
+          <div key={pkg.id} className="rounded-xl p-3 space-y-2" style={{ background: PKG_BG }}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs font-semibold" style={{ color: PKG_BLUE }}>{pkg.nameTh}</p>
+              {days !== null && (
+                <span className="text-[10px] font-medium" style={{ color: days <= 5 ? "#b45309" : MUTED }}>
+                  เหลือ {days} วัน
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <p style={{ color: MUTED }}>หมดอายุ</p>
+                <p className="font-medium mt-0.5" style={{ color: TEXT }}>{fmtDate(pkg.expiresAt)}</p>
+              </div>
+              <div>
+                <p style={{ color: MUTED }}>ใช้ไป</p>
+                <p className="font-medium mt-0.5" style={{ color: TEXT }}>
+                  {isUnlimited ? `${pkg.usagesUsed} ครั้ง (ไม่จำกัด)` : `${pkg.usagesUsed} / ${pkg.usageLimit} ครั้ง`}
+                </p>
+              </div>
+            </div>
+            {!isUnlimited && usedPct !== null && (
+              <div className="w-full h-1.5 rounded-full bg-blue-100">
+                <div
+                  className="h-1.5 rounded-full transition-all"
+                  style={{
+                    width: `${usedPct}%`,
+                    backgroundColor: usedPct >= 100 ? "#ef4444" : usedPct >= 80 ? "#f59e0b" : PKG_BLUE,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p style={{ color: MUTED }}>ทั้งหมด (ตลอดกาล)</p>
+          <p className="font-medium mt-0.5" style={{ color: TEXT }}>{row.totalBookings} ครั้ง</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -546,9 +645,14 @@ export default function MembershipManager() {
   }
 
   // ── Members filter / search ──
+  function isRowActive(c: MemberRow) {
+    if (c.kind === "membership") return c.membership?.isValid ?? false;
+    return c.packages.some(p => p.isActive); // package kind
+  }
+
   const memberFiltered = data.members.filter(c => {
-    if (filter === "active"  && !c.membership.isValid)  return false;
-    if (filter === "expired" &&  c.membership.isValid)  return false;
+    if (filter === "active"  && !isRowActive(c)) return false;
+    if (filter === "expired" &&  isRowActive(c)) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       return c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q);
@@ -556,8 +660,8 @@ export default function MembershipManager() {
     return true;
   });
 
-  const activeCount  = data.members.filter(c =>  c.membership.isValid).length;
-  const expiredCount = data.members.filter(c => !c.membership.isValid).length;
+  const activeCount  = data.members.filter(isRowActive).length;
+  const expiredCount = data.members.filter(c => !isRowActive(c)).length;
 
   const pendingFiltered = data.pending.filter(p => {
     if (!search.trim()) return true;
@@ -698,14 +802,18 @@ export default function MembershipManager() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {memberFiltered.map(row => (
-                  <CustomerCard
-                    key={row.id}
-                    row={row}
-                    onRenew={handleRenew}
-                    renewing={renewing === row.id}
-                  />
-                ))}
+                {memberFiltered.map(row =>
+                  row.kind === "package" ? (
+                    <PackageMemberCard key={row.id} row={row} />
+                  ) : (
+                    <CustomerCard
+                      key={row.id}
+                      row={row as MemberRow & { membership: MembershipInfo }}
+                      onRenew={handleRenew}
+                      renewing={renewing === row.id}
+                    />
+                  )
+                )}
               </div>
             )
           )}
