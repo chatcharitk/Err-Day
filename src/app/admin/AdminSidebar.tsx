@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import BrandLogo from "@/components/BrandLogo";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -39,8 +40,8 @@ export default function AdminSidebar() {
     >
       {/* Branding */}
       <div className="px-5 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        <p className="text-xs uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>err.day</p>
-        <p className="text-white font-medium mt-0.5 text-sm">Admin Panel</p>
+        <BrandLogo light size="lg" />
+        <p className="text-white/40 font-medium mt-1 text-xs tracking-widest uppercase">Admin Panel</p>
       </div>
 
       {/* Nav */}

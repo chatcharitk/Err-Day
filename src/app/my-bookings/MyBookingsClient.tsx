@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, X, Edit3, Trash2, C
 import { useLiff } from "@/hooks/useLiff";
 import { Calendar } from "@/components/ui/calendar";
 import { UserCheck, CreditCard as CardIcon, Package as PackageIcon } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 const ALL_SLOTS = [
   "10:00","10:30","11:00","11:30","12:00","12:30",
@@ -465,7 +466,7 @@ function Header({ rightSlot }: { rightSlot?: React.ReactNode }) {
         <Link href="/" className="text-white/80 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <span className="font-medium tracking-tight text-white text-lg">err.day</span>
+        <BrandLogo light size="md" />
       </div>
       {rightSlot}
     </nav>

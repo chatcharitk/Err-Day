@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, UserPlus, Sparkles, Check } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 export const metadata = {
   title: "สมาชิก err.day",
@@ -41,7 +42,8 @@ export default function MembershipLandingPage() {
             strokeWidth={1}
           />
           <div className="relative">
-            <p className="text-xs uppercase tracking-widest opacity-80 mb-1">err.day Membership &amp; Packages</p>
+            <div className="mb-2"><BrandLogo light size="lg" /></div>
+            <p className="text-xs uppercase tracking-widest opacity-80 mb-1">Membership &amp; Packages</p>
             <h1 className="text-2xl font-medium leading-tight mb-2">
               เลือกแพ็กเกจที่ใช่สำหรับคุณ
             </h1>

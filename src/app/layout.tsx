@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Prompt } from "next/font/google";
+import { Prompt, Cormorant_Garamond } from "next/font/google";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { LiffProvider } from "@/components/LiffProvider";
 import "./globals.css";
@@ -8,6 +8,14 @@ const prompt = Prompt({
   weight: ["300", "400", "500", "600"],
   subsets: ["latin", "thai"],
   variable: "--font-prompt",
+  display: "swap",
+});
+
+// Logo font — matches the brand's high-contrast serif logotype
+const cormorant = Cormorant_Garamond({
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+  variable: "--font-brand",
   display: "swap",
 });
 
@@ -22,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${prompt.variable} h-full antialiased`}>
+    <html lang="th" className={`${prompt.variable} ${cormorant.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-[family-name:var(--font-prompt)]">
         <LiffProvider>
           <LanguageProvider>{children}</LanguageProvider>

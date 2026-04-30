@@ -6,6 +6,7 @@ import Link from "next/link";
 import { MapPin, Phone, ArrowRight, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { LangSwitcher } from "@/components/LangSwitcher";
+import BrandLogo from "@/components/BrandLogo";
 
 interface Branch {
   id:      string;
@@ -88,7 +89,7 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
     <main className="min-h-screen" style={{ backgroundColor: "#FDF8F3" }}>
       {/* ── Top nav ── */}
       <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#8B1D24" }}>
-        <span className="font-medium tracking-tight text-white text-lg">err.day</span>
+        <BrandLogo light size="md" />
         <div className="flex items-center gap-5">
           <Link href="/my-bookings" className="text-white/80 hover:text-white text-sm transition-colors">
             การจองของฉัน
@@ -106,7 +107,7 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
       {/* ── Hero ── */}
       <section className="px-6 py-16 text-center" style={{ backgroundColor: "#8B1D24" }}>
         <p className="text-sm tracking-widest uppercase mb-3" style={{ color: "#D6BCAE" }}>ยินดีต้อนรับสู่</p>
-        <h1 className="text-5xl font-light tracking-tight mb-4 text-white">err.day</h1>
+        <h1 className="mb-4"><BrandLogo light size="xl" /></h1>
         <p className="text-lg max-w-md mx-auto" style={{ color: "rgba(255,255,255,0.85)" }}>
           ประสบการณ์ความงามระดับพรีเมียม
         </p>
