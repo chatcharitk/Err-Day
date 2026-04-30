@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/admin/customers?q=search — search customers by name or phone
+// GET /api/admin/customers?q=search&limit=N — search customers by name, nickname, or phone
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const q = searchParams.get("q")?.trim() ?? "";
+  const q     = searchParams.get("q")?.trim() ?? "";
+  const limit = Math.min(50, parseInt(searchParams.get("limit") ?? "10", 10) || 10);
 
   if (q.length < 1) {
     return NextResponse.json([]);
@@ -13,13 +14,14 @@ export async function GET(request: Request) {
   const customers = await prisma.customer.findMany({
     where: {
       OR: [
-        { name:  { contains: q, mode: "insensitive" } },
-        { phone: { contains: q } },
+        { name:     { contains: q, mode: "insensitive" } },
+        { nickname: { contains: q, mode: "insensitive" } },
+        { phone:    { contains: q } },
       ],
     },
     orderBy: { name: "asc" },
-    take: 10,
-    select: { id: true, name: true, phone: true },
+    take: limit,
+    select: { id: true, name: true, nickname: true, phone: true, email: true },
   });
 
   return NextResponse.json(customers);

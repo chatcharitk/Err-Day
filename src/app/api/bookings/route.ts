@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       branchId, serviceId, staffId, date, startTime, endTime,
-      totalPrice, name, phone, email, notes, addonIds,
+      totalPrice, name, nickname, phone, email, notes, addonIds,
       lineUserId, linePictureUrl,  // from Line LIFF — links customer + profile pic
       skipConflictCheck,            // trusted flag for POS / admin use
     } = body;
@@ -37,15 +37,17 @@ export async function POST(request: Request) {
       where: { phone },
       update: {
         name,
+        ...(nickname       ? { nickname }                   : {}),
         email: email || undefined,
-        ...(lineUserId     ? { lineUserId }                : {}),
+        ...(lineUserId     ? { lineUserId }                 : {}),
         ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
       },
       create: {
         name,
         phone,
+        ...(nickname       ? { nickname }                   : {}),
         email: email || undefined,
-        ...(lineUserId     ? { lineUserId }                : {}),
+        ...(lineUserId     ? { lineUserId }                 : {}),
         ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
       },
     });

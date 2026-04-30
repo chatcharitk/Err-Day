@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   ArrowLeft,
   LogOut,
+  Smartphone,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -101,6 +102,14 @@ export default function AdminSidebar({ role = "ADMIN", name }: AdminSidebarProps
             <span className="opacity-40 ml-1">({role})</span>
           </p>
         )}
+        <Link
+          href="/admin/m"
+          className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-80"
+          style={{ color: "rgba(255,255,255,0.55)" }}
+        >
+          <Smartphone className="w-3 h-3" />
+          มุมมองมือถือ
+        </Link>
         <button
           onClick={handleLogout}
           className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-80 w-full"
