@@ -9,10 +9,11 @@ import { LangSwitcher } from "@/components/LangSwitcher";
 import BrandLogo from "@/components/BrandLogo";
 
 interface Branch {
-  id:      string;
-  name:    string;
-  address: string;
-  phone?:  string | null;
+  id:       string;
+  name:     string;
+  address:  string;
+  phone?:   string | null;
+  isActive: boolean;
 }
 
 const RETURN_KEY   = "liff_return_to";
@@ -190,42 +191,80 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
             </p>
 
             <div className="grid gap-4">
-              {branches.map((branch) => (
-                <div
-                  key={branch.id}
-                  className="rounded-2xl bg-white overflow-hidden transition-shadow hover:shadow-md"
-                  style={{ border: "1.5px solid #E8D8CC" }}
-                >
-                  <div className="px-6 pt-6 pb-4">
-                    <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      <h3 className="text-lg font-medium" style={{ color: "#3B2A24" }}>{branch.name}</h3>
-                      <span className="text-xs px-2 py-0.5 rounded-full"
-                        style={{ backgroundColor: "#FFF0E8", color: "#8B1D24" }}>
-                        เปิดให้บริการ
-                      </span>
-                    </div>
-                    <p className="flex items-start gap-1.5 text-sm mb-1" style={{ color: "#6B5245" }}>
-                      <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                      {branch.address}
-                    </p>
-                    {branch.phone && (
-                      <p className="flex items-center gap-1.5 text-sm" style={{ color: "#6B5245" }}>
-                        <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                        {branch.phone}
+              {branches.map((branch) =>
+                branch.isActive ? (
+                  /* ── Open branch ── */
+                  <div
+                    key={branch.id}
+                    className="rounded-2xl bg-white overflow-hidden transition-shadow hover:shadow-md"
+                    style={{ border: "1.5px solid #E8D8CC" }}
+                  >
+                    <div className="px-6 pt-6 pb-4">
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <h3 className="text-lg font-medium" style={{ color: "#3B2A24" }}>{branch.name}</h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: "#FFF0E8", color: "#8B1D24" }}>
+                          เปิดให้บริการ
+                        </span>
+                      </div>
+                      <p className="flex items-start gap-1.5 text-sm mb-1" style={{ color: "#6B5245" }}>
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        {branch.address}
                       </p>
-                    )}
+                      {branch.phone && (
+                        <p className="flex items-center gap-1.5 text-sm" style={{ color: "#6B5245" }}>
+                          <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                          {branch.phone}
+                        </p>
+                      )}
+                    </div>
+                    <div className="px-6 pb-6">
+                      <Link
+                        href={`/book/${branch.id}`}
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-medium text-sm transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: "#8B1D24" }}
+                      >
+                        จองคิวที่สาขานี้ <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </div>
                   </div>
-                  <div className="px-6 pb-6">
-                    <Link
-                      href={`/book/${branch.id}`}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-medium text-sm transition-opacity hover:opacity-90"
-                      style={{ backgroundColor: "#8B1D24" }}
-                    >
-                      จองคิวที่สาขานี้ <ArrowRight className="w-4 h-4" />
-                    </Link>
+                ) : (
+                  /* ── Coming-soon branch ── */
+                  <div
+                    key={branch.id}
+                    className="rounded-2xl overflow-hidden"
+                    style={{ border: "1.5px solid #E8D8CC", backgroundColor: "#FAFAFA", opacity: 0.8 }}
+                  >
+                    <div className="px-6 pt-6 pb-4">
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <h3 className="text-lg font-medium" style={{ color: "#6B5245" }}>{branch.name}</h3>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                          style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>
+                          เร็วๆ นี้
+                        </span>
+                      </div>
+                      <p className="flex items-start gap-1.5 text-sm mb-1" style={{ color: "#9CA3AF" }}>
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        {branch.address}
+                      </p>
+                      {branch.phone && (
+                        <p className="flex items-center gap-1.5 text-sm" style={{ color: "#9CA3AF" }}>
+                          <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                          {branch.phone}
+                        </p>
+                      )}
+                    </div>
+                    <div className="px-6 pb-6">
+                      <div
+                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-medium cursor-not-allowed"
+                        style={{ backgroundColor: "#F3F4F6", color: "#9CA3AF" }}
+                      >
+                        กำลังเปิดให้บริการเร็วๆ นี้
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
 
             {/* Re-show LINE login as a soft option for users who skipped */}

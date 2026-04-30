@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, Phone, Mail, Star, CalendarRange, Repeat } from "lucide-react";
 import PdpaConsentBlock from "@/components/PdpaConsentBlock";
-import BrandLogo from "@/components/BrandLogo";
 
 type ProductKey = "membership" | "buffet" | "5pack";
 
@@ -204,7 +203,6 @@ export default function LiffMembershipSignupPage() {
         )}
 
         <header className="mb-6">
-          <div className="mb-3"><BrandLogo size="lg" /></div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Sign up</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>เลือกแพ็กเกจของคุณ</h1>
           <p className="text-sm mt-1" style={{ color: MUTED }}>
