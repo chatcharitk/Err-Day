@@ -272,3 +272,40 @@ enum AdminRole {
   OWNER
   ADMIN
 }
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+//
+// Records every customer-facing notification we attempt to send (e.g. LINE
+// push). The unique constraint on (kind, targetId) makes the system
+// idempotent — once a row exists, the same notification will not be sent
+// again no matter how many times the cron runs.
+
+model NotificationLog {
+  id        String             @id @default(cuid())
+  kind      NotificationKind
+  targetId  String             // bookingId / membershipId / customerPackageId — depends on kind
+  channel   String             @default("line")  // future: "sms", "email"
+  status    NotificationStatus
+  recipient String?            // lineUserId or other channel-specific id (audit only)
+  error     String?            // LINE API error message if status = FAILED
+  payload   String?            // optional JSON snapshot for debugging
+  sentAt    DateTime           @default(now())
+
+  @@unique([kind, targetId])
+  @@index([sentAt])
+  @@index([status])
+}
+
+enum NotificationKind {
+  BOOKING_REMINDER_4H
+  MEMBERSHIP_ACTIVATED
+  MEMBERSHIP_EXPIRY_1D
+  PACKAGE_ACTIVATED
+  PACKAGE_EXPIRY_1D
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  SKIPPED   // customer has no LINE link, or feature disabled
+}

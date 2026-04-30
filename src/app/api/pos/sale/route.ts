@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MEMBERSHIP_SKU, activateOrRenewMembership } from "@/lib/membership";
 import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
+import { sendMembershipActivated, sendPackageActivated } from "@/lib/notifications";
 
 interface SaleItem {
   name:             string;
@@ -100,23 +101,30 @@ export async function POST(request: Request) {
 
       // If the cart contains a membership SKU, activate / renew
       if (membershipItem) {
-        await activateOrRenewMembership({
+        const m = await activateOrRenewMembership({
           customerId:    booking.customerId,
           paidAmount:    membershipItem.price,
           paymentMethod: "POS",
           bookingId:     booking.id,
         });
+        // Fire & forget LINE confirmation — never block the sale on LINE failure
+        if (m?.membership?.id) {
+          sendMembershipActivated(m.membership.id).catch((e) => console.error("[notify] membership activated failed", e));
+        }
       }
 
       // Activate any package SKUs in the cart
       for (const p of packageItems) {
-        await activatePackage({
+        const cp = await activatePackage({
           customerId:    booking.customerId,
           packageSku:    p.serviceId,
           paidAmount:    p.price,
           paymentMethod: "POS",
           bookingId:     booking.id,
         });
+        if (cp?.id) {
+          sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e));
+        }
       }
 
       // Apply any package redemptions flagged by the cart
@@ -160,22 +168,28 @@ export async function POST(request: Request) {
     });
 
     if (membershipItem) {
-      await activateOrRenewMembership({
+      const m = await activateOrRenewMembership({
         customerId:    customer.id,
         paidAmount:    membershipItem.price,
         paymentMethod: "POS",
         bookingId:     booking.id,
       });
+      if (m?.membership?.id) {
+        sendMembershipActivated(m.membership.id).catch((e) => console.error("[notify] membership activated failed", e));
+      }
     }
 
     for (const p of packageItems) {
-      await activatePackage({
+      const cp = await activatePackage({
         customerId:    customer.id,
         packageSku:    p.serviceId,
         paidAmount:    p.price,
         paymentMethod: "POS",
         bookingId:     booking.id,
       });
+      if (cp?.id) {
+        sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e));
+      }
     }
 
     for (const rid of redemptionIds) {

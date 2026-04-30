@@ -15,6 +15,7 @@ import {
   CreditCard,
   Settings,
   ShieldCheck,
+  Bell,
   ArrowLeft,
   LogOut,
   Smartphone,
@@ -32,6 +33,7 @@ const MENU = [
   { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock,                              ownerOnly: false },
   { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors,                                   ownerOnly: false },
   { href: "/admin/settings",   labelTh: "ตั้งค่าร้าน",    label: "Shop Settings",icon: Settings,                                   ownerOnly: false },
+  { href: "/admin/notifications", labelTh: "การแจ้งเตือน",   label: "Notifications", icon: Bell,                                   ownerOnly: false },
   { href: "/admin/users",      labelTh: "จัดการผู้ใช้",   label: "Users",        icon: ShieldCheck,                                ownerOnly: true  },
 ];
 
