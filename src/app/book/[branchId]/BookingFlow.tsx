@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut } from "lucide-react";
@@ -29,12 +29,26 @@ const LINE_SVG = (
   </svg>
 );
 
+// Hair colour is a long service — restrict to a sensible window regardless of branch hours
 const HAIR_COLOR_SLOTS = ["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00"];
-const ALL_SLOTS = [
-  "10:00","10:30","11:00","11:30","12:00","12:30",
-  "13:00","13:30","14:00","14:30","15:00","15:30",
-  "16:00","16:30","17:00","17:30","18:00","18:30",
-];
+
+/**
+ * Generate 30-minute slots from openTime up to (closeTime - 30 min).
+ * Both params are "HH:mm" strings.  Example: "08:00","21:00" → 08:00 … 20:30
+ */
+function generateTimeSlots(openTime: string, closeTime: string): string[] {
+  const [oh, om] = openTime.split(":").map(Number);
+  const [ch, cm] = closeTime.split(":").map(Number);
+  const openMin  = oh * 60 + om;
+  const closeMin = ch * 60 + cm;
+  const slots: string[] = [];
+  for (let t = openMin; t <= closeMin - 30; t += 30) {
+    slots.push(
+      `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`
+    );
+  }
+  return slots;
+}
 
 function formatPrice(satang: number) {
   return `฿${(satang / 100).toLocaleString()}`;
@@ -223,7 +237,17 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     });
   }, []);
   const isHairColor = selectedService?.service.advanceBookingRequired ?? false;
-  const timeSlots = isHairColor ? HAIR_COLOR_SLOTS : ALL_SLOTS;
+
+  // Build the slot list for the selected day.
+  // Sunday (0) opens at 10:00; Mon–Sat open at branch.openTime (default 08:00).
+  // Last slot is always 30 min before branch.closeTime (default 21:00) → 20:30.
+  const timeSlots = useMemo(() => {
+    if (isHairColor) return HAIR_COLOR_SLOTS;
+    const isSunday  = selectedDate ? selectedDate.getDay() === 0 : false;
+    const openTime  = isSunday ? "10:00" : (branch.openTime  ?? "08:00");
+    const closeTime = branch.closeTime ?? "21:00";
+    return generateTimeSlots(openTime, closeTime);
+  }, [isHairColor, selectedDate, branch.openTime, branch.closeTime]);
 
   // Fetch availability when date, staff, or service changes
   useEffect(() => {
@@ -601,6 +625,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             <h2 className="text-xl font-medium mb-1" style={{ color: "#3B2A24" }}>
               {u.dateTime} <span className="text-base font-light" style={{ color: "#A08070" }}>/ {u.dateTimeSub}</span>
             </h2>
+
+            {/* Opening hours hint */}
+            <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: "#A08070" }}>
+              <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+              {lang === "th"
+                ? "จ–ส 08:00–21:00 · อา 10:00–21:00 (รับจองถึง 20:30)"
+                : "Mon–Sat 08:00–21:00 · Sun 10:00–21:00 (last slot 20:30)"}
+            </p>
+
             {isHairColor && (
               <p className="text-sm mb-4 flex items-center gap-1" style={{ color: "#8B1D24" }}>
                 <AlertCircle className="w-4 h-4" /> {u.hairColorNotice}
