@@ -2,24 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, MapPin, Phone, Clock, Calendar, User } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-function formatPrice(satang: number) {
-  return `฿${(satang / 100).toLocaleString()}`;
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-yellow-100 text-yellow-800",
-  CONFIRMED: "bg-green-100 text-green-800",
-  CANCELLED: "bg-red-100 text-red-800",
-  COMPLETED: "bg-stone-100 text-stone-700",
-  NO_SHOW: "bg-red-100 text-red-700",
-};
 
 export default async function ConfirmPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -135,12 +119,6 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
               </div>
             ))}
 
-            <hr style={{ borderColor: "#F0E4D8" }} />
-
-            <div className="flex justify-between items-center">
-              <span className="font-semibold" style={{ color: "#5C4A42" }}>ยอดรวม</span>
-              <span className="font-bold text-xl" style={{ color: "#8B1D24" }}>{formatPrice(booking.totalPrice)}</span>
-            </div>
           </div>
         </div>
 

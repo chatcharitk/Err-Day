@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Clock, Tag, AlertCircle, Star, Ban, LogOut } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,17 +46,10 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-const CATEGORY_ORDER = ["บริการทั่วไป", "แพ็กเกจ", "Davines Spa", "ย้อมผม NIGAO"];
-
-const PACKAGE_BADGES: Record<string, { th: string; en: string }> = {
-  "svc-pkg5":           { th: "90 วัน | แบ่งได้",        en: "90 days | Shareable"       },
-  "svc-buffet":         { th: "30 วัน | 1 ครั้ง/วัน",    en: "30 days | 1 per day"       },
-  "svc-member-monthly": { th: "30 วัน | ยอดนิยม ⭐",      en: "30 days | Most popular ⭐" },
-};
+const CATEGORY_ORDER = ["บริการทั่วไป", "Davines Spa", "ย้อมผม NIGAO"];
 
 const CAT_EN: Record<string, string> = {
   "บริการทั่วไป":  "General Services",
-  "แพ็กเกจ":       "Packages",
   "Davines Spa":   "Davines Spa",
   "ย้อมผม NIGAO": "NIGAO Color",
 };
@@ -219,6 +212,16 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   }, [liff.profile]);
 
   const categories = CATEGORY_ORDER.filter((c) => branchServices.some((bs) => bs.service.category === c));
+
+  // Collapsible categories — all open by default
+  const [openCats, setOpenCats] = useState<Set<string>>(() => new Set(CATEGORY_ORDER));
+  const toggleCat = useCallback((cat: string) => {
+    setOpenCats(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
+    });
+  }, []);
   const isHairColor = selectedService?.service.advanceBookingRequired ?? false;
   const timeSlots = isHairColor ? HAIR_COLOR_SLOTS : ALL_SLOTS;
 
@@ -440,87 +443,95 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             </h2>
             <p className="text-sm mb-6" style={{ color: "#A08070" }}>{u.chooseServiceHint}</p>
 
-            {categories.map((cat) => (
-              <div key={cat} className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-px flex-1" style={{ backgroundColor: "#D6BCAE" }} />
-                  <p className="text-xs font-semibold uppercase tracking-widest px-2" style={{ color: "#8B1D24" }}>
-                    {lang === "th" ? cat : (CAT_EN[cat] ?? cat)}
-                  </p>
-                  <div className="h-px flex-1" style={{ backgroundColor: "#D6BCAE" }} />
-                </div>
+            {categories.map((cat) => {
+              const isOpen = openCats.has(cat);
+              const catLabel = lang === "th" ? cat : (CAT_EN[cat] ?? cat);
+              const hasSelectedInCat = branchServices
+                .filter(bs => bs.service.category === cat)
+                .some(bs => selectedService?.id === bs.id);
+              return (
+                <div key={cat} className="mb-4">
+                  {/* Collapsible header */}
+                  <button
+                    type="button"
+                    onClick={() => toggleCat(cat)}
+                    className="w-full flex items-center gap-2 mb-2 py-1"
+                  >
+                    <div className="h-px flex-1" style={{ backgroundColor: "#D6BCAE" }} />
+                    <p className="text-xs font-semibold uppercase tracking-widest px-2 flex items-center gap-1.5" style={{ color: "#8B1D24" }}>
+                      {catLabel}
+                      {hasSelectedInCat && !isOpen && (
+                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: "#8B1D24" }} />
+                      )}
+                    </p>
+                    <div className="h-px flex-1" style={{ backgroundColor: "#D6BCAE" }} />
+                    <span className="text-xs flex-shrink-0 ml-1" style={{ color: "#A08070" }}>
+                      {isOpen ? "▲" : "▼"}
+                    </span>
+                  </button>
 
-                {cat === "ย้อมผม NIGAO" && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg mb-3 text-sm" style={{ backgroundColor: "#FFF0E8", borderLeft: "3px solid #8B1D24" }}>
-                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#8B1D24" }} />
-                    <div style={{ color: "#5C4A42" }}>
-                      <p className="font-medium">{u.nigaoTitle}</p>
-                      <p className="text-xs mt-0.5">{u.nigaoLine2}</p>
-                      <p className="text-xs mt-0.5 opacity-70">{u.nigaoLine3}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid gap-3">
-                  {branchServices
-                    .filter((bs) => bs.service.category === cat)
-                    .map((bs) => {
-                      const isSelected = selectedService?.id === bs.id;
-                      const badgeObj = PACKAGE_BADGES[bs.service.id];
-                      const badge = badgeObj ? (lang === "th" ? badgeObj.th : badgeObj.en) : null;
-                      const svcName = lang === "th" ? bs.service.nameTh : (bs.service.name || bs.service.nameTh);
-                      const svcDesc = lang === "th"
-                        ? bs.service.descriptionTh
-                        : (bs.service.description || bs.service.descriptionTh);
-                      return (
-                        <button
-                          key={bs.id}
-                          onClick={() => setSelectedService(bs)}
-                          className="w-full text-left p-4 rounded-xl border-2 transition-all"
-                          style={isSelected
-                            ? { borderColor: "#8B1D24", backgroundColor: "#8B1D24", color: "white" }
-                            : { borderColor: "#E8D8CC", backgroundColor: "white", color: "#3B2A24" }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-medium">{svcName}</p>
-                                {badge && (
-                                  <span
-                                    className="text-xs px-2 py-0.5 rounded-full"
-                                    style={isSelected
-                                      ? { backgroundColor: "rgba(255,255,255,0.2)", color: "white" }
-                                      : { backgroundColor: "#FFF0E8", color: "#8B1D24" }}
-                                  >
-                                    {badge}
-                                  </span>
-                                )}
-                              </div>
-                              {svcDesc && (
-                                <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#A08070" }}>
-                                  {svcDesc}
-                                </p>
-                              )}
-                              {bs.service.memberPrice && (
-                                <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#8B1D24" }}>
-                                  <Star className="w-3 h-3" />
-                                  {u.memberPrice} {formatPrice(bs.service.memberPrice)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
-                              <p className="text-xs flex items-center gap-1 justify-end mt-0.5" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#A08070" }}>
-                                <Clock className="w-3 h-3" /> {bs.duration} {u.minutes}
-                              </p>
-                            </div>
+                  {isOpen && (
+                    <>
+                      {cat === "ย้อมผม NIGAO" && (
+                        <div className="flex items-start gap-2 p-3 rounded-lg mb-3 text-sm" style={{ backgroundColor: "#FFF0E8", borderLeft: "3px solid #8B1D24" }}>
+                          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#8B1D24" }} />
+                          <div style={{ color: "#5C4A42" }}>
+                            <p className="font-medium">{u.nigaoTitle}</p>
+                            <p className="text-xs mt-0.5">{u.nigaoLine2}</p>
+                            <p className="text-xs mt-0.5 opacity-70">{u.nigaoLine3}</p>
                           </div>
-                        </button>
-                      );
-                    })}
+                        </div>
+                      )}
+
+                      <div className="grid gap-3 mb-4">
+                        {branchServices
+                          .filter((bs) => bs.service.category === cat)
+                          .map((bs) => {
+                            const isSelected = selectedService?.id === bs.id;
+                            const svcName = lang === "th" ? bs.service.nameTh : (bs.service.name || bs.service.nameTh);
+                            const svcDesc = lang === "th"
+                              ? bs.service.descriptionTh
+                              : (bs.service.description || bs.service.descriptionTh);
+                            return (
+                              <button
+                                key={bs.id}
+                                onClick={() => setSelectedService(bs)}
+                                className="w-full text-left p-4 rounded-xl border-2 transition-all"
+                                style={isSelected
+                                  ? { borderColor: "#8B1D24", backgroundColor: "#8B1D24", color: "white" }
+                                  : { borderColor: "#E8D8CC", backgroundColor: "white", color: "#3B2A24" }}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <p className="font-medium">{svcName}</p>
+                                    {svcDesc && (
+                                      <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#A08070" }}>
+                                        {svcDesc}
+                                      </p>
+                                    )}
+                                    {bs.service.memberPrice && (
+                                      <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#8B1D24" }}>
+                                        <Star className="w-3 h-3" />
+                                        {u.memberPrice} {formatPrice(bs.service.memberPrice)}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex-shrink-0 text-right">
+                                    <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
+                                    <p className="text-xs flex items-center gap-1 justify-end mt-0.5" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#A08070" }}>
+                                      <Clock className="w-3 h-3" /> {bs.duration} {u.minutes}
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -728,14 +739,6 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                     <span className="text-sm font-medium" style={{ color: "#3B2A24" }}>{value}</span>
                   </div>
                 ))}
-
-                <hr style={{ borderColor: "#F0E4D8" }} />
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold flex items-center gap-1" style={{ color: "#5C4A42" }}>
-                    <Tag className="w-4 h-4" /> {u.total}
-                  </span>
-                  <span className="font-bold text-xl" style={{ color: "#8B1D24" }}>{formatPrice(grandTotal)}</span>
-                </div>
               </CardContent>
             </Card>
 
@@ -779,7 +782,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
           <div className="mt-6 p-4 rounded-xl flex items-center justify-between text-sm" style={{ backgroundColor: "#FFF0E8" }}>
             <div>
               <p className="font-medium" style={{ color: "#3B2A24" }}>{lang === "th" ? selectedService.service.nameTh : (selectedService.service.name || selectedService.service.nameTh)}</p>
-              <p style={{ color: "#A08070" }}>{selectedService.duration} {u.minutes} · {formatPrice(grandTotal)}</p>
+              <p style={{ color: "#A08070" }}>{selectedService.duration} {u.minutes}</p>
             </div>
             {selectedDate && selectedTime && (
               <Badge style={{ backgroundColor: "#8B1D24", color: "white", border: "none" }}>

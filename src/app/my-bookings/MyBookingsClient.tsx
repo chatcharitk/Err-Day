@@ -33,7 +33,6 @@ interface Booking {
   startTime:  string;
   endTime:    string;
   status:     BookingStatus;
-  totalPrice: number;
   branch:  { id: string; name: string; address: string; phone: string };
   service: { id: string; name: string; nameTh: string; category: string };
   addons:  { addon: { id: string; name: string; nameTh: string } }[];
@@ -71,9 +70,6 @@ function formatDate(iso: string): string {
   });
 }
 
-function formatPrice(satang: number) {
-  return `฿${(satang / 100).toLocaleString()}`;
-}
 
 function isUpcoming(b: Booking): boolean {
   if (b.status === "CANCELLED" || b.status === "COMPLETED" || b.status === "NO_SHOW") return false;
@@ -464,11 +460,6 @@ function BookingCard({
           <Clock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D6BCAE" }} />
           {booking.startTime} — {booking.endTime} น.
         </p>
-      </div>
-
-      <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: "1px solid #F0E4D8" }}>
-        <span className="text-xs" style={{ color: "#A08070" }}>ยอดรวม</span>
-        <span className="font-semibold" style={{ color: "#8B1D24" }}>{formatPrice(booking.totalPrice)}</span>
       </div>
 
       {showActions && (
