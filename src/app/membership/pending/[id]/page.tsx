@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, MapPin, Phone, AlertCircle, CalendarDays } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 export const dynamic = "force-dynamic";
 
 const PRIMARY = "#8B1D24";
@@ -63,14 +64,17 @@ export default async function PendingPage({
   return (
     <main className="min-h-screen" style={{ background: BG }}>
       <div className="max-w-md mx-auto px-5 py-8">
-        <Link
-          href="/membership"
-          className="inline-flex items-center gap-1.5 text-sm mb-6"
-          style={{ color: MUTED }}
-        >
-          <ArrowLeft size={14} />
-          กลับ
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            href="/membership"
+            className="inline-flex items-center gap-1.5 text-sm"
+            style={{ color: MUTED }}
+          >
+            <ArrowLeft size={14} />
+            กลับ
+          </Link>
+          <BrandLogo size="md" />
+        </div>
 
         {isActiveMember ? (
           /* Already paid-up case */
