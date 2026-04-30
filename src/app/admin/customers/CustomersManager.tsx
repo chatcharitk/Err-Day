@@ -604,6 +604,15 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting,          setDeleting]          = useState(false);
 
+  // Load fresh customer data on mount — list items don't carry packages/full detail
+  useEffect(() => {
+    fetch(`/api/admin/customers/${customer.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setCustomer(data); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer.id]);
+
   // Load booking history once on mount
   useEffect(() => {
     fetch(`/api/admin/customers/${customer.id}/bookings`)
