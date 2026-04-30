@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, UserPlus, Sparkles, Star, Repeat, CalendarRange, Check } from "lucide-react";
+import { ArrowLeft, UserPlus, Sparkles, Check } from "lucide-react";
 
 export const metadata = {
   title: "สมาชิก err.day",
@@ -10,33 +10,6 @@ const TEXT    = "#3B2A24";
 const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 const BG      = "#FDF7F2";
-
-const PRODUCTS = [
-  {
-    icon:       Star,
-    name:       "สมาชิกรายเดือน",
-    price:      "฿990",
-    validity:   "30 วัน",
-    perk:       "ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100",
-    highlight:  false,
-  },
-  {
-    icon:       Repeat,
-    name:       "Buffet 30 วัน",
-    price:      "฿3,500",
-    validity:   "30 วัน",
-    perk:       "สระไดร์ไม่จำกัดครั้ง ตลอด 30 วัน",
-    highlight:  true,
-  },
-  {
-    icon:       CalendarRange,
-    name:       "แพ็กเกจ 5 ครั้ง",
-    price:      "฿1,600",
-    validity:   "90 วัน",
-    perk:       "สระไดร์ 5 ครั้ง ใช้ได้ภายใน 90 วัน",
-    highlight:  false,
-  },
-];
 
 const SHARED_PERKS = [
   "ชำระเงินที่หน้าร้านแค่ครั้งเดียว",
@@ -78,43 +51,6 @@ export default function MembershipLandingPage() {
               ลงทะเบียนผ่าน LINE แล้วชำระที่ร้าน
             </p>
           </div>
-        </div>
-
-        {/* Product cards */}
-        <div className="space-y-3 mb-5">
-          {PRODUCTS.map((p) => {
-            const Icon = p.icon;
-            return (
-              <div
-                key={p.name}
-                className="rounded-2xl bg-white p-4 flex items-start gap-3"
-                style={{
-                  border: `1.5px solid ${p.highlight ? PRIMARY : BORDER}`,
-                  background: p.highlight ? "#FFF8F4" : "white",
-                }}
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center mt-0.5"
-                  style={{ background: p.highlight ? PRIMARY : "#FFF0E8", color: p.highlight ? "white" : PRIMARY }}
-                >
-                  <Icon size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="font-semibold text-sm" style={{ color: TEXT }}>{p.name}</p>
-                    <p className="font-bold text-sm" style={{ color: PRIMARY }}>{p.price}</p>
-                  </div>
-                  <p className="text-xs mt-0.5" style={{ color: MUTED }}>{p.perk}</p>
-                  <p
-                    className="text-[10px] mt-0.5 font-medium uppercase tracking-wide"
-                    style={{ color: MUTED }}
-                  >
-                    ใช้ได้ {p.validity}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
         </div>
 
         {/* Shared perks */}
