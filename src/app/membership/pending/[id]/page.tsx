@@ -126,6 +126,25 @@ export default async function PendingPage({
               </div>
             </div>
 
+            {/* Registration ref code — show big so customer can read it out / screenshot */}
+            <div
+              className="rounded-2xl p-5 mb-5 text-center"
+              style={{ background: "#FFF8F4", border: `2px solid ${PRIMARY}` }}
+            >
+              <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: MUTED }}>
+                รหัสอ้างอิง
+              </p>
+              <p
+                className="text-3xl font-bold tracking-[0.15em] mb-1"
+                style={{ color: PRIMARY, fontVariantNumeric: "tabular-nums" }}
+              >
+                {customer.id.slice(-8).toUpperCase()}
+              </p>
+              <p className="text-xs" style={{ color: MUTED }}>
+                แจ้งรหัสนี้กับพนักงานหน้าร้านเพื่อรับบริการ
+              </p>
+            </div>
+
             {/* Customer info card */}
             <div
               className="rounded-2xl bg-white p-5 mb-5"

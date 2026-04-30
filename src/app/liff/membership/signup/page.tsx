@@ -124,7 +124,7 @@ export default function LiffMembershipSignupPage() {
           email:       email.trim() || undefined,
           gender:      gender || undefined,
           pdpaConsent: pdpa,
-          source:      "liff",
+          source:      `liff-${product}`,
           lineUserId:  profile?.userId,
           pictureUrl:  profile?.pictureUrl,
         }),

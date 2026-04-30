@@ -9,7 +9,7 @@ interface SignupBody {
   email?:      string;
   gender?:     string;
   pdpaConsent: boolean;
-  source?:     "signup" | "liff" | "staff" | "booking";
+  source?:     string;  // e.g. "liff-membership" | "liff-buffet" | "liff-5pack" | "signup" | "staff"
   lineUserId?: string;  // provided when signing up via LIFF
   pictureUrl?: string;  // LINE profile picture
 }

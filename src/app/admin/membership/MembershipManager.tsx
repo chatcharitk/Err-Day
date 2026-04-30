@@ -10,6 +10,16 @@ const TEXT    = "#3B2A24";
 const MUTED   = "#A08070";
 const BG      = "#FDF7F2";
 
+// ─── Helpers: product source parsing ─────────────────────────────────────────
+
+/** Maps a pdpaSource string like "liff-buffet" to a { label, addSku } pair. */
+function parseProductSource(source: string): { label: string; addSku: string } {
+  if (source === "liff-buffet"  || source === "buffet")  return { label: "Buffet 30 วัน",     addSku: "svc-buffet" };
+  if (source === "liff-5pack"   || source === "5pack")   return { label: "แพ็กเกจ 5 ครั้ง",   addSku: "svc-pkg5"   };
+  // "liff-membership", "liff", "signup", "staff", or anything else → membership
+  return { label: "สมาชิก 30 วัน", addSku: "svc-membership-30d" };
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface MemberTier {
@@ -308,6 +318,13 @@ function PendingCard({
               <p className="text-xs mt-0.5" style={{ color: MUTED }}>
                 ลงทะเบียน {fmtDateTime(row.consentedAt)}
               </p>
+              {/* Product badge */}
+              <span
+                className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold mt-1"
+                style={{ background: "#FFF0E8", color: PRIMARY }}
+              >
+                {parseProductSource(row.source).label}
+              </span>
             </>
           )}
         </div>
@@ -342,11 +359,14 @@ function PendingCard({
           </>
         ) : (
           <>
-            {/* Go to POS — opens POS with this customer pre-selected */}
+            {/* Go to POS — opens POS with this customer pre-selected + correct product pre-added */}
             <button
-              onClick={() => router.push(
-                `/admin/pos?customerPhone=${encodeURIComponent(row.phone ?? "")}&customerName=${encodeURIComponent(row.name)}`
-              )}
+              onClick={() => {
+                const { addSku } = parseProductSource(row.source);
+                router.push(
+                  `/admin/pos?customerPhone=${encodeURIComponent(row.phone ?? "")}&customerName=${encodeURIComponent(row.name)}&addSku=${encodeURIComponent(addSku)}`
+                );
+              }}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-white"
               style={{ background: PRIMARY }}
             >
@@ -667,8 +687,8 @@ export default function MembershipManager() {
                 <div className="rounded-xl p-3 mb-4 text-xs flex items-start gap-2" style={{ background: "#FFFBEB", color: "#92400e" }}>
                   <Hourglass size={14} className="flex-shrink-0 mt-0.5" />
                   <p>
-                    คนเหล่านี้ลงทะเบียนผ่านหน้าเว็บแล้ว แต่ยังไม่ชำระเงิน — ค้นหาด้วยเบอร์โทรใน POS
-                    เพื่อขายรายการ &ldquo;สมาชิก 30 วัน&rdquo; ฿990 ระบบจะเปิดสมาชิกอัตโนมัติ
+                    คนเหล่านี้ลงทะเบียนผ่านหน้าเว็บแล้ว แต่ยังไม่ชำระเงิน — กดปุ่ม &ldquo;ไปยัง POS&rdquo;
+                    ระบบจะเปิด POS พร้อมเลือกลูกค้าและรายการที่ถูกต้องให้อัตโนมัติ
                   </p>
                 </div>
                 <div className="space-y-2">

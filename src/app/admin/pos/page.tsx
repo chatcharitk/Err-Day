@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 export default async function PosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; bookingId?: string; customerPhone?: string; customerName?: string }>;
+  searchParams: Promise<{ branchId?: string; bookingId?: string; customerPhone?: string; customerName?: string; addSku?: string }>;
 }) {
-  const { branchId, bookingId, customerPhone, customerName } = await searchParams;
+  const { branchId, bookingId, customerPhone, customerName, addSku } = await searchParams;
 
   const branches = await prisma.branch.findMany({
     where: { isActive: true },
@@ -78,6 +78,7 @@ export default async function PosPage({
       addons={addons}
       prefillBooking={prefillBooking}
       prefillCustomer={prefillCustomer}
+      addSku={addSku ?? null}
     />
   );
 }

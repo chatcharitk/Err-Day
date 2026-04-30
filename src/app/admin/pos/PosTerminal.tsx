@@ -62,6 +62,8 @@ interface Props {
   prefillBooking?: PrefillBooking | null;
   /** Pre-select a customer (e.g. from the pending membership tab). */
   prefillCustomer?: PrefillCustomer | null;
+  /** If provided, auto-add the BranchService whose service.id equals this SKU when the terminal loads. */
+  addSku?: string | null;
 }
 
 function formatPrice(satang: number) {
@@ -87,7 +89,7 @@ const CATS_BEFORE_ADDONS = ["Membership", "บริการทั่วไป"
 // Categories rendered AFTER add-ons
 const CATS_AFTER_ADDONS  = ["Davines Spa", "ย้อมผม NIGAO"];
 
-export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer }: Props) {
+export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku }: Props) {
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (prefillBooking) {
       return [{
@@ -158,6 +160,27 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
       })
       .catch(() => { setMemberInfo(null); setActivePackages([]); });
   }, [customer.id, customer.phone]);
+
+  // ── Auto-add a service by SKU (used when navigating from pending membership tab) ──
+  const [autoAdded, setAutoAdded] = useState(false);
+  useEffect(() => {
+    if (!addSku || autoAdded || branchServices.length === 0 || prefillBooking) return;
+    const bs = branchServices.find(s => s.serviceId === addSku);
+    if (!bs) return;
+    setAutoAdded(true);
+    setCart(prev => {
+      if (prev.length > 0) return prev; // don't overwrite if cart already has items
+      const mPrice = getServiceMemberPrice(bs);
+      return [{
+        id:          bs.id,
+        name:        bs.service.nameTh,
+        basePrice:   bs.price,
+        price:       bs.price,
+        qty:         1,
+        memberPrice: mPrice,
+      }];
+    });
+  }, [addSku, autoAdded, branchServices, prefillBooking]);
 
   // ── Re-price cart items when member status changes ──
   useEffect(() => {
