@@ -318,13 +318,22 @@ function PendingCard({
               <p className="text-xs mt-0.5" style={{ color: MUTED }}>
                 ลงทะเบียน {fmtDateTime(row.consentedAt)}
               </p>
-              {/* Product badge */}
-              <span
-                className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold mt-1"
-                style={{ background: "#FFF0E8", color: PRIMARY }}
-              >
-                {parseProductSource(row.source).label}
-              </span>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                {/* Product badge */}
+                <span
+                  className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: "#FFF0E8", color: PRIMARY }}
+                >
+                  {parseProductSource(row.source).label}
+                </span>
+                {/* Ref code */}
+                <span
+                  className="inline-block text-[10px] px-2 py-0.5 rounded-full font-mono font-bold tracking-widest"
+                  style={{ background: "#F3F4F6", color: "#374151" }}
+                >
+                  #{row.id.slice(-8).toUpperCase()}
+                </span>
+              </div>
             </>
           )}
         </div>
