@@ -11,8 +11,9 @@ export const dynamic = "force-dynamic";
  */
 export default async function HomePage() {
   const branches = await prisma.branch.findMany({
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    select:  { id: true, name: true, address: true, phone: true, isActive: true },
+    where:   { isActive: true },                                  // only admin-active branches
+    orderBy: [{ bookingEnabled: "desc" }, { name: "asc" }],      // open branches first
+    select:  { id: true, name: true, address: true, phone: true, bookingEnabled: true },
   });
 
   return <BookCallback branches={branches} />;

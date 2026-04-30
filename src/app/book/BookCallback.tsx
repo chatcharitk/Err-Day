@@ -9,11 +9,11 @@ import { LangSwitcher } from "@/components/LangSwitcher";
 import BrandLogo from "@/components/BrandLogo";
 
 interface Branch {
-  id:       string;
-  name:     string;
-  address:  string;
-  phone?:   string | null;
-  isActive: boolean;
+  id:             string;
+  name:           string;
+  address:        string;
+  phone?:         string | null;
+  bookingEnabled: boolean;
 }
 
 const RETURN_KEY   = "liff_return_to";
@@ -192,7 +192,7 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
 
             <div className="grid gap-4">
               {branches.map((branch) =>
-                branch.isActive ? (
+                branch.bookingEnabled ? (
                   /* ── Open branch ── */
                   <div
                     key={branch.id}

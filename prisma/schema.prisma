@@ -18,7 +18,8 @@ model Branch {
   mapLng    Float?   // Longitude for precise embed pin
   openTime  String?  // Daily open time "HH:mm", e.g. "10:00"
   closeTime String?  // Daily close time "HH:mm", e.g. "20:00"
-  isActive  Boolean  @default(true)
+  isActive        Boolean  @default(true)  // visible in admin panel
+  bookingEnabled  Boolean  @default(true)  // open for customer booking
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
