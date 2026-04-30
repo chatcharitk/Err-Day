@@ -10,12 +10,38 @@ const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 const BG      = "#FDF7F2";
 
+const PRODUCT_INFO: Record<string, { name: string; priceTh: string; validityTh: string; perkTh: string }> = {
+  membership: {
+    name:       "สมาชิกรายเดือน",
+    priceTh:    "฿990",
+    validityTh: "30 วัน",
+    perkTh:     "ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100",
+  },
+  buffet: {
+    name:       "Buffet 30 วัน",
+    priceTh:    "฿3,500",
+    validityTh: "30 วัน",
+    perkTh:     "สระไดร์ไม่จำกัด ตลอด 30 วัน",
+  },
+  "5pack": {
+    name:       "แพ็กเกจ 5 ครั้ง",
+    priceTh:    "฿1,600",
+    validityTh: "90 วัน",
+    perkTh:     "สระไดร์ 5 ครั้ง ใช้ได้ภายใน 90 วัน",
+  },
+};
+
 export default async function PendingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ p?: string }>;
 }) {
   const { id } = await params;
+  const { p } = await searchParams;
+  const productKey = p && PRODUCT_INFO[p] ? p : "membership";
+  const productInfo = PRODUCT_INFO[productKey];
 
   const customer = await prisma.customer.findUnique({
     where: { id },
@@ -26,12 +52,13 @@ export default async function PendingPage({
 
   if (!customer) notFound();
 
-  // If they're already a paid-up member, redirect them to lookup view
+  // Only short-circuit if they signed up for "membership" AND already hold an active one.
+  // Buying a package while you also hold a membership is fine — they stack.
   const m = customer.membership;
   const now = new Date();
   const expired = m?.expiresAt != null && new Date(m.expiresAt) <= now;
   const usedUp  = m && m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-  const isActiveMember = !!m && !expired && !usedUp;
+  const isActiveMember = productKey === "membership" && !!m && !expired && !usedUp;
 
   return (
     <main className="min-h-screen" style={{ background: BG }}>
@@ -75,8 +102,28 @@ export default async function PendingPage({
                 ลงทะเบียนสำเร็จ! 🎉
               </h1>
               <p className="text-sm opacity-90">
-                กรุณาชำระเงิน ฿990 ที่หน้าร้านเพื่อเปิดใช้สมาชิก
+                กรุณาชำระเงิน {productInfo.priceTh} ที่หน้าร้านเพื่อเปิดใช้บริการ
               </p>
+            </div>
+
+            {/* Selected product card */}
+            <div
+              className="rounded-2xl p-4 mb-5 flex items-center gap-3"
+              style={{ background: "#FFF8F4", border: `1.5px solid ${PRIMARY}` }}
+            >
+              <div
+                className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center font-bold"
+                style={{ background: PRIMARY, color: "white" }}
+              >
+                {productInfo.priceTh}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs uppercase tracking-widest font-semibold mb-0.5" style={{ color: PRIMARY }}>
+                  รายการที่เลือก
+                </p>
+                <p className="text-sm font-semibold" style={{ color: TEXT }}>{productInfo.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>{productInfo.perkTh} · ใช้ได้ {productInfo.validityTh}</p>
+              </div>
             </div>
 
             {/* Customer info card */}
@@ -111,8 +158,8 @@ export default async function PendingPage({
                 {[
                   "ไปที่ err.day Salon ทุกสาขา",
                   "แสดงหน้านี้ให้พนักงานเห็น",
-                  "พนักงานจะค้นหาด้วยเบอร์โทร และคิดเงิน ฿990 ผ่านระบบ POS",
-                  "เมื่อชำระเสร็จ สมาชิกจะเริ่มมีผลทันที (ใช้ได้ 30 วัน)",
+                  `พนักงานจะค้นหาด้วยเบอร์โทร และคิดเงิน ${productInfo.priceTh} ผ่านระบบ POS`,
+                  `เมื่อชำระเสร็จ ${productInfo.name} จะเริ่มมีผลทันที (ใช้ได้ ${productInfo.validityTh})`,
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3">
                     <span
@@ -134,7 +181,7 @@ export default async function PendingPage({
             >
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
               <p>
-                สมาชิกจะยังไม่ active จนกว่าจะชำระเงินที่ร้าน — หากเปลี่ยนใจไม่จำเป็นต้องทำอะไร
+                {productInfo.name}จะยังไม่ active จนกว่าจะชำระเงินที่ร้าน — หากเปลี่ยนใจไม่จำเป็นต้องทำอะไร
               </p>
             </div>
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findActivePackages } from "@/lib/packages";
 
 // GET /api/admin/customers/[id] — fetch single customer (for re-loading after mutations)
 export async function GET(
@@ -16,6 +17,8 @@ export async function GET(
       },
     });
     if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const activePackages = await findActivePackages(c.id);
 
     return NextResponse.json({
       id:         c.id,
@@ -37,6 +40,16 @@ export async function GET(
             usagesAllowed: c.membership.usagesAllowed,
           }
         : null,
+      packages: activePackages.map(p => ({
+        id:         p.id,
+        sku:        p.packageSku,
+        nameTh:     p.spec.nameTh,
+        startedAt:  p.startedAt.toISOString(),
+        expiresAt:  p.expiresAt.toISOString(),
+        usagesUsed: p.usagesUsed,
+        usageLimit: p.usageLimit,
+        usagesLeft: p.usagesLeft,
+      })),
       _count: { bookings: c._count.bookings },
     });
   } catch (error) {
@@ -67,6 +80,7 @@ export async function DELETE(
       // MembershipCycle has FK to both membership and customer — delete before membership
       await tx.membershipCycle.deleteMany({ where: { customerId: id } });
       await tx.membership.deleteMany({ where: { customerId: id } });
+      await tx.customerPackage.deleteMany({ where: { customerId: id } });
       await tx.customer.delete({ where: { id } });
     });
 

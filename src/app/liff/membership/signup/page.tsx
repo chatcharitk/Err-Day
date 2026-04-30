@@ -2,8 +2,46 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, CheckCircle2, AlertCircle, Phone, Mail } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Phone, Mail, Star, CalendarRange, Repeat } from "lucide-react";
 import PdpaConsentBlock from "@/components/PdpaConsentBlock";
+
+type ProductKey = "membership" | "buffet" | "5pack";
+
+interface Product {
+  key:        ProductKey;
+  nameTh:     string;
+  priceTh:    string;
+  validityTh: string;
+  perkTh:     string;
+  icon:       React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+}
+
+const PRODUCTS: Product[] = [
+  {
+    key:        "membership",
+    nameTh:     "สมาชิกรายเดือน",
+    priceTh:    "฿990",
+    validityTh: "30 วัน",
+    perkTh:     "ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100",
+    icon:       Star,
+  },
+  {
+    key:        "buffet",
+    nameTh:     "Buffet 30 วัน",
+    priceTh:    "฿3,500",
+    validityTh: "30 วัน",
+    perkTh:     "สระไดร์ไม่จำกัด ตลอด 30 วัน",
+    icon:       Repeat,
+  },
+  {
+    key:        "5pack",
+    nameTh:     "แพ็กเกจ 5 ครั้ง",
+    priceTh:    "฿1,600",
+    validityTh: "90 วัน",
+    perkTh:     "สระไดร์ 5 ครั้ง ใช้ได้ภายใน 90 วัน",
+    icon:       CalendarRange,
+  },
+];
 
 const PRIMARY = "#8B1D24";
 const BORDER  = "#E8D8CC";
@@ -27,6 +65,7 @@ export default function LiffMembershipSignupPage() {
   const [profile,  setProfile]  = useState<LineProfile | null>(null);
 
   // Form state
+  const [product,  setProduct]  = useState<ProductKey>("membership");
   const [name,     setName]     = useState("");
   const [nickname, setNickname] = useState("");
   const [phone,    setPhone]    = useState("");
@@ -34,6 +73,8 @@ export default function LiffMembershipSignupPage() {
   const [gender,   setGender]   = useState("");
   const [pdpa,     setPdpa]     = useState(false);
   const [formErr, setFormErr] = useState("");
+
+  const selectedProduct = PRODUCTS.find(p => p.key === product)!;
 
   // Init LIFF and login
   useEffect(() => {
@@ -96,13 +137,14 @@ export default function LiffMembershipSignupPage() {
         router.replace(`/my-bookings`);
         return;
       }
-      // pending_payment
-      router.replace(`/membership/pending/${data.customerId}`);
+      // pending_payment — pass chosen product as a query param so the pending
+      // page can show the correct product name & price.
+      router.replace(`/membership/pending/${data.customerId}?p=${product}`);
     } catch {
       setFormErr("เกิดข้อผิดพลาด กรุณาลองใหม่");
       setStep("form");
     }
-  }, [name, nickname, phone, email, gender, pdpa, profile, router]);
+  }, [name, nickname, phone, email, gender, pdpa, profile, product, router]);
 
   // ── Loading ──
   if (step === "loading") {
@@ -158,12 +200,52 @@ export default function LiffMembershipSignupPage() {
         )}
 
         <header className="mb-6">
-          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Membership Signup</p>
-          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>สมัครสมาชิก</h1>
+          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Sign up</p>
+          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>เลือกแพ็กเกจของคุณ</h1>
           <p className="text-sm mt-1" style={{ color: MUTED }}>
-            กรอกข้อมูลด้านล่าง — ชำระเงิน ฿990 ที่ร้านเมื่อมาถึง
+            เลือก 1 รายการแล้วกรอกข้อมูล — ชำระเงินที่ร้านเมื่อมาถึง
           </p>
         </header>
+
+        {/* Product picker */}
+        <div className="space-y-2.5 mb-6">
+          {PRODUCTS.map(p => {
+            const isSelected = product === p.key;
+            const Icon = p.icon;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setProduct(p.key)}
+                className="w-full text-left rounded-2xl border-2 p-3.5 transition-all flex items-start gap-3"
+                style={{
+                  borderColor: isSelected ? PRIMARY : BORDER,
+                  background:  isSelected ? "#FFF8F4" : "white",
+                }}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center"
+                  style={{
+                    background: isSelected ? PRIMARY : "#FFF0E8",
+                    color:      isSelected ? "white"  : PRIMARY,
+                  }}
+                >
+                  <Icon size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="font-semibold text-sm" style={{ color: TEXT }}>{p.nameTh}</p>
+                    <p className="font-bold text-sm" style={{ color: PRIMARY }}>{p.priceTh}</p>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: MUTED }}>{p.perkTh}</p>
+                  <p className="text-[10px] mt-0.5 font-medium uppercase tracking-wide" style={{ color: MUTED }}>
+                    ใช้ได้ {p.validityTh}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
@@ -264,7 +346,9 @@ export default function LiffMembershipSignupPage() {
             style={{ background: PRIMARY }}
           >
             {step === "submitting" && <Loader2 size={16} className="animate-spin" />}
-            {step === "submitting" ? "กำลังลงทะเบียน..." : "ลงทะเบียน — ชำระที่ร้าน ฿990"}
+            {step === "submitting"
+              ? "กำลังลงทะเบียน..."
+              : `ลงทะเบียน — ชำระที่ร้าน ${selectedProduct.priceTh}`}
           </button>
 
           <p className="text-xs text-center" style={{ color: MUTED }}>

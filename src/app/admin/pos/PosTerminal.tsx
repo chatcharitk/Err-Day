@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag } from "lucide-react";
+import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
@@ -11,11 +11,26 @@ interface CartItem {
   id: string;
   name: string;
   basePrice: number;      // original price before any discount (satang)
-  price: number;          // actual price (may be member-discounted) (satang)
+  price: number;          // actual price (may be member-discounted or 0 from package) (satang)
   qty: number;
   /** The price to use when member is active (satang). Equals basePrice if no discount. */
   memberPrice: number;
   isCustom?: boolean;
+  /** When set, this item is being redeemed against an active package (free). */
+  redeemPackageId?: string;
+  /** When redeemed, label of the package (e.g. "Buffet 30 วัน"). Shown in cart row. */
+  redeemPackageName?: string;
+}
+
+interface ActivePackage {
+  id:               string;
+  sku:              string;
+  nameTh:           string;
+  coversServiceIds: string[];
+  expiresAt:        string;
+  usagesUsed:       number;
+  usageLimit:       number;
+  usagesLeft:       number | null;
 }
 
 interface PrefillBooking {
@@ -99,6 +114,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
   const [fromBookingId] = useState<string | null>(prefillBooking?.id ?? null);
   const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null);
+  const [activePackages, setActivePackages] = useState<ActivePackage[]>([]);
 
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -114,6 +130,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const clearCustomer = () => {
     setCustomer({ id: null, name: "", phone: "" });
     setMemberInfo(null);
+    setActivePackages([]);
   };
 
   // ── Fetch membership whenever a known customer is selected ──
@@ -125,17 +142,21 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
     fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (!data?.membership) { setMemberInfo(null); return; }
-        const m = data.membership;
-        // Validity: membership exists + not expired + not used up
-        // Note: pct check intentionally excluded — discount varies per service
-        const expired = m.expiresAt && new Date(m.expiresAt) <= new Date();
-        const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-        const valid   = !expired && !usedUp;
-        const tierPct: number = m.tier?.discountPercent ?? 0;
-        setMemberInfo({ label: m.label ?? "สมาชิก", isValid: valid, tierDiscountPct: tierPct });
+        // Membership block
+        if (data?.membership) {
+          const m = data.membership;
+          const expired = m.expiresAt && new Date(m.expiresAt) <= new Date();
+          const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
+          const valid   = !expired && !usedUp;
+          const tierPct: number = m.tier?.discountPercent ?? 0;
+          setMemberInfo({ label: m.label ?? "สมาชิก", isValid: valid, tierDiscountPct: tierPct });
+        } else {
+          setMemberInfo(null);
+        }
+        // Packages block
+        setActivePackages(Array.isArray(data?.packages) ? data.packages : []);
       })
-      .catch(() => setMemberInfo(null));
+      .catch(() => { setMemberInfo(null); setActivePackages([]); });
   }, [customer.id, customer.phone]);
 
   // ── Re-price cart items when member status changes ──
@@ -143,6 +164,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
     const active = memberInfo?.isValid ?? false;
     setCart(prev => prev.map(item => {
       if (item.isCustom) return item;
+      if (item.redeemPackageId) return item; // redemption stays at ฿0
       return { ...item, price: active ? item.memberPrice : item.basePrice };
     }));
   }, [memberInfo]);
@@ -158,19 +180,45 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const memberActive = memberInfo?.isValid ?? false;
 
+  /**
+   * Pick the active package most-eligible to redeem against this service.
+   * Already-claimed packages in the current cart are NOT picked again unless
+   * they have remaining capacity (each line redeems exactly 1 usage).
+   */
+  function pickPackageFor(bs: BS, currentCart: CartItem[]): ActivePackage | null {
+    const candidates = activePackages
+      .filter(p => p.coversServiceIds.includes(bs.serviceId))
+      .filter(p => {
+        if (p.usageLimit === 0) return true; // unlimited
+        const claimedHere = currentCart.filter(c => c.redeemPackageId === p.id).length;
+        const remaining = (p.usagesLeft ?? 0) - claimedHere;
+        return remaining > 0;
+      })
+      .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
+    return candidates[0] ?? null;
+  }
+
   // ── Cart operations ──
   const addService = (bs: BS) => {
     const mPrice = getServiceMemberPrice(bs);
     setCart(prev => {
-      const existing = prev.find(i => i.id === bs.id);
-      if (existing) return prev.map(i => i.id === bs.id ? { ...i, qty: i.qty + 1 } : i);
+      const pkg = pickPackageFor(bs, prev);
+      // Cart row id includes redemption marker so two redemptions are separate lines
+      const rowId = pkg ? `${bs.id}__pkg-${pkg.id}-${prev.length}` : bs.id;
+      // Stack qty for non-redemption lines only
+      if (!pkg) {
+        const existing = prev.find(i => i.id === bs.id && !i.redeemPackageId);
+        if (existing) return prev.map(i => i.id === bs.id && !i.redeemPackageId ? { ...i, qty: i.qty + 1 } : i);
+      }
       return [...prev, {
-        id: bs.id,
+        id: rowId,
         name: bs.service.nameTh,
         basePrice: bs.price,
-        price: memberActive ? mPrice : bs.price,
+        price: pkg ? 0 : (memberActive ? mPrice : bs.price),
         qty: 1,
         memberPrice: mPrice,
+        redeemPackageId:   pkg?.id,
+        redeemPackageName: pkg?.nameTh,
       }];
     });
   };
@@ -212,6 +260,19 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
   const removeItem = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
 
+  /** Cancel a package redemption on a cart row — restore normal pricing. */
+  const undoRedemption = (id: string) => {
+    setCart(prev => prev.map(i => {
+      if (i.id !== id) return i;
+      return {
+        ...i,
+        price: memberActive ? i.memberPrice : i.basePrice,
+        redeemPackageId:   undefined,
+        redeemPackageName: undefined,
+      };
+    }));
+  };
+
   const checkout = async () => {
     if (cart.length === 0 || !customerName.trim()) return;
     setLoading(true);
@@ -225,14 +286,21 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || undefined,
           items: cart.flatMap(i =>
-            Array.from({ length: i.qty }, () => ({
-              name:      i.name,
-              price:     i.price,
-              // For service items, `i.id` is the BranchService.id — the API will
-              // resolve it to a serviceId. Add-ons / custom items have prefixed ids.
-              branchServiceId: !i.isCustom && !i.id.startsWith("addon-") && !i.id.startsWith("prefill-")
-                ? i.id : undefined,
-            }))
+            Array.from({ length: i.qty }, () => {
+              // Strip any redemption marker suffix from the row id to recover
+              // the underlying BranchService.id for the API.
+              const baseId = i.id.split("__")[0];
+              const isService = !i.isCustom
+                && !baseId.startsWith("addon-")
+                && !baseId.startsWith("prefill-")
+                && !baseId.startsWith("custom-");
+              return {
+                name:            i.name,
+                price:           i.price,
+                branchServiceId: isService ? baseId : undefined,
+                redeemPackageId: i.redeemPackageId,
+              };
+            }),
           ),
           ...(fromBookingId ? { fromBookingId } : {}),
         }),
@@ -268,7 +336,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         </div>
         <div className="grid grid-cols-2 gap-2">
           {items.map(bs => {
-            const inCart = cart.some(i => i.id === bs.id);
+            const inCart = cart.some(i => i.id === bs.id || i.id.startsWith(`${bs.id}__`));
             const memberPriceNet = getServiceMemberPrice(bs);
             const discPrice = memberActive ? memberPriceNet : bs.price;
             const hasDiscount = memberActive && memberPriceNet < bs.price;
@@ -462,6 +530,17 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 </p>
               </div>
             )}
+
+            {/* Active packages banner */}
+            {activePackages.map(p => (
+              <div key={p.id} className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl"
+                style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+                <PackageIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#2563EB" }} />
+                <p className="text-xs font-semibold flex-1" style={{ color: "#1E40AF" }}>
+                  {p.nameTh} {p.usagesLeft !== null ? `· เหลือ ${p.usagesLeft}/${p.usageLimit} ครั้ง` : "· ไม่จำกัด"}
+                </p>
+              </div>
+            ))}
           </div>
 
           {/* Cart items */}
@@ -477,9 +556,27 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
             ) : (
               <div className="space-y-2">
                 {cart.map(item => (
-                  <div key={item.id} className="p-3 rounded-xl" style={{ backgroundColor: "#F9F4F0" }}>
+                  <div key={item.id} className="p-3 rounded-xl" style={{ backgroundColor: item.redeemPackageId ? "#EFF6FF" : "#F9F4F0" }}>
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium leading-tight flex-1" style={{ color: "#3B2A24" }}>{item.name}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium leading-tight" style={{ color: "#3B2A24" }}>{item.name}</p>
+                        {item.redeemPackageId && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <PackageIcon className="w-3 h-3" style={{ color: "#2563EB" }} />
+                            <p className="text-[10px] font-semibold" style={{ color: "#2563EB" }}>
+                              ใช้สิทธิ์ {item.redeemPackageName} — ฟรี
+                            </p>
+                            <button
+                              onClick={() => undoRedemption(item.id)}
+                              className="text-[10px] underline ml-1"
+                              style={{ color: "#6B5245" }}
+                              title="ไม่ใช้สิทธิ์ — คิดราคาปกติ"
+                            >
+                              ไม่ใช้สิทธิ์
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button onClick={() => removeItem(item.id)} style={{ color: "#C4B0A4" }}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -517,13 +614,31 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
           {/* Total + Checkout */}
           <div className="px-5 py-5" style={{ borderTop: "1px solid #F0E4D8" }}>
-            {/* Show savings when member discount applied */}
-            {memberActive && cart.some(i => i.price < i.basePrice) && (
-              <div className="flex justify-between text-xs mb-2" style={{ color: "#16a34a" }}>
-                <span>ส่วนลดสมาชิก</span>
-                <span>-{formatPrice(cart.reduce((s, i) => s + (i.basePrice - i.price) * i.qty, 0))}</span>
-              </div>
-            )}
+            {/* Savings — split between package redemption and member discount */}
+            {(() => {
+              const packageSavings = cart
+                .filter(i => i.redeemPackageId)
+                .reduce((s, i) => s + i.basePrice * i.qty, 0);
+              const memberSavings = cart
+                .filter(i => !i.redeemPackageId && !i.isCustom && i.price < i.basePrice)
+                .reduce((s, i) => s + (i.basePrice - i.price) * i.qty, 0);
+              return (
+                <>
+                  {packageSavings > 0 && (
+                    <div className="flex justify-between text-xs mb-1.5" style={{ color: "#2563EB" }}>
+                      <span>ใช้สิทธิ์แพ็กเกจ</span>
+                      <span>-{formatPrice(packageSavings)}</span>
+                    </div>
+                  )}
+                  {memberSavings > 0 && (
+                    <div className="flex justify-between text-xs mb-1.5" style={{ color: "#16a34a" }}>
+                      <span>ส่วนลดสมาชิก</span>
+                      <span>-{formatPrice(memberSavings)}</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             <div className="flex justify-between items-center mb-4">
               <span className="font-medium" style={{ color: "#5C4A42" }}>ยอดรวมทั้งหมด</span>
               <span className="font-bold text-2xl" style={{ color: "#8B1D24" }}>{formatPrice(total)}</span>

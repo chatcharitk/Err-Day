@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MEMBERSHIP_SKU, activateOrRenewMembership } from "@/lib/membership";
+import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
 
 interface SaleItem {
   name:             string;
   price:            number;
   branchServiceId?: string; // for service items, the BranchService row id
+  /** When set, this item was redeemed against an active package and was free. */
+  redeemPackageId?: string;
 }
 
 export async function POST(request: Request) {
@@ -47,9 +50,10 @@ export async function POST(request: Request) {
       .join("\n");
     const fullNotes = [itemSummary, notes].filter(Boolean).join("\n---\n");
 
-    // ── Detect membership SKU in cart ──────────────────────────────────
+    // ── Detect membership / package SKUs in cart ───────────────────────
     // We resolve serviceIds from the BranchService rows referenced in items.
     let membershipItem: { branchServiceId: string; price: number } | null = null;
+    const packageItems: { branchServiceId: string; serviceId: string; price: number }[] = [];
     const branchServiceIds = items
       .map(i => i.branchServiceId)
       .filter((x): x is string => !!x);
@@ -61,12 +65,21 @@ export async function POST(request: Request) {
       });
       const bsMap = new Map(bsRows.map(r => [r.id, r.serviceId]));
       for (const it of items) {
-        if (it.branchServiceId && bsMap.get(it.branchServiceId) === MEMBERSHIP_SKU) {
-          membershipItem = { branchServiceId: it.branchServiceId, price: it.price };
-          break;
+        if (!it.branchServiceId) continue;
+        const svcId = bsMap.get(it.branchServiceId);
+        if (!svcId) continue;
+        if (svcId === MEMBERSHIP_SKU) {
+          if (!membershipItem) membershipItem = { branchServiceId: it.branchServiceId, price: it.price };
+        } else if (isPackageSku(svcId)) {
+          packageItems.push({ branchServiceId: it.branchServiceId, serviceId: svcId, price: it.price });
         }
       }
     }
+
+    // Collect package redemptions to apply (one per item line that flagged itself)
+    const redemptionIds = items
+      .map(i => i.redeemPackageId)
+      .filter((x): x is string => !!x);
 
     // ── If continuing from a booking ───────────────────────────────────
     if (fromBookingId) {
@@ -93,6 +106,22 @@ export async function POST(request: Request) {
           paymentMethod: "POS",
           bookingId:     booking.id,
         });
+      }
+
+      // Activate any package SKUs in the cart
+      for (const p of packageItems) {
+        await activatePackage({
+          customerId:    booking.customerId,
+          packageSku:    p.serviceId,
+          paidAmount:    p.price,
+          paymentMethod: "POS",
+          bookingId:     booking.id,
+        });
+      }
+
+      // Apply any package redemptions flagged by the cart
+      for (const rid of redemptionIds) {
+        await redeemPackage(rid);
       }
 
       return NextResponse.json(booking, { status: 200 });
@@ -137,6 +166,20 @@ export async function POST(request: Request) {
         paymentMethod: "POS",
         bookingId:     booking.id,
       });
+    }
+
+    for (const p of packageItems) {
+      await activatePackage({
+        customerId:    customer.id,
+        packageSku:    p.serviceId,
+        paidAmount:    p.price,
+        paymentMethod: "POS",
+        bookingId:     booking.id,
+      });
+    }
+
+    for (const rid of redemptionIds) {
+      await redeemPackage(rid);
     }
 
     return NextResponse.json(booking, { status: 201 });

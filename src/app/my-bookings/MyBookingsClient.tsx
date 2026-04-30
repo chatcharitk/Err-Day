@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, X, Edit3, Trash2, Check, AlertCircle, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Calendar } from "@/components/ui/calendar";
-import { UserCheck, CreditCard as CardIcon } from "lucide-react";
+import { UserCheck, CreditCard as CardIcon, Package as PackageIcon } from "lucide-react";
 
 const ALL_SLOTS = [
   "10:00","10:30","11:00","11:30","12:00","12:30",
@@ -23,6 +23,22 @@ interface MembershipStatus {
   usagesAllowed:     number;
   isExpired:         boolean;
   isUsagesExhausted: boolean;
+}
+
+interface ActivePackage {
+  id:         string;
+  sku:        string;
+  nameTh:     string;
+  startedAt:  string;
+  expiresAt:  string;
+  usagesUsed: number;
+  usageLimit: number;
+  usagesLeft: number | null; // null = unlimited
+}
+
+interface EntitlementsPayload {
+  membership: MembershipStatus | null;
+  packages:   ActivePackage[];
 }
 
 interface Booking {
@@ -81,7 +97,7 @@ function isUpcoming(b: Booking): boolean {
 export default function MyBookingsClient() {
   const liff = useLiff();
   const [bookings,    setBookings]    = useState<Booking[] | null>(null);
-  const [membership,  setMembership]  = useState<MembershipStatus | null | "none">(null);
+  const [entitlements, setEntitlements] = useState<EntitlementsPayload | "none" | null>(null);
   const [branches,    setBranches]    = useState<Branch[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [editing,     setEditing]     = useState<Booking | null>(null);
@@ -100,9 +116,23 @@ export default function MyBookingsClient() {
       setBookings(data.bookings ?? []);
       setBranches(branchData);
       if (membershipRes.ok) {
-        setMembership(await membershipRes.json());
+        const payload = await membershipRes.json();
+        setEntitlements({
+          membership: payload.membership ?? null,
+          packages:   payload.packages   ?? [],
+        });
       } else {
-        setMembership("none");
+        // 404 may still carry packages array; try parsing
+        try {
+          const payload = await membershipRes.json();
+          if (Array.isArray(payload.packages) && payload.packages.length > 0) {
+            setEntitlements({ membership: null, packages: payload.packages });
+          } else {
+            setEntitlements("none");
+          }
+        } catch {
+          setEntitlements("none");
+        }
       }
     } catch (e) {
       console.error(e);
@@ -216,10 +246,8 @@ export default function MyBookingsClient() {
           </div>
         )}
 
-        {/* Membership status card */}
-        {membership !== null && (
-          <MembershipCard membership={membership} />
-        )}
+        {/* Entitlements: membership + packages */}
+        {entitlements !== null && <EntitlementCards data={entitlements} />}
 
         {bookings === null || loading ? (
           <div className="text-center py-16">
@@ -316,9 +344,9 @@ export default function MyBookingsClient() {
   );
 }
 
-// ── Membership card ───────────────────────────────────────────────────────────
-function MembershipCard({ membership }: { membership: MembershipStatus | "none" }) {
-  if (membership === "none") {
+// ── Entitlement cards (membership + packages) ────────────────────────────────
+function EntitlementCards({ data }: { data: EntitlementsPayload | "none" }) {
+  if (data === "none") {
     return (
       <div
         className="rounded-2xl mb-6 p-4 flex items-center gap-3"
@@ -326,8 +354,8 @@ function MembershipCard({ membership }: { membership: MembershipStatus | "none" 
       >
         <CardIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#D6BCAE" }} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>ยังไม่ได้เป็นสมาชิก</p>
-          <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>สมัครสมาชิกรับสิทธิ์ราคาพิเศษ 30 วัน เพียง ฿990</p>
+          <p className="text-sm font-medium" style={{ color: "#3B2A24" }}>ยังไม่มีสมาชิกหรือแพ็กเกจ</p>
+          <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>สมัครเพื่อรับสิทธิประโยชน์ — เริ่มต้น ฿990</p>
         </div>
         <a
           href="/liff/membership/signup"
@@ -340,17 +368,26 @@ function MembershipCard({ membership }: { membership: MembershipStatus | "none" 
     );
   }
 
-  const isActive = !membership.isExpired && !membership.isUsagesExhausted;
-  const expiresDate = membership.expiresAt
-    ? new Date(membership.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
+  return (
+    <div className="space-y-2.5 mb-6">
+      {data.membership && <MembershipCard m={data.membership} />}
+      {data.packages.map(p => <PackageCard key={p.id} pkg={p} />)}
+    </div>
+  );
+}
+
+function MembershipCard({ m }: { m: MembershipStatus }) {
+  const isActive = !m.isExpired && !m.isUsagesExhausted;
+  const expiresDate = m.expiresAt
+    ? new Date(m.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
     : null;
-  const usagesLeft = membership.usagesAllowed > 0
-    ? Math.max(0, membership.usagesAllowed - membership.usagesUsed)
+  const usagesLeft = m.usagesAllowed > 0
+    ? Math.max(0, m.usagesAllowed - m.usagesUsed)
     : null;
 
   return (
     <div
-      className="rounded-2xl mb-6 p-4"
+      className="rounded-2xl p-4"
       style={{
         background: isActive ? "#ECFDF5" : "#FEF2F2",
         border: `1.5px solid ${isActive ? "#BBF7D0" : "#FECACA"}`,
@@ -361,7 +398,7 @@ function MembershipCard({ membership }: { membership: MembershipStatus | "none" 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-bold" style={{ color: isActive ? "#065F46" : "#991B1B" }}>
-              {membership.label}
+              {m.label}
             </p>
             <span
               className="text-xs px-2 py-0.5 rounded-full font-medium"
@@ -370,16 +407,48 @@ function MembershipCard({ membership }: { membership: MembershipStatus | "none" 
                 : { background: "#FEE2E2", color: "#991B1B" }
               }
             >
-              {membership.isExpired ? "หมดอายุ" : membership.isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
+              {m.isExpired ? "หมดอายุ" : m.isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
             </span>
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs flex-wrap" style={{ color: isActive ? "#059669" : "#DC2626" }}>
-            {expiresDate && (
-              <span>หมดอายุ {expiresDate}</span>
-            )}
+            {expiresDate && <span>หมดอายุ {expiresDate}</span>}
             {!expiresDate && <span>ไม่หมดอายุ</span>}
             {usagesLeft !== null && (
-              <span>· เหลือ {usagesLeft}/{membership.usagesAllowed} ครั้ง</span>
+              <span>· เหลือ {usagesLeft}/{m.usagesAllowed} ครั้ง</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PackageCard({ pkg }: { pkg: ActivePackage }) {
+  const expiresDate = new Date(pkg.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  const daysLeft = Math.max(0, Math.ceil((new Date(pkg.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{ background: "#EFF6FF", border: "1.5px solid #BFDBFE" }}
+    >
+      <div className="flex items-center gap-3">
+        <PackageIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#2563EB" }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold" style={{ color: "#1E3A8A" }}>{pkg.nameTh}</p>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ background: "#DBEAFE", color: "#1E40AF" }}
+            >
+              ใช้งานได้
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs flex-wrap" style={{ color: "#2563EB" }}>
+            <span>เหลือ {daysLeft} วัน · หมดอายุ {expiresDate}</span>
+            {pkg.usagesLeft !== null ? (
+              <span>· เหลือ {pkg.usagesLeft}/{pkg.usageLimit} ครั้ง</span>
+            ) : (
+              <span>· ใช้แล้ว {pkg.usagesUsed} ครั้ง (ไม่จำกัด)</span>
             )}
           </div>
         </div>

@@ -19,6 +19,17 @@ interface MembershipInfo {
   usagesAllowed: number;
 }
 
+interface PackageInfo {
+  id:         string;
+  sku:        string;
+  nameTh:     string;
+  startedAt:  string;
+  expiresAt:  string;
+  usagesUsed: number;
+  usageLimit: number;
+  usagesLeft: number | null;
+}
+
 interface Customer {
   id:         string;
   name:       string;
@@ -30,6 +41,7 @@ interface Customer {
   lineUserId: string | null;
   createdAt:  string;
   membership: MembershipInfo | null;
+  packages?:  PackageInfo[];
   _count:     { bookings: number };
 }
 
@@ -516,6 +528,57 @@ function MembershipSection({
   );
 }
 
+// ─── Packages section (used inside CustomerDetailModal) ──────────────────────
+
+function PackagesSection({ customer }: { customer: Customer }) {
+  const pkgs = customer.packages ?? [];
+
+  return (
+    <section>
+      <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: PRIMARY }}>
+        แพ็กเกจที่ใช้งานได้
+      </h3>
+      {pkgs.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed p-4 text-center" style={{ borderColor: BORDER, color: MUTED }}>
+          <p className="text-sm font-medium">ยังไม่มีแพ็กเกจที่ใช้งานได้</p>
+          <p className="text-xs mt-1">แพ็กเกจจะถูกเปิดใช้อัตโนมัติเมื่อขายผ่าน POS</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {pkgs.map(p => {
+            const expiresLabel = new Date(p.expiresAt).toLocaleDateString("th-TH", {
+              day: "numeric", month: "short", year: "numeric",
+            });
+            const daysLeft = Math.max(0, Math.ceil((new Date(p.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+            return (
+              <div
+                key={p.id}
+                className="rounded-xl border p-4"
+                style={{ borderColor: "#BFDBFE", background: "#EFF6FF" }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-semibold text-sm" style={{ color: "#1E3A8A" }}>{p.nameTh}</p>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#DBEAFE", color: "#1E40AF" }}>
+                    ใช้งานได้
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs" style={{ color: "#3B5998" }}>
+                  <span>หมดอายุ <strong style={{ color: "#1E3A8A" }}>{expiresLabel}</strong> ({daysLeft} วัน)</span>
+                  <span>
+                    {p.usagesLeft !== null
+                      ? <>เหลือ <strong style={{ color: "#1E3A8A" }}>{p.usagesLeft}/{p.usageLimit}</strong> ครั้ง</>
+                      : <>ใช้แล้ว <strong style={{ color: "#1E3A8A" }}>{p.usagesUsed}</strong> ครั้ง (ไม่จำกัด)</>}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Customer Detail Modal — the big one ─────────────────────────────────────
 
 function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }: {
@@ -817,6 +880,9 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
 
             {/* ── Membership Status ── */}
             <MembershipSection customer={customer} onUpdated={c => { setCustomer(c); onSaved(c); }} />
+
+            {/* ── Active Packages ── */}
+            <PackagesSection customer={customer} />
 
             {/* ── Upcoming Bookings ── */}
             <section>

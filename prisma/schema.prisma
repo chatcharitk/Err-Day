@@ -109,6 +109,7 @@ model Customer {
   bookings        Booking[]
   membership      Membership?
   membershipCycles MembershipCycle[]
+  packages        CustomerPackage[]
 }
 
 model MembershipTier {
@@ -164,6 +165,28 @@ model MembershipCycle {
 
   @@index([customerId, startedAt])
   @@index([membershipId])
+}
+
+/// One row per package purchase (Buffet 30d / 5-pack 90d).
+/// Each customer can hold multiple active packages; redemption decrements usagesUsed.
+model CustomerPackage {
+  id            String    @id @default(cuid())
+  customerId    String
+  packageSku    String    // e.g. "svc-buffet" | "svc-pkg5"
+  startedAt     DateTime  @default(now())
+  expiresAt     DateTime
+  usagesUsed    Int       @default(0)
+  usageLimit    Int       // 0 = unlimited (buffet), positive = capped (5-pack)
+  paidAmount    Int       @default(0)        // satang
+  paymentMethod String?   // "POS" | "Manual"
+  bookingId     String?   // POS Booking that activated this package
+  closedAt      DateTime? // set when manually cancelled
+  notes         String?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, packageSku])
+  @@index([expiresAt])
 }
 
 model ServiceAddon {

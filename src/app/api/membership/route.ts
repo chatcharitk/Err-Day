@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findActivePackages } from "@/lib/packages";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,7 +22,22 @@ export async function GET(request: Request) {
   });
 
   if (!customer) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json(customer);
+
+  const activePackages = await findActivePackages(customer.id);
+  return NextResponse.json({
+    ...customer,
+    packages: activePackages.map(p => ({
+      id:               p.id,
+      sku:              p.packageSku,
+      nameTh:           p.spec.nameTh,
+      coversServiceIds: p.spec.coversServiceIds,
+      startedAt:        p.startedAt.toISOString(),
+      expiresAt:        p.expiresAt.toISOString(),
+      usagesUsed:       p.usagesUsed,
+      usageLimit:       p.usageLimit,
+      usagesLeft:       p.usagesLeft,
+    })),
+  });
 }
 
 export async function POST(request: Request) {
