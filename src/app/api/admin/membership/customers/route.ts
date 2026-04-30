@@ -66,11 +66,19 @@ export async function GET() {
     })
   );
 
-  // ── Pending signups (PDPA consent given, no membership yet) ─────────
+  // ── Pending signups (PDPA consent given, no active membership or package) ──
+  const now = new Date();
   const pendingCustomers = await prisma.customer.findMany({
     where: {
       pdpaConsentAt: { not: null },
       membership:    null,
+      // Also exclude customers who have already purchased an active package
+      packages: {
+        none: {
+          closedAt:  null,
+          expiresAt: { gt: now },
+        },
+      },
     },
     orderBy: { pdpaConsentAt: "desc" },
     select: {
