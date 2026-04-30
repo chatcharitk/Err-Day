@@ -109,3 +109,17 @@ export async function isValidSessionToken(token: string): Promise<boolean> {
   if (!session.user.isActive) return false;
   return true;
 }
+
+/** Throw-style guard for API routes that require an authenticated admin. */
+export async function requireAdmin(): Promise<CurrentAdmin> {
+  const me = await getCurrentAdmin();
+  if (!me) throw new Response("Unauthorized", { status: 401 });
+  return me;
+}
+
+/** Throw-style guard for OWNER-only API routes. */
+export async function requireOwner(): Promise<CurrentAdmin> {
+  const me = await requireAdmin();
+  if (me.role !== "OWNER") throw new Response("Forbidden", { status: 403 });
+  return me;
+}

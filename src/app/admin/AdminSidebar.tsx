@@ -14,27 +14,35 @@ import {
   Scissors,
   CreditCard,
   Settings,
+  ShieldCheck,
   ArrowLeft,
   LogOut,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const MENU = [
-  { href: "/admin",            labelTh: "ภาพรวม",        label: "Dashboard",    icon: LayoutDashboard, exact: true },
-  { href: "/admin/pos",        labelTh: "POS",            label: "POS",          icon: ShoppingCart },
-  { href: "/admin/calendar",   labelTh: "ปฏิทิน",        label: "Calendar",     icon: Calendar },
-  { href: "/admin/customers",  labelTh: "ลูกค้า",         label: "Customers",    icon: Users },
-  { href: "/admin/history",    labelTh: "ประวัติการขาย",  label: "Sales History", icon: History },
-  { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard },
-  { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog },
-  { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock },
-  { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors },
-  { href: "/admin/settings",  labelTh: "ตั้งค่าร้าน",    label: "Shop Settings", icon: Settings },
+  { href: "/admin",            labelTh: "ภาพรวม",        label: "Dashboard",    icon: LayoutDashboard, exact: true,             ownerOnly: false },
+  { href: "/admin/pos",        labelTh: "POS",            label: "POS",          icon: ShoppingCart,                              ownerOnly: false },
+  { href: "/admin/calendar",   labelTh: "ปฏิทิน",        label: "Calendar",     icon: Calendar,                                   ownerOnly: false },
+  { href: "/admin/customers",  labelTh: "ลูกค้า",         label: "Customers",    icon: Users,                                     ownerOnly: false },
+  { href: "/admin/history",    labelTh: "ประวัติการขาย",  label: "Sales History", icon: History,                                  ownerOnly: false },
+  { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard,                                 ownerOnly: false },
+  { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog,                                    ownerOnly: false },
+  { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock,                              ownerOnly: false },
+  { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors,                                   ownerOnly: false },
+  { href: "/admin/settings",   labelTh: "ตั้งค่าร้าน",    label: "Shop Settings",icon: Settings,                                   ownerOnly: false },
+  { href: "/admin/users",      labelTh: "จัดการผู้ใช้",   label: "Users",        icon: ShieldCheck,                                ownerOnly: true  },
 ];
 
-export default function AdminSidebar() {
+interface AdminSidebarProps {
+  role?: "OWNER" | "ADMIN";
+  name?: string;
+}
+
+export default function AdminSidebar({ role = "ADMIN", name }: AdminSidebarProps) {
   const pathname = usePathname();
   const router   = useRouter();
+  const visibleMenu = MENU.filter((m) => !m.ownerOnly || role === "OWNER");
 
   const handleLogout = async () => {
     await fetch("/api/admin/auth/logout", { method: "POST" });
@@ -55,7 +63,7 @@ export default function AdminSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-3">
-        {MENU.map(({ href, label, labelTh, icon: Icon, exact }) => {
+        {visibleMenu.map(({ href, label, labelTh, icon: Icon, exact }) => {
           const isActive = exact ? pathname === href : pathname.startsWith(href);
           return (
             <Link
@@ -86,6 +94,13 @@ export default function AdminSidebar() {
 
       {/* Footer */}
       <div className="px-5 py-4 space-y-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        {name && (
+          <p className="text-xs mb-1" style={{ color: "rgba(255,255,255,0.7)" }}>
+            <span className="opacity-50">เข้าสู่ระบบในชื่อ </span>
+            <span className="font-medium">{name}</span>
+            <span className="opacity-40 ml-1">({role})</span>
+          </p>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-80 w-full"
