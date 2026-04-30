@@ -248,23 +248,24 @@ function PendingCard({
   deleting,
 }: {
   row:      PendingRow;
-  onEdit:   (id: string, data: { name: string; phone: string; email: string }) => Promise<void>;
+  onEdit:   (id: string, data: { name: string; phone: string; email: string; pdpaSource: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   deleting: boolean;
 }) {
   const router = useRouter();
-  const [editing,  setEditing]  = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [editName, setEditName] = useState(row.name);
+  const [editing,   setEditing]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [editName,  setEditName]  = useState(row.name);
   const [editPhone, setEditPhone] = useState(row.phone ?? "");
   const [editEmail, setEditEmail] = useState(row.email ?? "");
+  const [editSource, setEditSource] = useState(row.source);
   const [err, setErr] = useState("");
 
   async function handleSave() {
     if (!editName.trim() || !editPhone.trim()) { setErr("ชื่อและเบอร์โทรจำเป็น"); return; }
     setSaving(true);
     setErr("");
-    await onEdit(row.id, { name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim() });
+    await onEdit(row.id, { name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), pdpaSource: editSource });
     setSaving(false);
     setEditing(false);
   }
@@ -306,6 +307,31 @@ function PendingCard({
                 className="w-full border rounded-lg px-2.5 py-1.5 text-sm outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
+              {/* Product selector */}
+              <div>
+                <p className="text-[10px] mb-1 font-medium" style={{ color: MUTED }}>รายการที่ต้องการซื้อ</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {([
+                    { src: "liff-membership", label: "สมาชิก 30 วัน" },
+                    { src: "liff-buffet",     label: "Buffet 30 วัน" },
+                    { src: "liff-5pack",      label: "แพ็กเกจ 5 ครั้ง" },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.src}
+                      type="button"
+                      onClick={() => setEditSource(opt.src)}
+                      className="text-[10px] px-2 py-1 rounded-full font-semibold transition-colors"
+                      style={{
+                        background: parseProductSource(editSource).label === opt.label ? PRIMARY : "#FFF0E8",
+                        color:      parseProductSource(editSource).label === opt.label ? "white"  : PRIMARY,
+                        border:     `1px solid ${parseProductSource(editSource).label === opt.label ? PRIMARY : BORDER}`,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {err && <p className="text-xs text-red-600">{err}</p>}
             </div>
           ) : (
@@ -492,12 +518,12 @@ export default function MembershipManager() {
     }
   }
 
-  async function handlePendingEdit(customerId: string, data: { name: string; phone: string; email: string }) {
+  async function handlePendingEdit(customerId: string, data: { name: string; phone: string; email: string; pdpaSource: string }) {
     try {
       const res = await fetch(`/api/admin/customers/${customerId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(data),
+        body:    JSON.stringify({ name: data.name, phone: data.phone, email: data.email, pdpaSource: data.pdpaSource }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "แก้ไขไม่สำเร็จ");
       await load();

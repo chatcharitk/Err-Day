@@ -98,7 +98,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const { name, nickname, phone, email, gender, pictureUrl } = await request.json();
+    const { name, nickname, phone, email, gender, pictureUrl, pdpaSource } = await request.json();
 
     // If phone is changing, check it isn't taken by someone else
     if (phone) {
@@ -119,6 +119,7 @@ export async function PATCH(
         ...(email      !== undefined ? { email:      email?.trim() || null      } : {}),
         ...(gender     !== undefined ? { gender:     gender || null             } : {}),
         ...(pictureUrl !== undefined ? { pictureUrl: pictureUrl?.trim() || null } : {}),
+        ...(pdpaSource !== undefined ? { pdpaSource: pdpaSource || null         } : {}),
       },
       include: {
         _count:     { select: { bookings: true } },
