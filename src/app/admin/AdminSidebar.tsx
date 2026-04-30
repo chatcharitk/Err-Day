@@ -15,7 +15,9 @@ import {
   CreditCard,
   Settings,
   ArrowLeft,
+  LogOut,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const MENU = [
   { href: "/admin",            labelTh: "ภาพรวม",        label: "Dashboard",    icon: LayoutDashboard, exact: true },
@@ -32,6 +34,13 @@ const MENU = [
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const router   = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/admin/auth/logout", { method: "POST" });
+    router.replace("/admin/login");
+    router.refresh();
+  };
 
   return (
     <aside
@@ -76,7 +85,15 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="px-5 py-4 space-y-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-80 w-full"
+          style={{ color: "rgba(255,255,255,0.55)" }}
+        >
+          <LogOut className="w-3 h-3" />
+          ออกจากระบบ
+        </button>
         <Link
           href="/"
           className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-80"

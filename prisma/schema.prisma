@@ -240,3 +240,35 @@ enum BookingStatus {
   COMPLETED
   NO_SHOW
 }
+
+// ─── Admin auth ───────────────────────────────────────────────────────────────
+
+model AdminUser {
+  id        String    @id @default(cuid())
+  username  String    @unique
+  password  String    // bcrypt hash
+  name      String
+  role      AdminRole @default(ADMIN)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sessions AdminSession[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique // random opaque token stored in cookie
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+enum AdminRole {
+  OWNER
+  ADMIN
+}

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
-import AdminActions from "./AdminActions";
+import AdminActions from "../AdminActions";
 
 export const dynamic = "force-dynamic";
 
