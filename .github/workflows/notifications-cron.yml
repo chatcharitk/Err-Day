@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer-notification dispatcher
+#
+# Hits /api/cron/notifications every 15 minutes so the production app sends
+# pending LINE notifications (4h booking reminders, 1d expiry warnings).
+#
+# Required GitHub secrets (Repo → Settings → Secrets → Actions):
+#   CRON_SECRET          — same value as the Vercel env var of the same name
+#   PRODUCTION_URL       — e.g. "https://book.err-daysalon.com" (no trailing /)
+#
+# Manual run: Actions tab → "Cron — customer notifications" → "Run workflow".
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Cron — customer notifications
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub Actions cron times are in UTC.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:   # allow manual run from the Actions tab
+
+# Don't pile up runs if a previous one is still going (network blip, etc.)
+concurrency:
+  group: cron-notifications
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/notifications
+        env:
+          CRON_SECRET:    ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "::error::PRODUCTION_URL secret not set"
+            exit 1
+          fi
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET secret not set"
+            exit 1
+          fi
+
+          # -f makes curl exit non-zero on HTTP 4xx/5xx
+          # --silent --show-error keeps the secret out of logs but shows real errors
+          # We pipe the body to a file then summarize so the secret never lands in the log
+          BODY="$(curl --fail --silent --show-error \
+            --max-time 60 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${PRODUCTION_URL}/api/cron/notifications")"
+
+          # Best-effort summary — prints the stats block if jq is around, else raw
+          echo "✓ Dispatcher run complete"
+          if command -v jq >/dev/null; then
+            echo "$BODY" | jq -r '.stats // .' || echo "$BODY"
+          else
+            echo "$BODY"
+          fi
