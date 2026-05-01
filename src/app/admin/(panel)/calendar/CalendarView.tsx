@@ -536,7 +536,9 @@ function ServiceTimeFields({
   onStartChange: (t: string) => void;
   onEndChange: (t: string) => void;
 }) {
-  const timeSlots = makeTimeSlots(30);
+  // 15-min granularity so 45-min services (e.g. สระไดร์ 45') can land on the
+  // exact end time. Customer-facing booking slots remain at 30 min.
+  const timeSlots = makeTimeSlots(15);
   const endSlots  = timeSlots.filter(t => timeToMins(t) > timeToMins(startTime));
 
   return (

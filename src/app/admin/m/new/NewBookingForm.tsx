@@ -40,13 +40,15 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+// 15-min granularity for admin-created bookings — accommodates 45-min services
+// like สระไดร์. Customer-facing booking flow still uses 30-min slots.
 function generateTimeSlots(openTime: string, closeTime: string): string[] {
   const [oh, om] = openTime.split(":").map(Number);
   const [ch, cm] = closeTime.split(":").map(Number);
   const o = oh * 60 + om;
   const c = ch * 60 + cm;
   const slots: string[] = [];
-  for (let t = o; t <= c - 30; t += 30) {
+  for (let t = o; t <= c - 30; t += 15) {
     slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
   }
   return slots;
