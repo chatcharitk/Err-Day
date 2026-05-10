@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { defaultBranchId, DEFAULT_BRANCH_ID } from "@/lib/utils";
 import { MapPin, Phone, Clock, Globe, Check, Loader2, ExternalLink } from "lucide-react";
 
 interface Branch {
@@ -38,8 +39,8 @@ function inputClass() {
 }
 
 export default function SettingsManager({ branches }: { branches: Branch[] }) {
-  const [selectedId, setSelectedId] = useState(branches[0]?.id ?? "");
-  const [form,  setForm]  = useState<Branch>(branches[0] ?? {} as Branch);
+  const [selectedId, setSelectedId] = useState(() => defaultBranchId(branches));
+  const [form,  setForm]  = useState<Branch>(() => branches.find(b => b.id === DEFAULT_BRANCH_ID) ?? branches[0] ?? {} as Branch);
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [error,   setError]   = useState("");

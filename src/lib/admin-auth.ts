@@ -73,24 +73,42 @@ export interface CurrentAdmin {
  * Returns the current admin (if logged in & session valid), else null.
  * Server-component / route-handler safe.
  */
+// Tiny in-memory cache (per Lambda instance) — admin sessions don't change
+// often and a 30s TTL avoids hitting the DB on every page render.
+const adminCache = new Map<string, { value: CurrentAdmin | null; expires: number }>();
+const ADMIN_CACHE_MS = 30_000;
+
 export async function getCurrentAdmin(): Promise<CurrentAdmin | null> {
   const c = await cookies();
   const token = c.get(ADMIN_COOKIE)?.value;
   if (!token) return null;
 
-  const session = await prisma.adminSession.findUnique({
-    where:   { token },
-    include: { user: true },
-  });
-  if (!session || session.expiresAt < new Date()) return null;
-  if (!session.user.isActive) return null;
+  const cached = adminCache.get(token);
+  if (cached && cached.expires > Date.now()) return cached.value;
 
-  return {
-    id:       session.user.id,
-    username: session.user.username,
-    name:     session.user.name,
-    role:     session.user.role,
-  };
+  const session = await prisma.adminSession.findUnique({
+    where:  { token },
+    select: {
+      expiresAt: true,
+      user: { select: { id: true, username: true, name: true, role: true, isActive: true } },
+    },
+  });
+  let value: CurrentAdmin | null = null;
+  if (session && session.expiresAt >= new Date() && session.user.isActive) {
+    value = {
+      id:       session.user.id,
+      username: session.user.username,
+      name:     session.user.name,
+      role:     session.user.role,
+    };
+  }
+  adminCache.set(token, { value, expires: Date.now() + ADMIN_CACHE_MS });
+  // Keep cache small
+  if (adminCache.size > 100) {
+    const oldest = Array.from(adminCache.entries()).sort((a, b) => a[1].expires - b[1].expires)[0];
+    if (oldest) adminCache.delete(oldest[0]);
+  }
+  return value;
 }
 
 /**

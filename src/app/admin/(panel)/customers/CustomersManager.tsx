@@ -6,28 +6,42 @@ import { createPortal } from "react-dom";
 import {
   UserPlus, Pencil, Search, ChevronDown, X, Save, Phone, Mail, Calendar,
   User as UserIcon, CreditCard, Clock, MapPin, Plus, Zap, Trash2,
+  Receipt, Info,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface MembershipInfo {
-  label:         string;
-  points:        number;
-  activatedAt:   string;
-  expiresAt:     string | null;
-  usagesUsed:    number;
-  usagesAllowed: number;
+  label:             string;
+  points:            number;
+  activatedAt:       string;
+  expiresAt:         string | null;
+  usagesUsed:        number;
+  usagesAllowed:     number;
+  pendingActivation?: boolean;
 }
 
 interface PackageInfo {
-  id:         string;
-  sku:        string;
-  nameTh:     string;
-  startedAt:  string;
-  expiresAt:  string;
-  usagesUsed: number;
-  usageLimit: number;
-  usagesLeft: number | null;
+  id:                string;
+  sku:               string;
+  nameTh:            string;
+  startedAt:         string;
+  expiresAt:         string;
+  usagesUsed:        number;
+  usageLimit:        number;
+  usagesLeft:        number | null;
+  pendingActivation?: boolean;
+}
+
+interface MembershipCycleInfo {
+  id:            string;
+  startedAt:     string;
+  endedAt:       string;
+  closedAt:      string | null;
+  paidAmount:    number;
+  paymentMethod: string | null;
+  bookingsUsed:  number;
+  notes:         string | null;
 }
 
 interface Customer {
@@ -41,6 +55,7 @@ interface Customer {
   lineUserId: string | null;
   createdAt:  string;
   membership: MembershipInfo | null;
+  membershipCycles?: MembershipCycleInfo[];
   packages?:  PackageInfo[];
   _count:     { bookings: number };
 }
@@ -89,6 +104,26 @@ const GENDER_LABEL: Record<string, string> = {
 
 function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
+}
+
+function fmtDateTime(iso: string): string {
+  const d    = new Date(iso);
+  const date = d.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" });
+  const time = d.toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${date} · ${time}`;
+}
+
+function fmtDateOnly(iso: string): string {
+  return new Date(iso).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" });
+}
+
+function paymentMethodLabel(method: string | null): string {
+  switch (method) {
+    case "POS":       return "ขายผ่าน POS";
+    case "PromptPay": return "PromptPay";
+    case "Manual":    return "บันทึกด้วยตนเอง";
+    default:          return method ?? "—";
+  }
 }
 
 function avatarBg(name: string) {
@@ -290,18 +325,22 @@ function MembershipSection({
   const m = customer.membership;
 
   // View vs edit state
-  const [editing,       setEditing]       = useState(false);
-  const [expiresAt,     setExpiresAt]     = useState(m?.expiresAt ? m.expiresAt.slice(0, 10) : "");
-  const [noExpiry,      setNoExpiry]      = useState(!m?.expiresAt);
-  const [usagesAllowed, setUsagesAllowed] = useState(m?.usagesAllowed ?? 0);
-  const [saving,        setSaving]        = useState(false);
-  const [error,         setError]         = useState("");
+  const [editing,           setEditing]           = useState(false);
+  const [activatedAt,       setActivatedAt]       = useState(m?.activatedAt ? m.activatedAt.slice(0, 10) : "");
+  const [expiresAt,         setExpiresAt]         = useState(m?.expiresAt ? m.expiresAt.slice(0, 10) : "");
+  const [noExpiry,          setNoExpiry]          = useState(!m?.expiresAt);
+  const [usagesAllowed,     setUsagesAllowed]     = useState(m?.usagesAllowed ?? 0);
+  const [pendingActivation, setPendingActivation] = useState(!!m?.pendingActivation);
+  const [saving,            setSaving]            = useState(false);
+  const [error,             setError]             = useState("");
 
   // Reset form whenever a different customer opens
   useEffect(() => {
+    setActivatedAt(m?.activatedAt ? m.activatedAt.slice(0, 10) : "");
     setExpiresAt(m?.expiresAt ? m.expiresAt.slice(0, 10) : "");
     setNoExpiry(!m?.expiresAt);
     setUsagesAllowed(m?.usagesAllowed ?? 0);
+    setPendingActivation(!!m?.pendingActivation);
     setEditing(false);
     setError("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,9 +356,10 @@ function MembershipSection({
     setError("");
     try {
       const payload = {
-        activatedAt:  new Date().toISOString().slice(0, 10),
+        activatedAt:  activatedAt || new Date().toISOString().slice(0, 10),
         expiresAt:    noExpiry ? null : (expiresAt || null),
         usagesAllowed,
+        pendingActivation,
       };
       const res = await fetch(`/api/admin/customers/${customer.id}/membership`, {
         method:  "POST",
@@ -344,8 +384,10 @@ function MembershipSection({
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
+          activatedAt:  activatedAt || null,
           expiresAt:    noExpiry ? null : (expiresAt || null),
           usagesAllowed,
+          pendingActivation,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
@@ -364,11 +406,38 @@ function MembershipSection({
     await refetch();
   }
 
-  // Derived status
-  const now = new Date();
-  const isExpired = m?.expiresAt ? new Date(m.expiresAt) < now : false;
+  // Derived status — expiry is inclusive: expired only when expiresAt is before today (UTC)
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const isPending = !!m?.pendingActivation;
+  const isExpired = !isPending && m?.expiresAt ? new Date(m.expiresAt) < today : false;
   const isUsagesExhausted = (m?.usagesAllowed ?? 0) > 0 && m ? m.usagesUsed >= m.usagesAllowed : false;
-  const isActive = !!m && !isExpired && !isUsagesExhausted;
+  const isActive = !!m && !isPending && !isExpired && !isUsagesExhausted;
+
+  async function handleActivateNow() {
+    if (!m) return;
+    setSaving(true);
+    setError("");
+    try {
+      const today = new Date();
+      const expiry = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const res = await fetch(`/api/admin/customers/${customer.id}/membership`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          activatedAt:       today.toISOString().slice(0, 10),
+          expiresAt:         expiry.toISOString().slice(0, 10),
+          pendingActivation: false,
+          usagesUsed:        0,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "เปิดใช้งานไม่สำเร็จ");
+      await refetch();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const expiresLabel = m?.expiresAt
     ? new Date(m.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
@@ -423,15 +492,24 @@ function MembershipSection({
             <span
               className="text-xs px-2 py-0.5 rounded-full font-medium ml-auto"
               style={
-                isActive
+                isPending
+                  ? { background: "#FFF8E8", color: "#B45309" }
+                  : isActive
                   ? { background: "#ECFDF5", color: "#065F46" }
                   : { background: "#FEF2F2", color: "#991B1B" }
               }
             >
-              {isExpired ? "หมดอายุ" : isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
+              {isPending ? "รอเปิดใช้งาน" : isExpired ? "หมดอายุ" : isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs" style={{ color: MUTED }}>
+            <span className="flex items-center gap-1.5">
+              <Calendar size={11} />
+              <span>เริ่ม</span>
+              <strong style={{ color: TEXT }}>
+                {new Date(m.activatedAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+              </strong>
+            </span>
             <span className="flex items-center gap-1.5">
               <Clock size={11} />
               <span>หมดอายุ</span>
@@ -447,6 +525,21 @@ function MembershipSection({
               {m.points} แต้มสะสม
             </span>
           </div>
+          <p className="text-[11px] mt-3 flex items-start gap-1" style={{ color: MUTED }}>
+            <Info size={11} className="flex-shrink-0 mt-0.5" />
+            <span>ต่ออายุ: ขายบริการ &quot;สมาชิก 30 วัน&quot; ที่ POS — ระบบจะปิดรอบเก่าและเปิดรอบใหม่ให้อัตโนมัติ</span>
+          </p>
+          {isPending && (
+            <button
+              onClick={handleActivateNow}
+              disabled={saving}
+              className="mt-3 w-full py-2 rounded-lg text-xs font-semibold text-white"
+              style={{ background: PRIMARY }}
+            >
+              <Zap size={11} className="inline mr-1" />
+              {saving ? "กำลังเปิด..." : "เปิดใช้งานตอนนี้ (30 วัน)"}
+            </button>
+          )}
         </div>
       )}
 
@@ -464,6 +557,34 @@ function MembershipSection({
           <p className="text-sm font-semibold" style={{ color: TEXT }}>
             {m ? "แก้ไขข้อมูลสมาชิก" : "ลงทะเบียนสมาชิกใหม่"}
           </p>
+
+          {/* Pending activation toggle */}
+          <div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: TEXT }}>
+              <input
+                type="checkbox"
+                checked={pendingActivation}
+                onChange={e => setPendingActivation(e.target.checked)}
+                className="rounded"
+              />
+              <span>ชำระเงินแล้ว แต่ยังไม่เปิดใช้งาน (Pending)</span>
+            </label>
+            <p className="text-xs mt-1 ml-6" style={{ color: MUTED }}>
+              สมาชิกจะไม่นับวันหมดอายุ จนกว่าจะกด &quot;เปิดใช้งาน&quot;
+            </p>
+          </div>
+
+          {/* Activation date */}
+          <div>
+            <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>วันที่ซื้อ / เริ่มใช้</label>
+            <input
+              type="date"
+              value={activatedAt}
+              onChange={e => setActivatedAt(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-xl border"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </div>
 
           {/* Expiry */}
           <div>
@@ -528,16 +649,430 @@ function MembershipSection({
   );
 }
 
-// ─── Packages section (used inside CustomerDetailModal) ──────────────────────
+// ─── Membership purchase history (cycles) ────────────────────────────────────
 
-function PackagesSection({ customer }: { customer: Customer }) {
-  const pkgs = customer.packages ?? [];
+function MembershipCyclesSection({
+  customer,
+}: {
+  customer: Customer;
+}) {
+  const cycles = customer.membershipCycles ?? [];
+  if (cycles.length === 0) return null;
 
   return (
     <section>
       <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: PRIMARY }}>
-        แพ็กเกจที่ใช้งานได้
+        ประวัติการซื้อสมาชิก ({cycles.length})
       </h3>
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
+        <table className="w-full text-sm">
+          <thead style={{ background: BG, color: MUTED }}>
+            <tr className="text-left text-xs">
+              <th className="px-3 py-2 font-medium">ชื่อคอร์ส</th>
+              <th className="px-3 py-2 font-medium">วันที่ซื้อ</th>
+              <th className="px-3 py-2 font-medium">การชำระเงิน</th>
+              <th className="px-3 py-2 font-medium">การใช้งาน</th>
+              <th className="px-3 py-2 font-medium">หมดอายุ</th>
+              <th className="px-3 py-2 font-medium">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cycles.map((cy, i) => {
+              const isOpen     = cy.closedAt == null;
+              const usageCount = isOpen
+                ? (customer.membership?.usagesUsed ?? 0)
+                : cy.bookingsUsed;
+              return (
+                <tr key={cy.id} className="border-t" style={{ borderColor: "#F5EFE9" }}>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <Receipt size={13} style={{ color: isOpen ? "#16a34a" : MUTED }} />
+                      <span className="font-medium" style={{ color: TEXT }}>สมาชิก 30 วัน</span>
+                    </div>
+                    {cy.notes && (
+                      <p className="text-[10px] italic mt-0.5" style={{ color: MUTED }}>
+                        &ldquo;{cy.notes}&rdquo;
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+                    {fmtDateTime(cy.startedAt)}
+                  </td>
+                  <td className="px-3 py-3 text-xs">
+                    <p className="font-semibold" style={{ color: TEXT }}>
+                      {cy.paidAmount > 0 ? fmt(cy.paidAmount) : <span style={{ color: MUTED }}>—</span>}
+                    </p>
+                    <p style={{ color: MUTED }}>{paymentMethodLabel(cy.paymentMethod)}</p>
+                  </td>
+                  <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+                    <span className="font-medium">{usageCount}</span> ครั้ง
+                    {isOpen && (
+                      <span className="text-[10px]" style={{ color: MUTED }}> (กำลังใช้)</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+                    {fmtDateOnly(cy.endedAt)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium inline-block"
+                      style={
+                        isOpen
+                          ? { background: "#DCFCE7", color: "#166534" }
+                          : { background: "#F3F4F6", color: "#6B7280" }
+                      }
+                    >
+                      {isOpen ? "ใช้งานอยู่" : "ปิดแล้ว"}
+                    </span>
+                    {!isOpen && cy.closedAt && i === 0 && (
+                      <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
+                        ปิด {fmtDateOnly(cy.closedAt)}
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] mt-2 flex items-start gap-1" style={{ color: MUTED }}>
+        <Info size={11} className="flex-shrink-0 mt-0.5" />
+        <span>ทุกครั้งที่ขาย &quot;สมาชิก 30 วัน&quot; ที่ POS จะถูกบันทึกเป็นรอบใหม่อัตโนมัติ</span>
+      </p>
+    </section>
+  );
+}
+
+// ─── Packages section (used inside CustomerDetailModal) ──────────────────────
+
+const PACKAGE_OPTIONS = [
+  { sku: "svc-buffet", nameTh: "Buffet 30 วัน",        defaultDays: 30 },
+  { sku: "svc-pkg5",   nameTh: "แพ็กเกจ 5 ครั้ง (90 วัน)", defaultDays: 90 },
+];
+
+function PackageRow({
+  p, customerId, onChanged,
+}: {
+  p: PackageInfo;
+  customerId: string;
+  onChanged: () => void;
+}) {
+  const [editing,           setEditing]           = useState(false);
+  const [startedAt,         setStartedAt]         = useState(p.startedAt.slice(0, 10));
+  const [expiresAt,         setExpiresAt]         = useState(p.expiresAt.slice(0, 10));
+  const [usagesUsed,        setUsagesUsed]        = useState(p.usagesUsed);
+  const [pendingActivation, setPendingActivation] = useState(!!p.pendingActivation);
+  const [saving,            setSaving]            = useState(false);
+  const [error,             setError]             = useState("");
+
+  const isPending     = !!p.pendingActivation;
+  const expiresLabel  = new Date(p.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  const startedLabel  = new Date(p.startedAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  const daysLeft      = Math.max(0, Math.ceil((new Date(p.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}/packages/${p.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ startedAt, expiresAt, usagesUsed, pendingActivation }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
+      onChanged();
+      setEditing(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleActivate() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}/packages/${p.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ activate: true }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "เปิดใช้งานไม่สำเร็จ");
+      onChanged();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`ลบแพ็กเกจ "${p.nameTh}" ออกจากลูกค้านี้?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}/packages/${p.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "ลบไม่สำเร็จ");
+      onChanged();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4"
+      style={{
+        borderColor: isPending ? "#FCD34D" : "#BFDBFE",
+        background:  isPending ? "#FFFBEB" : "#EFF6FF",
+      }}
+    >
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <p className="font-semibold text-sm flex-1" style={{ color: isPending ? "#92400E" : "#1E3A8A" }}>{p.nameTh}</p>
+        <span
+          className="text-xs px-2 py-0.5 rounded-full font-medium"
+          style={
+            isPending
+              ? { background: "#FEF3C7", color: "#92400E" }
+              : { background: "#DBEAFE", color: "#1E40AF" }
+          }
+        >
+          {isPending ? "รอเปิดใช้งาน" : "ใช้งานได้"}
+        </span>
+        {!editing && (
+          <div className="flex gap-1">
+            {isPending && (
+              <button
+                onClick={handleActivate}
+                disabled={saving}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white"
+                style={{ background: PRIMARY }}
+              >
+                <Zap size={11} /> เปิดใช้
+              </button>
+            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1 rounded-lg hover:bg-white/60"
+              title="แก้ไข"
+            >
+              <Pencil size={13} color="#2563EB" />
+            </button>
+            <button onClick={handleDelete} className="p-1 rounded-lg hover:bg-red-50" title="ลบ">
+              <Trash2 size={13} color="#EF4444" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!editing ? (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs" style={{ color: isPending ? "#92400E" : "#3B5998" }}>
+          <span>เริ่ม <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{startedLabel}</strong></span>
+          <span>หมดอายุ <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{expiresLabel}</strong>{!isPending && ` (${daysLeft} วัน)`}</span>
+          <span>
+            {p.usagesLeft !== null
+              ? <>เหลือ <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{p.usagesLeft}/{p.usageLimit}</strong> ครั้ง</>
+              : <>ใช้แล้ว <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{p.usagesUsed}</strong> ครั้ง (ไม่จำกัด)</>}
+          </span>
+        </div>
+      ) : (
+        <div className="space-y-3 mt-2">
+          <label className="flex items-center gap-2 text-xs" style={{ color: TEXT }}>
+            <input
+              type="checkbox"
+              checked={pendingActivation}
+              onChange={e => setPendingActivation(e.target.checked)}
+              className="rounded"
+            />
+            ชำระเงินแล้ว แต่ยังไม่เปิดใช้งาน
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs mb-1" style={{ color: MUTED }}>วันที่ซื้อ / เริ่มใช้</label>
+              <input
+                type="date"
+                value={startedAt}
+                onChange={e => setStartedAt(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border"
+                style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: MUTED }}>วันหมดอายุ</label>
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={e => setExpiresAt(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border"
+                style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+              />
+            </div>
+          </div>
+          {p.usageLimit > 0 && (
+            <div>
+              <label className="block text-xs mb-1" style={{ color: MUTED }}>ใช้ไปแล้ว (จาก {p.usageLimit})</label>
+              <input
+                type="number" min={0} max={p.usageLimit}
+                value={usagesUsed}
+                onChange={e => setUsagesUsed(Number(e.target.value))}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border"
+                style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+              />
+            </div>
+          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setEditing(false); setError(""); }}
+              className="px-3 py-1.5 text-xs rounded-lg border"
+              style={{ borderColor: BORDER, color: MUTED, background: "white" }}
+            >ยกเลิก</button>
+            <button
+              onClick={handleSave} disabled={saving}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg font-medium text-white"
+              style={{ background: saving ? MUTED : PRIMARY }}
+            >
+              <Save size={11} /> {saving ? "บันทึก..." : "บันทึก"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PackagesSection({ customer, onChanged }: { customer: Customer; onChanged: () => void }) {
+  const pkgs = customer.packages ?? [];
+  const [adding,            setAdding]            = useState(false);
+  const [sku,               setSku]               = useState(PACKAGE_OPTIONS[0].sku);
+  const [startedAt,         setStartedAt]         = useState(new Date().toISOString().slice(0, 10));
+  const [expiresAt,         setExpiresAt]         = useState("");
+  const [pendingActivation, setPendingActivation] = useState(false);
+  const [saving,            setSaving]            = useState(false);
+  const [error,             setError]             = useState("");
+
+  function defaultExpiry(skuValue: string, start: string) {
+    const opt = PACKAGE_OPTIONS.find(o => o.sku === skuValue);
+    if (!opt || !start) return "";
+    const d = new Date(start);
+    d.setDate(d.getDate() + opt.defaultDays);
+    return d.toISOString().slice(0, 10);
+  }
+
+  useEffect(() => {
+    if (adding && !expiresAt) setExpiresAt(defaultExpiry(sku, startedAt));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adding, sku, startedAt]);
+
+  async function handleAdd() {
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/customers/${customer.id}/packages`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          sku,
+          startedAt,
+          expiresAt: expiresAt || defaultExpiry(sku, startedAt),
+          pendingActivation,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "เพิ่มไม่สำเร็จ");
+      onChanged();
+      setAdding(false);
+      setStartedAt(new Date().toISOString().slice(0, 10));
+      setExpiresAt("");
+      setPendingActivation(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: PRIMARY }}>
+          แพ็กเกจที่ใช้งานได้
+        </h3>
+        {!adding && (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white"
+            style={{ background: PRIMARY }}
+          >
+            <Plus size={11} /> เพิ่มแพ็กเกจ
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="rounded-xl border p-4 space-y-3 mb-3" style={{ borderColor: BORDER, background: "#FAFAFA" }}>
+          <p className="text-sm font-semibold" style={{ color: TEXT }}>เพิ่มแพ็กเกจให้ลูกค้า</p>
+          <div>
+            <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>แพ็กเกจ</label>
+            <select
+              value={sku}
+              onChange={e => { setSku(e.target.value); setExpiresAt(defaultExpiry(e.target.value, startedAt)); }}
+              className="w-full px-3 py-2 text-sm rounded-xl border"
+              style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+            >
+              {PACKAGE_OPTIONS.map(o => <option key={o.sku} value={o.sku}>{o.nameTh}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: TEXT }}>
+            <input
+              type="checkbox"
+              checked={pendingActivation}
+              onChange={e => setPendingActivation(e.target.checked)}
+              className="rounded"
+            />
+            ชำระเงินแล้ว แต่ยังไม่เปิดใช้งาน
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs mb-1" style={{ color: MUTED }}>วันที่ซื้อ / เริ่มใช้</label>
+              <input
+                type="date"
+                value={startedAt}
+                onChange={e => { setStartedAt(e.target.value); setExpiresAt(defaultExpiry(sku, e.target.value)); }}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border"
+                style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: MUTED }}>วันหมดอายุ</label>
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={e => setExpiresAt(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border"
+                style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+              />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setAdding(false); setError(""); }}
+              className="px-3 py-1.5 text-xs rounded-lg border"
+              style={{ borderColor: BORDER, color: MUTED, background: "white" }}
+            >ยกเลิก</button>
+            <button
+              onClick={handleAdd} disabled={saving}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg font-medium text-white"
+              style={{ background: saving ? MUTED : PRIMARY }}
+            >
+              <Save size={11} /> {saving ? "บันทึก..." : "บันทึก"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {pkgs.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed p-4 text-center" style={{ borderColor: BORDER, color: MUTED }}>
           <p className="text-sm font-medium">ยังไม่มีแพ็กเกจที่ใช้งานได้</p>
@@ -545,34 +1080,9 @@ function PackagesSection({ customer }: { customer: Customer }) {
         </div>
       ) : (
         <div className="space-y-2">
-          {pkgs.map(p => {
-            const expiresLabel = new Date(p.expiresAt).toLocaleDateString("th-TH", {
-              day: "numeric", month: "short", year: "numeric",
-            });
-            const daysLeft = Math.max(0, Math.ceil((new Date(p.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
-            return (
-              <div
-                key={p.id}
-                className="rounded-xl border p-4"
-                style={{ borderColor: "#BFDBFE", background: "#EFF6FF" }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-semibold text-sm" style={{ color: "#1E3A8A" }}>{p.nameTh}</p>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#DBEAFE", color: "#1E40AF" }}>
-                    ใช้งานได้
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs" style={{ color: "#3B5998" }}>
-                  <span>หมดอายุ <strong style={{ color: "#1E3A8A" }}>{expiresLabel}</strong> ({daysLeft} วัน)</span>
-                  <span>
-                    {p.usagesLeft !== null
-                      ? <>เหลือ <strong style={{ color: "#1E3A8A" }}>{p.usagesLeft}/{p.usageLimit}</strong> ครั้ง</>
-                      : <>ใช้แล้ว <strong style={{ color: "#1E3A8A" }}>{p.usagesUsed}</strong> ครั้ง (ไม่จำกัด)</>}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          {pkgs.map(p => (
+            <PackageRow key={p.id} p={p} customerId={customer.id} onChanged={onChanged} />
+          ))}
         </div>
       )}
     </section>
@@ -890,8 +1400,21 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
             {/* ── Membership Status ── */}
             <MembershipSection customer={customer} onUpdated={c => { setCustomer(c); onSaved(c); }} />
 
+            {/* ── Membership Purchase History ── */}
+            <MembershipCyclesSection customer={customer} />
+
             {/* ── Active Packages ── */}
-            <PackagesSection customer={customer} />
+            <PackagesSection
+              customer={customer}
+              onChanged={async () => {
+                const res = await fetch(`/api/admin/customers/${customer.id}`);
+                if (res.ok) {
+                  const c = await res.json();
+                  setCustomer(c);
+                  onSaved(c);
+                }
+              }}
+            />
 
             {/* ── Upcoming Bookings ── */}
             <section>
@@ -1125,7 +1648,7 @@ export default function CustomersManager({ customers: initial }: Props) {
   const [showAdd,   setShowAdd]   = useState(false);
   const [openId,    setOpenId]    = useState<string | null>(null);
   const [search,    setSearch]    = useState("");
-  const [sort,      setSort]      = useState<SortKey>("newest");
+  const [sort,      setSort]      = useState<SortKey>("name");
 
   const focusRef = useRef<HTMLDivElement | null>(null);
 
@@ -1182,6 +1705,19 @@ export default function CustomersManager({ customers: initial }: Props) {
       return 0;
     });
   }, [customers, search, sort]);
+
+  // Group by first letter of name when sorting alphabetically
+  const grouped = useMemo(() => {
+    if (sort !== "name") return null;
+    const groups: { initial: string; items: Customer[] }[] = [];
+    for (const c of filtered) {
+      const initial = c.name.charAt(0) || "#";
+      const last    = groups[groups.length - 1];
+      if (last && last.initial === initial) last.items.push(c);
+      else groups.push({ initial, items: [c] });
+    }
+    return groups;
+  }, [filtered, sort]);
 
   const focusId   = searchParams.get("id");
   const openedCustomer = customers.find(c => c.id === openId) ?? null;
@@ -1242,7 +1778,31 @@ export default function CustomersManager({ customers: initial }: Props) {
             {search ? "ไม่พบลูกค้าที่ค้นหา" : "ยังไม่มีลูกค้า"}
           </p>
         </div>
+      ) : grouped ? (
+        /* Alphabetical with initial-letter dividers */
+        <div className="space-y-6">
+          {grouped.map(({ initial, items }) => (
+            <div key={initial}>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-lg font-bold" style={{ color: PRIMARY }}>{initial}</span>
+                <div className="flex-1 h-px" style={{ background: BORDER }} />
+                <span className="text-xs" style={{ color: MUTED }}>{items.length}</span>
+              </div>
+              <div className="space-y-3">
+                {items.map(c => (
+                  <CustomerCard
+                    key={c.id}
+                    customer={c}
+                    onClick={() => setOpenId(c.id)}
+                    highlightRef={c.id === focusId ? focusRef : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
+        /* Flat list for other sort modes */
         <div className="space-y-3">
           {filtered.map(c => (
             <CustomerCard

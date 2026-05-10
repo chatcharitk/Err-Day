@@ -13,15 +13,34 @@ const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 
 interface Branch { id: string; name: string; openTime: string | null; closeTime: string | null; }
-interface Service { id: string; nameTh: string; category: string; price: number; duration: number; }
+interface Service {
+  id:                    string;
+  nameTh:                string;
+  category:              string;
+  price:                 number;
+  duration:              number;
+  memberPrice?:          number | null;
+  memberDiscountPercent?: number;
+}
+
+/** Effective member price for a service (null = no discount configured). */
+function computeMemberPrice(svc: Service): number | null {
+  if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;
+  if (svc.memberDiscountPercent) return Math.round(svc.price * (1 - svc.memberDiscountPercent / 100));
+  return null;
+}
 interface Staff   { id: string; name: string; }
+interface Addon   { id: string; nameTh: string; price: number; }
 
 interface CustomerHit {
-  id:        string;
-  name:      string;
-  nickname:  string | null;
-  phone:     string;
-  email:     string | null;
+  id:          string;
+  name:        string;
+  nickname:    string | null;
+  phone:       string;
+  email:       string | null;
+  isMember?:   boolean;
+  isPending?:  boolean;
+  hasPackage?: boolean;
 }
 
 interface Props {
@@ -30,6 +49,7 @@ interface Props {
   defaultDate:    string;
   branchServices: Service[];
   branchStaff:    Staff[];
+  addons:         Addon[];
 }
 
 function formatPrice(satang: number) { return `฿${(satang / 100).toLocaleString()}`; }
@@ -54,7 +74,7 @@ function generateTimeSlots(openTime: string, closeTime: string): string[] {
   return slots;
 }
 
-export default function NewBookingForm({ branches, activeBranchId, defaultDate, branchServices, branchStaff }: Props) {
+export default function NewBookingForm({ branches, activeBranchId, defaultDate, branchServices, branchStaff, addons }: Props) {
   const router = useRouter();
   const [branchId,  setBranchId]  = useState(activeBranchId);
   const [date,      setDate]      = useState(defaultDate);
@@ -63,13 +83,17 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
   const [time,      setTime]      = useState<string>("");
 
   // Customer
-  const [phone,    setPhone]    = useState("");
+  const [isWalkin,    setIsWalkin]    = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");   // what's typed in the search box
+  const [phone,    setPhone]    = useState("");         // actual phone for booking submission
   const [name,     setName]     = useState("");
   const [nickname, setNickname] = useState("");
   const [searchHits, setSearchHits] = useState<CustomerHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [matched, setMatched] = useState<CustomerHit | null>(null);
 
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
+  const [discountBaht, setDiscountBaht] = useState(0); // discount in baht (display units)
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -78,11 +102,36 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
   const branch = branches.find((b) => b.id === branchId);
   const service = branchServices.find((s) => s.id === serviceId);
 
-  // Group services by category
-  const grouped = useMemo(() => {
+  // Group bookable services by category — exclude membership/package/hair/wellness/skin
+  // Note: "บริการทั่วไป" (สระไดร์) is intentionally kept.
+  const groupedEntries = useMemo(() => {
+    const SKIP_CATS = ["hair", "wellness", "skin", "membership", "package", "สมาชิก", "แพ็กเกจ", "member"];
+    const SKIP_IDS  = ["svc-membership-30d", "svc-buffet", "svc-pkg5",
+                       "svc-member-monthly", "svc-member-pkg"];
+
     const out: Record<string, Service[]> = {};
-    for (const s of branchServices) (out[s.category] ??= []).push(s);
-    return out;
+    for (const s of branchServices) {
+      const catL = s.category.toLowerCase();
+      if (SKIP_CATS.some((ex) => catL.includes(ex))) continue;
+      if (SKIP_IDS.includes(s.id)) continue;
+      (out[s.category] ??= []).push(s);
+    }
+
+    // Within each category: สระ* first, then alphabetical
+    for (const cat in out) {
+      out[cat].sort((a, b) => {
+        const aP = a.nameTh.startsWith("สระ") ? 0 : 1;
+        const bP = b.nameTh.startsWith("สระ") ? 0 : 1;
+        return aP - bP || a.nameTh.localeCompare(b.nameTh, "th");
+      });
+    }
+
+    // Bring the category that contains สระ* to the top
+    return Object.entries(out).sort(([, aI], [, bI]) => {
+      const aP = aI.some((s) => s.nameTh.startsWith("สระ")) ? 0 : 1;
+      const bP = bI.some((s) => s.nameTh.startsWith("สระ")) ? 0 : 1;
+      return aP - bP;
+    });
   }, [branchServices]);
 
   // Slot list adapts to day-of-week (Sunday opens at 10:00)
@@ -95,14 +144,14 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
     return generateTimeSlots(open, close);
   }, [branch, date]);
 
-  /* ── Customer phone search (debounced) ── */
+  /* ── Customer search (debounced) — name, nickname, or phone ── */
   useEffect(() => {
-    if (matched && matched.phone === phone) return; // already matched, no need to re-search
-    if (!phone || phone.length < 4) { setSearchHits([]); return; }
+    if (matched) return; // already selected, stop searching
+    if (!searchQuery || searchQuery.length < 2) { setSearchHits([]); return; }
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const r = await fetch(`/api/admin/customers?q=${encodeURIComponent(phone)}&limit=6`);
+        const r = await fetch(`/api/admin/customers?q=${encodeURIComponent(searchQuery)}&limit=8`);
         if (r.ok) {
           const json = await r.json();
           setSearchHits(json.customers ?? json ?? []);
@@ -110,23 +159,38 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
       } finally { setSearching(false); }
     }, 250);
     return () => clearTimeout(t);
-  }, [phone, matched]);
+  }, [searchQuery, matched]);
 
   const useCustomer = (c: CustomerHit) => {
     setMatched(c);
     setPhone(c.phone);
     setName(c.name);
     setNickname(c.nickname ?? "");
+    setSearchQuery("");
     setSearchHits([]);
   };
 
   const clearMatch = () => {
     setMatched(null);
-    setName(""); setNickname("");
+    setPhone(""); setName(""); setNickname("");
+    setSearchQuery("");
   };
 
-  const canSubmit = !!branchId && !!serviceId && !!date && !!time
-                 && !!phone.trim() && !!name.trim() && !submitting;
+  const addonTotal = selectedAddonIds.reduce((sum, id) => {
+    const a = addons.find((a) => a.id === id);
+    return sum + (a?.price ?? 0);
+  }, 0);
+
+  const isMember = matched?.isMember ?? false;
+  const effectiveServicePrice = service
+    ? (isMember ? (computeMemberPrice(service) ?? service.price) : service.price)
+    : 0;
+
+  const discountSatang = Math.round(discountBaht * 100);
+  const finalPrice = service ? Math.max(0, effectiveServicePrice + addonTotal - discountSatang) : 0;
+
+  const canSubmit = !!branchId && !!serviceId && !!date && !!time && !submitting
+                 && (isWalkin || (!!phone.trim() && !!name.trim()));
 
   const handleSubmit = async () => {
     if (!service || !canSubmit) return;
@@ -145,12 +209,14 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           date,
           startTime:  time,
           endTime,
-          totalPrice: service.price,
-          name:       name.trim(),
-          phone:      phone.trim(),
-          nickname:   finalNickname,
+          totalPrice: finalPrice,
+          name:       name.trim() || undefined,
+          phone:      phone.trim() || undefined,
+          nickname:   finalNickname || undefined,
           notes:      notes.trim() || undefined,
-          skipConflictCheck: true, // admin override; conflicts shown but allowed
+          addonIds:   selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
+          isWalkin,
+          skipConflictCheck: true,
         }),
       });
       const data = await res.json();
@@ -215,8 +281,88 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
 
       {/* Customer */}
       <section className="px-4 pt-5">
-        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>ลูกค้า</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>ลูกค้า</p>
+          {/* Walk-in toggle — makes name & phone optional */}
+          <button
+            onClick={() => setIsWalkin((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={{
+              background: isWalkin ? PRIMARY : "white",
+              color:      isWalkin ? "white"  : MUTED,
+              border:     `1px solid ${isWalkin ? PRIMARY : BORDER}`,
+            }}
+          >
+            {isWalkin && <Check size={10} />}
+            Walk-in
+          </button>
+        </div>
 
+        {/* ── Search box (hidden once a customer is matched) ── */}
+        {!matched && (
+          <div className="mb-2">
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+              <Search size={14} style={{ color: MUTED }} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ค้นหาชื่อ ชื่อเล่น หรือ เบอร์โทร"
+                className="flex-1 text-sm outline-none bg-transparent"
+                style={{ color: TEXT }}
+                autoComplete="off"
+              />
+              {searching && <Loader2 size={12} className="animate-spin" style={{ color: MUTED }} />}
+              {searchQuery && !searching && (
+                <button onClick={() => { setSearchQuery(""); setSearchHits([]); }} style={{ color: MUTED }}>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {searchHits.length > 0 && (
+              <div className="mt-1 rounded-xl bg-white overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
+                {searchHits.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => useCustomer(c)}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm active:bg-stone-50"
+                    style={{ color: TEXT, borderBottom: `1px solid ${BORDER}` }}
+                  >
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                         style={{ background: "#F0E4D8", color: PRIMARY }}>
+                      {(c.nickname || c.name)[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <p className="font-medium truncate">
+                          {c.name}
+                          {c.nickname && <span style={{ color: MUTED }}> · {c.nickname}</span>}
+                        </p>
+                        {c.isMember && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#F0FDF4", color: "#166534" }}>สมาชิก</span>
+                        )}
+                        {c.isPending && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#FFF7ED", color: "#9A3412" }}>รอเปิดใช้</span>
+                        )}
+                        {c.hasPackage && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>แพ็กเกจ</span>
+                        )}
+                      </div>
+                      <p className="text-[11px]" style={{ color: MUTED }}>{c.phone}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {searchQuery.length >= 2 && !searching && searchHits.length === 0 && (
+              <p className="text-xs mt-1.5 px-1" style={{ color: MUTED }}>ไม่พบลูกค้า — กรอกข้อมูลด้านล่าง</p>
+            )}
+          </div>
+        )}
+
+        {/* ── Matched customer card ── */}
         {matched ? (
           <div className="rounded-2xl bg-white p-4 flex items-center gap-3" style={{ border: `1.5px solid ${PRIMARY}` }}>
             <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold flex-shrink-0"
@@ -224,10 +370,18 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
               {(matched.nickname || matched.name)[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold" style={{ color: TEXT }}>
-                {matched.name}
-                {matched.nickname && <span style={{ color: MUTED }}> · {matched.nickname}</span>}
-              </p>
+              <div className="flex items-center gap-1 flex-wrap">
+                <p className="text-sm font-semibold" style={{ color: TEXT }}>
+                  {matched.name}
+                  {matched.nickname && <span style={{ color: MUTED }}> · {matched.nickname}</span>}
+                </p>
+                {matched.isMember && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#F0FDF4", color: "#166534" }}>สมาชิก</span>
+                )}
+                {matched.hasPackage && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>แพ็กเกจ</span>
+                )}
+              </div>
               <p className="text-xs" style={{ color: MUTED }}>{matched.phone}</p>
             </div>
             <button onClick={clearMatch} className="p-2" style={{ color: MUTED }} aria-label="ล้าง">
@@ -235,6 +389,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
             </button>
           </div>
         ) : (
+          /* ── Manual entry — optional when Walk-in is on ── */
           <div className="space-y-2">
             <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
               <Phone size={14} style={{ color: MUTED }} />
@@ -242,30 +397,11 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="เบอร์โทรศัพท์"
+                placeholder={isWalkin ? "เบอร์โทรศัพท์ (ไม่บังคับ)" : "เบอร์โทรศัพท์ *"}
                 className="flex-1 text-sm outline-none bg-transparent"
                 style={{ color: TEXT }}
               />
-              {searching && <Loader2 size={12} className="animate-spin" style={{ color: MUTED }} />}
             </div>
-
-            {searchHits.length > 0 && (
-              <div className="rounded-xl bg-white overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
-                {searchHits.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => useCustomer(c)}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-stone-50"
-                    style={{ color: TEXT }}
-                  >
-                    <Search size={12} style={{ color: MUTED }} />
-                    <span className="font-medium">{c.name}</span>
-                    {c.nickname && <span style={{ color: MUTED }}>· {c.nickname}</span>}
-                    <span style={{ color: MUTED }} className="ml-auto text-xs">{c.phone}</span>
-                  </button>
-                ))}
-              </div>
-            )}
 
             <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
               <User size={14} style={{ color: MUTED }} />
@@ -273,7 +409,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="ชื่อ-นามสกุล"
+                placeholder={isWalkin ? "ชื่อ-นามสกุล (ไม่บังคับ)" : "ชื่อ-นามสกุล *"}
                 className="flex-1 text-sm outline-none bg-transparent"
                 style={{ color: TEXT }}
               />
@@ -290,9 +426,11 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                 style={{ color: TEXT }}
               />
             </div>
-            <p className="text-[10px]" style={{ color: MUTED }}>
-              หากเว้นว่างจะใช้ชื่อแรกของลูกค้าแทน
-            </p>
+            {isWalkin && (
+              <p className="text-[10px]" style={{ color: MUTED }}>
+                หากไม่กรอกชื่อ ระบบจะบันทึกเป็น &quot;Walk-in&quot; โดยอัตโนมัติ
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -301,7 +439,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
       <section className="px-4 pt-5">
         <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>บริการ</p>
         <div className="space-y-3">
-          {Object.entries(grouped).map(([cat, items]) => (
+          {groupedEntries.map(([cat, items]) => (
             <div key={cat}>
               <p className="text-xs font-medium mb-1.5" style={{ color: PRIMARY }}>{cat}</p>
               <div className="grid grid-cols-2 gap-2">
@@ -322,7 +460,14 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                       <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
                         <Clock size={9} />{s.duration} นาที
                       </p>
-                      <p className="text-sm font-bold mt-1" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>
+                      {isMember && computeMemberPrice(s) !== null && computeMemberPrice(s)! < s.price ? (
+                        <div className="mt-1 flex items-baseline gap-1">
+                          <span className="text-[10px] line-through" style={{ color: MUTED }}>{formatPrice(s.price)}</span>
+                          <span className="text-sm font-bold" style={{ color: "#16a34a" }}>{formatPrice(computeMemberPrice(s)!)}</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-bold mt-1" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>
+                      )}
                     </button>
                   );
                 })}
@@ -331,6 +476,40 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           ))}
         </div>
       </section>
+
+      {/* Add-ons */}
+      {addons.length > 0 && (
+        <section className="px-4 pt-5">
+          <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>
+            เพิ่มเติม <span style={{ color: MUTED }}>(ไม่บังคับ)</span>
+          </p>
+          <div className="space-y-2">
+            {addons.map((a) => {
+              const active = selectedAddonIds.includes(a.id);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() =>
+                    setSelectedAddonIds((prev) =>
+                      active ? prev.filter((id) => id !== a.id) : [...prev, a.id]
+                    )
+                  }
+                  className="w-full flex items-center justify-between rounded-xl px-4 py-3 text-left"
+                  style={{
+                    background: active ? "#FFF8F4" : "white",
+                    border:     `1.5px solid ${active ? PRIMARY : BORDER}`,
+                  }}
+                >
+                  <p className="text-sm" style={{ color: TEXT }}>{a.nameTh}</p>
+                  <p className="text-sm font-bold" style={{ color: active ? PRIMARY : MUTED }}>
+                    +{formatPrice(a.price)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Staff */}
       <section className="px-4 pt-5">
@@ -385,6 +564,30 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
         </div>
       </section>
 
+      {/* Discount */}
+      {service && (
+        <section className="px-4 pt-5">
+          <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>ส่วนลด</p>
+          <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+            <span className="text-sm" style={{ color: MUTED }}>฿</span>
+            <input
+              type="number"
+              min={0}
+              value={discountBaht || ""}
+              onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
+              placeholder="0"
+              className="flex-1 text-sm outline-none bg-transparent"
+              style={{ color: TEXT }}
+            />
+            {discountBaht > 0 && (
+              <span className="text-xs font-medium" style={{ color: "#166534" }}>
+                รวม {formatPrice(finalPrice)}
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Notes */}
       <section className="px-4 pt-5">
         <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุ <span style={{ color: MUTED }}>(ไม่บังคับ)</span></p>
@@ -413,7 +616,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           style={{ background: PRIMARY }}
         >
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-          {submitting ? "กำลังบันทึก..." : `บันทึกการจอง${service ? ` · ${formatPrice(service.price)}` : ""}`}
+          {submitting ? "กำลังบันทึก..." : `บันทึกการจอง${service ? ` · ${formatPrice(finalPrice)}` : ""}`}
         </button>
       </div>
     </main>

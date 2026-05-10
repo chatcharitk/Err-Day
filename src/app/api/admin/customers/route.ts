@@ -11,6 +11,8 @@ export async function GET(request: Request) {
     return NextResponse.json([]);
   }
 
+  const now = new Date();
+
   const customers = await prisma.customer.findMany({
     where: {
       OR: [
@@ -21,10 +23,33 @@ export async function GET(request: Request) {
     },
     orderBy: { name: "asc" },
     take: limit,
-    select: { id: true, name: true, nickname: true, phone: true, email: true },
+    select: {
+      id:       true,
+      name:     true,
+      nickname: true,
+      phone:    true,
+      email:    true,
+      membership: {
+        select: { pendingActivation: true, expiresAt: true },
+      },
+      packages: {
+        where: { expiresAt: { gte: now }, pendingActivation: false },
+        select: { id: true },
+        take: 1,
+      },
+    },
   });
 
-  return NextResponse.json(customers);
+  return NextResponse.json(customers.map(c => ({
+    id:             c.id,
+    name:           c.name,
+    nickname:       c.nickname,
+    phone:          c.phone,
+    email:          c.email,
+    isMember:       !!c.membership && !c.membership.pendingActivation && (!c.membership.expiresAt || c.membership.expiresAt >= now),
+    isPending:      !!c.membership?.pendingActivation,
+    hasPackage:     c.packages.length > 0,
+  })));
 }
 
 // POST /api/admin/customers — register a new customer

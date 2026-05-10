@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { startOfTodayUTC } from "@/lib/utils";
 
 /**
  * Package SKUs — these are the service IDs that, when sold at POS, activate
@@ -82,7 +83,9 @@ export async function activatePackage(opts: ActivateOpts) {
   } = opts;
 
   const now       = new Date();
-  const expiresAt = new Date(now.getTime() + spec.validityDays * 24 * 60 * 60 * 1000);
+  // 30-day package activated today → expires day 30 (inclusive). So count today
+  // as day 1 and add (validityDays - 1) more days.
+  const expiresAt = new Date(now.getTime() + (spec.validityDays - 1) * 24 * 60 * 60 * 1000);
 
   return prisma.$transaction(async (tx) => {
     // Close any open package of the same SKU
@@ -129,12 +132,13 @@ export interface ActivePackage {
  * packages a customer holds. Most-recently-started first.
  */
 export async function findActivePackages(customerId: string): Promise<ActivePackage[]> {
-  const now = new Date();
+  const today = startOfTodayUTC();
   const rows = await prisma.customerPackage.findMany({
     where: {
       customerId,
       closedAt:  null,
-      expiresAt: { gt: now },
+      pendingActivation: false,
+      expiresAt: { gte: today },
     },
     orderBy: { startedAt: "desc" },
   });
@@ -154,6 +158,52 @@ export async function findActivePackages(customerId: string): Promise<ActivePack
       usagesUsed: r.usagesUsed,
       usageLimit: r.usageLimit,
       usagesLeft,
+    });
+  }
+  return out;
+}
+
+export interface AdminPackage extends ActivePackage {
+  pendingActivation: boolean;
+  paidAmount: number;
+}
+
+/**
+ * For the admin customer detail view: returns all open (non-closed) packages
+ * including those that are still pending activation. Active ones plus pending
+ * ones, most-recently-started first.
+ */
+export async function findCustomerPackagesForAdmin(customerId: string): Promise<AdminPackage[]> {
+  const today = startOfTodayUTC();
+  const rows = await prisma.customerPackage.findMany({
+    where: {
+      customerId,
+      closedAt: null,
+      OR: [
+        { pendingActivation: true },
+        { expiresAt: { gte: today } },
+      ],
+    },
+    orderBy: { startedAt: "desc" },
+  });
+
+  const out: AdminPackage[] = [];
+  for (const r of rows) {
+    const spec = PACKAGE_SPECS[r.packageSku];
+    if (!spec) continue;
+    const usagesLeft = r.usageLimit > 0 ? Math.max(0, r.usageLimit - r.usagesUsed) : null;
+    if (!r.pendingActivation && usagesLeft === 0) continue;
+    out.push({
+      id:                r.id,
+      packageSku:        r.packageSku,
+      spec,
+      startedAt:         r.startedAt,
+      expiresAt:         r.expiresAt,
+      usagesUsed:        r.usagesUsed,
+      usageLimit:        r.usageLimit,
+      usagesLeft,
+      pendingActivation: r.pendingActivation,
+      paidAmount:        r.paidAmount,
     });
   }
   return out;

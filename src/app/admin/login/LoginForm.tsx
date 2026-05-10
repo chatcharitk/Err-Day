@@ -19,24 +19,21 @@ export default function LoginForm() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [mode,     setMode]     = useState<"desktop" | "mobile">("desktop");
+  const [mode,     setMode]     = useState<"desktop" | "mobile">(
+    nextParam?.startsWith("/admin/m") ? "mobile" : "desktop"
+  );
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
 
-  // Auto-pick mode based on viewport width and last-used preference on first load
+  // Restore last-used mode preference (only if no ?next= hint)
   useEffect(() => {
+    if (nextParam) return; // let ?next= dictate the mode
     try {
       const saved = localStorage.getItem(LS_LAST_MODE) as "desktop" | "mobile" | null;
-      if (saved === "desktop" || saved === "mobile") {
-        setMode(saved);
-        return;
-      }
+      if (saved === "desktop" || saved === "mobile") { setMode(saved); return; }
     } catch { /* ignore */ }
-    // No saved preference — default to mobile if the screen is narrow
-    if (typeof window !== "undefined" && window.innerWidth < 640) {
-      setMode("mobile");
-    }
-  }, []);
+    if (typeof window !== "undefined" && window.innerWidth < 640) setMode("mobile");
+  }, [nextParam]);
 
   // If `next` was set explicitly (e.g. proxy redirect), respect it. Otherwise
   // we route based on the user's mode pick.
@@ -103,7 +100,7 @@ export default function LoginForm() {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
+                placeholder="ชื่อผู้ใช้"
                 className="flex-1 text-sm outline-none bg-transparent"
                 style={{ color: TEXT }}
               />
@@ -130,44 +127,42 @@ export default function LoginForm() {
           </div>
 
           {/* Mode toggle */}
-          {!nextParam && (
-            <div>
-              <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>
-                เข้าสู่โหมด
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMode("desktop")}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all"
-                  style={{
-                    background: mode === "desktop" ? PRIMARY : "white",
-                    color:      mode === "desktop" ? "white" : TEXT,
-                    border:     `1.5px solid ${mode === "desktop" ? PRIMARY : BORDER}`,
-                  }}
-                >
-                  <Monitor size={14} /> เดสก์ท็อป
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("mobile")}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all"
-                  style={{
-                    background: mode === "mobile" ? PRIMARY : "white",
-                    color:      mode === "mobile" ? "white" : TEXT,
-                    border:     `1.5px solid ${mode === "mobile" ? PRIMARY : BORDER}`,
-                  }}
-                >
-                  <Smartphone size={14} /> มือถือ
-                </button>
-              </div>
-              <p className="text-[10px] mt-1.5" style={{ color: MUTED }}>
-                {mode === "mobile"
-                  ? "เข้าหน้าจัดการการจองแบบกะทัดรัด เหมาะกับมือถือ"
-                  : "เข้าระบบจัดการเต็มรูปแบบ"}
-              </p>
+          <div>
+            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>
+              เข้าสู่โหมด
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMode("desktop")}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: mode === "desktop" ? PRIMARY : "white",
+                  color:      mode === "desktop" ? "white" : TEXT,
+                  border:     `1.5px solid ${mode === "desktop" ? PRIMARY : BORDER}`,
+                }}
+              >
+                <Monitor size={14} /> เดสก์ท็อป
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("mobile")}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: mode === "mobile" ? PRIMARY : "white",
+                  color:      mode === "mobile" ? "white" : TEXT,
+                  border:     `1.5px solid ${mode === "mobile" ? PRIMARY : BORDER}`,
+                }}
+              >
+                <Smartphone size={14} /> มือถือ
+              </button>
             </div>
-          )}
+            <p className="text-[10px] mt-1.5" style={{ color: MUTED }}>
+              {mode === "mobile"
+                ? "เข้าหน้าจัดการการจองแบบกะทัดรัด เหมาะกับมือถือ"
+                : "เข้าระบบจัดการเต็มรูปแบบ"}
+            </p>
+          </div>
 
           {error && (
             <div

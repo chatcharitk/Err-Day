@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, User, X, UserPlus, Plus } from "lucide-react";
+import { Search, User, X, UserPlus } from "lucide-react";
 
 export interface CustomerValue {
   id: string | null;
@@ -10,9 +10,12 @@ export interface CustomerValue {
 }
 
 interface Suggestion {
-  id: string;
-  name: string;
-  phone: string | null;
+  id:         string;
+  name:       string;
+  phone:      string | null;
+  isMember?:  boolean;
+  isPending?: boolean;
+  hasPackage?: boolean;
 }
 
 interface Props {
@@ -184,7 +187,18 @@ export default function CustomerSearch({
                   {c.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: "#3B2A24" }}>{c.name}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-sm font-medium truncate" style={{ color: "#3B2A24" }}>{c.name}</p>
+                    {c.isMember && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#F0FDF4", color: "#166534" }}>สมาชิก</span>
+                    )}
+                    {c.isPending && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#FFF7ED", color: "#9A3412" }}>รอเปิดใช้</span>
+                    )}
+                    {c.hasPackage && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>แพ็กเกจ</span>
+                    )}
+                  </div>
                   {c.phone && <p className="text-xs" style={{ color: "#A08070" }}>{c.phone}</p>}
                 </div>
               </button>

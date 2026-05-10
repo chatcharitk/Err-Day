@@ -23,6 +23,58 @@ export default async function NotificationsPage() {
     failed:  recent.filter((r) => r.status === "FAILED").length,
   };
 
+  // Non-followers: customers with lineUserId whose pushes hit "Failed to send messages"
+  // (LINE API rejects pushes to users who haven't added the OA as a friend).
+  const failed = await prisma.notificationLog.findMany({
+    where: {
+      status:    "FAILED",
+      sentAt:    { gte: since },
+      recipient: { not: null },
+      error:     { contains: "Failed to send messages" },
+    },
+    select: { recipient: true, error: true, sentAt: true, kind: true },
+    orderBy: { sentAt: "desc" },
+  });
+
+  // Group by lineUserId, keep the most recent failure per user
+  const byUid = new Map<string, { lineUserId: string; lastError: string; lastAt: string; lastKind: string; count: number }>();
+  for (const r of failed) {
+    const uid = r.recipient!;
+    const existing = byUid.get(uid);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      byUid.set(uid, {
+        lineUserId: uid,
+        lastError:  r.error ?? "",
+        lastAt:     r.sentAt.toISOString(),
+        lastKind:   r.kind,
+        count:      1,
+      });
+    }
+  }
+
+  // Look up customer names for these lineUserIds
+  const uids = Array.from(byUid.keys());
+  const customers = uids.length === 0 ? [] : await prisma.customer.findMany({
+    where:  { lineUserId: { in: uids } },
+    select: { id: true, name: true, nickname: true, phone: true, lineUserId: true },
+  });
+  const cMap = new Map(customers.map(c => [c.lineUserId!, c]));
+
+  const nonFollowers = Array.from(byUid.values())
+    .map(f => {
+      const c = cMap.get(f.lineUserId);
+      return {
+        ...f,
+        customerId: c?.id ?? null,
+        name:       c?.name ?? "—",
+        nickname:   c?.nickname ?? null,
+        phone:      c?.phone ?? null,
+      };
+    })
+    .sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+
   return (
     <NotificationsView
       logs={logs.map((l) => ({
@@ -36,6 +88,7 @@ export default async function NotificationsPage() {
         sentAt:    l.sentAt.toISOString(),
       }))}
       stats={stats}
+      nonFollowers={nonFollowers}
     />
   );
 }

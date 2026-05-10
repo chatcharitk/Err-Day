@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { defaultBranchId } from "@/lib/utils";
 import NewBookingForm from "./NewBookingForm";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function NewBookingPage({
     select:  { id: true, name: true, openTime: true, closeTime: true },
   });
 
-  const activeBranchId = branchId ?? branches[0]?.id ?? "";
+  const activeBranchId = branchId ?? defaultBranchId(branches);
 
   const branchServices = activeBranchId
     ? await prisma.branchService.findMany({
@@ -30,13 +31,20 @@ export default async function NewBookingPage({
       })
     : [];
 
-  const branchStaff = activeBranchId
-    ? await prisma.staff.findMany({
-        where:   { branchId: activeBranchId, isActive: true },
-        orderBy: { name: "asc" },
-        select:  { id: true, name: true },
-      })
-    : [];
+  const [branchStaff, addons] = await Promise.all([
+    activeBranchId
+      ? prisma.staff.findMany({
+          where:   { branchId: activeBranchId, isActive: true },
+          orderBy: { name: "asc" },
+          select:  { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    prisma.serviceAddon.findMany({
+      where:   { isActive: true },
+      orderBy: { nameTh: "asc" },
+      select:  { id: true, nameTh: true, price: true },
+    }),
+  ]);
 
   return (
     <NewBookingForm
@@ -44,13 +52,16 @@ export default async function NewBookingPage({
       activeBranchId={activeBranchId}
       defaultDate={date ?? toLocalDateStr(new Date())}
       branchServices={branchServices.map((bs) => ({
-        id:       bs.serviceId,
-        nameTh:   bs.service.nameTh,
-        category: bs.service.category,
-        price:    bs.price,
-        duration: bs.duration,
+        id:                    bs.serviceId,
+        nameTh:                bs.service.nameTh,
+        category:              bs.service.category,
+        price:                 bs.price,
+        duration:              bs.duration,
+        memberPrice:           bs.service.memberPrice ?? null,
+        memberDiscountPercent: bs.service.memberDiscountPercent ?? 0,
       }))}
       branchStaff={branchStaff}
+      addons={addons}
     />
   );
 }

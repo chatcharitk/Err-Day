@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown, Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -18,18 +18,32 @@ type Status = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 
 interface Branch { id: string; name: string; }
 
+interface PackageBadge {
+  id:         string;
+  sku:        string;
+  expiresAt:  string;
+  usagesLeft: number | null;
+  isPending:  boolean;
+}
+
 interface BookingRow {
-  id:            string;
-  startTime:     string;
-  endTime:       string;
-  status:        Status;
-  totalPrice:    number;
-  notes:         string | null;
-  serviceName:   string;
-  customerName:  string;
-  customerPhone: string;
-  staffName:     string | null;
-  addonCount:    number;
+  id:                string;
+  startTime:         string;
+  endTime:           string;
+  status:            Status;
+  totalPrice:        number;
+  /** Member-adjusted price for display in the overview list. Equals totalPrice for non-members. */
+  displayPrice:      number;
+  /** True when displayPrice < totalPrice (member rate is cheaper than saved). */
+  hasMemberDiscount: boolean;
+  serviceName:       string;
+  customerName:      string;
+  customerPhone:     string;
+  staffName:         string | null;
+  addonCount:        number;
+  memberStatus:      "active" | "pending" | "expired" | null;
+  memberExpiresAt:   string | null;
+  packages:          PackageBadge[];
 }
 
 interface Props {
@@ -75,11 +89,14 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const [showMenu,         setShowMenu]         = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
+  const [isNavigating, startNavigate] = useTransition();
 
   const handleRefresh = () => {
     // Server component re-fetches; useTransition gives us a pending flag
     startRefresh(() => router.refresh());
   };
+
+  const buildDateUrl = (dateStr: string) => `?branchId=${activeBranchId}&date=${dateStr}`;
 
   const activeBranch = branches.find((b) => b.id === activeBranchId);
 
@@ -107,9 +124,11 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   };
 
   const switchDate = (dateStr: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("date", dateStr);
-    router.replace(url.pathname + url.search);
+    startNavigate(() => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("date", dateStr);
+      router.replace(url.pathname + url.search);
+    });
   };
 
   const handleLogout = async () => {
@@ -121,6 +140,13 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
 
   const visibleBookings = bookings.filter((b) => b.status !== "CANCELLED");
   const cancelledCount  = bookings.length - visibleBookings.length;
+  const paidRevenue     = visibleBookings
+    .filter((b) => b.status === "COMPLETED")
+    .reduce((sum, b) => sum + b.displayPrice, 0);
+  const pendingRevenue  = visibleBookings
+    .filter((b) => b.status === "CONFIRMED" || b.status === "PENDING")
+    .reduce((sum, b) => sum + b.displayPrice, 0);
+
 
   // Format date headline
   const [yr, mo, dy] = selectedDate.split("-").map(Number);
@@ -183,14 +209,17 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
         </div>
 
         {/* Date strip */}
-        <div className="px-2 pb-3 flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        <div className="px-2 pb-3 flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", opacity: isNavigating ? 0.6 : 1, transition: "opacity 100ms" }}>
           {days.map(({ date, isSelected, isToday }) => {
             const [y, m, d] = date.split("-").map(Number);
             const dt = new Date(y, m - 1, d);
             return (
-              <button
+              <Link
                 key={date}
-                onClick={() => switchDate(date)}
+                href={buildDateUrl(date)}
+                replace
+                prefetch
+                onClick={(e) => { e.preventDefault(); switchDate(date); }}
                 className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-2 rounded-xl min-w-[52px]"
                 style={{
                   background: isSelected ? PRIMARY : (isToday ? "#FFF8F4" : "transparent"),
@@ -205,7 +234,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                     วันนี้
                   </span>
                 )}
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -213,7 +242,23 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
 
       {/* ── Date headline ── */}
       <section className="px-5 pt-5 pb-2">
-        <h1 className="text-lg font-medium" style={{ color: TEXT }}>{headline}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-lg font-medium" style={{ color: TEXT }}>{headline}</h1>
+          {(paidRevenue > 0 || pendingRevenue > 0) && (
+            <div className="text-right">
+              {paidRevenue > 0 && (
+                <p className="text-sm font-semibold leading-tight" style={{ color: "#166534" }}>
+                  จ่ายแล้ว ฿{(paidRevenue / 100).toLocaleString()}
+                </p>
+              )}
+              {pendingRevenue > 0 && (
+                <p className="text-xs leading-tight mt-0.5" style={{ color: MUTED }}>
+                  รอยืนยัน ฿{(pendingRevenue / 100).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         <p className="text-xs mt-0.5" style={{ color: MUTED }}>
           {visibleBookings.length === 0 ? "ไม่มีนัด" : `${visibleBookings.length} นัด`}
           {cancelledCount > 0 && ` · ยกเลิก ${cancelledCount}`}
@@ -235,52 +280,78 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
             </p>
           </div>
         ) : (
-          <ul className="space-y-2.5">
+          <ul className="space-y-1.5">
             {visibleBookings.map((b) => {
               const meta = STATUS_META[b.status];
               return (
                 <li key={b.id}>
                   <Link
                     href={`/admin/m/${b.id}`}
-                    className="block rounded-2xl bg-white p-4 transition-shadow active:scale-[0.99]"
+                    className="block rounded-xl bg-white px-3 py-2.5 active:scale-[0.99]"
                     style={{ border: `1px solid ${BORDER}` }}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-center gap-2.5">
                       {/* Time block */}
-                      <div className="flex flex-col items-center justify-center px-2.5 py-2 rounded-xl flex-shrink-0"
-                           style={{ background: "#FFF8F4", minWidth: 60 }}>
-                        <span className="text-base font-bold leading-none" style={{ color: PRIMARY }}>
-                          {b.startTime}
-                        </span>
-                        <span className="text-[10px] mt-1 leading-none" style={{ color: MUTED }}>
-                          {b.endTime}
-                        </span>
+                      <div className="flex flex-col items-center justify-center flex-shrink-0" style={{ minWidth: 46 }}>
+                        <span className="text-sm font-bold leading-none" style={{ color: PRIMARY }}>{b.startTime}</span>
+                        <span className="text-[10px] mt-0.5 leading-none" style={{ color: MUTED }}>{b.endTime}</span>
                       </div>
+
+                      {/* Divider */}
+                      <div className="w-px self-stretch" style={{ background: BORDER }} />
 
                       {/* Details */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-sm font-semibold" style={{ color: TEXT }}>
-                            {b.customerName}
-                          </span>
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                            style={{ background: meta.bg, color: meta.fg }}
-                          >
-                            {meta.label}
-                          </span>
-                        </div>
-                        <p className="text-xs truncate" style={{ color: TEXT }}>
-                          {b.serviceName}
-                          {b.addonCount > 0 && (
-                            <span style={{ color: MUTED }}> · +{b.addonCount} เสริม</span>
+                        {/* Row 1: name + status */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold leading-tight truncate" style={{ color: TEXT }}>{b.customerName}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: meta.bg, color: meta.fg }}>{meta.label}</span>
+                          {b.memberStatus === "active" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 inline-flex items-center gap-0.5" style={{ background: "#F0FDF4", color: "#166534" }}>
+                              <Sparkles size={8} />
+                              {b.memberExpiresAt ? new Date(b.memberExpiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "สมาชิก"}
+                            </span>
                           )}
-                        </p>
-                        <p className="text-[11px] mt-0.5 flex items-center gap-2" style={{ color: MUTED }}>
-                          <span className="inline-flex items-center gap-1"><User size={10} />{b.staffName ?? "ไม่ระบุช่าง"}</span>
-                          <span className="inline-flex items-center gap-1"><Phone size={10} />{b.customerPhone}</span>
+                          {b.memberStatus === "pending" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#FFF7ED", color: "#9A3412" }}>รอเปิด</span>
+                          )}
+                          {b.packages.filter(p => !p.isPending).map(p => (
+                            <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>
+                              {p.sku === "svc-buffet" ? "Buffet" : p.sku === "svc-pkg5" ? "5 ครั้ง" : p.sku}
+                              {p.usagesLeft != null && ` ·${p.usagesLeft}`}
+                            </span>
+                          ))}
+                        </div>
+                        {/* Row 2: service + staff + phone */}
+                        <p className="text-[11px] mt-0.5 truncate" style={{ color: MUTED }}>
+                          {b.serviceName}
+                          {b.addonCount > 0 && ` +${b.addonCount}`}
+                          <span className="mx-1">·</span>
+                          <User size={9} className="inline mb-0.5" /> {b.staffName ?? "ไม่ระบุ"}
+                          <span className="mx-1">·</span>
+                          {b.customerPhone}
                         </p>
                       </div>
+
+                      {/* Price — right-aligned, hidden for cancelled/no-show */}
+                      {b.status !== "CANCELLED" && b.status !== "NO_SHOW" && (
+                        <div className="flex-shrink-0 text-right pl-1 leading-tight">
+                          {b.hasMemberDiscount && (
+                            <span
+                              className="text-[10px] line-through block"
+                              style={{ color: MUTED }}
+                            >
+                              ฿{(b.totalPrice / 100).toLocaleString()}
+                            </span>
+                          )}
+                          <span
+                            className="text-xs font-semibold"
+                            style={{ color: b.status === "COMPLETED" ? "#166534" : MUTED }}
+                          >
+                            ฿{(b.displayPrice / 100).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </Link>
                 </li>
@@ -361,6 +432,60 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </button>
             </div>
             <div className="p-2">
+              <Link
+                href="/admin/m/dashboard"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <BarChart2 size={16} style={{ color: MUTED }} />
+                BI — ภาพรวมธุรกิจ
+              </Link>
+              <Link
+                href="/admin/m/history"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <Receipt size={16} style={{ color: MUTED }} />
+                ประวัติการขาย
+              </Link>
+              <Link
+                href="/admin/m/pos"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <ShoppingBag size={16} style={{ color: MUTED }} />
+                POS — ขายหน้าร้าน
+              </Link>
+              <Link
+                href="/admin/m/customers"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <Users size={16} style={{ color: MUTED }} />
+                ลูกค้า
+              </Link>
+              <Link
+                href="/admin/m/membership"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <CreditCard size={16} style={{ color: MUTED }} />
+                สมาชิก
+              </Link>
+              <Link
+                href="/admin/m/staff"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <UserCog size={16} style={{ color: MUTED }} />
+                ช่าง / กะการทำงาน
+              </Link>
               <Link
                 href="/admin"
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"

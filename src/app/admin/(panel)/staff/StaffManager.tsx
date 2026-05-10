@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { defaultBranchId } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import {
   UserPlus, Pencil, Trash2, Check, X, ChevronLeft, ChevronRight, Save,
@@ -43,7 +44,7 @@ export default function StaffManager({ staff, branches, monthLabel, currentMonth
 
   /* ── Add form ── */
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", phone: "", branchId: branches[0]?.id ?? "" });
+  const [addForm, setAddForm] = useState({ name: "", phone: "", branchId: defaultBranchId(branches) });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
 

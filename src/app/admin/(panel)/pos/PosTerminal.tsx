@@ -36,7 +36,8 @@ interface ActivePackage {
 interface PrefillBooking {
   id: string;
   branchId: string;
-  customer: { name: string; phone: string };
+  customer: { id: string; name: string; phone: string };
+  serviceId: string;
   serviceName: string;
   totalPrice: number;
 }
@@ -92,6 +93,20 @@ const CATS_AFTER_ADDONS  = ["Davines Spa", "ย้อมผม NIGAO"];
 export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku }: Props) {
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (prefillBooking) {
+      // Find the real BranchService so member re-pricing can work
+      const bs = branchServices.find(s => s.serviceId === prefillBooking.serviceId);
+      if (bs) {
+        const mPrice = getServiceMemberPrice(bs);
+        return [{
+          id:          bs.id,
+          name:        bs.service.nameTh,
+          basePrice:   bs.price,
+          price:       bs.price,
+          qty:         1,
+          memberPrice: mPrice,
+        }];
+      }
+      // Fallback if service no longer exists in catalog
       return [{
         id: `prefill-${prefillBooking.id}`,
         name: prefillBooking.serviceName,
@@ -106,7 +121,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   });
   const [customer, setCustomer] = useState<CustomerValue>(() => {
     if (prefillBooking) {
-      return { id: null, name: prefillBooking.customer.name, phone: prefillBooking.customer.phone };
+      return { id: prefillBooking.customer.id, name: prefillBooking.customer.name, phone: prefillBooking.customer.phone };
     }
     if (prefillCustomer) {
       return { id: prefillCustomer.id, name: prefillCustomer.name, phone: prefillCustomer.phone };
@@ -124,6 +139,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [discountBaht, setDiscountBaht] = useState(0);
   const [lastCustomerPhone, setLastCustomerPhone] = useState<string | null>(null);
   const [showMemberPrompt, setShowMemberPrompt] = useState(false);
 
@@ -147,7 +163,8 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         // Membership block
         if (data?.membership) {
           const m = data.membership;
-          const expired = m.expiresAt && new Date(m.expiresAt) <= new Date();
+          const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+          const expired = m.expiresAt && new Date(m.expiresAt) < today;
           const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
           const valid   = !expired && !usedUp;
           const tierPct: number = m.tier?.discountPercent ?? 0;
@@ -200,7 +217,9 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
     branchServices.some(bs => bs.service.category === c)
   );
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const discountSatang = Math.min(subtotal, Math.round(discountBaht * 100));
+  const total = Math.max(0, subtotal - discountSatang);
   const memberActive = memberInfo?.isValid ?? false;
 
   /**
@@ -308,23 +327,26 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           branchId: activeBranchId,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || undefined,
-          items: cart.flatMap(i =>
-            Array.from({ length: i.qty }, () => {
-              // Strip any redemption marker suffix from the row id to recover
-              // the underlying BranchService.id for the API.
-              const baseId = i.id.split("__")[0];
-              const isService = !i.isCustom
-                && !baseId.startsWith("addon-")
-                && !baseId.startsWith("prefill-")
-                && !baseId.startsWith("custom-");
-              return {
-                name:            i.name,
-                price:           i.price,
-                branchServiceId: isService ? baseId : undefined,
-                redeemPackageId: i.redeemPackageId,
-              };
-            }),
-          ),
+          items: [
+            ...cart.flatMap(i =>
+              Array.from({ length: i.qty }, () => {
+                // Strip any redemption marker suffix from the row id to recover
+                // the underlying BranchService.id for the API.
+                const baseId = i.id.split("__")[0];
+                const isService = !i.isCustom
+                  && !baseId.startsWith("addon-")
+                  && !baseId.startsWith("prefill-")
+                  && !baseId.startsWith("custom-");
+                return {
+                  name:            i.name,
+                  price:           i.price,
+                  branchServiceId: isService ? baseId : undefined,
+                  redeemPackageId: i.redeemPackageId,
+                };
+              }),
+            ),
+            ...(discountSatang > 0 ? [{ name: "ส่วนลด", price: -discountSatang, branchServiceId: undefined, redeemPackageId: undefined }] : []),
+          ],
           ...(fromBookingId ? { fromBookingId } : {}),
         }),
       });
@@ -662,6 +684,27 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 </>
               );
             })()}
+            {/* Manual discount */}
+            <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2" style={{ border: "1px solid #D6BCAE", background: "white" }}>
+              <span className="text-xs" style={{ color: "#A08070" }}>ส่วนลด ฿</span>
+              <input
+                type="number" min={0}
+                value={discountBaht || ""}
+                onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
+                placeholder="0"
+                className="flex-1 text-sm outline-none bg-transparent"
+                style={{ color: "#3B2A24" }}
+              />
+              {discountBaht > 0 && (
+                <button onClick={() => setDiscountBaht(0)} className="text-xs" style={{ color: "#A08070" }}>ล้าง</button>
+              )}
+            </div>
+            {discountSatang > 0 && (
+              <div className="flex justify-between text-xs mb-1.5" style={{ color: "#16a34a" }}>
+                <span>ส่วนลดที่กรอก</span>
+                <span>-{formatPrice(discountSatang)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center mb-4">
               <span className="font-medium" style={{ color: "#5C4A42" }}>ยอดรวมทั้งหมด</span>
               <span className="font-bold text-2xl" style={{ color: "#8B1D24" }}>{formatPrice(total)}</span>

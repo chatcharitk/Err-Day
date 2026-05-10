@@ -123,218 +123,244 @@ function daysLeft(iso: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-// ─── Member card ──────────────────────────────────────────────────────────────
+// ─── Member table row ─────────────────────────────────────────────────────────
 
-function CustomerCard({
+const PKG_BLUE   = "#1d4ed8";
+const PKG_BG     = "#EFF6FF";
+
+function MemberTableRow({
   row,
   onRenew,
+  onClick,
   renewing,
 }: {
-  row: MemberRow & { membership: MembershipInfo };
+  row: MemberRow;
   onRenew: (id: string) => void;
+  onClick: (id: string) => void;
   renewing: boolean;
 }) {
-  const m    = row.membership;
+  if (row.kind === "package") {
+    // Pick the soonest-expiring active package, fall back to first.
+    const active   = row.packages.filter(p => p.isActive).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
+    const main     = active[0] ?? row.packages[0];
+    const days     = main ? daysLeft(main.expiresAt) : null;
+    const isUnlim  = main ? main.usageLimit === 0 : false;
+    const usedPct  = main && !isUnlim ? Math.min(100, Math.round((main.usagesUsed / main.usageLimit) * 100)) : null;
+
+    return (
+      <tr
+        className="cursor-pointer hover:bg-amber-50/40 transition-colors"
+        style={{ borderBottom: `1px solid #F5EFE9` }}
+        onClick={() => onClick(row.id)}
+      >
+        {/* Customer */}
+        <td className="px-3 py-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+              style={{ backgroundColor: PKG_BLUE }}
+            >
+              {row.name.charAt(0)}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{row.name}</p>
+              {row.phone && <p className="text-[11px]" style={{ color: MUTED }}>{row.phone}</p>}
+            </div>
+          </div>
+        </td>
+
+        {/* Type */}
+        <td className="px-3 py-3">
+          <span
+            className="text-[11px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+            style={{ background: PKG_BG, color: PKG_BLUE }}
+          >
+            {main?.nameTh ?? "แพ็กเกจ"}
+          </span>
+          {row.packages.length > 1 && (
+            <span className="text-[10px] ml-1.5" style={{ color: MUTED }}>+{row.packages.length - 1}</span>
+          )}
+        </td>
+
+        {/* Status */}
+        <td className="px-3 py-3">
+          <span
+            className="text-[11px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+            style={{ background: PKG_BG, color: PKG_BLUE }}
+          >
+            <CheckCircle size={10} />
+            ใช้งานได้
+          </span>
+        </td>
+
+        {/* Expires */}
+        <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+          {main ? fmtDate(main.expiresAt) : "—"}
+          {days !== null && main?.isActive && (
+            <p className="text-[10px] mt-0.5" style={{ color: days <= 5 ? "#b45309" : MUTED }}>
+              เหลือ {days} วัน
+            </p>
+          )}
+        </td>
+
+        {/* Cycle usage */}
+        <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+          {main ? (
+            <>
+              <div className="font-medium">
+                {isUnlim ? `${main.usagesUsed} (ไม่จำกัด)` : `${main.usagesUsed} / ${main.usageLimit}`}
+              </div>
+              {!isUnlim && usedPct !== null && (
+                <div className="w-20 h-1 rounded-full mt-1" style={{ background: "#DBEAFE" }}>
+                  <div
+                    className="h-1 rounded-full"
+                    style={{
+                      width: `${usedPct}%`,
+                      backgroundColor: usedPct >= 100 ? "#ef4444" : usedPct >= 80 ? "#f59e0b" : PKG_BLUE,
+                    }}
+                  />
+                </div>
+              )}
+            </>
+          ) : <span style={{ color: MUTED }}>—</span>}
+        </td>
+
+        {/* Lifetime */}
+        <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+          {row.totalBookings} ครั้ง
+        </td>
+
+        {/* Actions */}
+        <td className="px-3 py-3 text-right">
+          <span className="text-[11px]" style={{ color: MUTED }}>—</span>
+        </td>
+      </tr>
+    );
+  }
+
+  // ─── Membership row ─────────────────────────────────────────────────────────
+  const m    = row.membership!;
   const days = daysLeft(m.expiresAt);
 
   let statusColor = "#166534";
   let statusBg    = "#F0FFF4";
   let statusText  = "ใช้งานได้";
+  let statusIcon: React.ReactNode = <CheckCircle size={10} />;
 
   if (m.expired) {
-    statusColor = "#991b1b"; statusBg = "#FEF2F2"; statusText = "หมดอายุ";
+    statusColor = "#991b1b"; statusBg = "#FEF2F2"; statusText = "หมดอายุ"; statusIcon = <XCircle size={10} />;
   } else if (m.usedUp) {
-    statusColor = "#92400e"; statusBg = "#FFFBEB"; statusText = "ใช้ครบแล้ว";
+    statusColor = "#92400e"; statusBg = "#FFFBEB"; statusText = "ใช้ครบแล้ว"; statusIcon = <Clock size={10} />;
   } else if (days !== null && days <= 5) {
-    statusColor = "#b45309"; statusBg = "#FFFBEB"; statusText = `เหลือ ${days} วัน`;
+    statusColor = "#b45309"; statusBg = "#FFFBEB"; statusText = `เหลือ ${days} วัน`; statusIcon = <Clock size={10} />;
   }
 
   const hasCycleLimit = m.usagesAllowed > 0;
   const cycleUsedPct  = hasCycleLimit ? Math.min(100, Math.round((row.cycleBookings / m.usagesAllowed) * 100)) : null;
 
   return (
-    <div
-      className="rounded-2xl bg-white p-4 flex flex-col gap-3"
-      style={{ border: `1.5px solid ${m.isValid ? BORDER : "#FECACA"}` }}
+    <tr
+      className="cursor-pointer hover:bg-amber-50/40 transition-colors"
+      style={{ borderBottom: `1px solid #F5EFE9` }}
+      onClick={() => onClick(row.id)}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+      {/* Customer */}
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
             style={{ backgroundColor: m.isValid ? PRIMARY : MUTED }}
           >
             {row.name.charAt(0)}
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{row.name}</p>
-            {row.phone && <p className="text-xs" style={{ color: MUTED }}>{row.phone}</p>}
+            {row.phone && <p className="text-[11px]" style={{ color: MUTED }}>{row.phone}</p>}
           </div>
         </div>
+      </td>
 
+      {/* Type */}
+      <td className="px-3 py-3">
         <span
-          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 flex items-center gap-1"
-          style={{ backgroundColor: statusBg, color: statusColor }}
+          className="text-[11px] px-2 py-0.5 rounded-full font-medium inline-block"
+          style={{ background: "#F9F0E8", color: PRIMARY }}
         >
-          {m.isValid ? <CheckCircle size={11} /> : m.expired ? <XCircle size={11} /> : <Clock size={11} />}
+          {m.label ?? "สมาชิก"}
+        </span>
+        {m.points > 0 && (
+          <span className="text-[10px] ml-1.5" style={{ color: "#1d4ed8" }}>{m.points} แต้ม</span>
+        )}
+      </td>
+
+      {/* Status */}
+      <td className="px-3 py-3">
+        <span
+          className="text-[11px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1"
+          style={{ background: statusBg, color: statusColor }}
+        >
+          {statusIcon}
           {statusText}
         </span>
-      </div>
+      </td>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {m.label && (
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F9F0E8", color: PRIMARY }}>
-            {m.label}
-          </span>
-        )}
-        {m.points > 0 && (
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#EFF6FF", color: "#1d4ed8" }}>
-            {m.points} แต้ม
-          </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <p style={{ color: MUTED }}>หมดอายุ</p>
-          <p className="font-medium mt-0.5" style={{ color: m.expired ? "#991b1b" : TEXT }}>
-            {fmtDate(m.expiresAt)}
+      {/* Expires */}
+      <td className="px-3 py-3 text-xs" style={{ color: m.expired ? "#991b1b" : TEXT }}>
+        {fmtDate(m.expiresAt)}
+        {days !== null && m.isValid && (
+          <p className="text-[10px] mt-0.5" style={{ color: days <= 5 ? "#b45309" : MUTED }}>
+            เหลือ {days} วัน
           </p>
-        </div>
-        <div>
-          <p style={{ color: MUTED }}>ครั้งที่ใช้ (รอบนี้)</p>
-          <p className="font-medium mt-0.5" style={{ color: TEXT }}>
-            {row.cycleBookings}
-            {hasCycleLimit && ` / ${m.usagesAllowed} ครั้ง`}
+        )}
+        {m.activatedAt && (
+          <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
+            เริ่ม {fmtDate(m.activatedAt)}
           </p>
-        </div>
-        <div>
-          <p style={{ color: MUTED }}>เริ่มรอบปัจจุบัน</p>
-          <p className="font-medium mt-0.5" style={{ color: TEXT }}>{fmtDate(m.activatedAt)}</p>
-        </div>
-        <div>
-          <p style={{ color: MUTED }}>ทั้งหมด (ตลอดกาล)</p>
-          <p className="font-medium mt-0.5" style={{ color: TEXT }}>{row.totalBookings} ครั้ง</p>
-        </div>
-      </div>
+        )}
+      </td>
 
-      {hasCycleLimit && cycleUsedPct !== null && (
-        <div>
-          <div className="flex items-center justify-between text-xs mb-1" style={{ color: MUTED }}>
-            <span>การใช้งานรอบนี้</span>
-            <span style={{ color: cycleUsedPct >= 100 ? "#991b1b" : TEXT }}>{cycleUsedPct}%</span>
-          </div>
-          <div className="w-full h-1.5 rounded-full" style={{ background: BORDER }}>
+      {/* Cycle usage */}
+      <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+        <div className="font-medium">
+          {row.cycleBookings}
+          {hasCycleLimit ? ` / ${m.usagesAllowed}` : ""}
+        </div>
+        {hasCycleLimit && cycleUsedPct !== null && (
+          <div className="w-20 h-1 rounded-full mt-1" style={{ background: BORDER }}>
             <div
-              className="h-1.5 rounded-full transition-all"
+              className="h-1 rounded-full"
               style={{
                 width: `${cycleUsedPct}%`,
                 backgroundColor: cycleUsedPct >= 100 ? "#ef4444" : cycleUsedPct >= 80 ? "#f59e0b" : "#22c55e",
               }}
             />
           </div>
-        </div>
-      )}
+        )}
+      </td>
 
-      <button
-        onClick={() => onRenew(row.id)}
-        disabled={renewing}
-        className="w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-        style={{
-          background: m.isValid ? BG : PRIMARY,
-          color:      m.isValid ? PRIMARY : "white",
-          border:     m.isValid ? `1px solid ${BORDER}` : "none",
-        }}
-        title="ใช้สำหรับกรณีพิเศษ — ปกติต่ออายุผ่าน POS"
-      >
-        <RefreshCw size={12} className={renewing ? "animate-spin" : ""} />
-        {renewing ? "กำลังต่ออายุ..." : "ต่ออายุ (Manual)"}
-      </button>
-    </div>
-  );
-}
+      {/* Lifetime */}
+      <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
+        {row.totalBookings} ครั้ง
+      </td>
 
-// ─── Package member card ──────────────────────────────────────────────────────
-
-function PackageMemberCard({ row }: { row: MemberRow }) {
-  const PKG_BLUE = "#1d4ed8";
-  const PKG_BG   = "#EFF6FF";
-  const PKG_BORDER = "#BFDBFE";
-
-  return (
-    <div
-      className="rounded-2xl bg-white p-4 flex flex-col gap-3"
-      style={{ border: `1.5px solid ${PKG_BORDER}` }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-            style={{ backgroundColor: PKG_BLUE }}
-          >
-            {row.name.charAt(0)}
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-sm truncate" style={{ color: TEXT }}>{row.name}</p>
-            {row.phone && <p className="text-xs" style={{ color: MUTED }}>{row.phone}</p>}
-          </div>
-        </div>
-        <span
-          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 flex items-center gap-1"
-          style={{ backgroundColor: PKG_BG, color: PKG_BLUE }}
+      {/* Actions */}
+      <td className="px-3 py-3 text-right">
+        <button
+          onClick={(e) => { e.stopPropagation(); onRenew(row.id); }}
+          disabled={renewing}
+          className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+          style={{
+            background: m.isValid ? "white" : PRIMARY,
+            color:      m.isValid ? PRIMARY : "white",
+            border:     `1px solid ${m.isValid ? BORDER : PRIMARY}`,
+          }}
+          title="ใช้สำหรับกรณีพิเศษ — ปกติต่ออายุผ่าน POS"
         >
-          <CheckCircle size={11} />
-          แพ็กเกจ
-        </span>
-      </div>
-
-      {row.packages.map(pkg => {
-        const days  = daysLeft(pkg.expiresAt);
-        const isUnlimited = pkg.usageLimit === 0;
-        const usedPct = isUnlimited ? null : Math.min(100, Math.round((pkg.usagesUsed / pkg.usageLimit) * 100));
-        return (
-          <div key={pkg.id} className="rounded-xl p-3 space-y-2" style={{ background: PKG_BG }}>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-xs font-semibold" style={{ color: PKG_BLUE }}>{pkg.nameTh}</p>
-              {days !== null && (
-                <span className="text-[10px] font-medium" style={{ color: days <= 5 ? "#b45309" : MUTED }}>
-                  เหลือ {days} วัน
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <p style={{ color: MUTED }}>หมดอายุ</p>
-                <p className="font-medium mt-0.5" style={{ color: TEXT }}>{fmtDate(pkg.expiresAt)}</p>
-              </div>
-              <div>
-                <p style={{ color: MUTED }}>ใช้ไป</p>
-                <p className="font-medium mt-0.5" style={{ color: TEXT }}>
-                  {isUnlimited ? `${pkg.usagesUsed} ครั้ง (ไม่จำกัด)` : `${pkg.usagesUsed} / ${pkg.usageLimit} ครั้ง`}
-                </p>
-              </div>
-            </div>
-            {!isUnlimited && usedPct !== null && (
-              <div className="w-full h-1.5 rounded-full bg-blue-100">
-                <div
-                  className="h-1.5 rounded-full transition-all"
-                  style={{
-                    width: `${usedPct}%`,
-                    backgroundColor: usedPct >= 100 ? "#ef4444" : usedPct >= 80 ? "#f59e0b" : PKG_BLUE,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <p style={{ color: MUTED }}>ทั้งหมด (ตลอดกาล)</p>
-          <p className="font-medium mt-0.5" style={{ color: TEXT }}>{row.totalBookings} ครั้ง</p>
-        </div>
-      </div>
-    </div>
+          <RefreshCw size={11} className={renewing ? "animate-spin" : ""} />
+          {renewing ? "กำลัง..." : "ต่ออายุ"}
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -575,6 +601,7 @@ function HistoryRow({ row }: { row: CycleRow }) {
 type Tab = "members" | "pending" | "history";
 
 export default function MembershipManager() {
+  const router = useRouter();
   const [data,     setData]     = useState<ApiResponse>({ members: [], pending: [], history: [] });
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
@@ -801,19 +828,37 @@ export default function MembershipManager() {
                 <p className="text-sm">ไม่พบสมาชิก</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {memberFiltered.map(row =>
-                  row.kind === "package" ? (
-                    <PackageMemberCard key={row.id} row={row} />
-                  ) : (
-                    <CustomerCard
-                      key={row.id}
-                      row={row as MemberRow & { membership: MembershipInfo }}
-                      onRenew={handleRenew}
-                      renewing={renewing === row.id}
-                    />
-                  )
-                )}
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1.5px solid ${BORDER}` }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>
+                        <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>ลูกค้า</th>
+                        <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>ประเภท</th>
+                        <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>สถานะ</th>
+                        <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>หมดอายุ</th>
+                        <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>รอบนี้</th>
+                        <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>ตลอดกาล</th>
+                        <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>การจัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {memberFiltered.map(row => (
+                        <MemberTableRow
+                          key={row.id}
+                          row={row}
+                          onRenew={handleRenew}
+                          onClick={(id) => router.push(`/admin/customers?id=${id}`)}
+                          renewing={renewing === row.id}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-2.5 text-[11px] flex items-center justify-between" style={{ background: BG, color: MUTED, borderTop: `1px solid ${BORDER}` }}>
+                  <span>{memberFiltered.length} รายการ</span>
+                  <span className="hidden sm:inline">คลิกแถวเพื่อเปิดข้อมูลลูกค้า · ปุ่ม &quot;ต่ออายุ&quot; สำหรับกรณีพิเศษ — ปกติต่ออายุผ่าน POS</span>
+                </div>
               </div>
             )
           )}

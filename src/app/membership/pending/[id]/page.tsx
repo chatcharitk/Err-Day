@@ -56,8 +56,8 @@ export default async function PendingPage({
   // Only short-circuit if they signed up for "membership" AND already hold an active one.
   // Buying a package while you also hold a membership is fine — they stack.
   const m = customer.membership;
-  const now = new Date();
-  const expired = m?.expiresAt != null && new Date(m.expiresAt) <= now;
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const expired = m?.expiresAt != null && new Date(m.expiresAt) < today;
   const usedUp  = m && m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
   const isActiveMember = productKey === "membership" && !!m && !expired && !usedUp;
 

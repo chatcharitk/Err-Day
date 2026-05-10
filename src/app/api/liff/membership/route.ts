@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findActivePackages } from "@/lib/packages";
+import { startOfTodayUTC } from "@/lib/utils";
 
 // GET /api/liff/membership?lineUserId=xxx
 // Public endpoint — returns membership + active package status for a Line user
@@ -34,8 +35,13 @@ export async function GET(request: Request) {
     usagesLeft:   p.usagesLeft,
   }));
 
+  // Pending memberships hide from the customer-facing LIFF view
+  const visibleMembership = customer.membership && !customer.membership.pendingActivation
+    ? customer.membership
+    : null;
+
   // If they have neither membership nor packages, signal "no entitlements"
-  if (!customer.membership && packagesPayload.length === 0) {
+  if (!visibleMembership && packagesPayload.length === 0) {
     return NextResponse.json(
       { error: "ยังไม่มีสมาชิกหรือแพ็กเกจ", packages: [] },
       { status: 404 },
@@ -44,10 +50,9 @@ export async function GET(request: Request) {
 
   // Membership block — null when customer has packages but no membership
   let membershipBlock: Record<string, unknown> | null = null;
-  if (customer.membership) {
-    const { membership } = customer;
-    const now = new Date();
-    const isExpired = membership.expiresAt ? membership.expiresAt < now : false;
+  if (visibleMembership) {
+    const membership = visibleMembership;
+    const isExpired = membership.expiresAt ? membership.expiresAt < startOfTodayUTC() : false;
     const isUsagesExhausted =
       membership.usagesAllowed > 0 && membership.usagesUsed >= membership.usagesAllowed;
 
@@ -64,7 +69,7 @@ export async function GET(request: Request) {
   }
 
   // Fetch services that have a member discount (only relevant if membership exists)
-  const services = customer.membership ? await prisma.service.findMany({
+  const services = visibleMembership ? await prisma.service.findMany({
     where: { isActive: true, memberDiscountPercent: { gt: 0 } },
     select: {
       id: true,

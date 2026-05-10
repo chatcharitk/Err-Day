@@ -63,6 +63,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       startTime: newStartTime,
       endTime: newEndTime,
       excludeBookingId: id,
+      online: true,
     });
     if (!result.ok) {
       return NextResponse.json(

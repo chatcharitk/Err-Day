@@ -1,172 +1,222 @@
 import { prisma } from "@/lib/prisma";
-import { Badge } from "@/components/ui/badge";
-import AdminActions from "../AdminActions";
+import DashboardView, { DashboardData } from "./DashboardView";
 
 export const dynamic = "force-dynamic";
 
-function formatPrice(satang: number) {
-  return `฿${(satang / 100).toLocaleString()}`;
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+/** Current time in Bangkok (UTC+7). */
+function bkkNow(): Date {
+  return new Date(Date.now() + 7 * 3600 * 1000);
 }
 
-const STATUS_TH: Record<string, string> = {
-  PENDING: "รอยืนยัน",
-  CONFIRMED: "ยืนยันแล้ว",
-  CANCELLED: "ยกเลิก",
-  COMPLETED: "เสร็จสิ้น",
-  NO_SHOW: "ไม่มา",
-};
+/** Bounds for a full calendar day (UTC midnight → end-of-day). */
+function dayBounds(dateStr: string) {
+  return {
+    start: new Date(dateStr + "T00:00:00.000Z"),
+    end:   new Date(dateStr + "T23:59:59.999Z"),
+  };
+}
 
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  PENDING:   { bg: "#FFF8E8", color: "#B45309" },
-  CONFIRMED: { bg: "#ECFDF5", color: "#065F46" },
-  CANCELLED: { bg: "#FEF2F2", color: "#991B1B" },
-  COMPLETED: { bg: "#F5F0EC", color: "#5C4A42" },
-  NO_SHOW:   { bg: "#FEF2F2", color: "#7C3AED" },
-};
+/** Bounds from day 1 of (year, month) through `endDay` inclusive (UTC). */
+function partialMonthBounds(year: number, month: number, endDay: number) {
+  const m = String(month + 1).padStart(2, "0");
+  const d = String(endDay).padStart(2, "0");
+  return {
+    start: new Date(`${year}-${m}-01T00:00:00.000Z`),
+    end:   new Date(`${year}-${m}-${d}T23:59:59.999Z`),
+  };
+}
 
-export default async function AdminDashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ branchId?: string }>;
-}) {
-  const { branchId } = await searchParams;
+const THAI_MONTHS = [
+  "มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
+  "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม",
+];
+const THAI_MONTHS_SHORT = [
+  "ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.",
+  "ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค.",
+];
 
-  const [branches, bookings] = await Promise.all([
-    prisma.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+// ── Server component ──────────────────────────────────────────────────────────
+
+export default async function AdminDashboard() {
+  const now           = bkkNow();
+  const todayStr      = now.toISOString().slice(0, 10);
+  const thisYear      = Number(todayStr.slice(0, 4));
+  const thisMonthIdx  = Number(todayStr.slice(5, 7)) - 1;
+  const dayOfMonth    = Number(todayStr.slice(8, 10));        // 1-31
+  const lastMonthIdx  = thisMonthIdx === 0 ? 11 : thisMonthIdx - 1;
+  const lastMonthYear = thisMonthIdx === 0 ? thisYear - 1 : thisYear;
+
+  // For MTD (month-to-date) comparison: clamp to last month's days (e.g.
+  // today=Mar 31 vs last month Feb → 28).
+  const lastMonthDays = new Date(lastMonthYear, lastMonthIdx + 1, 0).getDate();
+  const lastMonthClampedDay = Math.min(dayOfMonth, lastMonthDays);
+
+  const todayB        = dayBounds(todayStr);
+  const thisMonthMTDB = partialMonthBounds(thisYear, thisMonthIdx, dayOfMonth);
+  const lastMonthMTDB = partialMonthBounds(lastMonthYear, lastMonthIdx, lastMonthClampedDay);
+
+  // For grouping (weekly bars, etc.) we still want the full current month.
+  const fullMonthEnd = new Date(thisYear, thisMonthIdx + 1, 0).getDate();
+  const thisMonthFullB = partialMonthBounds(thisYear, thisMonthIdx, fullMonthEnd);
+
+  const [
+    branches,
+    todayCompleted,
+    thisMonthCompleted,
+    lastMonthAgg,
+    activeMembersList,
+    newMembersThisMonth,
+  ] = await Promise.all([
+    prisma.branch.findMany({
+      where: { isActive: true }, orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+
+    // Today: completed bookings
     prisma.booking.findMany({
-      where: branchId ? { branchId } : undefined,
-      include: { branch: true, service: true, staff: true, customer: true },
-      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      where: { status: "COMPLETED", date: { gte: todayB.start, lte: todayB.end } },
+      select: { totalPrice: true },
+    }),
+
+    // This month: completed bookings (need full detail for breakdowns)
+    prisma.booking.findMany({
+      where: { status: "COMPLETED", date: { gte: thisMonthFullB.start, lte: thisMonthFullB.end } },
+      select: {
+        totalPrice: true,
+        serviceId:  true,
+        date:       true,
+        startTime:  true,
+        service:  { select: { nameTh: true } },
+        customer: { select: { id: true, name: true } },
+        staff:    { select: { id: true, name: true } },
+      },
+    }),
+
+    // Last month MTD aggregate (1st → same day of month)
+    prisma.booking.aggregate({
+      where: { status: "COMPLETED", date: { gte: lastMonthMTDB.start, lte: lastMonthMTDB.end } },
+      _sum: { totalPrice: true },
+      _count: true,
+    }),
+
+    // Memberships — fetch & filter active in JS for accuracy (Prisma can't compare
+    // two columns natively for `usagesUsed < usagesAllowed`).
+    prisma.membership.findMany({
+      where:  { pendingActivation: false },
+      select: { expiresAt: true, usagesUsed: true, usagesAllowed: true },
+    }),
+
+    // New memberships this month (by joinedAt)
+    prisma.membership.count({
+      where: { joinedAt: { gte: thisMonthMTDB.start, lte: thisMonthMTDB.end } },
     }),
   ]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // ── Derived metrics ─────────────────────────────────────────────────────────
 
-  const upcoming = bookings.filter((b) => new Date(b.date) >= today);
-  const past = bookings.filter((b) => new Date(b.date) < today);
-  const pending = bookings.filter((b) => b.status === "PENDING");
-  const totalRevenue = bookings
-    .filter((b) => b.status === "COMPLETED")
-    .reduce((sum, b) => sum + b.totalPrice, 0);
+  const todayRevenue     = todayCompleted.reduce((s, b) => s + b.totalPrice, 0);
+  const todayCount       = todayCompleted.length;
+
+  // Month-to-date totals (only days 1 → today)
+  const mtdEnd = new Date(`${todayStr}T23:59:59.999Z`);
+  const thisMonthMTDCompleted = thisMonthCompleted.filter(b => b.date <= mtdEnd);
+  const thisMonthRevenue = thisMonthMTDCompleted.reduce((s, b) => s + b.totalPrice, 0);
+  const thisMonthCount   = thisMonthMTDCompleted.length;
+
+  const lastMonthRevenue = lastMonthAgg._sum.totalPrice ?? 0;
+  const lastMonthCount   = lastMonthAgg._count;
+  const avgTicket        = thisMonthCount > 0 ? Math.round(thisMonthRevenue / thisMonthCount) : 0;
+
+  // Active members: not pending, not expired, not used-up.
+  const nowDate = new Date();
+  const activeMembers = activeMembersList.filter(m => {
+    const notExpired = m.expiresAt == null || m.expiresAt >= nowDate;
+    const notUsedUp  = m.usagesAllowed === 0 || m.usagesUsed < m.usagesAllowed;
+    return notExpired && notUsedUp;
+  }).length;
+
+  // Service breakdown (full month)
+  const serviceMap = new Map<string, { name: string; total: number; count: number }>();
+  for (const b of thisMonthCompleted) {
+    if (!serviceMap.has(b.serviceId))
+      serviceMap.set(b.serviceId, { name: b.service.nameTh || "ไม่ระบุ", total: 0, count: 0 });
+    const s = serviceMap.get(b.serviceId)!;
+    s.total += b.totalPrice;
+    s.count++;
+  }
+  const serviceBreakdown = [...serviceMap.values()].sort((a, b) => b.total - a.total);
+
+  // Top customers — by USAGE count (visits), not revenue
+  const customerMap = new Map<string, { id: string; name: string; total: number; count: number }>();
+  for (const b of thisMonthCompleted) {
+    const { id, name } = b.customer;
+    if (!customerMap.has(id)) customerMap.set(id, { id, name, total: 0, count: 0 });
+    const c = customerMap.get(id)!;
+    c.total += b.totalPrice;
+    c.count++;
+  }
+  const topCustomers = [...customerMap.values()]
+    .sort((a, b) => b.count - a.count || b.total - a.total) // count desc, tiebreak by spend
+    .slice(0, 5);
+
+  // Staff revenue
+  const staffMap = new Map<string, { name: string; total: number; count: number }>();
+  for (const b of thisMonthCompleted) {
+    if (!b.staff) continue;
+    const { id, name } = b.staff;
+    if (!staffMap.has(id)) staffMap.set(id, { name, total: 0, count: 0 });
+    const s = staffMap.get(id)!;
+    s.total += b.totalPrice;
+    s.count++;
+  }
+  const staffRevenue = [...staffMap.values()].sort((a, b) => b.total - a.total);
+
+  // Weekly revenue (W1=days 1-7, …, W5=29+)
+  const weekTotals = [0, 0, 0, 0, 0];
+  for (const b of thisMonthCompleted) {
+    const day     = b.date.getUTCDate();
+    const weekIdx = Math.min(Math.floor((day - 1) / 7), 4);
+    weekTotals[weekIdx] += b.totalPrice;
+  }
+  const weeklyRevenue = weekTotals
+    .map((total, i) => ({ label: String(i + 1), total }))
+    .filter((_, i) => i * 7 + 1 <= fullMonthEnd);
+
+  // Hourly usage — bookings grouped by start hour (09–21 covers salon hours)
+  const hourCounts = new Array(24).fill(0);
+  for (const b of thisMonthCompleted) {
+    const h = parseInt((b.startTime ?? "").split(":")[0] ?? "", 10);
+    if (Number.isFinite(h) && h >= 0 && h < 24) hourCounts[h]++;
+  }
+  const HOUR_FROM = 9, HOUR_TO = 21;
+  const hourlyUsage: { hour: number; count: number }[] = [];
+  for (let h = HOUR_FROM; h <= HOUR_TO; h++) {
+    hourlyUsage.push({ hour: h, count: hourCounts[h] });
+  }
+
+  const currentMonthLabel  = `${THAI_MONTHS[thisMonthIdx]} ${thisYear + 543}`;
+  const lastMonthRangeLabel = `1–${lastMonthClampedDay} ${THAI_MONTHS_SHORT[lastMonthIdx]}`;
+  const thisMonthRangeLabel = `1–${dayOfMonth} ${THAI_MONTHS_SHORT[thisMonthIdx]}`;
+
+  const dashData: DashboardData = {
+    branches,
+    todayRevenue, todayCount,
+    thisMonthRevenue, thisMonthCount,
+    lastMonthRevenue, lastMonthCount,
+    activeMembers, newMembersThisMonth,
+    serviceBreakdown, topCustomers, staffRevenue, weeklyRevenue,
+    hourlyUsage,
+    avgTicket,
+    currentMonthLabel,
+    lastMonthRangeLabel,
+    thisMonthRangeLabel,
+  };
 
   return (
     <div className="px-8 py-8">
-      {/* Page header */}
-      <div className="mb-8">
-        <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#A08070" }}>Dashboard</p>
-        <h1 className="text-2xl font-medium" style={{ color: "#3B2A24" }}>ภาพรวม</h1>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        {[
-          { label: "การจองที่กำลังมา", labelEn: "Upcoming", value: upcoming.length },
-          { label: "รอยืนยัน", labelEn: "Pending", value: pending.length, highlight: pending.length > 0 },
-          { label: "รายรับรวม (เสร็จสิ้น)", labelEn: "Revenue", value: formatPrice(totalRevenue) },
-        ].map(({ label, labelEn, value, highlight }) => (
-          <div
-            key={label}
-            className="rounded-2xl bg-white p-5"
-            style={{ border: "1.5px solid #E8D8CC" }}
-          >
-            <p
-              className="text-2xl font-semibold mb-1"
-              style={{ color: highlight ? "#8B1D24" : "#3B2A24" }}
-            >
-              {value}
-            </p>
-            <p className="text-sm" style={{ color: "#6B5245" }}>{label}</p>
-            <p className="text-xs" style={{ color: "#A08070" }}>{labelEn}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Branch filter */}
-      <div className="mb-6">
-        <AdminActions branches={branches} currentBranchId={branchId} />
-      </div>
-
-      {/* Upcoming bookings */}
-      <div className="rounded-2xl bg-white mb-6 overflow-hidden" style={{ border: "1.5px solid #E8D8CC" }}>
-        <div className="px-6 py-4" style={{ borderBottom: "1px solid #F0E4D8" }}>
-          <h2 className="font-medium text-sm" style={{ color: "#3B2A24" }}>
-            การจองที่กำลังมา <span style={{ color: "#A08070" }}>({upcoming.length})</span>
-          </h2>
-        </div>
-        {upcoming.length === 0 ? (
-          <p className="text-center py-8 text-sm" style={{ color: "#A08070" }}>ไม่มีการจอง</p>
-        ) : (
-          <div className="divide-y" style={{ borderColor: "#F5EFE9" }}>
-            {upcoming.map((b) => {
-              const sc = STATUS_COLORS[b.status] ?? STATUS_COLORS.PENDING;
-              return (
-                <div key={b.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <p className="font-medium text-sm" style={{ color: "#3B2A24" }}>{b.customer.name}</p>
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: sc.bg, color: sc.color }}
-                      >
-                        {STATUS_TH[b.status] ?? b.status}
-                      </span>
-                    </div>
-                    <p className="text-sm" style={{ color: "#6B5245" }}>{b.service.nameTh || b.service.name}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>
-                      {new Date(b.date).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
-                      {" · "}{b.startTime}–{b.endTime}
-                      {b.staff && ` · ${b.staff.name}`}
-                    </p>
-                    <p className="text-xs" style={{ color: "#A08070" }}>
-                      {b.branch.name} · {b.customer.phone}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-semibold text-sm" style={{ color: "#8B1D24" }}>{formatPrice(b.totalPrice)}</p>
-                    <p className="text-xs font-mono mt-0.5" style={{ color: "#C4B0A4" }}>#{b.id.slice(-6).toUpperCase()}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Past bookings */}
-      {past.length > 0 && (
-        <div className="rounded-2xl bg-white overflow-hidden" style={{ border: "1.5px solid #E8D8CC" }}>
-          <div className="px-6 py-4" style={{ borderBottom: "1px solid #F0E4D8" }}>
-            <h2 className="font-medium text-sm" style={{ color: "#A08070" }}>
-              ที่ผ่านมา <span>({past.length})</span>
-            </h2>
-          </div>
-          <div className="divide-y" style={{ borderColor: "#F5EFE9" }}>
-            {past.map((b) => {
-              const sc = STATUS_COLORS[b.status] ?? STATUS_COLORS.COMPLETED;
-              return (
-                <div key={b.id} className="px-6 py-3 flex items-start justify-between gap-4 opacity-70">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                      <p className="font-medium text-sm" style={{ color: "#3B2A24" }}>{b.customer.name}</p>
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: sc.bg, color: sc.color }}
-                      >
-                        {STATUS_TH[b.status] ?? b.status}
-                      </span>
-                    </div>
-                    <p className="text-xs" style={{ color: "#A08070" }}>
-                      {b.service.nameTh || b.service.name} · {new Date(b.date).toLocaleDateString("th-TH", { day: "numeric", month: "short" })} {b.startTime}
-                    </p>
-                  </div>
-                  <p className="text-sm flex-shrink-0" style={{ color: "#6B5245" }}>{formatPrice(b.totalPrice)}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <DashboardView data={dashData} />
     </div>
   );
 }

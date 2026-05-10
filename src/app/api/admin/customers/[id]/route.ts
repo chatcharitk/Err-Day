@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { findActivePackages } from "@/lib/packages";
+import { findCustomerPackagesForAdmin } from "@/lib/packages";
 
 // GET /api/admin/customers/[id] — fetch single customer (for re-loading after mutations)
 export async function GET(
@@ -14,11 +14,15 @@ export async function GET(
       include: {
         _count:     { select: { bookings: true } },
         membership: true,
+        membershipCycles: {
+          orderBy: { startedAt: "desc" },
+          take: 24, // most recent 2 years of cycles is plenty
+        },
       },
     });
     if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const activePackages = await findActivePackages(c.id);
+    const activePackages = await findCustomerPackagesForAdmin(c.id);
 
     return NextResponse.json({
       id:         c.id,
@@ -30,25 +34,40 @@ export async function GET(
       pictureUrl: c.pictureUrl,
       lineUserId: c.lineUserId,
       createdAt:  c.createdAt.toISOString(),
+      notes:      c.notes ?? null,
+      photoUrls:  c.photoUrls ?? null,
       membership: c.membership
         ? {
-            label:         c.membership.label,
-            points:        c.membership.points,
-            activatedAt:   c.membership.activatedAt.toISOString(),
-            expiresAt:     c.membership.expiresAt?.toISOString() ?? null,
-            usagesUsed:    c.membership.usagesUsed,
-            usagesAllowed: c.membership.usagesAllowed,
+            label:             c.membership.label,
+            points:            c.membership.points,
+            activatedAt:       c.membership.activatedAt.toISOString(),
+            expiresAt:         c.membership.expiresAt?.toISOString() ?? null,
+            usagesUsed:        c.membership.usagesUsed,
+            usagesAllowed:     c.membership.usagesAllowed,
+            pendingActivation: c.membership.pendingActivation,
           }
         : null,
       packages: activePackages.map(p => ({
-        id:         p.id,
-        sku:        p.packageSku,
-        nameTh:     p.spec.nameTh,
-        startedAt:  p.startedAt.toISOString(),
-        expiresAt:  p.expiresAt.toISOString(),
-        usagesUsed: p.usagesUsed,
-        usageLimit: p.usageLimit,
-        usagesLeft: p.usagesLeft,
+        id:                p.id,
+        sku:               p.packageSku,
+        nameTh:            p.spec.nameTh,
+        startedAt:         p.startedAt.toISOString(),
+        expiresAt:         p.expiresAt.toISOString(),
+        usagesUsed:        p.usagesUsed,
+        usageLimit:        p.usageLimit,
+        usagesLeft:        p.usagesLeft,
+        pendingActivation: p.pendingActivation,
+      })),
+      membershipCycles: c.membershipCycles.map(cy => ({
+        id:            cy.id,
+        startedAt:     cy.startedAt.toISOString(),
+        endedAt:       cy.endedAt.toISOString(),
+        closedAt:      cy.closedAt?.toISOString() ?? null,
+        paidAmount:    cy.paidAmount,
+        paymentMethod: cy.paymentMethod,
+        bookingsUsed:  cy.bookingsUsed,
+        bookingId:     cy.bookingId,
+        notes:         cy.notes,
       })),
       _count: { bookings: c._count.bookings },
     });
@@ -98,7 +117,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const { name, nickname, phone, email, gender, pictureUrl, pdpaSource } = await request.json();
+    const { name, nickname, phone, email, gender, pictureUrl, pdpaSource, notes, photoUrls } = await request.json();
 
     // If phone is changing, check it isn't taken by someone else
     if (phone) {
@@ -120,6 +139,8 @@ export async function PATCH(
         ...(gender     !== undefined ? { gender:     gender || null             } : {}),
         ...(pictureUrl !== undefined ? { pictureUrl: pictureUrl?.trim() || null } : {}),
         ...(pdpaSource !== undefined ? { pdpaSource: pdpaSource || null         } : {}),
+        ...(notes      !== undefined ? { notes:      notes?.trim() || null      } : {}),
+        ...(photoUrls  !== undefined ? { photoUrls:  photoUrls                  } : {}),
       },
       include: {
         _count:     { select: { bookings: true } },

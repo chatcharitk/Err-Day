@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { defaultBranchId } from "@/lib/utils";
+import { getCachedBranches, getCachedBranchStaff } from "@/lib/branches-cache";
 import CalendarView from "./CalendarView";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +16,9 @@ function parseLocal(dateStr: string) {
 function getWeekBounds(dateStr: string) {
   const date = parseLocal(dateStr);
   const dow  = date.getDay(); // 0=Sun
-  // Monday of this week
   const monday = new Date(date);
   monday.setDate(date.getDate() - (dow === 0 ? 6 : dow - 1));
   monday.setHours(0, 0, 0, 0);
-  // Sunday of this week
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
@@ -32,31 +32,39 @@ export default async function CalendarPage({
 }) {
   const { date, branchId } = await searchParams;
 
-  const branches = await prisma.branch.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-  });
+  const branches = await getCachedBranches();
 
-  // Use local date (not UTC) so Thailand UTC+7 midnight doesn't give yesterday
   const now   = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
   const selectedDate = date ?? today;
-  const activeBranchId = branchId ?? branches[0]?.id ?? "";
+  const activeBranchId = branchId ?? defaultBranchId(branches);
 
   const { monday, sunday } = getWeekBounds(selectedDate);
 
   const [staff, bookings] = await Promise.all([
-    prisma.staff.findMany({
-      where: { branchId: activeBranchId, isActive: true },
-      orderBy: { name: "asc" },
-    }),
+    getCachedBranchStaff(activeBranchId),
     prisma.booking.findMany({
       where: {
         branchId: activeBranchId,
         date: { gte: monday, lte: sunday },
         status: { notIn: ["CANCELLED"] },
+        serviceId: { notIn: ["svc-membership-30d", "svc-buffet", "svc-pkg5"] },
       },
-      include: { service: true, customer: true, staff: true, addons: { include: { addon: true } } },
+      // Slim select: only the fields rendered by the calendar.
+      select: {
+        id:         true,
+        date:       true,
+        startTime:  true,
+        endTime:    true,
+        status:     true,
+        totalPrice: true,
+        notes:      true,
+        serviceId:  true,
+        service:    { select: { name: true, nameTh: true, category: true } },
+        customer:   { select: { id: true, name: true, phone: true } },
+        staff:      { select: { id: true, name: true } },
+        addons:     { select: { addonId: true, price: true, addon: { select: { nameTh: true, name: true } } } },
+      },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
   ]);
@@ -70,11 +78,7 @@ export default async function CalendarPage({
     totalPrice: b.totalPrice,
     notes: b.notes,
     serviceId: b.serviceId,
-    service: {
-      name: b.service.name,
-      nameTh: b.service.nameTh,
-      category: b.service.category,
-    },
+    service: { name: b.service.name, nameTh: b.service.nameTh, category: b.service.category },
     customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
     staff: b.staff ? { id: b.staff.id, name: b.staff.name } : null,
     addons: b.addons.map((a) => ({ id: a.addonId, nameTh: a.addon.nameTh, name: a.addon.name, price: a.price })),
@@ -83,9 +87,9 @@ export default async function CalendarPage({
   return (
     <CalendarView
       weekBookings={weekBookings}
-      staff={staff.map((s) => ({ id: s.id, name: s.name }))}
+      staff={staff}
       selectedDate={selectedDate}
-      branches={branches.map((b) => ({ id: b.id, name: b.name }))}
+      branches={branches}
       activeBranchId={activeBranchId}
     />
   );

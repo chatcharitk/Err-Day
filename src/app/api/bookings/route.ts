@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity } from "@/lib/capacity";
+import { sendBookingCreated, sendStaffBookingAlert } from "@/lib/notifications";
 
 export async function POST(request: Request) {
   try {
@@ -10,15 +11,21 @@ export async function POST(request: Request) {
       totalPrice, name, nickname, phone, email, notes, addonIds,
       lineUserId, linePictureUrl,  // from Line LIFF — links customer + profile pic
       skipConflictCheck,            // trusted flag for POS / admin use
+      isWalkin,                     // admin flag — skip customer info, use placeholder
     } = body;
 
-    if (!branchId || !serviceId || !date || !startTime || !endTime || !name || !phone) {
+    // For walk-in bookings name/phone are optional; everything else is required
+    if (!branchId || !serviceId || !date || !startTime || !endTime) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (!isWalkin && (!name || !phone)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     if (!skipConflictCheck) {
       const result = await checkCapacity({
         branchId, date, startTime, endTime, staffId: staffId ?? null,
+        online: true,
       });
       if (!result.ok) {
         const msg =
@@ -32,19 +39,23 @@ export async function POST(request: Request) {
       }
     }
 
+    // Walk-in: use whatever was provided; fall back to placeholder if blank
+    const finalName  = name?.trim()  || "Walk-in";
+    const finalPhone = phone?.trim() || `walkin-${Date.now()}`;
+
     // Upsert customer by phone, linking Line account + picture if provided
     const customer = await prisma.customer.upsert({
-      where: { phone },
+      where: { phone: finalPhone },
       update: {
-        name,
+        name: finalName,
         ...(nickname       ? { nickname }                   : {}),
         email: email || undefined,
         ...(lineUserId     ? { lineUserId }                 : {}),
         ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
       },
       create: {
-        name,
-        phone,
+        name: finalName,
+        phone: finalPhone,
         ...(nickname       ? { nickname }                   : {}),
         email: email || undefined,
         ...(lineUserId     ? { lineUserId }                 : {}),
@@ -76,6 +87,10 @@ export async function POST(request: Request) {
       },
       include: { branch: true, service: true, staff: true, customer: true },
     });
+
+    // Fire-and-forget: customer confirmation (skipped if no LINE link) + staff alert.
+    sendBookingCreated(booking.id).catch(e => console.error("[notify] booking created failed", e));
+    sendStaffBookingAlert(booking.id).catch(e => console.error("[notify] staff alert failed", e));
 
     return NextResponse.json(booking, { status: 201 });
   } catch (error) {

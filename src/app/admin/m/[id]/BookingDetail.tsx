@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, Clock, User, Plus, Trash2, Check, X,
-  CheckCircle2, XCircle, Calendar, Pencil, Loader2, CreditCard,
+  XCircle, Calendar, Pencil, Loader2, CreditCard,
   AlertCircle, Sparkles, RefreshCw,
 } from "lucide-react";
+import ImageUpload from "@/components/ImageUpload";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -32,14 +33,25 @@ interface Booking {
   status:        Status;
   totalPrice:    number;
   notes:         string | null;
+  receiptUrl:    string | null;
+  isMember:      boolean;
   addons: { id: string; addonId: string; name: string; price: number }[];
 }
 
 interface Service {
-  id:       string;
-  nameTh:   string;
-  price:    number;
-  duration: number;
+  id:                    string;
+  nameTh:                string;
+  price:                 number;
+  duration:              number;
+  memberPrice?:          number | null;
+  memberDiscountPercent?: number;
+}
+
+/** Effective member price for a service (null = no member discount configured). */
+function computeMemberPrice(svc: Service): number | null {
+  if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;
+  if (svc.memberDiscountPercent) return Math.round(svc.price * (1 - svc.memberDiscountPercent / 100));
+  return null;
 }
 
 interface Staff { id: string; name: string; }
@@ -85,6 +97,8 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const [editStart, setEditStart] = useState(b.startTime);
   const [notesDraft, setNotesDraft] = useState(b.notes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [discountBaht, setDiscountBaht] = useState(0);
+  const [savingDiscount, setSavingDiscount] = useState(false);
 
   const meta = STATUS_META[b.status];
   const isClosed = b.status === "COMPLETED" || b.status === "CANCELLED" || b.status === "NO_SHOW";
@@ -123,9 +137,10 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     const svc = branchServices.find((s) => s.id === svcId);
     if (!svc) return;
     const newEnd = addMinutes(b.startTime, svc.duration);
-    // Recompute price = service base + sum of addons
-    const addonsTotal = b.addons.reduce((s, a) => s + a.price, 0);
-    const newTotal    = svc.price + addonsTotal;
+    // Recompute price = effective service price (member price if applicable) + addons
+    const addonsTotal   = b.addons.reduce((s, a) => s + a.price, 0);
+    const effectiveSvcPrice = b.isMember ? (computeMemberPrice(svc) ?? svc.price) : svc.price;
+    const newTotal      = effectiveSvcPrice + addonsTotal;
     const updated = await patch({
       serviceId: svcId,
       endTime:   newEnd,
@@ -200,9 +215,17 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     setB((x) => ({ ...x, notes: notesDraft }));
   };
 
+  const applyDiscount = async () => {
+    if (discountBaht <= 0) return;
+    const newTotal = Math.max(0, b.totalPrice - Math.round(discountBaht * 100));
+    setSavingDiscount(true);
+    const updated = await patch({ totalPrice: newTotal });
+    setSavingDiscount(false);
+    if (updated) { setB((x) => ({ ...x, totalPrice: newTotal })); setDiscountBaht(0); }
+  };
+
   const goToPos = () => {
-    const url = `/admin/pos?customerPhone=${encodeURIComponent(b.customerPhone)}&customerName=${encodeURIComponent(b.customerName)}&bookingId=${b.id}`;
-    router.push(url);
+    router.push(`/admin/m/pos?bookingId=${b.id}`);
   };
 
   return (
@@ -256,14 +279,6 @@ export default function BookingDetail({ booking: initial, branchServices, branch
             onClick={() => setStatus("CONFIRMED")}
           />
           <ActionPill
-            label="เสร็จสิ้น"
-            icon={<CheckCircle2 size={14} />}
-            active={b.status === "COMPLETED"}
-            color="#166534"
-            disabled={busy}
-            onClick={() => setStatus("COMPLETED")}
-          />
-          <ActionPill
             label="ไม่มา"
             icon={<XCircle size={14} />}
             active={b.status === "NO_SHOW"}
@@ -299,10 +314,17 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         <div className="rounded-2xl bg-white" style={{ border: `1px solid ${BORDER}` }}>
           <Row label="ลูกค้า">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium" style={{ color: TEXT }}>
-                {b.customerName}
-                {b.customerNickname && <span className="font-normal" style={{ color: MUTED }}> · {b.customerNickname}</span>}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-medium" style={{ color: TEXT }}>
+                  {b.customerName}
+                  {b.customerNickname && <span className="font-normal" style={{ color: MUTED }}> · {b.customerNickname}</span>}
+                </p>
+                {b.isMember && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-0.5" style={{ background: "#F0FDF4", color: "#166534" }}>
+                    <Sparkles size={9} />สมาชิก
+                  </span>
+                )}
+              </div>
               <a href={`tel:${b.customerPhone}`} className="text-xs flex items-center gap-1 mt-0.5" style={{ color: PRIMARY }}>
                 <Phone size={11} /> {b.customerPhone}
               </a>
@@ -406,12 +428,85 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         )}
       </section>
 
-      {/* ── Total ── */}
-      <section className="px-4 mt-5">
+      {/* ── Total + Discount ── */}
+      <section className="px-4 mt-5 space-y-2">
+        {/* Member-price hint — shown when customer is a member and stored price > member price */}
+        {(() => {
+          if (!b.isMember || isClosed) return null;
+          const svc = branchServices.find(s => s.id === b.serviceId);
+          if (!svc) return null;
+          const mPrice = computeMemberPrice(svc);
+          if (mPrice === null || mPrice >= b.totalPrice) return null;
+          const diff = b.totalPrice - mPrice;
+          return (
+            <div className="rounded-xl px-3 py-2.5 flex items-center gap-2" style={{ background: "#F0FDF4", border: "1px solid #86EFAC" }}>
+              <Sparkles size={13} style={{ color: "#16a34a" }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold" style={{ color: "#166534" }}>ราคาสมาชิก {formatPrice(mPrice)}</p>
+                <p className="text-[10px]" style={{ color: "#4ade80" }}>กดปุ่ม &quot;ใช้&quot; เพื่ออัปเดตยอดรวม</p>
+              </div>
+              <button
+                onClick={() => setDiscountBaht(diff / 100)}
+                className="text-xs font-semibold px-3 py-1 rounded-lg flex-shrink-0"
+                style={{ background: "#16a34a", color: "white" }}
+              >
+                ใช้
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Discount input row */}
+        {!isClosed && (
+          <div className="rounded-xl px-3 py-2 flex items-center gap-2 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+            <span className="text-xs flex-shrink-0" style={{ color: MUTED }}>ส่วนลด ฿</span>
+            <input
+              type="number"
+              min={0}
+              value={discountBaht || ""}
+              onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
+              placeholder="0"
+              className="flex-1 text-sm outline-none bg-transparent"
+              style={{ color: TEXT }}
+            />
+            {discountBaht > 0 && (
+              <button
+                onClick={applyDiscount}
+                disabled={savingDiscount}
+                className="px-3 py-1 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50"
+                style={{ background: PRIMARY }}
+              >
+                {savingDiscount ? <Loader2 size={12} className="animate-spin" /> : "ใช้"}
+              </button>
+            )}
+          </div>
+        )}
+        {/* Total row */}
         <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: "#FFF8F4", border: `1px solid ${BORDER}` }}>
           <p className="text-sm font-medium" style={{ color: TEXT }}>ยอดรวม</p>
-          <p className="text-xl font-bold" style={{ color: PRIMARY }}>{formatPrice(b.totalPrice)}</p>
+          <div className="text-right">
+            {discountBaht > 0 && (
+              <p className="text-xs line-through" style={{ color: MUTED }}>{formatPrice(b.totalPrice)}</p>
+            )}
+            <p className="text-xl font-bold" style={{ color: PRIMARY }}>
+              {discountBaht > 0 ? formatPrice(Math.max(0, b.totalPrice - Math.round(discountBaht * 100))) : formatPrice(b.totalPrice)}
+            </p>
+          </div>
         </div>
+      </section>
+
+      {/* ── Receipt ── */}
+      <section className="px-4 mt-5">
+        <ImageUpload
+          kind="receipt"
+          ref={b.id}
+          value={b.receiptUrl}
+          label="ใบเสร็จ / สลิปโอนเงิน"
+          onChange={async (url) => {
+            const updated = await patch({ receiptUrl: url });
+            if (updated) setB(x => ({ ...x, receiptUrl: url }));
+          }}
+        />
       </section>
 
       {/* ── Notes ── */}

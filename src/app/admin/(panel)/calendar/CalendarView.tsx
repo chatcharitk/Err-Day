@@ -710,9 +710,17 @@ function EditModal({
         {/* Scrollable body */}
         <div className="p-5 space-y-4 overflow-y-auto">
           {/* Price + status */}
-          <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold text-[#3B2A24]">฿{formatPrice(price)}</span>
-            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border ${c.bg} ${c.text} ${c.border}`}>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-1.5 flex-1">
+              <span className="text-sm text-gray-400">฿</span>
+              <input
+                type="number" min={0}
+                value={price / 100}
+                onChange={e => setPrice(Math.max(0, Math.round(Number(e.target.value) * 100)))}
+                className="flex-1 text-lg font-bold text-[#3B2A24] outline-none bg-transparent w-0 min-w-0"
+              />
+            </div>
+            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border flex-shrink-0 ${c.bg} ${c.text} ${c.border}`}>
               <span className={`w-2 h-2 rounded-full ${c.dot}`} />
               {STATUS_LABEL[currentStatus] ?? currentStatus}
             </span>
@@ -826,16 +834,18 @@ function AddBookingModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [services,  setServices]  = useState<ServiceOption[]>([]);
-  const [date,      setDate]      = useState(defaultDate);
-  const [bsId,      setBsId]      = useState("");
-  const [staffId,   setStaffId]   = useState("");
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime,   setEndTime]   = useState("11:00");
-  const [customer,  setCustomer]  = useState<CustomerValue>({ id: null, name: "", phone: "" });
-  const [notesVal,  setNotesVal]  = useState("");
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState("");
+  const [services,      setServices]      = useState<ServiceOption[]>([]);
+  const [date,          setDate]          = useState(defaultDate);
+  const [bsId,          setBsId]          = useState("");
+  const [staffId,       setStaffId]       = useState("");
+  const [startTime,     setStartTime]     = useState("10:00");
+  const [endTime,       setEndTime]       = useState("11:00");
+  const [customer,      setCustomer]      = useState<CustomerValue>({ id: null, name: "", phone: "" });
+  const [isWalkin,      setIsWalkin]      = useState(false);
+  const [discountBaht,  setDiscountBaht]  = useState(0);
+  const [notesVal,      setNotesVal]      = useState("");
+  const [saving,        setSaving]        = useState(false);
+  const [error,         setError]         = useState("");
 
   const name  = customer.name;
   const phone = customer.phone;
@@ -844,10 +854,15 @@ function AddBookingModal({
     fetch(`/api/services?branchId=${branchId}`)
       .then(r => r.json())
       .then((data: ServiceOption[]) => {
-        setServices(data);
-        if (data.length > 0) {
-          setBsId(data[0].id);
-          setEndTime(addMinutes("10:00", data[0].duration));
+        const HIDDEN_SKUS = new Set([
+          "svc-haircut", "svc-facial", "svc-massage",
+          "svc-membership-30d", "svc-buffet", "svc-pkg5",
+        ]);
+        const filtered = data.filter(d => !HIDDEN_SKUS.has(d.service.id));
+        setServices(filtered);
+        if (filtered.length > 0) {
+          setBsId(filtered[0].id);
+          setEndTime(addMinutes("10:00", filtered[0].duration));
         }
       });
   }, [branchId]);
@@ -865,12 +880,18 @@ function AddBookingModal({
   }
 
   const selectedSvc = services.find(s => s.id === bsId);
+  const discountSatang = Math.round(discountBaht * 100);
+  const finalPrice = selectedSvc ? Math.max(0, selectedSvc.price - discountSatang) : 0;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!name.trim() || !phone.trim() || !bsId) {
-      setError("กรุณากรอกชื่อ เบอร์โทร และบริการ");
+    if (!bsId) {
+      setError("กรุณาเลือกบริการ");
+      return;
+    }
+    if (!isWalkin && (!name.trim() || !phone.trim())) {
+      setError("กรุณากรอกชื่อและเบอร์โทร หรือเลือก Walk-in");
       return;
     }
     setSaving(true);
@@ -884,10 +905,11 @@ function AddBookingModal({
         date,
         startTime,
         endTime,
-        totalPrice: selectedSvc?.price ?? 0,
-        name: name.trim(),
-        phone: phone.trim(),
+        totalPrice: finalPrice,
+        name:  name.trim()  || undefined,
+        phone: phone.trim() || undefined,
         notes: notesVal || null,
+        isWalkin,
         skipConflictCheck: true,
       }),
     });
@@ -941,9 +963,46 @@ function AddBookingModal({
 
           {/* Customer */}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">ลูกค้า *</label>
-            <CustomerSearch value={customer} onChange={setCustomer} requirePhoneOnCreate />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-gray-500">
+                ลูกค้า {!isWalkin && <span className="text-red-400">*</span>}
+                {isWalkin && <span className="text-gray-400 ml-1">(ไม่บังคับ)</span>}
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsWalkin(v => !v)}
+                className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all"
+                style={isWalkin
+                  ? { background: "#8B1D24", color: "white", borderColor: "#8B1D24" }
+                  : { background: "white",   color: "#6B5245", borderColor: "#D6BCAE" }}
+              >
+                {isWalkin && <span>✓</span>} Walk-in
+              </button>
+            </div>
+            <CustomerSearch value={customer} onChange={setCustomer} requirePhoneOnCreate={!isWalkin} />
+            {isWalkin && !customer.name && (
+              <p className="text-xs text-gray-400 mt-1">หากไม่กรอก จะบันทึกเป็น &quot;Walk-in&quot; อัตโนมัติ</p>
+            )}
           </div>
+
+          {/* Discount */}
+          {selectedSvc && (
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">ส่วนลด (บาท)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={0}
+                  value={discountBaht || ""}
+                  onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
+                  placeholder="0"
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30"
+                />
+                <span className="text-sm font-semibold whitespace-nowrap" style={{ color: "#8B1D24" }}>
+                  รวม ฿{formatPrice(finalPrice)}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div>
@@ -957,7 +1016,7 @@ function AddBookingModal({
 
           <button type="submit" disabled={saving}
             className="w-full py-2.5 rounded-xl bg-[#8B1D24] text-white font-semibold text-sm hover:bg-[#7a1820] disabled:opacity-50">
-            {saving ? "กำลังบันทึก..." : "✓ บันทึกการจอง"}
+            {saving ? "กำลังบันทึก..." : `✓ บันทึกการจอง${selectedSvc ? ` · ฿${formatPrice(finalPrice)}` : ""}`}
           </button>
         </form>
       </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, Phone, Mail, Star, CalendarRange, Repeat } from "lucide-react";
 import PdpaConsentBlock from "@/components/PdpaConsentBlock";
+import { getLiff } from "@/lib/liff-client";
 
 type ProductKey = "membership" | "buffet" | "5pack";
 
@@ -76,32 +77,28 @@ export default function LiffMembershipSignupPage() {
 
   const selectedProduct = PRODUCTS.find(p => p.key === product)!;
 
-  // Init LIFF and login
+  // Init LIFF and login — getLiff() reuses the already-initialized singleton
+  // from LiffProvider so this completes instantly after the OAuth redirect.
   useEffect(() => {
-    (async () => {
-      try {
-        const { default: liff } = await import("@line/liff");
-        const liffId = process.env.NEXT_PUBLIC_LIFF_ID!;
-        await liff.init({ liffId });
-
+    getLiff()
+      .then(async (liff) => {
         if (!liff.isLoggedIn()) {
           liff.login({ redirectUri: window.location.href });
-          return; // redirect will happen
+          return;
         }
-
         const p = await liff.getProfile();
         setProfile({
           userId:      p.userId,
           displayName: p.displayName,
           pictureUrl:  p.pictureUrl ?? undefined,
         });
-        setName(p.displayName); // pre-fill name from LINE
+        setName(p.displayName);
         setStep("form");
-      } catch {
+      })
+      .catch(() => {
         setErrMsg("กรุณาเปิดหน้านี้ผ่าน LINE");
         setStep("error");
-      }
-    })();
+      });
   }, []);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {

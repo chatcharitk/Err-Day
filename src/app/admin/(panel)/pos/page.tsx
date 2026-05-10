@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { defaultBranchId } from "@/lib/utils";
 import PosTerminal from "./PosTerminal";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,8 @@ export default async function PosPage({
   let prefillBooking: {
     id: string;
     branchId: string;
-    customer: { name: string; phone: string };
+    customer: { id: string; name: string; phone: string };
+    serviceId: string;
     serviceName: string;
     totalPrice: number;
   } | null = null;
@@ -33,7 +35,8 @@ export default async function PosPage({
       prefillBooking = {
         id: b.id,
         branchId: b.branchId,
-        customer: { name: b.customer.name, phone: b.customer.phone },
+        customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
+        serviceId: b.serviceId,
         serviceName: b.service.nameTh || b.service.name,
         totalPrice: b.totalPrice,
       };
@@ -42,7 +45,7 @@ export default async function PosPage({
 
   // Use the booking's branch if no explicit branchId was given
   const activeBranchId =
-    branchId ?? prefillBooking?.branchId ?? branches[0]?.id ?? "";
+    branchId ?? prefillBooking?.branchId ?? defaultBranchId(branches);
 
   const [branchServices, addons] = await Promise.all([
     activeBranchId

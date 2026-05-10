@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
   const customers = await prisma.customer.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: { name: "asc" },
     include: {
       _count:     { select: { bookings: true } },
       membership: true,
@@ -28,10 +28,11 @@ export default async function CustomersPage() {
           ? {
               label:         c.membership.label,
               points:        c.membership.points,
-              activatedAt:   c.membership.activatedAt.toISOString(),
-              expiresAt:     c.membership.expiresAt?.toISOString() ?? null,
-              usagesUsed:    c.membership.usagesUsed,
-              usagesAllowed: c.membership.usagesAllowed,
+              activatedAt:       c.membership.activatedAt.toISOString(),
+              expiresAt:         c.membership.expiresAt?.toISOString() ?? null,
+              usagesUsed:        c.membership.usagesUsed,
+              usagesAllowed:     c.membership.usagesAllowed,
+              pendingActivation: c.membership.pendingActivation,
             }
           : null,
         _count: { bookings: c._count.bookings },

@@ -107,6 +107,10 @@ model Customer {
   pdpaVersion   String?    // policy version at time of consent (e.g. "2025-04-29")
   pdpaSource    String?    // "signup" | "booking" | "staff" | "liff"
 
+  // Internal staff notes and photo gallery
+  notes     String?  // free-text staff notes about this customer
+  photoUrls String?  // JSON array of Vercel Blob URLs
+
   bookings        Booking[]
   membership      Membership?
   membershipCycles MembershipCycle[]
@@ -138,6 +142,7 @@ model Membership {
   expiresAt     DateTime? // directly editable in admin
   usagesUsed    Int       @default(0)
   usagesAllowed Int       @default(0) // 0 = unlimited
+  pendingActivation Boolean @default(false) // paid but not yet started — excluded from active checks
   updatedAt     DateTime  @updatedAt
 
   customer Customer        @relation(fields: [customerId], references: [id])
@@ -182,6 +187,7 @@ model CustomerPackage {
   paymentMethod String?   // "POS" | "Manual"
   bookingId     String?   // POS Booking that activated this package
   closedAt      DateTime? // set when manually cancelled
+  pendingActivation Boolean @default(false) // paid but not yet started — excluded from active redemption
   notes         String?
 
   customer Customer @relation(fields: [customerId], references: [id])
@@ -213,6 +219,8 @@ model Booking {
   notes       String?
   totalPrice  Int           // in satang
   completedAt DateTime?     // set when payment is processed via POS (UTC)
+  receiptUrl  String?       // Vercel Blob URL of uploaded receipt photo
+  receiptUploadedAt DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -297,6 +305,8 @@ model NotificationLog {
 }
 
 enum NotificationKind {
+  BOOKING_CREATED
+  BOOKING_CONFIRMED
   BOOKING_REMINDER_4H
   MEMBERSHIP_ACTIVATED
   MEMBERSHIP_EXPIRY_1D

@@ -17,6 +17,8 @@ import { prisma } from "@/lib/prisma";
 import { pushText } from "@/lib/line-messaging";
 
 type Kind =
+  | "BOOKING_CREATED"
+  | "BOOKING_CONFIRMED"
   | "BOOKING_REMINDER_4H"
   | "MEMBERSHIP_ACTIVATED"
   | "MEMBERSHIP_EXPIRY_1D"
@@ -73,6 +75,186 @@ async function alreadySent(kind: Kind, targetId: string): Promise<boolean> {
   return row?.status === "SENT";
 }
 
+// ── Staff alert on new booking (push to owner LINE accounts) ─────────────────
+
+const STAFF_LINE_IDS = [
+  "U91a73dcc35c56adc217c8afc361265ce", // Looklipair
+  "U2548106b79ded01779f134727dc373d3", // Chatcharit
+];
+
+export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
+  const b = await prisma.booking.findUnique({
+    where:   { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b) return;
+
+  // Strip "err.day " prefix from branch name for a cleaner alert header
+  const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
+  const dateStr = b.date.toLocaleDateString("th-TH", {
+    weekday: "long", day: "numeric", month: "short", year: "numeric",
+  });
+
+  const text =
+`จองใหม่ - ${branchShort}
+
+👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
+📅 ${dateStr}
+⏰ ${b.startTime}–${b.endTime}
+💆 ${b.service.nameTh}
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
+
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const r = await pushText(uid, text);
+      if (!r.ok) console.error("[notify] staff alert failed", uid, r.error);
+      else console.log("[notify] staff alert sent", uid);
+    })
+  );
+}
+
+// ── Booking time-change notification (customer) ───────────────────────────────
+
+/**
+ * Sent whenever an admin changes startTime / endTime on an existing booking.
+ * No deduplication — the admin can reschedule multiple times and the customer
+ * should receive a notification for each change.
+ */
+export async function sendBookingTimeChanged(
+  bookingId: string,
+  oldStart:  string,
+  oldEnd:    string,
+): Promise<void> {
+  const b = await prisma.booking.findUnique({
+    where:   { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b || !b.customer.lineUserId) return;
+
+  const dateStr = b.date.toLocaleDateString("th-TH", {
+    weekday: "long", day: "numeric", month: "short", year: "numeric",
+  });
+
+  const text =
+`⏰ err·day — เปลี่ยนเวลานัดค่ะ
+
+สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
+ทีมงานได้ปรับเวลานัดของคุณใหม่แล้วนะคะ
+
+📅 ${dateStr}
+⏰ ${oldStart}–${oldEnd} → ${b.startTime}–${b.endTime}
+💆 ${b.service.nameTh}
+👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
+📍 ${b.branch.name}
+
+หากมีคำถามกรุณาติดต่อเราได้เลยนะคะ 🌸`;
+
+  // Customer notification
+  const r = await pushText(b.customer.lineUserId, text);
+  if (!r.ok) console.error("[notify] time changed (customer) failed", bookingId, r.error);
+  else        console.log("[notify] time changed (customer) sent",    bookingId);
+
+  // Staff / admin notification
+  const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
+  const staffText =
+`เปลี่ยนเวลานัด - ${branchShort}
+
+👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
+📅 ${dateStr}
+⏰ ${oldStart}–${oldEnd} → ${b.startTime}–${b.endTime}
+💆 ${b.service.nameTh}
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
+
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const rs = await pushText(uid, staffText);
+      if (!rs.ok) console.error("[notify] time changed (staff) failed", uid, rs.error);
+      else        console.log("[notify] time changed (staff) sent",    uid);
+    })
+  );
+}
+
+// ── Booking confirmation (sent immediately on creation) ────────────────────
+
+export async function sendBookingCreated(bookingId: string): Promise<SendResult> {
+  const kind: Kind = "BOOKING_CREATED";
+  if (await alreadySent(kind, bookingId)) return { kind, targetId: bookingId, status: "SENT", reason: "already" };
+
+  const b = await prisma.booking.findUnique({
+    where:   { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b) return { kind, targetId: bookingId, status: "FAILED", reason: "not_found" };
+
+  if (!b.customer.lineUserId) {
+    await recordLog({ kind, targetId: bookingId, status: "SKIPPED", error: "no_line_link" });
+    return { kind, targetId: bookingId, status: "SKIPPED", reason: "no_line_link" };
+  }
+
+  const text =
+`✨ err·day — ได้รับการจองของคุณแล้วค่ะ
+
+สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
+ทางร้านได้รับการจองของคุณเรียบร้อยแล้วนะคะ 🙏
+ทีมงานจะตรวจสอบและส่งข้อความยืนยันกลับให้คุณอีกครั้งในไม่ช้านะคะ
+
+📅 ${formatDateTh(b.date)}
+⏰ ${b.startTime} – ${b.endTime}
+💆 ${b.service.nameTh}
+👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
+📍 ${b.branch.name}
+
+ดูรายละเอียดได้ที่ "การจองของฉัน" นะคะ 🌸`;
+
+  const r = await pushText(b.customer.lineUserId, text);
+  if (r.ok) {
+    await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
+    return { kind, targetId: bookingId, status: "SENT" };
+  }
+  await recordLog({ kind, targetId: bookingId, status: "FAILED", recipient: b.customer.lineUserId, error: r.error });
+  return { kind, targetId: bookingId, status: "FAILED", reason: r.error };
+}
+
+// ── Booking confirmed by admin ─────────────────────────────────────────────
+
+export async function sendBookingConfirmed(bookingId: string): Promise<SendResult> {
+  const kind: Kind = "BOOKING_CONFIRMED";
+  if (await alreadySent(kind, bookingId)) return { kind, targetId: bookingId, status: "SENT", reason: "already" };
+
+  const b = await prisma.booking.findUnique({
+    where:   { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b) return { kind, targetId: bookingId, status: "FAILED", reason: "not_found" };
+
+  if (!b.customer.lineUserId) {
+    await recordLog({ kind, targetId: bookingId, status: "SKIPPED", error: "no_line_link" });
+    return { kind, targetId: bookingId, status: "SKIPPED", reason: "no_line_link" };
+  }
+
+  const text =
+`✅ err·day — ยืนยันการจองแล้วค่ะ
+
+สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
+ทีมงานได้ยืนยันการจองของคุณเรียบร้อยแล้วนะคะ 🎉
+
+📅 ${formatDateTh(b.date)}
+⏰ ${b.startTime} – ${b.endTime}
+💆 ${b.service.nameTh}
+👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
+📍 ${b.branch.name}
+
+แล้วพบกันนะคะ 🌸`;
+
+  const r = await pushText(b.customer.lineUserId, text);
+  if (r.ok) {
+    await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
+    return { kind, targetId: bookingId, status: "SENT" };
+  }
+  await recordLog({ kind, targetId: bookingId, status: "FAILED", recipient: b.customer.lineUserId, error: r.error });
+  return { kind, targetId: bookingId, status: "FAILED", reason: r.error };
+}
+
 // ── Booking 4-hour reminder ──────────────────────────────────────────────────
 
 export async function sendBookingReminder4h(bookingId: string): Promise<SendResult> {
@@ -97,8 +279,8 @@ export async function sendBookingReminder4h(bookingId: string): Promise<SendResu
   const text =
 `🌸 err·day reminder
 
-สวัสดีคุณ ${b.customer.nickname || b.customer.name}
-นัดของคุณกำลังจะมาถึงในอีกประมาณ 4 ชั่วโมง
+สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
+นัดของคุณกำลังจะมาถึงในอีกประมาณ 4 ชั่วโมงนะคะ
 
 📅 ${formatDateTh(b.date)}
 ⏰ ${b.startTime} – ${b.endTime}
@@ -106,7 +288,7 @@ export async function sendBookingReminder4h(bookingId: string): Promise<SendResu
 👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
 📍 ${b.branch.name}
 
-หากต้องการเปลี่ยนแปลงหรือยกเลิก กรุณาแจ้งล่วงหน้า ขอบคุณค่ะ 🙏`;
+หากต้องการเปลี่ยนแปลงหรือยกเลิก กรุณาแจ้งล่วงหน้านะคะ ขอบคุณค่ะ 🙏`;
 
   const r = await pushText(b.customer.lineUserId, text);
   if (r.ok) {
@@ -115,6 +297,35 @@ export async function sendBookingReminder4h(bookingId: string): Promise<SendResu
   }
   await recordLog({ kind, targetId: bookingId, status: "FAILED", recipient: b.customer.lineUserId, error: r.error });
   return { kind, targetId: bookingId, status: "FAILED", reason: r.error };
+}
+
+// ── Staff alert when a customer activates / renews membership ────────────────
+
+export async function sendStaffMembershipAlert(membershipId: string): Promise<void> {
+  const m = await prisma.membership.findUnique({
+    where:   { id: membershipId },
+    include: { customer: true, tier: true },
+  });
+  if (!m) return;
+
+  const customerLabel = [m.customer.name, m.customer.nickname && `(${m.customer.nickname})`]
+    .filter(Boolean).join(" ");
+  const expiryStr = m.expiresAt ? formatDateTh(m.expiresAt) : "ไม่มีวันหมดอายุ";
+
+  const text =
+`🎟️ สมาชิกใหม่ / ต่ออายุ
+
+👤 ${customerLabel}
+📞 ${m.customer.phone}
+✨ ${m.tier?.nameTh ?? "สมาชิกรายเดือน"}
+📅 หมดอายุ: ${expiryStr}`;
+
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const r = await pushText(uid, text);
+      if (!r.ok) console.error("[notify] staff membership alert failed", uid, r.error);
+    })
+  );
 }
 
 // ── Membership activated ─────────────────────────────────────────────────────
@@ -134,14 +345,14 @@ export async function sendMembershipActivated(membershipId: string): Promise<Sen
   }
 
   const text =
-`🎉 ยินดีต้อนรับสู่ครอบครัว err·day!
+`🎉 ยินดีต้อนรับสู่ครอบครัว err·day ค่ะ!
 
-คุณ${m.customer.nickname || m.customer.name} สมาชิก${m.tier?.nameTh ?? "รายเดือน"} ของคุณเริ่มต้นแล้ว
+คุณ${m.customer.nickname || m.customer.name} สมาชิก${m.tier?.nameTh ?? "รายเดือน"} ของคุณเริ่มต้นแล้วนะคะ
 
 📅 ใช้ได้ถึง: ${m.expiresAt ? formatDateTh(m.expiresAt) : "ตลอดชีพ"}
 ✨ สิทธิ์: ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100
 
-ทางทีมงานพร้อมต้อนรับคุณค่ะ 🌸`;
+ทีมงานพร้อมต้อนรับคุณนะคะ 🌸`;
 
   const r = await pushText(m.customer.lineUserId, text);
   if (r.ok) {
@@ -169,14 +380,14 @@ export async function sendMembershipExpiryWarning1d(membershipId: string): Promi
   }
 
   const text =
-`⏰ แจ้งเตือนสมาชิกใกล้หมดอายุ
+`⏰ แจ้งเตือนสมาชิกใกล้หมดอายุค่ะ
 
-คุณ${m.customer.nickname || m.customer.name} สมาชิก${m.tier?.nameTh ?? "รายเดือน"} ของคุณจะหมดอายุในอีก 1 วัน
+คุณ${m.customer.nickname || m.customer.name} สมาชิก${m.tier?.nameTh ?? "รายเดือน"} ของคุณจะหมดอายุในอีก 1 วันนะคะ
 
 📅 หมดอายุ: ${formatDateTh(m.expiresAt)}
 🔄 ต่ออายุได้ที่หน้าร้านทุกสาขา
 
-ขอบคุณที่ใช้บริการกับเรา 🌸`;
+ขอบคุณที่ใช้บริการกับเรานะคะ 🌸`;
 
   const r = await pushText(m.customer.lineUserId, text);
   if (r.ok) {
@@ -212,13 +423,13 @@ export async function sendPackageActivated(packageId: string): Promise<SendResul
   const usagesNote  = p.usageLimit > 0 ? `🎟 ใช้ได้ ${p.usageLimit} ครั้ง\n` : "🎟 ไม่จำกัดจำนวนครั้ง\n";
 
   const text =
-`🎉 ยินดีต้อนรับสู่ครอบครัว err·day!
+`🎉 ยินดีต้อนรับสู่ครอบครัว err·day ค่ะ!
 
-คุณ${p.customer.nickname || p.customer.name} ${productName} ของคุณเริ่มต้นแล้ว
+คุณ${p.customer.nickname || p.customer.name} ${productName} ของคุณเริ่มต้นแล้วนะคะ
 
 📅 ใช้ได้ถึง: ${formatDateTh(p.expiresAt)}
 ${usagesNote}
-ทางทีมงานพร้อมต้อนรับคุณค่ะ 🌸`;
+ทีมงานพร้อมต้อนรับคุณนะคะ 🌸`;
 
   const r = await pushText(p.customer.lineUserId, text);
   if (r.ok) {
@@ -250,14 +461,14 @@ export async function sendPackageExpiryWarning1d(packageId: string): Promise<Sen
   const usagesNote  = usagesLeft !== null ? `🎟 เหลือใช้ได้ ${usagesLeft} ครั้ง\n` : "";
 
   const text =
-`⏰ แจ้งเตือนแพ็กเกจใกล้หมดอายุ
+`⏰ แจ้งเตือนแพ็กเกจใกล้หมดอายุค่ะ
 
-คุณ${p.customer.nickname || p.customer.name} ${productName} ของคุณจะหมดอายุในอีก 1 วัน
+คุณ${p.customer.nickname || p.customer.name} ${productName} ของคุณจะหมดอายุในอีก 1 วันนะคะ
 
 📅 หมดอายุ: ${formatDateTh(p.expiresAt)}
 ${usagesNote}🔄 ต่ออายุได้ที่หน้าร้านทุกสาขา
 
-ขอบคุณที่ใช้บริการกับเรา 🌸`;
+ขอบคุณที่ใช้บริการกับเรานะคะ 🌸`;
 
   const r = await pushText(p.customer.lineUserId, text);
   if (r.ok) {

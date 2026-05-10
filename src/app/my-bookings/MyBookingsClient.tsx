@@ -154,11 +154,7 @@ export default function MyBookingsClient() {
   }, [liff.ready, liff.profile?.userId, fetchBookings]);
 
   const handleLineLogin = () => {
-    if (isMobileDevice()) {
-      window.location.href = LINE_APP_URL;
-    } else {
-      liff.login();
-    }
+    liff.login();
   };
 
   const handleCancel = async () => {

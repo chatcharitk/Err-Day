@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Pencil, X, Save, Search, ChevronDown, ExternalLink } from "lucide-react";
+import { Pencil, Trash2, X, Save, Search, ChevronDown, ExternalLink, Calendar } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,17 @@ function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
 }
 
+/** Convert UTC ISO → "YYYY-MM-DDTHH:mm" in Bangkok time (for datetime-local input) */
+function utcToBkkInput(iso: string): string {
+  const ms = new Date(iso).getTime() + 7 * 60 * 60 * 1000;
+  return new Date(ms).toISOString().slice(0, 16);
+}
+
+/** Convert "YYYY-MM-DDTHH:mm" Bangkok time → UTC ISO string */
+function bkkInputToUtc(local: string): string {
+  return new Date(local + ":00+07:00").toISOString();
+}
+
 /** Format a UTC ISO string as Bangkok local date+time, e.g. "28 เม.ย. 14:36 น." */
 function fmtInvoiceTime(iso: string): string {
   const d = new Date(iso);
@@ -75,6 +86,25 @@ function fmtInvoiceTime(iso: string): string {
 
 function toLocalStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+/** YYYY-MM-DD in Bangkok time from a UTC ISO string. */
+function bkkDateStr(iso: string): string {
+  const ms = new Date(iso).getTime() + 7 * 60 * 60 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * Date used for filtering and grouping in Sales History.
+ *
+ * Sales History is an accounting view, so for COMPLETED bookings we use the
+ * actual payment timestamp (`completedAt`) — that's when the cash arrived.
+ * For everything else (pending / confirmed / cancelled / no-show), we fall
+ * back to the appointment date.
+ */
+function effectiveDateOf(s: SaleRecord): string {
+  if (s.status === "COMPLETED" && s.completedAt) return bkkDateStr(s.completedAt);
+  return s.date.slice(0, 10);
 }
 
 // ─── Portal ───────────────────────────────────────────────────────────────────
@@ -97,15 +127,17 @@ interface EditModalProps {
 }
 
 function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalProps) {
-  const [status,    setStatus]    = useState(sale.status);
-  const [price,     setPrice]     = useState(String(sale.totalPrice / 100));
-  const [staffId,   setStaffId]   = useState(sale.staff?.id ?? "");
-  const [notes,     setNotes]     = useState(sale.notes ?? "");
-  const [startTime, setStartTime] = useState(sale.startTime);
-  const [endTime,   setEndTime]   = useState(sale.endTime);
-  const [serviceId, setServiceId] = useState(sale.serviceId);
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState("");
+  const [status,      setStatus]      = useState(sale.status);
+  const [date,        setDate]        = useState(sale.date.slice(0, 10));
+  const [completedAt, setCompletedAt] = useState(sale.completedAt ? utcToBkkInput(sale.completedAt) : "");
+  const [price,       setPrice]       = useState(String(sale.totalPrice / 100));
+  const [staffId,     setStaffId]     = useState(sale.staff?.id ?? "");
+  const [notes,       setNotes]       = useState(sale.notes ?? "");
+  const [startTime,   setStartTime]   = useState(sale.startTime);
+  const [endTime,     setEndTime]     = useState(sale.endTime);
+  const [serviceId,   setServiceId]   = useState(sale.serviceId);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState("");
 
   const branchStaff = allStaff.filter(s => s.branchId === sale.branchId);
 
@@ -118,6 +150,8 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status,
+          date,
+          completedAt: completedAt ? bkkInputToUtc(completedAt) : null,
           totalPrice: Math.round(Number(price) * 100),
           staffId: staffId || null,
           notes: notes || null,
@@ -130,14 +164,16 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
       const updated = await res.json();
       onSaved({
         ...sale,
-        status: updated.status,
-        totalPrice: updated.totalPrice,
-        staff: updated.staff ? { id: updated.staff.id, name: updated.staff.name } : null,
-        notes: updated.notes,
-        startTime: updated.startTime,
-        endTime: updated.endTime,
-        serviceId: updated.serviceId,
-        service: { name: updated.service.name, nameTh: updated.service.nameTh },
+        status:      updated.status,
+        date:        updated.date,
+        completedAt: updated.completedAt,
+        totalPrice:  updated.totalPrice,
+        staff:       updated.staff ? { id: updated.staff.id, name: updated.staff.name } : null,
+        notes:       updated.notes,
+        startTime:   updated.startTime,
+        endTime:     updated.endTime,
+        serviceId:   updated.serviceId,
+        service:     { name: updated.service.name, nameTh: updated.service.nameTh },
       });
       onClose();
     } catch (e: unknown) {
@@ -233,7 +269,34 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
               </select>
             </div>
 
-            {/* Time */}
+            {/* Date + Time */}
+            <div>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>วันที่นัด</label>
+              <input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-xl border"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+
+            {/* Payment timestamp */}
+            <div>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>
+                💳 วันเวลาชำระเงิน <span className="font-normal">(เวลาไทย)</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={completedAt}
+                onChange={e => setCompletedAt(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-xl border"
+                style={{ borderColor: BORDER, color: completedAt ? TEXT : MUTED }}
+              />
+              {!completedAt && (
+                <p className="text-xs mt-1" style={{ color: MUTED }}>ว่างไว้ = ยังไม่ได้ชำระ</p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>เวลาเริ่ม</label>
@@ -355,13 +418,43 @@ function SummaryBar({ sales }: { sales: SaleRecord[] }) {
 
 // ─── Date range presets ───────────────────────────────────────────────────────
 
-type DatePreset = "today" | "week" | "month" | "last_month" | "all";
+type DatePreset =
+  | "today"
+  | "yesterday"
+  | "last7"
+  | "last30"
+  | "week"
+  | "month"
+  | "last_month"
+  | "year"
+  | "all"
+  | "custom";
 
-function getRange(preset: DatePreset): { from: string; to: string } | null {
+function getRange(
+  preset: DatePreset,
+  customFrom?: string,
+  customTo?: string,
+): { from: string; to: string } | null {
   const now   = new Date();
   const today = toLocalStr(now);
 
   if (preset === "today") return { from: today, to: today };
+
+  if (preset === "yesterday") {
+    const d = new Date(now); d.setDate(now.getDate() - 1);
+    const y = toLocalStr(d);
+    return { from: y, to: y };
+  }
+
+  if (preset === "last7") {
+    const d = new Date(now); d.setDate(now.getDate() - 6); // inclusive of today = 7 days
+    return { from: toLocalStr(d), to: today };
+  }
+
+  if (preset === "last30") {
+    const d = new Date(now); d.setDate(now.getDate() - 29);
+    return { from: toLocalStr(d), to: today };
+  }
 
   if (preset === "week") {
     const dow = now.getDay();
@@ -375,9 +468,21 @@ function getRange(preset: DatePreset): { from: string; to: string } | null {
   }
 
   if (preset === "last_month") {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const d    = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const last = new Date(now.getFullYear(), now.getMonth(), 0);
     return { from: toLocalStr(d), to: toLocalStr(last) };
+  }
+
+  if (preset === "year") {
+    return { from: `${now.getFullYear()}-01-01`, to: today };
+  }
+
+  if (preset === "custom") {
+    if (!customFrom && !customTo) return null;
+    const from = customFrom || "1970-01-01";
+    const to   = customTo   || today;
+    // Normalize so from <= to
+    return from <= to ? { from, to } : { from: to, to: from };
   }
 
   return null; // "all"
@@ -385,10 +490,15 @@ function getRange(preset: DatePreset): { from: string; to: string } | null {
 
 const PRESET_LABELS: Record<DatePreset, string> = {
   today:      "วันนี้",
+  yesterday:  "เมื่อวาน",
+  last7:      "7 วันล่าสุด",
+  last30:     "30 วันล่าสุด",
   week:       "สัปดาห์นี้",
   month:      "เดือนนี้",
   last_month: "เดือนที่แล้ว",
+  year:       "ปีนี้",
   all:        "ทั้งหมด",
+  custom:     "กำหนดเอง",
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -398,6 +508,8 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
 
   const [sales,      setSales]      = useState<SaleRecord[]>(initial);
   const [editing,    setEditing]    = useState<SaleRecord | null>(null);
+  const [deleteId,   setDeleteId]   = useState<string | null>(null);
+  const [deleting,   setDeleting]   = useState(false);
 
   // filters
   const [branchId,  setBranchId]  = useState<string>("");
@@ -405,14 +517,21 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
   const [preset,    setPreset]    = useState<DatePreset>("month");
   const [search,    setSearch]    = useState("");
 
+  // Custom range state — defaults to month-to-date when first opened.
+  const [customFrom, setCustomFrom] = useState<string>(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [customTo, setCustomTo] = useState<string>(() => toLocalStr(new Date()));
+
   // apply filters
   const filtered = useMemo(() => {
-    const range = getRange(preset);
+    const range = getRange(preset, customFrom, customTo);
     return sales.filter(s => {
       if (branchId && s.branchId !== branchId) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       if (range) {
-        const d = s.date.slice(0, 10);
+        const d = effectiveDateOf(s);
         if (d < range.from || d > range.to) return false;
       }
       if (search) {
@@ -427,18 +546,30 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
       }
       return true;
     });
-  }, [sales, branchId, statusFilter, preset, search]);
+  }, [sales, branchId, statusFilter, preset, search, customFrom, customTo]);
 
   function handleSaved(updated: SaleRecord) {
     setSales(prev => prev.map(s => s.id === updated.id ? updated : s));
     router.refresh();
   }
 
-  // group by date
+  async function handleDelete() {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/bookings/${deleteId}`, { method: "DELETE" });
+      setSales(prev => prev.filter(s => s.id !== deleteId));
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
+  }
+
+  // group by effective date (payment date for completed sales, else appointment date)
   const byDate = useMemo(() => {
     const map = new Map<string, SaleRecord[]>();
     for (const s of filtered) {
-      const d = s.date.slice(0, 10);
+      const d = effectiveDateOf(s);
       if (!map.has(d)) map.set(d, []);
       map.get(d)!.push(s);
     }
@@ -460,21 +591,68 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
       <div className="space-y-3 mb-6">
         {/* date presets */}
         <div className="flex gap-2 flex-wrap">
-          {(Object.keys(PRESET_LABELS) as DatePreset[]).map(p => (
-            <button
-              key={p}
-              onClick={() => setPreset(p)}
-              className="text-sm px-4 py-1.5 rounded-full border transition-colors"
-              style={
-                preset === p
-                  ? { background: PRIMARY, borderColor: PRIMARY, color: "white" }
-                  : { background: "white", borderColor: BORDER, color: "#6B5245" }
-              }
-            >
-              {PRESET_LABELS[p]}
-            </button>
-          ))}
+          {(Object.keys(PRESET_LABELS) as DatePreset[]).map(p => {
+            const isCustom = p === "custom";
+            return (
+              <button
+                key={p}
+                onClick={() => setPreset(p)}
+                className="text-sm px-4 py-1.5 rounded-full border transition-colors flex items-center gap-1.5"
+                style={
+                  preset === p
+                    ? { background: PRIMARY, borderColor: PRIMARY, color: "white" }
+                    : { background: "white", borderColor: BORDER, color: "#6B5245" }
+                }
+              >
+                {isCustom && <Calendar size={12} />}
+                {PRESET_LABELS[p]}
+              </button>
+            );
+          })}
         </div>
+
+        {/* Custom date range — visible only when "custom" preset is active */}
+        {preset === "custom" && (
+          <div
+            className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3"
+            style={{ background: BG, border: `1px solid ${BORDER}` }}
+          >
+            <span className="text-xs font-medium" style={{ color: MUTED }}>ช่วงวันที่:</span>
+            <div className="flex items-center gap-2">
+              <label className="text-xs" style={{ color: MUTED }}>จาก</label>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={e => setCustomFrom(e.target.value)}
+                max={customTo || undefined}
+                className="px-3 py-1.5 text-sm rounded-lg border bg-white"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs" style={{ color: MUTED }}>ถึง</label>
+              <input
+                type="date"
+                value={customTo}
+                onChange={e => setCustomTo(e.target.value)}
+                min={customFrom || undefined}
+                className="px-3 py-1.5 text-sm rounded-lg border bg-white"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            {(() => {
+              if (!customFrom || !customTo) return null;
+              const from = new Date(customFrom + "T00:00:00");
+              const to   = new Date(customTo   + "T00:00:00");
+              const days = Math.abs(Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24))) + 1;
+              return (
+                <span className="text-xs ml-auto" style={{ color: MUTED }}>
+                  {days} วัน
+                </span>
+              );
+            })()}
+          </div>
+        )}
 
         <div className="flex gap-3 flex-wrap items-center">
           {/* branch */}
@@ -574,6 +752,15 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                               {sale.staff && ` · ${sale.staff.name}`}
                               {" · "}{sale.branch.name}
                             </p>
+                            {/* Show appointment date when it differs from the group's date
+                                (e.g. payment processed on a different day than the appointment). */}
+                            {effectiveDateOf(sale) !== sale.date.slice(0, 10) && (
+                              <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                                📅 นัดเมื่อ {new Date(sale.date).toLocaleDateString("th-TH", {
+                                  timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "2-digit",
+                                })}
+                              </p>
+                            )}
                             {sale.completedAt && (
                               <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#16a34a" }}>
                                 <span>💳</span>
@@ -589,14 +776,24 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                           <div className="flex flex-col items-end gap-2 flex-shrink-0">
                             <p className="font-semibold text-sm" style={{ color: PRIMARY }}>{fmt(sale.totalPrice)}</p>
                             <p className="text-xs font-mono" style={{ color: "#C4B0A4" }}>#{sale.id.slice(-6).toUpperCase()}</p>
-                            <button
-                              onClick={() => setEditing(sale)}
-                              className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-blue-50"
-                              style={{ color: "#2563EB", border: "1px solid #BFDBFE" }}
-                            >
-                              <Pencil size={11} />
-                              แก้ไข
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setEditing(sale)}
+                                className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-blue-50"
+                                style={{ color: "#2563EB", border: "1px solid #BFDBFE" }}
+                              >
+                                <Pencil size={11} />
+                                แก้ไข
+                              </button>
+                              <button
+                                onClick={() => setDeleteId(sale.id)}
+                                className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-red-50"
+                                style={{ color: "#DC2626", border: "1px solid #FECACA" }}
+                              >
+                                <Trash2 size={11} />
+                                ลบ
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -618,6 +815,51 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
         />
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteId && (
+        <Modal>
+          <div
+            className="fixed inset-0 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.45)", zIndex: 99999 }}
+            onClick={() => { if (!deleting) setDeleteId(null); }}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
+              style={{ background: "white" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-6 py-5">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4" style={{ background: "#FEF2F2" }}>
+                  <Trash2 size={18} color="#DC2626" />
+                </div>
+                <h2 className="font-semibold text-base mb-1" style={{ color: TEXT }}>ลบรายการนี้?</h2>
+                <p className="text-sm" style={{ color: MUTED }}>
+                  รายการจะถูกลบออกจากระบบถาวร ไม่สามารถกู้คืนได้
+                </p>
+              </div>
+              <div className="px-6 pb-5 flex gap-3">
+                <button
+                  onClick={() => setDeleteId(null)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium border"
+                  style={{ borderColor: BORDER, color: MUTED }}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-60"
+                  style={{ background: "#DC2626" }}
+                >
+                  {deleting ? "กำลังลบ..." : "ยืนยันลบ"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

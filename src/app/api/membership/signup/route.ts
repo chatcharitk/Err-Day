@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDPA_VERSION } from "@/lib/pdpa";
+import { startOfTodayUTC } from "@/lib/utils";
 
 interface SignupBody {
   name:        string;
@@ -48,9 +49,9 @@ export async function POST(request: Request) {
     if (existing?.membership) {
       const m = existing.membership;
       const now = new Date();
-      const expired = m.expiresAt != null && new Date(m.expiresAt) <= now;
+      const expired = m.expiresAt != null && new Date(m.expiresAt) < startOfTodayUTC();
       const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-      const isValid = !expired && !usedUp;
+      const isValid = !expired && !usedUp && !m.pendingActivation;
 
       if (isValid) {
         return NextResponse.json({

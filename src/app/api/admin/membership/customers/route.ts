@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PACKAGE_SPECS } from "@/lib/packages";
+import { startOfTodayUTC } from "@/lib/utils";
 
 /** GET /api/admin/membership/customers
  *
@@ -11,6 +12,7 @@ import { PACKAGE_SPECS } from "@/lib/packages";
  */
 export async function GET() {
   const now = new Date();
+  const today = startOfTodayUTC();
 
   // ── Members with a Membership row ───────────────────────────────────
   const memberCustomers = await prisma.customer.findMany({
@@ -39,9 +41,10 @@ export async function GET() {
         }),
       ]);
 
-      const expired  = m.expiresAt != null && new Date(m.expiresAt) <= now;
+      const expired  = m.expiresAt != null && new Date(m.expiresAt) < today;
       const usedUp   = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-      const isValid  = !expired && !usedUp;
+      const pending  = m.pendingActivation;
+      const isValid  = !expired && !usedUp && !pending;
 
       return {
         id:    c.id,
@@ -54,6 +57,7 @@ export async function GET() {
           isValid,
           expired,
           usedUp,
+          pending,
           expiresAt:    m.expiresAt?.toISOString() ?? null,
           activatedAt:  m.activatedAt?.toISOString() ?? null,
           usagesAllowed: m.usagesAllowed,
@@ -79,14 +83,15 @@ export async function GET() {
       packages: {
         some: {
           closedAt:  null,
-          expiresAt: { gt: now },
+          pendingActivation: false,
+          expiresAt: { gte: today },
         },
       },
     },
     orderBy: { name: "asc" },
     include: {
       packages: {
-        where: { closedAt: null, expiresAt: { gt: now } },
+        where: { closedAt: null, pendingActivation: false, expiresAt: { gte: today } },
         orderBy: { expiresAt: "asc" },
       },
     },
@@ -148,7 +153,7 @@ export async function GET() {
       packages: {
         none: {
           closedAt:  null,
-          expiresAt: { gt: now },
+          expiresAt: { gte: today },
         },
       },
     },

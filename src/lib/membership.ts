@@ -40,7 +40,9 @@ export async function activateOrRenewMembership(opts: ActivateOpts) {
   } = opts;
 
   const now       = new Date();
-  const expiresAt = new Date(now.getTime() + MEMBERSHIP_VALIDITY_DAYS * 24 * 60 * 60 * 1000);
+  // Inclusive expiry: today counts as day 1, so add (DAYS - 1) more days.
+  // 30-day membership activated May 9 → expires Jun 7 (valid through end of Jun 7).
+  const expiresAt = new Date(now.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * 24 * 60 * 60 * 1000);
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.membership.findUnique({ where: { customerId } });

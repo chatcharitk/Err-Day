@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MEMBERSHIP_SKU, activateOrRenewMembership } from "@/lib/membership";
 import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
-import { sendMembershipActivated, sendPackageActivated } from "@/lib/notifications";
+import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
 
 interface SaleItem {
   name:             string;
@@ -110,6 +110,7 @@ export async function POST(request: Request) {
         // Fire & forget LINE confirmation — never block the sale on LINE failure
         if (m?.membership?.id) {
           sendMembershipActivated(m.membership.id).catch((e) => console.error("[notify] membership activated failed", e));
+          sendStaffMembershipAlert(m.membership.id).catch((e) => console.error("[notify] staff membership alert failed", e));
         }
       }
 
@@ -150,10 +151,49 @@ export async function POST(request: Request) {
       create: { name: customerName, phone },
     });
 
+    // Detect "sale-only" carts: only membership/package items, no real services.
+    // These are recorded as bookings (so they show in sales history) BUT their
+    // serviceId points to the membership/package SKU itself — booking lists
+    // filter these out so the mobile/desktop calendar doesn't get cluttered.
+    const SALE_ONLY_SKUS = new Set([MEMBERSHIP_SKU, "svc-buffet", "svc-pkg5"]);
+    const hasMembershipOrPackage = !!membershipItem || packageItems.length > 0;
+    const allItemsAreSaleOnly = hasMembershipOrPackage
+      && items.every(it => {
+        if (!it.branchServiceId) return false;
+        // Find the serviceId behind this branchServiceId
+        // (already resolved earlier; checking via the maps used above)
+        return false;
+      });
+    // Recompute by walking items more carefully:
+    let nonSaleOnlyCount = 0;
+    if (branchServiceIds.length > 0) {
+      const bsRows2 = await prisma.branchService.findMany({
+        where:  { id: { in: branchServiceIds } },
+        select: { id: true, serviceId: true },
+      });
+      const bsMap2 = new Map(bsRows2.map(r => [r.id, r.serviceId]));
+      for (const it of items) {
+        const svcId = it.branchServiceId ? bsMap2.get(it.branchServiceId) : null;
+        if (!svcId || !SALE_ONLY_SKUS.has(svcId)) nonSaleOnlyCount++;
+      }
+    } else {
+      nonSaleOnlyCount = items.length;
+    }
+    const saleOnly = hasMembershipOrPackage && nonSaleOnlyCount === 0;
+    void allItemsAreSaleOnly;
+
+    // Pick serviceId: use the membership/package SKU for sale-only carts,
+    // otherwise use walkin.
+    let saleServiceId = walkinBs.serviceId;
+    if (saleOnly) {
+      if (membershipItem) saleServiceId = MEMBERSHIP_SKU;
+      else if (packageItems.length > 0) saleServiceId = packageItems[0].serviceId;
+    }
+
     const booking = await prisma.booking.create({
       data: {
         branchId,
-        serviceId:   walkinBs.serviceId,
+        serviceId:   saleServiceId,
         staffId:     null,
         customerId:  customer.id,
         date,

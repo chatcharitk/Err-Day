@@ -80,6 +80,8 @@ export const ALL_SLOTS = generateTimeSlots("08:00", "21:00"); // 08:00 … 20:30
 // ── Day snapshot — fetch shifts + bookings + active staff for one branch/day ──
 
 export interface DaySnapshot {
+  /** Branch id — used for branch-specific online booking caps. */
+  branchId: string;
   /** All active staff at the branch (used as legacy fallback when no shifts exist). */
   activeStaffIds: string[];
   /** Whether *any* shifts are defined for this branch on this date. */
@@ -89,6 +91,16 @@ export interface DaySnapshot {
   /** Non-cancelled bookings for this branch on this date (excluding excludeBookingId). */
   bookings: { id: string; startTime: string; endTime: string; staffId: string | null }[];
 }
+
+/**
+ * Per-branch concurrency cap for ONLINE bookings (LIFF/customer-facing only).
+ * Even if more staff are scheduled, online bookings are capped at this number
+ * of overlapping appointments to avoid overcrowding small branches.
+ * Admin/POS bookings bypass this cap (they pass `skipConflictCheck: true`).
+ */
+const ONLINE_BOOKING_CAP: Record<string, number> = {
+  "branch-sukhumvit": 2,
+};
 
 export async function loadDaySnapshot(
   branchId: string,
@@ -121,7 +133,7 @@ export async function loadDaySnapshot(
     }),
   ]);
 
-  return { activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
+  return { branchId, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
 }
 
 // ── Capacity check (single window) ────────────────────────────────────────────
@@ -135,23 +147,28 @@ export interface CapacityResult {
   occupiedCount: number;
 }
 
-/** Pure logic — given a snapshot, decide whether a window is bookable. */
+/** Pure logic — given a snapshot, decide whether a window is bookable.
+ *  When `online` is true, also enforces per-branch online cap and rejects
+ *  windows with no shifts assigned (no legacy fallback). */
 export function evaluateCapacity(
   snapshot: DaySnapshot,
   startTime: string,
   endTime: string,
   staffId: string | null = null,
+  online: boolean = false,
 ): CapacityResult {
-  const { activeStaffIds, hasShifts, shifts, bookings } = snapshot;
+  const { branchId, activeStaffIds, hasShifts, shifts, bookings } = snapshot;
 
-  // Staff scheduled to cover the window
+  // Staff scheduled to cover the window.
+  // Online bookings ALWAYS require explicit shifts — no staff = unavailable.
+  // Admin bookings keep the legacy fallback (assume all active staff free).
   const scheduledIds = hasShifts
     ? new Set(
         shifts
           .filter((s) => shiftCovers(s.startTime, s.endTime, startTime, endTime))
           .map((s) => s.staffId),
       )
-    : new Set(activeStaffIds);
+    : (online ? new Set<string>() : new Set(activeStaffIds));
 
   // Bookings overlapping the window
   const conflicting = bookings.filter((b) => overlaps(startTime, endTime, b.startTime, b.endTime));
@@ -174,10 +191,15 @@ export function evaluateCapacity(
   if (scheduledIds.size === 0) {
     return { ok: false, reason: "no_capacity", scheduledCount: 0, occupiedCount: occupied };
   }
-  if (occupied >= scheduledIds.size) {
-    return { ok: false, reason: "no_capacity", scheduledCount: scheduledIds.size, occupiedCount: occupied };
+
+  // Branch-specific cap for online bookings (e.g. Sukhumvit max 2/concurrent).
+  const cap = online ? ONLINE_BOOKING_CAP[branchId] : undefined;
+  const effectiveCap = cap !== undefined ? Math.min(cap, scheduledIds.size) : scheduledIds.size;
+
+  if (occupied >= effectiveCap) {
+    return { ok: false, reason: "no_capacity", scheduledCount: effectiveCap, occupiedCount: occupied };
   }
-  return { ok: true, scheduledCount: scheduledIds.size, occupiedCount: occupied };
+  return { ok: true, scheduledCount: effectiveCap, occupiedCount: occupied };
 }
 
 /** Convenience: load snapshot and evaluate a single window. */
@@ -188,9 +210,10 @@ export async function checkCapacity(args: {
   endTime: string;
   staffId?: string | null;
   excludeBookingId?: string;
+  online?: boolean;
 }): Promise<CapacityResult> {
   const snapshot = await loadDaySnapshot(args.branchId, args.date, args.excludeBookingId);
-  return evaluateCapacity(snapshot, args.startTime, args.endTime, args.staffId ?? null);
+  return evaluateCapacity(snapshot, args.startTime, args.endTime, args.staffId ?? null, args.online ?? false);
 }
 
 // ── Slot grid (used by /api/availability) ─────────────────────────────────────
@@ -207,9 +230,23 @@ export async function getTakenSlots(
   const snapshot = await loadDaySnapshot(branchId, date, excludeBookingId);
   const slots  = generateTimeSlots(openTime, closeTime);
   const taken: string[] = [];
+
+  // Past-slot cutoff: for today's date, mark any slot whose start has already
+  // passed as taken (online customers can't book a slot in the past).
+  // Slot times are Thailand local (Asia/Bangkok = UTC+7); the server runs in
+  // UTC, so we shift "now" by +7h before extracting the local date and time.
+  const bkkNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const todayStr = `${bkkNow.getUTCFullYear()}-${String(bkkNow.getUTCMonth() + 1).padStart(2, "0")}-${String(bkkNow.getUTCDate()).padStart(2, "0")}`;
+  const isToday = date === todayStr;
+  const nowMin  = isToday ? (bkkNow.getUTCHours() * 60 + bkkNow.getUTCMinutes()) : -1;
+
   for (const slot of slots) {
+    if (isToday && timeToMins(slot) <= nowMin) {
+      taken.push(slot);
+      continue;
+    }
     const slotEnd = addMinutes(slot, duration);
-    const result  = evaluateCapacity(snapshot, slot, slotEnd, staffId);
+    const result  = evaluateCapacity(snapshot, slot, slotEnd, staffId, /* online */ true);
     if (!result.ok) taken.push(slot);
   }
   return taken;

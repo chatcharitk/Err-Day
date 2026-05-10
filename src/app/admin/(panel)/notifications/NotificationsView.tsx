@@ -2,7 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Bell, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
+import { RefreshCw, Bell, CheckCircle2, AlertCircle, MinusCircle, UserX, Copy, Check } from "lucide-react";
+
+const LINE_OA_BASIC_ID  = "@err.daysalon";
+const LINE_ADD_FRIEND_URL = `https://line.me/R/ti/p/${encodeURIComponent(LINE_OA_BASIC_ID)}`;
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -20,9 +23,22 @@ interface Log {
   sentAt:    string;
 }
 
+interface NonFollower {
+  customerId: string | null;
+  lineUserId: string;
+  name:       string;
+  nickname:   string | null;
+  phone:      string | null;
+  lastError:  string;
+  lastAt:     string;
+  lastKind:   string;
+  count:      number;
+}
+
 interface Props {
   logs:  Log[];
   stats: { total: number; sent: number; skipped: number; failed: number };
+  nonFollowers: NonFollower[];
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -46,11 +62,35 @@ function formatDateTimeTh(iso: string): string {
   });
 }
 
-export default function NotificationsView({ logs, stats }: Props) {
+export default function NotificationsView({ logs, stats, nonFollowers }: Props) {
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
   const [running, setRunning] = useState(false);
   const [runMsg, setRunMsg] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState<string | null>(null);
+  const [verifyResult, setVerifyResult] = useState<Record<string, "follower" | "not_follower" | "error">>({});
+  const [copied, setCopied] = useState(false);
+
+  const copyAddFriendUrl = async () => {
+    try { await navigator.clipboard.writeText(LINE_ADD_FRIEND_URL); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
+  };
+
+  const verifyOne = async (uid: string) => {
+    setVerifying(uid);
+    try {
+      const r  = await fetch("/api/admin/line-verify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ lineUserId: uid }),
+      });
+      const js = await r.json();
+      setVerifyResult(prev => ({ ...prev, [uid]: js.ok ? "follower" : (js.status === 404 ? "not_follower" : "error") }));
+    } catch {
+      setVerifyResult(prev => ({ ...prev, [uid]: "error" }));
+    } finally {
+      setVerifying(null);
+    }
+  };
 
   /** Fire the cron endpoint manually (uses CRON_SECRET via ?secret=… fallback). */
   const runNow = async () => {
@@ -124,6 +164,77 @@ export default function NotificationsView({ logs, stats }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Non-followers panel */}
+      {nonFollowers.length > 0 && (
+        <div className="mb-6 rounded-2xl bg-white p-5" style={{ border: `1px solid ${BORDER}` }}>
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2" style={{ color: TEXT }}>
+                <UserX size={14} style={{ color: "#991B1B" }} />
+                ลูกค้าที่ยังไม่ได้เป็นเพื่อนกับ LINE OA ({nonFollowers.length} คน)
+              </p>
+              <p className="text-xs mt-1" style={{ color: MUTED }}>
+                LINE ปฏิเสธการส่งข้อความ &quot;Failed to send messages&quot; แปลว่าลูกค้ายังไม่ได้เพิ่ม {LINE_OA_BASIC_ID} เป็นเพื่อน
+                <br />ส่งลิงก์เพิ่มเพื่อนให้ลูกค้า แล้วกด &quot;ตรวจสอบ&quot; อีกครั้งเพื่อยืนยัน
+              </p>
+            </div>
+            <button
+              onClick={copyAddFriendUrl}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm border"
+              style={{ borderColor: BORDER, color: TEXT, background: "white" }}
+            >
+              {copied ? <Check size={14} style={{ color: "#166534" }} /> : <Copy size={14} />}
+              {copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์เพิ่มเพื่อน"}
+            </button>
+          </div>
+
+          <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
+            <div className="grid grid-cols-[1fr_140px_140px_120px_140px] gap-3 px-4 py-2 text-xs font-semibold uppercase tracking-widest" style={{ background: "#FFF8F4", color: MUTED }}>
+              <span>ลูกค้า</span>
+              <span>เบอร์โทร</span>
+              <span>ครั้งล่าสุด</span>
+              <span>ครั้งที่ล้มเหลว</span>
+              <span>การจัดการ</span>
+            </div>
+            <div className="divide-y" style={{ borderColor: "#F5EFE9" }}>
+              {nonFollowers.map(f => {
+                const result = verifyResult[f.lineUserId];
+                return (
+                  <div key={f.lineUserId} className="grid grid-cols-[1fr_140px_140px_120px_140px] gap-3 px-4 py-3 items-center text-sm" style={{ color: TEXT }}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{f.name}{f.nickname && <span style={{ color: MUTED }}> · {f.nickname}</span>}</p>
+                      <p className="text-[10px] font-mono truncate" style={{ color: MUTED }}>{f.lineUserId}</p>
+                    </div>
+                    <span className="text-xs" style={{ color: MUTED }}>{f.phone ?? "—"}</span>
+                    <span className="text-xs" style={{ color: MUTED }}>{formatDateTimeTh(f.lastAt)}</span>
+                    <span className="text-xs">{f.count}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => verifyOne(f.lineUserId)}
+                        disabled={verifying === f.lineUserId}
+                        className="px-2.5 py-1 rounded-lg text-xs disabled:opacity-50"
+                        style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "white" }}
+                      >
+                        {verifying === f.lineUserId ? "กำลังตรวจ..." : "ตรวจสอบ"}
+                      </button>
+                      {result === "follower" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#F0FDF4", color: "#166534" }}>เป็นเพื่อนแล้ว</span>
+                      )}
+                      {result === "not_follower" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#FEF2F2", color: "#991B1B" }}>ยังไม่ได้เพิ่ม</span>
+                      )}
+                      {result === "error" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#F3F4F6", color: "#6B7280" }}>ผิดพลาด</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Log table */}
       <div className="rounded-2xl bg-white overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>

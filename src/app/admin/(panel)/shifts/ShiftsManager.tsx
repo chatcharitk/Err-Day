@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { defaultBranchId } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Plus, Trash2, X, Copy, Loader2 } from "lucide-react";
 
 interface Branch { id: string; name: string }
@@ -67,7 +68,7 @@ function formatRangeLabel(start: Date, end: Date): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ShiftsManager({ branches }: { branches: Branch[] }) {
-  const [branchId,  setBranchId]  = useState(branches[0]?.id ?? "");
+  const [branchId,  setBranchId]  = useState(() => defaultBranchId(branches));
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [staff,     setStaff]     = useState<StaffWithShifts[]>([]);
   const [loading,   setLoading]   = useState(false);

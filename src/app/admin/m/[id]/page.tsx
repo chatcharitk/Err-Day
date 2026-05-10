@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getCachedBranchServices, getCachedBranchStaff, getCachedAddons } from "@/lib/branches-cache";
 import BookingDetail from "./BookingDetail";
 
 export const dynamic = "force-dynamic";
@@ -13,33 +14,85 @@ export default async function MobileBookingDetailPage({
 
   const booking = await prisma.booking.findUnique({
     where: { id },
-    include: {
-      branch:   true,
-      service:  true,
-      customer: true,
-      staff:    true,
-      addons:   { include: { addon: true } },
+    select: {
+      id:         true,
+      branchId:   true,
+      serviceId:  true,
+      staffId:    true,
+      date:       true,
+      startTime:  true,
+      endTime:    true,
+      status:     true,
+      totalPrice: true,
+      notes:      true,
+      receiptUrl: true,
+      branch:   { select: { name: true } },
+      service:  { select: { nameTh: true } },
+      staff:    { select: { name: true } },
+      customer: {
+        select: {
+          name:     true,
+          nickname: true,
+          phone:    true,
+          membership: {
+            select: { expiresAt: true, usagesUsed: true, usagesAllowed: true, pendingActivation: true },
+          },
+        },
+      },
+      addons: {
+        select: {
+          id:      true,
+          addonId: true,
+          price:   true,
+          addon:   { select: { nameTh: true } },
+        },
+      },
     },
   });
   if (!booking) notFound();
 
-  // For switching service / staff / add-ons inline
+  // Resolve membership validity server-side
+  const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
+  const mem = booking.customer.membership;
+  const isMember = !!mem
+    && !mem.pendingActivation
+    && !(mem.expiresAt != null && new Date(mem.expiresAt) < todayUTC)
+    && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
+
   const [branchServices, branchStaff, allAddons] = await Promise.all([
-    prisma.branchService.findMany({
-      where:   { branchId: booking.branchId, isActive: true },
-      include: { service: true },
-      orderBy: { service: { category: "asc" } },
-    }),
-    prisma.staff.findMany({
-      where:   { branchId: booking.branchId, isActive: true },
-      orderBy: { name: "asc" },
-      select:  { id: true, name: true },
-    }),
-    prisma.serviceAddon.findMany({
-      where:   { isActive: true },
-      orderBy: { price: "asc" },
-    }),
+    getCachedBranchServices(booking.branchId),
+    getCachedBranchStaff(booking.branchId),
+    getCachedAddons(),
   ]);
+
+  // Auto-apply the member discount to the saved totalPrice when:
+  //   1) the customer is currently a valid member, AND
+  //   2) the booking's totalPrice is HIGHER than the member-adjusted total.
+  // This keeps overview, detail, and POS in sync without staff having to click
+  // "ใช้" on the green banner. Bookings that already have a manual lower price
+  // (e.g. comp / extra discount) are preserved — Math.min() takes the smaller.
+  let effectiveTotalPrice = booking.totalPrice;
+  if (isMember && booking.status !== "COMPLETED") {
+    const bs = branchServices.find((s) => s.id === booking.serviceId);
+    if (bs) {
+      let memberServicePrice = bs.price;
+      if (bs.memberPrice != null) {
+        memberServicePrice = bs.memberPrice;
+      } else if ((bs.memberDiscountPercent ?? 0) > 0) {
+        memberServicePrice = Math.round(bs.price * (1 - (bs.memberDiscountPercent ?? 0) / 100));
+      }
+      const addonsTotal         = booking.addons.reduce((s, a) => s + a.price, 0);
+      const memberAdjustedTotal = memberServicePrice + addonsTotal;
+      if (memberAdjustedTotal < booking.totalPrice) {
+        // Persist the discount so the saved value matches what the customer actually pays.
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data:  { totalPrice: memberAdjustedTotal },
+        });
+        effectiveTotalPrice = memberAdjustedTotal;
+      }
+    }
+  }
 
   const data = {
     id:           booking.id,
@@ -52,17 +105,19 @@ export default async function MobileBookingDetailPage({
     customerName: booking.customer.name,
     customerNickname: booking.customer.nickname,
     customerPhone:booking.customer.phone,
+    isMember,
     date:         `${booking.date.getFullYear()}-${String(booking.date.getMonth() + 1).padStart(2, "0")}-${String(booking.date.getDate()).padStart(2, "0")}`,
     startTime:    booking.startTime,
     endTime:      booking.endTime,
     status:       booking.status as "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW",
-    totalPrice:   booking.totalPrice,
+    totalPrice:   effectiveTotalPrice,
     notes:        booking.notes,
+    receiptUrl:   booking.receiptUrl,
     addons:       booking.addons.map((a) => ({
-      id:        a.id,         // BookingAddon.id (used to delete)
-      addonId:   a.addonId,
-      name:      a.addon.nameTh,
-      price:     a.price,
+      id:      a.id,
+      addonId: a.addonId,
+      name:    a.addon.nameTh,
+      price:   a.price,
     })),
   };
 
@@ -70,13 +125,15 @@ export default async function MobileBookingDetailPage({
     <BookingDetail
       booking={data}
       branchServices={branchServices.map((bs) => ({
-        id:       bs.serviceId,
-        nameTh:   bs.service.nameTh,
-        price:    bs.price,
-        duration: bs.duration,
+        id:                    bs.id,
+        nameTh:                bs.nameTh,
+        price:                 bs.price,
+        duration:              bs.duration,
+        memberPrice:           bs.memberPrice ?? null,
+        memberDiscountPercent: bs.memberDiscountPercent ?? 0,
       }))}
       branchStaff={branchStaff}
-      allAddons={allAddons.map((a) => ({ id: a.id, nameTh: a.nameTh, price: a.price }))}
+      allAddons={allAddons}
     />
   );
 }

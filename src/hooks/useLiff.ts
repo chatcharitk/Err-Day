@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { getLiff } from "@/lib/liff-client";
 
 export interface LiffProfile {
-  userId: string;
+  userId:      string;
   displayName: string;
   pictureUrl?: string;
-  email?: string;
+  email?:      string;
 }
 
 export interface LiffState {
   ready:      boolean;   // LIFF SDK finished initializing
-  isLoggedIn: boolean;   // user is authenticated with Line
-  isInClient: boolean;   // opened inside the Line app
+  isLoggedIn: boolean;   // user is authenticated with LINE
+  isInClient: boolean;   // opened inside the LINE app
   profile:    LiffProfile | null;
   login:      () => void;
   logout:     () => void;
@@ -25,12 +26,10 @@ export function useLiff(): LiffState {
   const [profile,    setProfile]    = useState<LiffProfile | null>(null);
 
   useEffect(() => {
-    const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-    if (!liffId) { setReady(true); return; }
+    if (!process.env.NEXT_PUBLIC_LIFF_ID) { setReady(true); return; }
 
-    import("@line/liff").then(async ({ default: liff }) => {
-      try {
-        await liff.init({ liffId });
+    getLiff()
+      .then(async (liff) => {
         setIsInClient(liff.isInClient());
 
         if (liff.isLoggedIn()) {
@@ -44,22 +43,17 @@ export function useLiff(): LiffState {
             email:       token?.email ?? undefined,
           });
         }
-      } catch (err) {
-        console.error("LIFF init failed:", err);
-      } finally {
-        setReady(true);
-      }
-    });
+      })
+      .catch(err => console.error("LIFF init failed:", err))
+      .finally(() => setReady(true));
   }, []);
 
   const login = useCallback(() => {
-    import("@line/liff").then(({ default: liff }) => {
-      liff.login({ redirectUri: window.location.href });
-    });
+    getLiff().then(liff => liff.login({ redirectUri: window.location.href }));
   }, []);
 
   const logout = useCallback(() => {
-    import("@line/liff").then(({ default: liff }) => {
+    getLiff().then(liff => {
       liff.logout();
       setIsLoggedIn(false);
       setProfile(null);

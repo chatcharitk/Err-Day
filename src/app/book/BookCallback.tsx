@@ -98,9 +98,6 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
           <Link href="/membership" className="text-white/80 hover:text-white text-sm transition-colors">
             สมาชิก
           </Link>
-          <Link href="/admin" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Admin
-          </Link>
           <LangSwitcher />
         </div>
       </nav>
