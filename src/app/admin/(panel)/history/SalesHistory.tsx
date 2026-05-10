@@ -577,7 +577,7 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
   }, [filtered]);
 
   return (
-    <div className="px-6 py-8 max-w-4xl">
+    <div className="px-6 py-8 max-w-6xl">
       {/* header */}
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Sales History</p>
@@ -699,110 +699,161 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
         </div>
       </div>
 
-      {/* list */}
+      {/* table */}
       {byDate.length === 0 ? (
         <div className="text-center py-16 rounded-2xl bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
           <p className="text-sm" style={{ color: MUTED }}>ไม่พบรายการ</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {byDate.map(([date, rows]) => {
-            const dateRevenue = rows.filter(r => r.status === "COMPLETED").reduce((s, r) => s + r.totalPrice, 0);
-            const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("th-TH", {
-              weekday: "long", day: "numeric", month: "long", year: "numeric",
-            });
-            return (
-              <div key={date}>
-                {/* date header */}
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                    {dateLabel}
-                  </p>
-                  {dateRevenue > 0 && (
-                    <p className="text-xs font-semibold" style={{ color: PRIMARY }}>{fmt(dateRevenue)}</p>
-                  )}
-                </div>
+        <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${BORDER}` }}>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr style={{ background: "#F9F0EA", borderBottom: `1.5px solid ${BORDER}` }}>
+                {["เวลา","ลูกค้า","บริการ","ช่าง","สาขา","สถานะ","ยอด",""].map(h => (
+                  <th
+                    key={h}
+                    className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap"
+                    style={{ color: MUTED }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {byDate.map(([date, rows]) => {
+                const dateRevenue = rows.filter(r => r.status === "COMPLETED").reduce((s, r) => s + r.totalPrice, 0);
+                const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("th-TH", {
+                  weekday: "short", day: "numeric", month: "short", year: "numeric",
+                });
+                return (
+                  <>
+                    {/* Day separator row */}
+                    <tr key={`hdr-${date}`} style={{ background: "#F9F0EA", borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
+                      <td colSpan={6} className="px-4 py-1.5">
+                        <span className="text-xs font-semibold" style={{ color: TEXT }}>{dateLabel}</span>
+                      </td>
+                      <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                        {dateRevenue > 0 && (
+                          <span className="text-xs font-bold" style={{ color: PRIMARY }}>{fmt(dateRevenue)}</span>
+                        )}
+                      </td>
+                      <td />
+                    </tr>
 
-                {/* rows */}
-                <div className="rounded-2xl overflow-hidden bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
-                  <div className="divide-y" style={{ borderColor: "#F5EFE9" }}>
-                    {rows.map(sale => {
+                    {/* Sale rows */}
+                    {rows.map((sale, ri) => {
                       const sc = STATUS_STYLE[sale.status] ?? STATUS_STYLE.PENDING;
                       return (
-                        <div key={sale.id} className="px-5 py-4 flex items-start justify-between gap-4 hover:bg-amber-50/30 transition-colors">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <Link
-                                href={`/admin/customers?id=${sale.customer.id}`}
-                                className="font-semibold text-sm hover:underline"
-                                style={{ color: TEXT }}
-                                title="ดูข้อมูลลูกค้า"
-                              >
-                                {sale.customer.name}
-                              </Link>
-                              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: sc.bg, color: sc.color }}>
-                                {STATUS_LABEL[sale.status] ?? sale.status}
-                              </span>
-                            </div>
-                            <p className="text-sm" style={{ color: "#6B5245" }}>
-                              {sale.service.nameTh || sale.service.name}
+                        <tr
+                          key={sale.id}
+                          className="transition-colors hover:bg-amber-50/40"
+                          style={{
+                            background: ri % 2 === 0 ? "white" : "#FDFAF8",
+                            borderBottom: `1px solid ${BORDER}`,
+                          }}
+                        >
+                          {/* Time */}
+                          <td className="px-4 py-3 whitespace-nowrap align-top">
+                            <p className="text-xs font-semibold" style={{ color: PRIMARY }}>
+                              {sale.startTime}
                             </p>
-                            <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                              {sale.startTime}–{sale.endTime}
-                              {sale.staff && ` · ${sale.staff.name}`}
-                              {" · "}{sale.branch.name}
-                            </p>
-                            {/* Show appointment date when it differs from the group's date
-                                (e.g. payment processed on a different day than the appointment). */}
+                            <p className="text-[10px]" style={{ color: MUTED }}>{sale.endTime}</p>
+                            {sale.completedAt && (
+                              <p className="text-[10px] mt-0.5" style={{ color: "#16a34a" }}>
+                                💳 {fmtInvoiceTime(sale.completedAt)}
+                              </p>
+                            )}
+                          </td>
+
+                          {/* Customer */}
+                          <td className="px-4 py-3 align-top">
+                            <Link
+                              href={`/admin/customers?id=${sale.customer.id}`}
+                              className="font-semibold text-sm hover:underline block"
+                              style={{ color: TEXT }}
+                            >
+                              {sale.customer.name}
+                            </Link>
+                            <p className="text-[11px]" style={{ color: MUTED }}>{sale.customer.phone}</p>
                             {effectiveDateOf(sale) !== sale.date.slice(0, 10) && (
-                              <p className="text-xs mt-0.5" style={{ color: MUTED }}>
-                                📅 นัดเมื่อ {new Date(sale.date).toLocaleDateString("th-TH", {
-                                  timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "2-digit",
+                              <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
+                                📅 นัด {new Date(sale.date).toLocaleDateString("th-TH", {
+                                  timeZone: "Asia/Bangkok", day: "numeric", month: "short",
                                 })}
                               </p>
                             )}
-                            {sale.completedAt && (
-                              <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#16a34a" }}>
-                                <span>💳</span>
-                                <span>ชำระเงิน {fmtInvoiceTime(sale.completedAt)}</span>
+                          </td>
+
+                          {/* Service */}
+                          <td className="px-4 py-3 align-top">
+                            <p className="text-sm" style={{ color: "#6B5245" }}>
+                              {sale.service.nameTh || sale.service.name}
+                            </p>
+                            {sale.notes && (
+                              <p className="text-[11px] italic mt-0.5" style={{ color: MUTED }}>
+                                &ldquo;{sale.notes}&rdquo;
                               </p>
                             )}
-                            <p className="text-xs" style={{ color: MUTED }}>{sale.customer.phone}</p>
-                            {sale.notes && (
-                              <p className="text-xs mt-1 italic" style={{ color: MUTED }}>"{sale.notes}"</p>
-                            )}
-                          </div>
+                          </td>
 
-                          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                          {/* Staff */}
+                          <td className="px-4 py-3 whitespace-nowrap align-top">
+                            <p className="text-sm" style={{ color: TEXT }}>
+                              {sale.staff?.name ?? <span style={{ color: MUTED }}>—</span>}
+                            </p>
+                          </td>
+
+                          {/* Branch */}
+                          <td className="px-4 py-3 whitespace-nowrap align-top">
+                            <p className="text-xs" style={{ color: MUTED }}>{sale.branch.name}</p>
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-4 py-3 whitespace-nowrap align-top">
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full font-medium"
+                              style={{ background: sc.bg, color: sc.color }}
+                            >
+                              {STATUS_LABEL[sale.status] ?? sale.status}
+                            </span>
+                          </td>
+
+                          {/* Price */}
+                          <td className="px-4 py-3 whitespace-nowrap text-right align-top">
                             <p className="font-semibold text-sm" style={{ color: PRIMARY }}>{fmt(sale.totalPrice)}</p>
-                            <p className="text-xs font-mono" style={{ color: "#C4B0A4" }}>#{sale.id.slice(-6).toUpperCase()}</p>
+                            <p className="text-[10px] font-mono" style={{ color: "#C4B0A4" }}>
+                              #{sale.id.slice(-6).toUpperCase()}
+                            </p>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3 whitespace-nowrap align-top">
                             <div className="flex items-center gap-1.5">
                               <button
                                 onClick={() => setEditing(sale)}
-                                className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-blue-50"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-blue-50"
                                 style={{ color: "#2563EB", border: "1px solid #BFDBFE" }}
                               >
-                                <Pencil size={11} />
-                                แก้ไข
+                                <Pencil size={11} /> แก้ไข
                               </button>
                               <button
                                 onClick={() => setDeleteId(sale.id)}
-                                className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-red-50"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-red-50"
                                 style={{ color: "#DC2626", border: "1px solid #FECACA" }}
                               >
-                                <Trash2 size={11} />
-                                ลบ
+                                <Trash2 size={11} /> ลบ
                               </button>
                             </div>
-                          </div>
-                        </div>
+                          </td>
+                        </tr>
                       );
                     })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
