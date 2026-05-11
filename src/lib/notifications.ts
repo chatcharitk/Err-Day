@@ -85,7 +85,7 @@ const STAFF_LINE_IDS = [
 export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
   const b = await prisma.booking.findUnique({
     where:   { id: bookingId },
-    include: { customer: true, branch: true, service: true, staff: true },
+    include: { customer: { include: { membership: true } }, branch: true, service: true, staff: true },
   });
   if (!b) return;
 
@@ -95,6 +95,16 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
     weekday: "long", day: "numeric", month: "short", year: "numeric",
   });
 
+  const m           = b.customer.membership;
+  const now         = new Date();
+  const isMember    = m != null
+    && !m.pendingActivation
+    && (m.expiresAt == null || m.expiresAt > now)
+    && (m.usagesAllowed === 0 || m.usagesUsed < m.usagesAllowed);
+  const memberLine  = isMember
+    ? `🎟️ สมาชิก: ✅ ใช้งานได้ (หมดอายุ ${m!.expiresAt ? formatDateTh(m!.expiresAt) : "ตลอดชีพ"})`
+    : `🎟️ สมาชิก: ❌ ไม่ใช่สมาชิก`;
+
   const text =
 `จองใหม่ - ${branchShort}
 
@@ -102,7 +112,8 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
 📅 ${dateStr}
 ⏰ ${b.startTime}–${b.endTime}
 💆 ${b.service.nameTh}
-👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}
+${memberLine}`;
 
   await Promise.all(
     STAFF_LINE_IDS.map(async uid => {
@@ -127,7 +138,7 @@ export async function sendBookingTimeChanged(
 ): Promise<void> {
   const b = await prisma.booking.findUnique({
     where:   { id: bookingId },
-    include: { customer: true, branch: true, service: true, staff: true },
+    include: { customer: { include: { membership: true } }, branch: true, service: true, staff: true },
   });
   if (!b || !b.customer.lineUserId) return;
 
@@ -155,7 +166,17 @@ export async function sendBookingTimeChanged(
   else        console.log("[notify] time changed (customer) sent",    bookingId);
 
   // Staff / admin notification
-  const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
+  const branchShort  = b.branch.name.replace(/^err\.day\s*/i, "");
+  const mc          = b.customer.membership;
+  const nowR        = new Date();
+  const isMemberR   = mc != null
+    && !mc.pendingActivation
+    && (mc.expiresAt == null || mc.expiresAt > nowR)
+    && (mc.usagesAllowed === 0 || mc.usagesUsed < mc.usagesAllowed);
+  const memberLineR = isMemberR
+    ? `🎟️ สมาชิก: ✅ ใช้งานได้ (หมดอายุ ${mc!.expiresAt ? formatDateTh(mc!.expiresAt) : "ตลอดชีพ"})`
+    : `🎟️ สมาชิก: ❌ ไม่ใช่สมาชิก`;
+
   const staffText =
 `เปลี่ยนเวลานัด - ${branchShort}
 
@@ -163,7 +184,8 @@ export async function sendBookingTimeChanged(
 📅 ${dateStr}
 ⏰ ${oldStart}–${oldEnd} → ${b.startTime}–${b.endTime}
 💆 ${b.service.nameTh}
-👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}
+${memberLineR}`;
 
   await Promise.all(
     STAFF_LINE_IDS.map(async uid => {
