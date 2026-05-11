@@ -45,15 +45,16 @@ interface MembershipCycleInfo {
 }
 
 interface Customer {
-  id:         string;
-  name:       string;
-  nickname:   string | null;
-  phone:      string;
-  email:      string | null;
-  gender:     string | null;
-  pictureUrl: string | null;
-  lineUserId: string | null;
-  createdAt:  string;
+  id:          string;
+  name:        string;
+  nickname:    string | null;
+  phone:       string;
+  email:       string | null;
+  gender:      string | null;
+  dateOfBirth: string | null;
+  pictureUrl:  string | null;
+  lineUserId:  string | null;
+  createdAt:   string;
   membership: MembershipInfo | null;
   membershipCycles?: MembershipCycleInfo[];
   packages?:  PackageInfo[];
@@ -1102,13 +1103,16 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
   const [bookings,  setBookings]  = useState<BookingRecord[] | null>(null);
 
   // editable fields
-  const [name,     setName]     = useState(customer.name);
-  const [nickname, setNickname] = useState(customer.nickname ?? "");
-  const [phone,    setPhone]    = useState(customer.phone);
-  const [email,    setEmail]    = useState(customer.email ?? "");
-  const [gender,   setGender]   = useState(customer.gender ?? "");
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState("");
+  const [name,        setName]        = useState(customer.name);
+  const [nickname,    setNickname]    = useState(customer.nickname ?? "");
+  const [phone,       setPhone]       = useState(customer.phone);
+  const [email,       setEmail]       = useState(customer.email ?? "");
+  const [gender,      setGender]      = useState(customer.gender ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(
+    customer.dateOfBirth ? new Date(customer.dateOfBirth).toISOString().slice(0, 10) : ""
+  );
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState("");
 
   // delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1159,11 +1163,12 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          name:     name.trim(),
-          nickname: nickname.trim() || null,
-          phone:    phone.trim(),
-          email:    email.trim() || null,
-          gender:   gender || null,
+          name:        name.trim(),
+          nickname:    nickname.trim() || null,
+          phone:       phone.trim(),
+          email:       email.trim() || null,
+          gender:      gender || null,
+          dateOfBirth: dateOfBirth || null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "บันทึกไม่สำเร็จ");
@@ -1367,6 +1372,25 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
                     </span>
                   )}
                 </InfoRow>
+
+                {/* Date of Birth */}
+                <InfoRow icon={<Calendar size={14} />} label="วันเกิด">
+                  {editMode ? (
+                    <input
+                      type="date"
+                      value={dateOfBirth}
+                      onChange={e => setDateOfBirth(e.target.value)}
+                      className="px-2 py-1 text-sm rounded-lg border"
+                      style={{ borderColor: BORDER, color: dateOfBirth ? TEXT : MUTED }}
+                    />
+                  ) : (
+                    <span className="text-sm" style={{ color: customer.dateOfBirth ? TEXT : MUTED }}>
+                      {customer.dateOfBirth
+                        ? new Date(customer.dateOfBirth).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })
+                        : "—"}
+                    </span>
+                  )}
+                </InfoRow>
               </div>
 
               {editMode && (
@@ -1380,6 +1404,7 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
                       setPhone(customer.phone);
                       setEmail(customer.email ?? "");
                       setGender(customer.gender ?? "");
+                      setDateOfBirth(customer.dateOfBirth ? new Date(customer.dateOfBirth).toISOString().slice(0, 10) : "");
                       setError("");
                     }}
                     className="px-4 py-2 text-sm rounded-xl border font-medium"

@@ -4,15 +4,16 @@ import { PDPA_VERSION } from "@/lib/pdpa";
 import { startOfTodayUTC } from "@/lib/utils";
 
 interface SignupBody {
-  name:        string;
-  nickname?:   string;  // ชื่อเล่น — optional
-  phone:       string;
-  email?:      string;
-  gender?:     string;
-  pdpaConsent: boolean;
-  source?:     string;  // e.g. "liff-membership" | "liff-buffet" | "liff-5pack" | "signup" | "staff"
-  lineUserId?: string;  // provided when signing up via LIFF
-  pictureUrl?: string;  // LINE profile picture
+  name:         string;
+  nickname?:    string;  // ชื่อเล่น — optional
+  phone:        string;
+  email?:       string;
+  gender?:      string;
+  dateOfBirth?: string; // ISO date string "YYYY-MM-DD"
+  pdpaConsent:  boolean;
+  source?:      string; // e.g. "liff-membership" | "liff-buffet" | "liff-5pack" | "signup" | "staff"
+  lineUserId?:  string; // provided when signing up via LIFF
+  pictureUrl?:  string; // LINE profile picture
 }
 
 /** POST /api/membership/signup
@@ -23,7 +24,7 @@ interface SignupBody {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as SignupBody;
-    const { name, nickname, phone, email, gender, pdpaConsent, lineUserId, pictureUrl } = body;
+    const { name, nickname, phone, email, gender, dateOfBirth, pdpaConsent, lineUserId, pictureUrl } = body;
     const source = body.source ?? "signup";
 
     // Validate
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
         ...(nickname   ? { nickname: nickname.trim() } : {}),
         email:         email?.trim() || undefined,
         gender:        gender || undefined,
+        ...(dateOfBirth ? { dateOfBirth: new Date(dateOfBirth) } : {}),
         pdpaConsentAt: new Date(),
         pdpaVersion:   PDPA_VERSION,
         pdpaSource:    source,
@@ -78,15 +80,16 @@ export async function POST(request: Request) {
       },
       create: {
         name:          name.trim(),
-        ...(nickname   ? { nickname: nickname.trim() } : {}),
-        phone:         phoneClean,
-        email:         email?.trim() || undefined,
-        gender:        gender || undefined,
-        pdpaConsentAt: new Date(),
-        pdpaVersion:   PDPA_VERSION,
-        pdpaSource:    source,
-        ...(lineUserId ? { lineUserId } : {}),
-        ...(pictureUrl ? { pictureUrl } : {}),
+        ...(nickname    ? { nickname: nickname.trim() }         : {}),
+        phone:          phoneClean,
+        email:          email?.trim() || undefined,
+        gender:         gender || undefined,
+        ...(dateOfBirth ? { dateOfBirth: new Date(dateOfBirth) } : {}),
+        pdpaConsentAt:  new Date(),
+        pdpaVersion:    PDPA_VERSION,
+        pdpaSource:     source,
+        ...(lineUserId  ? { lineUserId } : {}),
+        ...(pictureUrl  ? { pictureUrl } : {}),
       },
     });
 

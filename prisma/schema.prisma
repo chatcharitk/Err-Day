@@ -97,8 +97,9 @@ model Customer {
   nickname   String?  // ชื่อเล่น — used in booking & shown to staff
   phone      String   @unique
   email      String?
-  gender     String?  // "MALE" | "FEMALE" | "OTHER"
-  pictureUrl String?  // profile picture (auto-pulled from Line, or manually set)
+  gender      String?   // "MALE" | "FEMALE" | "OTHER"
+  dateOfBirth DateTime? // customer's date of birth
+  pictureUrl  String?   // profile picture (auto-pulled from Line, or manually set)
   lineUserId String?  @unique // Line user ID — set automatically when customer signs in via LIFF
   createdAt  DateTime @default(now())
 

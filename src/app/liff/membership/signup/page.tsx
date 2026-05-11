@@ -66,14 +66,15 @@ export default function LiffMembershipSignupPage() {
   const [profile,  setProfile]  = useState<LineProfile | null>(null);
 
   // Form state
-  const [product,  setProduct]  = useState<ProductKey>("membership");
-  const [name,     setName]     = useState("");
-  const [nickname, setNickname] = useState("");
-  const [phone,    setPhone]    = useState("");
-  const [email,    setEmail]    = useState("");
-  const [gender,   setGender]   = useState("");
-  const [pdpa,     setPdpa]     = useState(false);
-  const [formErr, setFormErr] = useState("");
+  const [product,     setProduct]     = useState<ProductKey>("membership");
+  const [name,        setName]        = useState("");
+  const [nickname,    setNickname]    = useState("");
+  const [phone,       setPhone]       = useState("");
+  const [email,       setEmail]       = useState("");
+  const [gender,      setGender]      = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [pdpa,        setPdpa]        = useState(false);
+  const [formErr,     setFormErr]     = useState("");
 
   const selectedProduct = PRODUCTS.find(p => p.key === product)!;
 
@@ -123,6 +124,7 @@ export default function LiffMembershipSignupPage() {
           phone:       phone.trim(),
           email:       email.trim() || undefined,
           gender:      gender || undefined,
+          dateOfBirth: dateOfBirth || undefined,
           pdpaConsent: pdpa,
           source:      `liff-${product}`,
           lineUserId:  profile?.userId,
@@ -338,6 +340,18 @@ export default function LiffMembershipSignupPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Date of birth */}
+          <div>
+            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>วันเกิด (ไม่บังคับ)</label>
+            <input
+              type="date"
+              value={dateOfBirth}
+              onChange={e => setDateOfBirth(e.target.value)}
+              className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none bg-white"
+              style={{ borderColor: BORDER, color: dateOfBirth ? TEXT : MUTED }}
+            />
           </div>
 
           {/* PDPA */}

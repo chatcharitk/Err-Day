@@ -25,17 +25,18 @@ export async function GET(
     const activePackages = await findCustomerPackagesForAdmin(c.id);
 
     return NextResponse.json({
-      id:         c.id,
-      name:       c.name,
-      nickname:   c.nickname,
-      phone:      c.phone,
-      email:      c.email,
-      gender:     c.gender,
-      pictureUrl: c.pictureUrl,
-      lineUserId: c.lineUserId,
-      createdAt:  c.createdAt.toISOString(),
-      notes:      c.notes ?? null,
-      photoUrls:  c.photoUrls ?? null,
+      id:          c.id,
+      name:        c.name,
+      nickname:    c.nickname,
+      phone:       c.phone,
+      email:       c.email,
+      gender:      c.gender,
+      dateOfBirth: c.dateOfBirth?.toISOString() ?? null,
+      pictureUrl:  c.pictureUrl,
+      lineUserId:  c.lineUserId,
+      createdAt:   c.createdAt.toISOString(),
+      notes:       c.notes ?? null,
+      photoUrls:   c.photoUrls ?? null,
       membership: c.membership
         ? {
             label:             c.membership.label,
@@ -117,7 +118,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const { name, nickname, phone, email, gender, pictureUrl, pdpaSource, notes, photoUrls } = await request.json();
+    const { name, nickname, phone, email, gender, dateOfBirth, pictureUrl, pdpaSource, notes, photoUrls } = await request.json();
 
     // If phone is changing, check it isn't taken by someone else
     if (phone) {
@@ -136,8 +137,9 @@ export async function PATCH(
         ...(nickname   !== undefined ? { nickname:   nickname?.trim() || null   } : {}),
         ...(phone      !== undefined ? { phone:      phone.trim()               } : {}),
         ...(email      !== undefined ? { email:      email?.trim() || null      } : {}),
-        ...(gender     !== undefined ? { gender:     gender || null             } : {}),
-        ...(pictureUrl !== undefined ? { pictureUrl: pictureUrl?.trim() || null } : {}),
+        ...(gender      !== undefined ? { gender:      gender || null                                       } : {}),
+        ...(dateOfBirth !== undefined ? { dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null           } : {}),
+        ...(pictureUrl  !== undefined ? { pictureUrl:  pictureUrl?.trim() || null                           } : {}),
         ...(pdpaSource !== undefined ? { pdpaSource: pdpaSource || null         } : {}),
         ...(notes      !== undefined ? { notes:      notes?.trim() || null      } : {}),
         ...(photoUrls  !== undefined ? { photoUrls:  photoUrls                  } : {}),

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Pencil, Phone, Mail, User, Sparkles, Package as PackageIcon,
   Loader2, AlertCircle, Check, Clock, MapPin, Camera, Plus, Trash2, X,
-  Receipt, Info, FileImage, NotebookPen,
+  Receipt, Info, FileImage, NotebookPen, Cake,
 } from "lucide-react";
 
 const PACKAGE_OPTIONS: { sku: string; nameTh: string; price: number }[] = [
@@ -82,6 +82,7 @@ interface Customer {
   phone:         string;
   email:         string | null;
   gender:        string | null;
+  dateOfBirth:   string | null;
   lineUserId:    string | null;
   pictureUrl:    string | null;
   notes:         string | null;
@@ -126,11 +127,12 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
   const [c, setC] = useState(initial);
   const [editing, setEditing] = useState(false);
 
-  const [name,     setName]     = useState(c.name);
-  const [nickname, setNickname] = useState(c.nickname ?? "");
-  const [phone,    setPhone]    = useState(c.phone);
-  const [email,    setEmail]    = useState(c.email ?? "");
-  const [gender,   setGender]   = useState(c.gender ?? "");
+  const [name,        setName]        = useState(c.name);
+  const [nickname,    setNickname]    = useState(c.nickname ?? "");
+  const [phone,       setPhone]       = useState(c.phone);
+  const [email,       setEmail]       = useState(c.email ?? "");
+  const [gender,      setGender]      = useState(c.gender ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(isoDateInput(c.dateOfBirth));
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState("");
 
@@ -172,6 +174,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
     setPhone(c.phone);
     setEmail(c.email ?? "");
     setGender(c.gender ?? "");
+    setDateOfBirth(isoDateInput(c.dateOfBirth));
     setError("");
     setEditing(true);
   };
@@ -337,7 +340,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
       const res = await fetch(`/api/admin/customers/${c.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name, nickname, phone, email, gender }),
+        body:    JSON.stringify({ name, nickname, phone, email, gender, dateOfBirth: dateOfBirth || null }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -345,7 +348,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
         setSaving(false);
         return;
       }
-      setC(prev => ({ ...prev, name, nickname: nickname || null, phone, email: email || null, gender: gender || null }));
+      setC(prev => ({ ...prev, name, nickname: nickname || null, phone, email: email || null, gender: gender || null, dateOfBirth: dateOfBirth || null }));
       setEditing(false);
       setSaving(false);
       router.refresh();
@@ -438,6 +441,12 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                 ))}
               </div>
             </div>
+            <div>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>วันเกิด</label>
+              <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                style={{ borderColor: BORDER, color: dateOfBirth ? TEXT : MUTED }} />
+            </div>
             {error && (
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ background: "#FEF2F2", color: "#991b1b" }}>
                 <AlertCircle size={14} /> {error}
@@ -467,10 +476,18 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
               <Mail size={14} style={{ color: MUTED }} />
               <span className="text-sm" style={{ color: c.email ? TEXT : MUTED }}>{c.email ?? "—"}</span>
             </div>
-            <div className="px-3 py-2.5 flex items-center gap-3">
+            <div className="px-3 py-2.5 flex items-center gap-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <User size={14} style={{ color: MUTED }} />
               <span className="text-sm" style={{ color: c.gender ? TEXT : MUTED }}>
                 {c.gender === "FEMALE" ? "หญิง" : c.gender === "MALE" ? "ชาย" : c.gender === "OTHER" ? "อื่น ๆ" : "—"}
+              </span>
+            </div>
+            <div className="px-3 py-2.5 flex items-center gap-3">
+              <Cake size={14} style={{ color: MUTED }} />
+              <span className="text-sm" style={{ color: c.dateOfBirth ? TEXT : MUTED }}>
+                {c.dateOfBirth
+                  ? new Date(c.dateOfBirth).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })
+                  : "—"}
               </span>
             </div>
           </div>
