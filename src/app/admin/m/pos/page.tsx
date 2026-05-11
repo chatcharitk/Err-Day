@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
+import { findActivePackages } from "@/lib/packages";
 import MobilePos from "./MobilePos";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,28 @@ export default async function MobilePosPage({
 
   const activeBranchId = branchId ?? prefillBooking?.branchId ?? defaultBranchId(branches);
 
+  // Preload active packages for the prefill customer so MobilePos can assign
+  // redeemPackageId during the synchronous cart initializer (avoids the
+  // useEffect race where the cart item has no redeemPackageId until packages load).
+  type InitialPackage = {
+    id: string; sku: string; nameTh: string; coversServiceIds: string[];
+    expiresAt: string; usagesUsed: number; usageLimit: number; usagesLeft: number | null;
+  };
+  let initialActivePackages: InitialPackage[] = [];
+  if (prefillBooking) {
+    const pkgs = await findActivePackages(prefillBooking.customer.id);
+    initialActivePackages = pkgs.map(p => ({
+      id:               p.id,
+      sku:              p.packageSku,
+      nameTh:           p.spec.nameTh,
+      coversServiceIds: p.spec.coversServiceIds,
+      expiresAt:        p.expiresAt.toISOString(),
+      usagesUsed:       p.usagesUsed,
+      usageLimit:       p.usageLimit,
+      usagesLeft:       p.usagesLeft,
+    }));
+  }
+
   const [branchServices, addons] = await Promise.all([
     activeBranchId
       ? prisma.branchService.findMany({
@@ -112,6 +135,7 @@ export default async function MobilePosPage({
       branchServices={branchServices}
       addons={addons}
       prefillBooking={prefillBooking}
+      initialActivePackages={initialActivePackages}
     />
   );
 }

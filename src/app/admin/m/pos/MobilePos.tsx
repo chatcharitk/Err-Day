@@ -79,11 +79,13 @@ interface PrefillBooking {
 }
 
 interface Props {
-  branches:        Branch[];
-  activeBranchId:  string;
-  branchServices:  BS[];
-  addons:          ServiceAddon[];
-  prefillBooking?: PrefillBooking | null;
+  branches:               Branch[];
+  activeBranchId:         string;
+  branchServices:         BS[];
+  addons:                 ServiceAddon[];
+  prefillBooking?:        PrefillBooking | null;
+  /** Server-preloaded packages for the prefill customer — eliminates the useEffect race */
+  initialActivePackages?: ActivePackage[];
 }
 
 const PRIMARY = "#8B1D24";
@@ -107,7 +109,7 @@ function getServiceMemberPrice(bs: BS): number {
   return applyDiscount(bs.price, bs.service.memberDiscountPercent ?? 0);
 }
 
-export default function MobilePos({ branches, activeBranchId, branchServices, addons, prefillBooking }: Props) {
+export default function MobilePos({ branches, activeBranchId, branchServices, addons, prefillBooking, initialActivePackages }: Props) {
   const router = useRouter();
   const [customer, setCustomer] = useState<CustomerValue>(() => {
     if (prefillBooking) {
@@ -116,24 +118,36 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     return { id: null, name: "", phone: "" };
   });
   const [memberInfo,     setMemberInfo]     = useState<MemberInfo | null>(null);
-  const [activePackages, setActivePackages] = useState<ActivePackage[]>([]);
+  const [activePackages, setActivePackages] = useState<ActivePackage[]>(() => initialActivePackages ?? []);
   const [cart,           setCart]           = useState<CartItem[]>(() => {
     if (!prefillBooking) return [];
 
     const items: CartItem[] = [];
+    const initPkgs = initialActivePackages ?? [];
+
+    // Helper: pick the best package from the preloaded list for a given serviceId
+    function pickInitialPkg(serviceId: string): ActivePackage | null {
+      return initPkgs
+        .filter(p => p.coversServiceIds.includes(serviceId))
+        .filter(p => p.usageLimit === 0 || (p.usagesLeft ?? 0) > 0)
+        .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime())[0] ?? null;
+    }
 
     // ── Main service ────────────────────────────────────────────────
     const bs = branchServices.find(s => s.serviceId === prefillBooking.serviceId);
     if (bs) {
       const mPrice = getServiceMemberPrice(bs);
-      // Use member price immediately if we know the customer is a member (server-resolved).
+      const pkg    = pickInitialPkg(bs.serviceId);
+      // Package coverage wins over member price; otherwise use server-resolved isMember flag.
       items.push({
-        id:          bs.id,
-        name:        bs.service.nameTh,
-        basePrice:   bs.price,
-        price:       prefillBooking.isMember ? mPrice : bs.price,
-        qty:         1,
-        memberPrice: mPrice,
+        id:                pkg ? `${bs.id}__pkg-${pkg.id}-0` : bs.id,
+        name:              bs.service.nameTh,
+        basePrice:         bs.price,
+        price:             pkg ? 0 : (prefillBooking.isMember ? mPrice : bs.price),
+        qty:               1,
+        memberPrice:       mPrice,
+        redeemPackageId:   pkg?.id,
+        redeemPackageName: pkg?.nameTh,
       });
     } else {
       // Fallback: service not in branch catalogue (shouldn't normally happen)
@@ -174,8 +188,10 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   //   (bs.price / member price). The difference is the implicit bill-level discount.
   const [discountBaht, setDiscountBaht] = useState<number>(() => {
     if (!prefillBooking) return 0;
-    const bs = branchServices.find(s => s.serviceId === prefillBooking.serviceId);
-    const servicePrice = bs
+    const bs      = branchServices.find(s => s.serviceId === prefillBooking.serviceId);
+    const initPkgs = initialActivePackages ?? [];
+    const hasPkg   = initPkgs.some(p => p.coversServiceIds.includes(prefillBooking.serviceId) && (p.usageLimit === 0 || (p.usagesLeft ?? 0) > 0));
+    const servicePrice = hasPkg ? 0 : bs
       ? (prefillBooking.isMember ? getServiceMemberPrice(bs) : bs.price)
       : prefillBooking.totalPrice;
     const addonsTotal = prefillBooking.addons.reduce((s, a) => s + a.price, 0);
@@ -224,6 +240,41 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       return { ...item, price: active ? item.memberPrice : item.basePrice };
     }));
   }, [memberInfo]);
+
+  // When packages load (after customer selection), retroactively apply package
+  // redemption to any matching cart items that were added before packages loaded.
+  // This handles the walk-in path where the staff adds a service then selects customer.
+  useEffect(() => {
+    if (activePackages.length === 0) return;
+    setCart(prev => {
+      let changed = false;
+      const next = prev.map(item => {
+        if (item.redeemPackageId || item.isCustom || item.id.startsWith("addon-")) return item;
+        // Find the branchService for this cart item
+        const bs = branchServices.find(s => s.id === item.id);
+        if (!bs) return item;
+        const pkg = activePackages
+          .filter(p => p.coversServiceIds.includes(bs.serviceId))
+          .filter(p => {
+            if (p.usageLimit === 0) return true;
+            const claimedHere = prev.filter(c => c.redeemPackageId === p.id).length;
+            return (p.usagesLeft ?? 0) - claimedHere > 0;
+          })
+          .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime())[0] ?? null;
+        if (!pkg) return item;
+        changed = true;
+        return {
+          ...item,
+          id:                `${bs.id}__pkg-${pkg.id}-${prev.indexOf(item)}`,
+          price:             0,
+          redeemPackageId:   pkg.id,
+          redeemPackageName: pkg.nameTh,
+        };
+      });
+      return changed ? next : prev;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePackages]);
 
   // Which branchService row corresponds to the membership SKU
   const MEMBERSHIP_SKU = "svc-membership-30d";
