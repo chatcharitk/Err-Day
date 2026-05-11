@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
-import { getCachedBranches, getCachedBranchStaff } from "@/lib/branches-cache";
+import { getCachedBranches, getCachedBranchStaff, getCachedBranchServices, getCachedAddons } from "@/lib/branches-cache";
 import CalendarView from "./CalendarView";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export default async function CalendarPage({
 
   const { monday, sunday } = getWeekBounds(selectedDate);
 
-  const [staff, bookings] = await Promise.all([
+  const [staff, bookings, branchServices, addons] = await Promise.all([
     getCachedBranchStaff(activeBranchId),
     prisma.booking.findMany({
       where: {
@@ -67,6 +67,8 @@ export default async function CalendarPage({
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
+    getCachedBranchServices(activeBranchId),
+    getCachedAddons(),
   ]);
 
   const weekBookings = bookings.map((b) => ({
@@ -91,6 +93,8 @@ export default async function CalendarPage({
       selectedDate={selectedDate}
       branches={branches}
       activeBranchId={activeBranchId}
+      branchServices={branchServices}
+      addons={addons}
     />
   );
 }

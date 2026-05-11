@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
@@ -39,12 +39,25 @@ interface ServiceOption {
   price: number;
   service: { id: string; name: string; nameTh: string };
 }
+interface BranchServiceItem {
+  id:                    string;  // serviceId
+  nameTh:                string;
+  category:              string;
+  price:                 number;
+  duration:              number;
+  memberPrice:           number | null;
+  memberDiscountPercent: number;
+}
+interface AddonItem { id: string; nameTh: string; price: number; }
+
 interface Props {
-  weekBookings: BookingItem[];
-  staff: StaffItem[];
-  selectedDate: string;   // "YYYY-MM-DD"
-  branches: BranchItem[];
-  activeBranchId: string;
+  weekBookings:    BookingItem[];
+  staff:           StaffItem[];
+  selectedDate:    string;          // "YYYY-MM-DD"
+  branches:        BranchItem[];
+  activeBranchId:  string;
+  branchServices:  BranchServiceItem[];
+  addons:          AddonItem[];
 }
 
 /* ─── Constants ─────────────────────────────────────────── */
@@ -826,89 +839,122 @@ function EditModal({
 
 /* ─── Add Booking Modal ──────────────────────────────────── */
 function AddBookingModal({
-  defaultDate, branchId, staff, onClose, onSaved,
+  defaultDate, branchId, staff, branchServices, addons, onClose, onSaved,
 }: {
-  defaultDate: string;
-  branchId: string;
-  staff: StaffItem[];
+  defaultDate:    string;
+  branchId:       string;
+  staff:          StaffItem[];
+  branchServices: BranchServiceItem[];
+  addons:         AddonItem[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [services,      setServices]      = useState<ServiceOption[]>([]);
-  const [date,          setDate]          = useState(defaultDate);
-  const [bsId,          setBsId]          = useState("");
-  const [staffId,       setStaffId]       = useState("");
-  const [startTime,     setStartTime]     = useState("10:00");
-  const [endTime,       setEndTime]       = useState("11:00");
-  const [customer,      setCustomer]      = useState<CustomerValue>({ id: null, name: "", phone: "" });
-  const [isWalkin,      setIsWalkin]      = useState(false);
-  const [discountBaht,  setDiscountBaht]  = useState(0);
-  const [notesVal,      setNotesVal]      = useState("");
-  const [saving,        setSaving]        = useState(false);
-  const [error,         setError]         = useState("");
+  const [date,             setDate]             = useState(defaultDate);
+  const [serviceId,        setServiceId]        = useState("");
+  const [staffId,          setStaffId]          = useState("");
+  const [time,             setTime]             = useState("");
+  const [customer,         setCustomer]         = useState<CustomerValue>({ id: null, name: "", phone: "" });
+  const [isWalkin,         setIsWalkin]         = useState(false);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
+  const [discountBaht,     setDiscountBaht]     = useState(0);
+  const [notesVal,         setNotesVal]         = useState("");
+  const [saving,           setSaving]           = useState(false);
+  const [error,            setError]            = useState("");
+  const [isMember,         setIsMember]         = useState(false);
 
-  const name  = customer.name;
-  const phone = customer.phone;
-
+  // Fetch membership status when a known customer is selected
   useEffect(() => {
-    fetch(`/api/services?branchId=${branchId}`)
-      .then(r => r.json())
-      .then((data: ServiceOption[]) => {
-        const HIDDEN_SKUS = new Set([
-          "svc-haircut", "svc-facial", "svc-massage",
-          "svc-membership-30d", "svc-buffet", "svc-pkg5",
-        ]);
-        const filtered = data.filter(d => !HIDDEN_SKUS.has(d.service.id));
-        setServices(filtered);
-        if (filtered.length > 0) {
-          setBsId(filtered[0].id);
-          setEndTime(addMinutes("10:00", filtered[0].duration));
-        }
+    if (!customer.id || !customer.phone) { setIsMember(false); return; }
+    fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.membership) {
+          const m = data.membership;
+          const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+          const expired = m.expiresAt && new Date(m.expiresAt) < today;
+          const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
+          setIsMember(!expired && !usedUp && !m.pendingActivation);
+        } else { setIsMember(false); }
+      })
+      .catch(() => setIsMember(false));
+  }, [customer.id, customer.phone]);
+
+  // Service helper
+  function computeMemberPrice(svc: BranchServiceItem): number | null {
+    if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;
+    if (svc.memberDiscountPercent) return Math.round(svc.price * (1 - svc.memberDiscountPercent / 100));
+    return null;
+  }
+
+  // Filter & group services (same logic as mobile NewBookingForm)
+  const groupedEntries = useMemo(() => {
+    const SKIP_CATS = ["hair", "wellness", "skin", "membership", "package", "สมาชิก", "แพ็กเกจ", "member"];
+    const SKIP_IDS  = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-member-monthly", "svc-member-pkg"];
+    const out: Record<string, BranchServiceItem[]> = {};
+    for (const s of branchServices) {
+      if (SKIP_CATS.some(ex => s.category.toLowerCase().includes(ex))) continue;
+      if (SKIP_IDS.includes(s.id)) continue;
+      (out[s.category] ??= []).push(s);
+    }
+    for (const cat in out) {
+      out[cat].sort((a, b) => {
+        const aP = a.nameTh.startsWith("สระ") ? 0 : 1;
+        const bP = b.nameTh.startsWith("สระ") ? 0 : 1;
+        return aP - bP || a.nameTh.localeCompare(b.nameTh, "th");
       });
-  }, [branchId]);
+    }
+    return Object.entries(out).sort(([, aI], [, bI]) => {
+      const aP = aI.some(s => s.nameTh.startsWith("สระ")) ? 0 : 1;
+      const bP = bI.some(s => s.nameTh.startsWith("สระ")) ? 0 : 1;
+      return aP - bP;
+    });
+  }, [branchServices]);
 
-  function handleServiceChange(id: string) {
-    setBsId(id);
-    const svc = services.find(s => s.id === id);
-    if (svc) setEndTime(addMinutes(startTime, svc.duration));
-  }
+  // 15-min time slot grid (Sunday opens at 10:00)
+  const timeSlots = useMemo(() => {
+    const [y, mo, d] = date.split("-").map(Number);
+    const isSunday = new Date(y, mo - 1, d).getDay() === 0;
+    const openMins = isSunday ? 10 * 60 : 8 * 60;
+    const slots: string[] = [];
+    for (let t = openMins; t <= 21 * 60 - 30; t += 15) {
+      slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
+    }
+    return slots;
+  }, [date]);
 
-  function handleStartChange(t: string) {
-    setStartTime(t);
-    const svc = services.find(s => s.id === bsId);
-    if (svc) setEndTime(addMinutes(t, svc.duration));
-  }
-
-  const selectedSvc = services.find(s => s.id === bsId);
+  const selectedSvc    = branchServices.find(s => s.id === serviceId);
+  const effectiveSvcPx = selectedSvc
+    ? (isMember ? (computeMemberPrice(selectedSvc) ?? selectedSvc.price) : selectedSvc.price)
+    : 0;
+  const addonTotal     = selectedAddonIds.reduce((sum, id) => sum + (addons.find(a => a.id === id)?.price ?? 0), 0);
   const discountSatang = Math.round(discountBaht * 100);
-  const finalPrice = selectedSvc ? Math.max(0, selectedSvc.price - discountSatang) : 0;
+  const finalPrice     = selectedSvc ? Math.max(0, effectiveSvcPx + addonTotal - discountSatang) : 0;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!bsId) {
-      setError("กรุณาเลือกบริการ");
-      return;
-    }
-    if (!isWalkin && (!name.trim() || !phone.trim())) {
+    if (!serviceId) { setError("กรุณาเลือกบริการ"); return; }
+    if (!time)      { setError("กรุณาเลือกเวลา");   return; }
+    if (!isWalkin && (!customer.name.trim() || !customer.phone.trim())) {
       setError("กรุณากรอกชื่อและเบอร์โทร หรือเลือก Walk-in");
       return;
     }
     setSaving(true);
     const res = await fetch("/api/bookings", {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         branchId,
-        serviceId: selectedSvc?.service.id ?? bsId,
-        staffId: staffId || null,
+        serviceId,
+        staffId:           staffId || null,
         date,
-        startTime,
-        endTime,
-        totalPrice: finalPrice,
-        name:  name.trim()  || undefined,
-        phone: phone.trim() || undefined,
-        notes: notesVal || null,
+        startTime:         time,
+        endTime:           addMinutes(time, selectedSvc!.duration),
+        totalPrice:        finalPrice,
+        name:              customer.name.trim()  || undefined,
+        phone:             customer.phone.trim() || undefined,
+        notes:             notesVal || null,
+        addonIds:          selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
         isWalkin,
         skipConflictCheck: true,
       }),
@@ -928,96 +974,189 @@ function AddBookingModal({
     <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       style={{ zIndex: 99999 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div className="px-5 py-4 bg-[#8B1D24] text-white flex items-center justify-between flex-shrink-0">
           <h2 className="font-bold text-base">+ จองใหม่</h2>
           <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none">×</button>
         </div>
 
-        <form onSubmit={submit} className="p-5 space-y-3 overflow-y-auto">
-          {/* Date */}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">วันที่</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30" />
-          </div>
+        <form onSubmit={submit} className="flex-1 overflow-y-auto">
+          <div className="p-5 space-y-5">
 
-          {/* Service + time */}
-          <ServiceTimeFields
-            services={services} serviceId={bsId} startTime={startTime} endTime={endTime}
-            onServiceChange={handleServiceChange}
-            onStartChange={handleStartChange}
-            onEndChange={setEndTime}
-          />
-
-          {/* Staff */}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">พนักงาน</label>
-            <select value={staffId} onChange={e => setStaffId(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30">
-              <option value="">ไม่ระบุ</option>
-              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-
-          {/* Customer */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-gray-500">
-                ลูกค้า {!isWalkin && <span className="text-red-400">*</span>}
-                {isWalkin && <span className="text-gray-400 ml-1">(ไม่บังคับ)</span>}
-              </label>
-              <button
-                type="button"
-                onClick={() => setIsWalkin(v => !v)}
-                className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all"
-                style={isWalkin
-                  ? { background: "#8B1D24", color: "white", borderColor: "#8B1D24" }
-                  : { background: "white",   color: "#6B5245", borderColor: "#D6BCAE" }}
-              >
-                {isWalkin && <span>✓</span>} Walk-in
-              </button>
-            </div>
-            <CustomerSearch value={customer} onChange={setCustomer} requirePhoneOnCreate={!isWalkin} />
-            {isWalkin && !customer.name && (
-              <p className="text-xs text-gray-400 mt-1">หากไม่กรอก จะบันทึกเป็น &quot;Walk-in&quot; อัตโนมัติ</p>
-            )}
-          </div>
-
-          {/* Discount */}
-          {selectedSvc && (
+            {/* Date */}
             <div>
-              <label className="text-xs text-gray-500 block mb-1">ส่วนลด (บาท)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number" min={0}
-                  value={discountBaht || ""}
-                  onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
-                  placeholder="0"
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30"
-                />
-                <span className="text-sm font-semibold whitespace-nowrap" style={{ color: "#8B1D24" }}>
-                  รวม ฿{formatPrice(finalPrice)}
-                </span>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">วันที่</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full border border-[#E8D8CC] rounded-xl px-3 py-2.5 text-sm focus:outline-none text-[#3B2A24]" />
+            </div>
+
+            {/* Customer */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] uppercase tracking-widest text-[#A08070]">
+                  ลูกค้า {!isWalkin && <span className="text-red-400">*</span>}
+                </label>
+                <button type="button" onClick={() => setIsWalkin(v => !v)}
+                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all"
+                  style={isWalkin
+                    ? { background: "#8B1D24", color: "white", borderColor: "#8B1D24" }
+                    : { background: "white",   color: "#A08070", borderColor: "#E8D8CC" }}>
+                  {isWalkin && "✓ "}Walk-in
+                </button>
+              </div>
+              <CustomerSearch value={customer} onChange={setCustomer} requirePhoneOnCreate={!isWalkin} />
+              {isMember && (
+                <div className="mt-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200">
+                  🎟️ สมาชิก — ราคาพิเศษสมาชิก ✓
+                </div>
+              )}
+              {isWalkin && !customer.name && (
+                <p className="text-xs text-[#A08070] mt-1">หากไม่กรอกชื่อ จะบันทึกเป็น &quot;Walk-in&quot; อัตโนมัติ</p>
+              )}
+            </div>
+
+            {/* Service cards */}
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">บริการ</label>
+              <div className="space-y-3">
+                {groupedEntries.map(([cat, items]) => (
+                  <div key={cat}>
+                    <p className="text-xs font-semibold mb-1.5 text-[#8B1D24]">{cat}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {items.map(s => {
+                        const selected = s.id === serviceId;
+                        const mPrice   = computeMemberPrice(s);
+                        return (
+                          <button key={s.id} type="button" onClick={() => setServiceId(s.id)}
+                            className="rounded-xl p-3 text-left transition-all"
+                            style={{
+                              background: selected ? "#FFF8F4" : "white",
+                              border:     `1.5px solid ${selected ? "#8B1D24" : "#E8D8CC"}`,
+                            }}>
+                            <p className="text-xs font-medium leading-tight text-[#3B2A24]">{s.nameTh}</p>
+                            <p className="text-[10px] mt-1 text-[#A08070]">{s.duration} นาที</p>
+                            {isMember && mPrice !== null && mPrice < s.price ? (
+                              <div className="mt-1 flex items-baseline gap-1">
+                                <span className="text-[10px] line-through text-[#A08070]">{formatPrice(s.price)}</span>
+                                <span className="text-sm font-bold text-green-600">{formatPrice(mPrice)}</span>
+                              </div>
+                            ) : (
+                              <p className="text-sm font-bold mt-1 text-[#8B1D24]">{formatPrice(s.price)}</p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
 
-          {/* Notes */}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">หมายเหตุ</label>
-            <input value={notesVal} onChange={e => setNotesVal(e.target.value)}
-              placeholder="หมายเหตุ (ไม่บังคับ)"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30" />
+            {/* Add-ons */}
+            {addons.length > 0 && (
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">
+                  บริการเสริม <span className="text-[#A08070]">(ไม่บังคับ)</span>
+                </label>
+                <div className="space-y-2">
+                  {addons.map(a => {
+                    const active = selectedAddonIds.includes(a.id);
+                    return (
+                      <button key={a.id} type="button"
+                        onClick={() => setSelectedAddonIds(prev =>
+                          active ? prev.filter(id => id !== a.id) : [...prev, a.id])}
+                        className="w-full flex items-center justify-between rounded-xl px-4 py-3 text-left transition-all"
+                        style={{
+                          background: active ? "#FFF8F4" : "white",
+                          border:     `1.5px solid ${active ? "#8B1D24" : "#E8D8CC"}`,
+                        }}>
+                        <p className="text-sm text-[#3B2A24]">{a.nameTh}</p>
+                        <p className="text-sm font-bold" style={{ color: active ? "#8B1D24" : "#A08070" }}>
+                          +{formatPrice(a.price)}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Staff pills */}
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ช่าง (ไม่บังคับ)</label>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => setStaffId("")}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                  style={{
+                    background: staffId === "" ? "#8B1D24" : "white",
+                    color:      staffId === "" ? "white"   : "#3B2A24",
+                    border:     `1px solid ${staffId === "" ? "#8B1D24" : "#E8D8CC"}`,
+                  }}>ไม่ระบุ</button>
+                {staff.map(s => (
+                  <button key={s.id} type="button" onClick={() => setStaffId(s.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    style={{
+                      background: staffId === s.id ? "#8B1D24" : "white",
+                      color:      staffId === s.id ? "white"   : "#3B2A24",
+                      border:     `1px solid ${staffId === s.id ? "#8B1D24" : "#E8D8CC"}`,
+                    }}>{s.name}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time grid */}
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">เวลา</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {timeSlots.map(t => (
+                  <button key={t} type="button" onClick={() => setTime(t)}
+                    className="py-2 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background: time === t ? "#8B1D24" : "white",
+                      color:      time === t ? "white"   : "#3B2A24",
+                      border:     `1px solid ${time === t ? "#8B1D24" : "#E8D8CC"}`,
+                    }}>{t}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Discount */}
+            {selectedSvc && (
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ส่วนลด (บาท)</label>
+                <div className="flex items-center gap-2 border border-[#E8D8CC] rounded-xl px-3 py-2.5">
+                  <span className="text-sm text-[#A08070]">฿</span>
+                  <input type="number" min={0} value={discountBaht || ""}
+                    onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
+                    placeholder="0"
+                    className="flex-1 text-sm outline-none bg-transparent text-[#3B2A24]" />
+                  {discountBaht > 0 && (
+                    <span className="text-xs font-medium text-green-600">รวม {formatPrice(finalPrice)}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">หมายเหตุ (ไม่บังคับ)</label>
+              <input value={notesVal} onChange={e => setNotesVal(e.target.value)}
+                placeholder="ข้อมูลพิเศษเกี่ยวกับลูกค้าหรือนัด"
+                className="w-full border border-[#E8D8CC] rounded-xl px-3 py-2.5 text-sm outline-none text-[#3B2A24]" />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <button type="submit"
+              disabled={saving || !serviceId || !time || (!isWalkin && !customer.name)}
+              className="w-full py-3 rounded-xl bg-[#8B1D24] text-white font-semibold text-sm disabled:opacity-50">
+              {saving ? "กำลังบันทึก..." : `✓ บันทึกการจอง${selectedSvc ? ` · ${formatPrice(finalPrice)}` : ""}`}
+            </button>
+
           </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button type="submit" disabled={saving}
-            className="w-full py-2.5 rounded-xl bg-[#8B1D24] text-white font-semibold text-sm hover:bg-[#7a1820] disabled:opacity-50">
-            {saving ? "กำลังบันทึก..." : `✓ บันทึกการจอง${selectedSvc ? ` · ฿${formatPrice(finalPrice)}` : ""}`}
-          </button>
         </form>
       </div>
     </div>
@@ -1027,7 +1166,7 @@ function AddBookingModal({
 
 /* ─── Main Component ─────────────────────────────────────── */
 export default function CalendarView({
-  weekBookings, staff, selectedDate, branches, activeBranchId,
+  weekBookings, staff, selectedDate, branches, activeBranchId, branchServices, addons,
 }: Props) {
   const router = useRouter();
   const [view,         setView]         = useState<ViewMode>("list");
@@ -1216,6 +1355,7 @@ export default function CalendarView({
       {addOpen && (
         <AddBookingModal
           defaultDate={selectedDate} branchId={activeBranchId} staff={staff}
+          branchServices={branchServices} addons={addons}
           onClose={() => setAddOpen(false)}
           onSaved={() => router.refresh()}
         />
