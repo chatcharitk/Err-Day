@@ -310,15 +310,30 @@ export async function sendStaffMembershipAlert(membershipId: string): Promise<vo
 
   const customerLabel = [m.customer.name, m.customer.nickname && `(${m.customer.nickname})`]
     .filter(Boolean).join(" ");
-  const expiryStr = m.expiresAt ? formatDateTh(m.expiresAt) : "ไม่มีวันหมดอายุ";
+
+  const now       = new Date();
+  const expired   = m.expiresAt != null && m.expiresAt < now;
+  const usedUp    = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
+  const statusStr = m.pendingActivation ? "⏳ รอเปิดใช้งาน"
+                  : (expired || usedUp)  ? "❌ หมดอายุ / ใช้ครบ"
+                  :                        "✅ ใช้งานได้";
+
+  const expiryStr     = m.expiresAt ? formatDateTh(m.expiresAt) : "ไม่มีวันหมดอายุ";
+  const activatedStr  = formatDateTh(m.activatedAt);
+  const usageStr      = m.usagesAllowed > 0
+    ? `ใช้แล้ว ${m.usagesUsed}/${m.usagesAllowed} ครั้ง`
+    : "ไม่จำกัดครั้ง";
 
   const text =
 `🎟️ สมาชิกใหม่ / ต่ออายุ
 
 👤 ${customerLabel}
 📞 ${m.customer.phone}
-✨ ${m.tier?.nameTh ?? "สมาชิกรายเดือน"}
-📅 หมดอายุ: ${expiryStr}`;
+✨ ${m.label ?? m.tier?.nameTh ?? "สมาชิกรายเดือน"}
+📊 สถานะ: ${statusStr}
+📅 เริ่มต้น: ${activatedStr}
+📅 หมดอายุ: ${expiryStr}
+🔢 ${usageStr}`;
 
   await Promise.all(
     STAFF_LINE_IDS.map(async uid => {
