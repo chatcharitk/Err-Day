@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -577,11 +577,14 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
   }, [filtered]);
 
   return (
-    <div className="px-6 py-8 max-w-6xl">
+    <div className="px-6 py-8 max-w-7xl">
       {/* header */}
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Sales History</p>
         <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ประวัติการขาย</h1>
+        <p className="text-xs mt-1" style={{ color: MUTED }}>
+          💡 คลิกที่แถวเพื่อแก้ไขรายการ หรือใช้ปุ่ม &ldquo;แก้ไข&rdquo; / &ldquo;ลบ&rdquo; ด้านขวา
+        </p>
       </div>
 
       {/* summary */}
@@ -705,11 +708,11 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
           <p className="text-sm" style={{ color: MUTED }}>ไม่พบรายการ</p>
         </div>
       ) : (
-        <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${BORDER}` }}>
+        <div className="rounded-2xl overflow-x-auto" style={{ border: `1.5px solid ${BORDER}` }}>
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr style={{ background: "#F9F0EA", borderBottom: `1.5px solid ${BORDER}` }}>
-                {["เวลา","ลูกค้า","บริการ","ช่าง","สาขา","สถานะ","ยอด",""].map(h => (
+                {["เวลา","ลูกค้า","บริการ","ช่าง","สาขา","สถานะ","ยอด","การจัดการ"].map(h => (
                   <th
                     key={h}
                     className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap"
@@ -727,9 +730,9 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                   weekday: "short", day: "numeric", month: "short", year: "numeric",
                 });
                 return (
-                  <>
+                  <Fragment key={`grp-${date}`}>
                     {/* Day separator row */}
-                    <tr key={`hdr-${date}`} style={{ background: "#F9F0EA", borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
+                    <tr style={{ background: "#F9F0EA", borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
                       <td colSpan={6} className="px-4 py-1.5">
                         <span className="text-xs font-semibold" style={{ color: TEXT }}>{dateLabel}</span>
                       </td>
@@ -747,7 +750,9 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                       return (
                         <tr
                           key={sale.id}
-                          className="transition-colors hover:bg-amber-50/40"
+                          onClick={() => setEditing(sale)}
+                          className="transition-colors hover:bg-amber-50/60 cursor-pointer"
+                          title="คลิกเพื่อแก้ไขรายการ"
                           style={{
                             background: ri % 2 === 0 ? "white" : "#FDFAF8",
                             borderBottom: `1px solid ${BORDER}`,
@@ -770,6 +775,7 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                           <td className="px-4 py-3 align-top">
                             <Link
                               href={`/admin/customers?id=${sale.customer.id}`}
+                              onClick={e => e.stopPropagation()}
                               className="font-semibold text-sm hover:underline block"
                               style={{ color: TEXT }}
                             >
@@ -831,25 +837,25 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                           <td className="px-4 py-3 whitespace-nowrap align-top">
                             <div className="flex items-center gap-1.5">
                               <button
-                                onClick={() => setEditing(sale)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-blue-50"
-                                style={{ color: "#2563EB", border: "1px solid #BFDBFE" }}
+                                onClick={e => { e.stopPropagation(); setEditing(sale); }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-blue-50"
+                                style={{ color: "#2563EB", border: "1.5px solid #BFDBFE", background: "#F0F7FF" }}
                               >
-                                <Pencil size={11} /> แก้ไข
+                                <Pencil size={12} /> แก้ไข
                               </button>
                               <button
-                                onClick={() => setDeleteId(sale.id)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-red-50"
-                                style={{ color: "#DC2626", border: "1px solid #FECACA" }}
+                                onClick={e => { e.stopPropagation(); setDeleteId(sale.id); }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50"
+                                style={{ color: "#DC2626", border: "1.5px solid #FECACA", background: "#FEF5F5" }}
                               >
-                                <Trash2 size={11} /> ลบ
+                                <Trash2 size={12} /> ลบ
                               </button>
                             </div>
                           </td>
                         </tr>
                       );
                     })}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
