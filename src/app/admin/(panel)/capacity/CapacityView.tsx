@@ -57,7 +57,9 @@ export default function CapacityView({ branches, activeBranchId, selectedDate }:
       <Header />
       <BranchDateBar branches={branches} activeBranchId={activeBranchId} selectedDate={selectedDate} />
       <div className="grid lg:grid-cols-[360px_1fr] gap-6">
-        <SettingsForm key={branch?.id} branch={branch} />
+        <div id="capacity-settings" className="scroll-mt-4">
+          <SettingsForm key={branch?.id} branch={branch} />
+        </div>
         <DailyBreakdown key={`${activeBranchId}-${selectedDate}`} branchId={activeBranchId} selectedDate={selectedDate} />
       </div>
     </div>
@@ -136,6 +138,10 @@ function SettingsForm({ branch }: { branch?: Branch }) {
     return () => clearTimeout(t);
   }, [justSaved]);
 
+  // Track dirty state so the Save button is highlighted only when there are changes
+  const currentCapStr = branch?.onlineCap == null ? "" : String(branch.onlineCap);
+  const isDirty = onlineCap !== currentCapStr || bookingEnabled !== (branch?.bookingEnabled ?? true);
+
   async function handleSave() {
     if (!branch) return;
     setSaving(true);
@@ -156,8 +162,13 @@ function SettingsForm({ branch }: { branch?: Branch }) {
   }
 
   return (
-    <section className="rounded-2xl p-5 bg-white h-fit" style={{ border: `1.5px solid ${BORDER}` }}>
-      <h2 className="font-medium text-sm mb-4" style={{ color: TEXT }}>ตั้งค่าความจุ — {branch?.name}</h2>
+    <section className="rounded-2xl p-5 bg-white h-fit shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
+      <div className="mb-4 pb-3" style={{ borderBottom: `1px dashed ${BORDER}` }}>
+        <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: PRIMARY }}>
+          ⚙ ตั้งค่าการจอง (แก้ไขที่นี่)
+        </p>
+        <h2 className="font-semibold text-sm mt-1" style={{ color: TEXT }}>{branch?.name}</h2>
+      </div>
 
       {/* Online cap input */}
       <div className="mb-5">
@@ -222,12 +233,15 @@ function SettingsForm({ branch }: { branch?: Branch }) {
 
       <button
         onClick={handleSave}
-        disabled={saving || !branch}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white"
-        style={{ background: saving ? MUTED : PRIMARY }}
+        disabled={saving || !branch || !isDirty}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity"
+        style={{
+          background: PRIMARY,
+          opacity:    saving ? 0.5 : isDirty ? 1 : 0.5,
+        }}
       >
         <Save size={14} />
-        {saving ? "กำลังบันทึก..." : "บันทึก"}
+        {saving ? "กำลังบันทึก..." : isDirty ? "บันทึกการเปลี่ยนแปลง" : "บันทึก"}
       </button>
       {justSaved && (
         <p className="text-xs mt-2 text-center" style={{ color: "#15803D" }}>
@@ -261,7 +275,7 @@ function DailyBreakdown({ branchId, selectedDate }: { branchId: string; selected
 
   return (
     <section className="rounded-2xl bg-white" style={{ border: `1.5px solid ${BORDER}` }}>
-      <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1.5px solid ${BORDER}` }}>
+      <div className="px-5 py-4 flex items-center justify-between gap-3" style={{ borderBottom: `1.5px solid ${BORDER}` }}>
         <div>
           <h2 className="font-medium text-sm" style={{ color: TEXT }}>
             <Calendar size={13} className="inline mr-1.5" />
@@ -283,6 +297,13 @@ function DailyBreakdown({ branchId, selectedDate }: { branchId: string; selected
             </p>
           )}
         </div>
+        <a
+          href="#capacity-settings"
+          className="text-xs font-medium px-3 py-1.5 rounded-full whitespace-nowrap"
+          style={{ background: "#FFF8F4", color: PRIMARY, border: `1px solid ${BORDER}` }}
+        >
+          ⚙ แก้ไขความจุ
+        </a>
       </div>
 
       {loading ? (
