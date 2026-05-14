@@ -82,6 +82,13 @@ export const ALL_SLOTS = generateTimeSlots("08:00", "21:00"); // 08:00 … 20:30
 export interface DaySnapshot {
   /** Branch id — used for branch-specific online booking caps. */
   branchId: string;
+  /**
+   * Per-branch concurrency cap for ONLINE bookings (customer-facing only).
+   *   null → no cap (use staff-on-shift count)
+   *   N    → cap online bookings at N concurrent
+   * Admin bookings bypass this cap (skipConflictCheck = true).
+   */
+  onlineCap: number | null;
   /** All active staff at the branch (used as legacy fallback when no shifts exist). */
   activeStaffIds: string[];
   /** Whether *any* shifts are defined for this branch on this date. */
@@ -92,16 +99,6 @@ export interface DaySnapshot {
   bookings: { id: string; startTime: string; endTime: string; staffId: string | null }[];
 }
 
-/**
- * Per-branch concurrency cap for ONLINE bookings (LIFF/customer-facing only).
- * Even if more staff are scheduled, online bookings are capped at this number
- * of overlapping appointments to avoid overcrowding small branches.
- * Admin/POS bookings bypass this cap (they pass `skipConflictCheck: true`).
- */
-const ONLINE_BOOKING_CAP: Record<string, number> = {
-  "branch-sukhumvit": 2,
-};
-
 export async function loadDaySnapshot(
   branchId: string,
   date: string,
@@ -109,11 +106,12 @@ export async function loadDaySnapshot(
 ): Promise<DaySnapshot> {
   const { start, end } = dayBounds(date);
 
-  const activeStaff = await prisma.staff.findMany({
-    where: { branchId, isActive: true },
-    select: { id: true },
-  });
+  const [branchRow, activeStaff] = await Promise.all([
+    prisma.branch.findUnique({ where: { id: branchId }, select: { onlineCap: true } }),
+    prisma.staff.findMany({ where: { branchId, isActive: true }, select: { id: true } }),
+  ]);
   const activeStaffIds = activeStaff.map((s) => s.id);
+  const onlineCap      = branchRow?.onlineCap ?? null;
 
   const [shifts, bookings] = await Promise.all([
     activeStaffIds.length === 0
@@ -133,7 +131,7 @@ export async function loadDaySnapshot(
     }),
   ]);
 
-  return { branchId, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
+  return { branchId, onlineCap, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
 }
 
 // ── Capacity check (single window) ────────────────────────────────────────────
@@ -157,7 +155,7 @@ export function evaluateCapacity(
   staffId: string | null = null,
   online: boolean = false,
 ): CapacityResult {
-  const { branchId, activeStaffIds, hasShifts, shifts, bookings } = snapshot;
+  const { onlineCap, activeStaffIds, hasShifts, shifts, bookings } = snapshot;
 
   // Staff scheduled to cover the window.
   // Online bookings ALWAYS require explicit shifts — no staff = unavailable.
@@ -192,9 +190,10 @@ export function evaluateCapacity(
     return { ok: false, reason: "no_capacity", scheduledCount: 0, occupiedCount: occupied };
   }
 
-  // Branch-specific cap for online bookings (e.g. Sukhumvit max 2/concurrent).
-  const cap = online ? ONLINE_BOOKING_CAP[branchId] : undefined;
-  const effectiveCap = cap !== undefined ? Math.min(cap, scheduledIds.size) : scheduledIds.size;
+  // Branch-specific cap for online bookings (set via Capacity admin page).
+  // Admin/POS bookings bypass via skipConflictCheck → online=false here.
+  const cap = online ? onlineCap : null;
+  const effectiveCap = cap != null ? Math.min(cap, scheduledIds.size) : scheduledIds.size;
 
   if (occupied >= effectiveCap) {
     return { ok: false, reason: "no_capacity", scheduledCount: effectiveCap, occupiedCount: occupied };

@@ -20,6 +20,15 @@ model Branch {
   closeTime String?  // Daily close time "HH:mm", e.g. "20:00"
   isActive        Boolean  @default(true)  // visible in admin panel
   bookingEnabled  Boolean  @default(true)  // open for customer booking
+  /**
+   * Concurrency cap for ONLINE (LIFF/customer-facing) bookings.
+   *   null → no cap (use staff-on-shift count)
+   *   0    → online booking effectively disabled
+   *   N    → cap online bookings at N overlapping appointments
+   * Admin/POS bookings bypass this entirely.
+   * Use to reserve some chairs for walk-ins on busy branches.
+   */
+  onlineCap Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

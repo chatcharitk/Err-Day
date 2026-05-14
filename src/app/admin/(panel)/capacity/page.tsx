@@ -1,0 +1,37 @@
+import { prisma } from "@/lib/prisma";
+import { getCachedBranches } from "@/lib/branches-cache";
+import { defaultBranchId } from "@/lib/utils";
+import CapacityView from "./CapacityView";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "ความจุการจอง — err.day" };
+
+export default async function CapacityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ branchId?: string; date?: string }>;
+}) {
+  const { branchId, date } = await searchParams;
+
+  const branchesList = await getCachedBranches();
+  const activeBranchId = branchId ?? defaultBranchId(branchesList);
+
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const selectedDate = date ?? today;
+
+  // Full branch records (need onlineCap + bookingEnabled which aren't in the slim cache)
+  const branches = await prisma.branch.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, onlineCap: true, bookingEnabled: true },
+  });
+
+  return (
+    <CapacityView
+      branches={branches}
+      activeBranchId={activeBranchId}
+      selectedDate={selectedDate}
+    />
+  );
+}

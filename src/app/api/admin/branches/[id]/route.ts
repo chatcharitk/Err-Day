@@ -12,7 +12,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, address, phone, openTime, closeTime, mapUrl, mapLat, mapLng } = body;
+    const {
+      name, address, phone, openTime, closeTime, mapUrl, mapLat, mapLng,
+      onlineCap, bookingEnabled,
+    } = body;
 
     const branch = await prisma.branch.update({
       where: { id },
@@ -25,6 +28,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(mapUrl    !== undefined ? { mapUrl:    mapUrl    || null }   : {}),
         ...(mapLat    !== undefined ? { mapLat:    mapLat  != null ? Number(mapLat)  : null } : {}),
         ...(mapLng    !== undefined ? { mapLng:    mapLng  != null ? Number(mapLng)  : null } : {}),
+        // Capacity controls — null = no cap (use staff count), 0 = online closed, N = cap online
+        ...(onlineCap      !== undefined ? { onlineCap:      onlineCap === null || onlineCap === "" ? null : Math.max(0, Number(onlineCap)) } : {}),
+        ...(bookingEnabled !== undefined ? { bookingEnabled: Boolean(bookingEnabled) } : {}),
       },
     });
     return NextResponse.json(branch);

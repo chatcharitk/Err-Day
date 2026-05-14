@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   LogOut,
   Smartphone,
+  Gauge,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -31,6 +32,7 @@ const MENU = [
   { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard,                                 ownerOnly: false },
   { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog,                                    ownerOnly: false },
   { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock,                              ownerOnly: false },
+  { href: "/admin/capacity",   labelTh: "ความจุการจอง",   label: "Capacity",     icon: Gauge,                                      ownerOnly: false },
   { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors,                                   ownerOnly: false },
   { href: "/admin/settings",   labelTh: "ตั้งค่าร้าน",    label: "Shop Settings",icon: Settings,                                   ownerOnly: false },
   { href: "/admin/notifications", labelTh: "การแจ้งเตือน",   label: "Notifications", icon: Bell,                                   ownerOnly: false },
