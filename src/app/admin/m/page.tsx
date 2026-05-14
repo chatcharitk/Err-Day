@@ -139,11 +139,13 @@ export default async function MobileHomePage({
       isPending: p.pendingActivation,
     }));
 
-    // Compute the would-be member-discounted total. For active members whose
-    // booking was created at full price, this lets the overview reflect the
-    // member rate without mutating the saved totalPrice.
+    // For PENDING / CONFIRMED bookings of an active member, show what the
+    // booking *would* cost at today's member rate (as a hint) — without
+    // overwriting the saved totalPrice. Once a booking is COMPLETED the
+    // totalPrice is the audited charged amount and must be shown as-is.
     let displayPrice = b.totalPrice;
-    if (memberStatus === "active") {
+    const isOpenBooking = b.status === "PENDING" || b.status === "CONFIRMED";
+    if (isOpenBooking && memberStatus === "active") {
       const branchListPrice = branchPriceByService.get(b.serviceId);
       if (branchListPrice != null) {
         let memberServicePrice = branchListPrice;
