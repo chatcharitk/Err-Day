@@ -20,6 +20,16 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { BUFFET_SKU, FIVE_PACK_SKU } from "@/lib/packages";
+import { MEMBERSHIP_SKU } from "@/lib/membership";
+
+/**
+ * Bookings whose serviceId is a sale-only SKU represent a POS *transaction*
+ * (the customer bought a membership or package), not an appointment with a
+ * stylist. They shouldn't consume a chair / staff slot — exclude them from
+ * the capacity snapshot.
+ */
+const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU];
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 
@@ -89,6 +99,12 @@ export interface DaySnapshot {
    * Admin bookings bypass this cap (skipConflictCheck = true).
    */
   onlineCap: number | null;
+  /**
+   * Per-time-window overrides for this branch/date. The most specific (date)
+   * wins over day-of-week. If a window matches, it overrides `onlineCap` for
+   * that slice of the day.
+   */
+  overrides: { startTime: string; endTime: string; capacity: number; specific: boolean }[];
   /** All active staff at the branch (used as legacy fallback when no shifts exist). */
   activeStaffIds: string[];
   /** Whether *any* shifts are defined for this branch on this date. */
@@ -99,6 +115,29 @@ export interface DaySnapshot {
   bookings: { id: string; startTime: string; endTime: string; staffId: string | null }[];
 }
 
+/**
+ * Pick the cap that applies to a given window for this snapshot, in priority order:
+ *   1. date-specific override covering the window
+ *   2. day-of-week override covering the window
+ *   3. branch.onlineCap
+ *   4. null (no cap)
+ * "Covering" means the override window fully contains the requested window.
+ */
+export function resolveCap(snapshot: DaySnapshot, startTime: string, endTime: string): number | null {
+  const sMin = timeToMins(startTime);
+  const eMin = timeToMins(endTime);
+  // Try specific (date) first, then non-specific (day-of-week)
+  for (const specific of [true, false]) {
+    const match = snapshot.overrides.find(o =>
+      o.specific === specific
+      && timeToMins(o.startTime) <= sMin
+      && timeToMins(o.endTime)   >= eMin,
+    );
+    if (match) return match.capacity;
+  }
+  return snapshot.onlineCap;
+}
+
 export async function loadDaySnapshot(
   branchId: string,
   date: string,
@@ -106,12 +145,33 @@ export async function loadDaySnapshot(
 ): Promise<DaySnapshot> {
   const { start, end } = dayBounds(date);
 
-  const [branchRow, activeStaff] = await Promise.all([
+  // Day-of-week (0=Sun … 6=Sat) for matching recurring overrides.
+  // The `date` string is "YYYY-MM-DD" in Bangkok local time.
+  const [yy, mm, dd] = date.split("-").map(Number);
+  const dow = new Date(yy, mm - 1, dd).getDay();
+
+  const [branchRow, activeStaff, overrideRows] = await Promise.all([
     prisma.branch.findUnique({ where: { id: branchId }, select: { onlineCap: true } }),
     prisma.staff.findMany({ where: { branchId, isActive: true }, select: { id: true } }),
+    prisma.capacityOverride.findMany({
+      where: {
+        branchId,
+        OR: [
+          { date: { gte: start, lte: end } },
+          { dayOfWeek: dow },
+        ],
+      },
+      select: { date: true, startTime: true, endTime: true, capacity: true },
+    }),
   ]);
   const activeStaffIds = activeStaff.map((s) => s.id);
   const onlineCap      = branchRow?.onlineCap ?? null;
+  const overrides      = overrideRows.map(o => ({
+    startTime: o.startTime,
+    endTime:   o.endTime,
+    capacity:  o.capacity,
+    specific:  o.date != null,
+  }));
 
   const [shifts, bookings] = await Promise.all([
     activeStaffIds.length === 0
@@ -124,14 +184,15 @@ export async function loadDaySnapshot(
       where: {
         branchId,
         date: { gte: start, lte: end },
-        status: { notIn: ["CANCELLED"] },
+        status:    { notIn: ["CANCELLED"] },
+        serviceId: { notIn: SALE_ONLY_SKUS },  // exclude POS membership/package transactions
         ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       },
       select: { id: true, startTime: true, endTime: true, staffId: true },
     }),
   ]);
 
-  return { branchId, onlineCap, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
+  return { branchId, onlineCap, overrides, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
 }
 
 // ── Capacity check (single window) ────────────────────────────────────────────
@@ -155,7 +216,7 @@ export function evaluateCapacity(
   staffId: string | null = null,
   online: boolean = false,
 ): CapacityResult {
-  const { onlineCap, activeStaffIds, hasShifts, shifts, bookings } = snapshot;
+  const { activeStaffIds, hasShifts, shifts, bookings } = snapshot;
 
   // Staff scheduled to cover the window.
   // Online bookings ALWAYS require explicit shifts — no staff = unavailable.
@@ -190,9 +251,10 @@ export function evaluateCapacity(
     return { ok: false, reason: "no_capacity", scheduledCount: 0, occupiedCount: occupied };
   }
 
-  // Branch-specific cap for online bookings (set via Capacity admin page).
-  // Admin/POS bookings bypass via skipConflictCheck → online=false here.
-  const cap = online ? onlineCap : null;
+  // Branch-specific cap for online bookings, with optional per-window overrides
+  // (date-specific > day-of-week > branch default). Admin/POS bookings bypass
+  // via skipConflictCheck → online=false here.
+  const cap = online ? resolveCap(snapshot, startTime, endTime) : null;
   const effectiveCap = cap != null ? Math.min(cap, scheduledIds.size) : scheduledIds.size;
 
   if (occupied >= effectiveCap) {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Save, Info, CheckCircle2, AlertTriangle, XCircle, Power, Users, Calendar } from "lucide-react";
+import { ChevronDown, Save, Info, CheckCircle2, AlertTriangle, XCircle, Power, Users, Calendar, Plus, Trash2 } from "lucide-react";
 
 interface Branch {
   id:             string;
@@ -57,8 +57,9 @@ export default function CapacityView({ branches, activeBranchId, selectedDate }:
       <Header />
       <BranchDateBar branches={branches} activeBranchId={activeBranchId} selectedDate={selectedDate} />
       <div className="grid lg:grid-cols-[360px_1fr] gap-6">
-        <div id="capacity-settings" className="scroll-mt-4">
+        <div id="capacity-settings" className="scroll-mt-4 space-y-4">
           <SettingsForm key={branch?.id} branch={branch} />
+          {branch && <OverridesPanel branchId={branch.id} />}
         </div>
         <DailyBreakdown key={`${activeBranchId}-${selectedDate}`} branchId={activeBranchId} selectedDate={selectedDate} />
       </div>
@@ -382,5 +383,243 @@ function DailyBreakdown({ branchId, selectedDate }: { branchId: string; selected
         </table>
       )}
     </section>
+  );
+}
+
+// ── Overrides panel ──────────────────────────────────────────────────────────
+
+interface Override {
+  id:        string;
+  date:      string | null;   // "YYYY-MM-DD"
+  dayOfWeek: number | null;   // 0-6
+  startTime: string;
+  endTime:   string;
+  capacity:  number;
+  note:      string | null;
+}
+
+const DOW_TH = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+
+function OverridesPanel({ branchId }: { branchId: string }) {
+  const router = useRouter();
+  const [overrides, setOverrides] = useState<Override[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [adding,    setAdding]    = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/branches/${branchId}/capacity-overrides`);
+      if (res.ok) setOverrides(await res.json());
+    } finally { setLoading(false); }
+  }, [branchId]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [load]);
+
+  async function deleteOne(id: string) {
+    if (!confirm("ลบกฎนี้?")) return;
+    await fetch(`/api/admin/branches/${branchId}/capacity-overrides/${id}`, { method: "DELETE" });
+    await load();
+    router.refresh();
+  }
+
+  return (
+    <section className="rounded-2xl p-5 bg-white shadow-sm" style={{ border: `1.5px solid ${BORDER}` }}>
+      <div className="flex items-center justify-between mb-3 pb-3" style={{ borderBottom: `1px dashed ${BORDER}` }}>
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: PRIMARY }}>
+            🕒 กฎความจุรายชั่วโมง
+          </p>
+          <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
+            ใช้แทนค่าเริ่มต้นในช่วงเวลาที่ระบุ (วันเฉพาะมาก่อนวันประจำสัปดาห์)
+          </p>
+        </div>
+        <button
+          onClick={() => setAdding(v => !v)}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
+          style={{ background: adding ? "#FEF2F2" : "#FFF8F4", color: PRIMARY, border: `1px solid ${BORDER}` }}
+        >
+          {adding ? <><XCircle size={12} /> ยกเลิก</> : <><Plus size={12} /> เพิ่ม</>}
+        </button>
+      </div>
+
+      {adding && (
+        <AddOverrideForm
+          branchId={branchId}
+          onDone={async () => { setAdding(false); await load(); router.refresh(); }}
+        />
+      )}
+
+      {loading ? (
+        <p className="text-xs text-center py-4" style={{ color: MUTED }}>กำลังโหลด...</p>
+      ) : overrides.length === 0 ? (
+        <p className="text-xs text-center py-4" style={{ color: MUTED }}>
+          ยังไม่มีกฎ — ใช้ค่าเริ่มต้นของสาขา
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {overrides.map(o => (
+            <li key={o.id} className="flex items-center gap-2 rounded-xl px-3 py-2"
+              style={{ background: "#FAF5F0", border: `1px solid ${BORDER}` }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold" style={{ color: TEXT }}>
+                  {o.date
+                    ? `📅 ${new Date(o.date + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}`
+                    : `🔁 ทุก ${DOW_TH[o.dayOfWeek!]}`}
+                  <span className="mx-1.5" style={{ color: MUTED }}>·</span>
+                  {o.startTime}–{o.endTime}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
+                  ความจุ <span className="font-semibold" style={{ color: o.capacity === 0 ? "#B91C1C" : TEXT }}>
+                    {o.capacity === 0 ? "🔒 ปิด" : `${o.capacity} คิว`}
+                  </span>
+                  {o.note && <span> — {o.note}</span>}
+                </p>
+              </div>
+              <button onClick={() => deleteOne(o.id)} className="p-1.5 rounded-lg" style={{ color: "#B91C1C" }}>
+                <Trash2 size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function AddOverrideForm({ branchId, onDone }: { branchId: string; onDone: () => void | Promise<void> }) {
+  const [scope,     setScope]     = useState<"date" | "dayOfWeek">("date");
+  const [date,      setDate]      = useState<string>(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  });
+  const [dayOfWeek, setDayOfWeek] = useState<number>(0);
+  const [startTime, setStartTime] = useState<string>("10:00");
+  const [endTime,   setEndTime]   = useState<string>("13:00");
+  const [capacity,  setCapacity]  = useState<string>("2");
+  const [note,      setNote]      = useState<string>("");
+  const [saving,    setSaving]    = useState(false);
+  const [err,       setErr]       = useState<string>("");
+
+  async function submit() {
+    setErr("");
+    if (endTime <= startTime) { setErr("เวลาสิ้นสุดต้องหลังเวลาเริ่ม"); return; }
+    if (capacity === "" || Number(capacity) < 0) { setErr("ความจุต้องเป็นจำนวนเต็มไม่ติดลบ"); return; }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/branches/${branchId}/capacity-overrides`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date:      scope === "date"      ? date      : undefined,
+          dayOfWeek: scope === "dayOfWeek" ? dayOfWeek : undefined,
+          startTime, endTime,
+          capacity:  Number(capacity),
+          note:      note.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErr(data.error ?? "บันทึกไม่สำเร็จ");
+        return;
+      }
+      await onDone();
+    } finally { setSaving(false); }
+  }
+
+  // Time-slot options (15-min granularity, 08:00 - 21:00)
+  const timeOptions: string[] = [];
+  for (let m = 8 * 60; m <= 21 * 60; m += 15) {
+    timeOptions.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  }
+
+  return (
+    <div className="rounded-xl p-3 mb-3 space-y-3" style={{ background: "#FFFBF5", border: `1px solid ${BORDER}` }}>
+      {/* Scope tabs */}
+      <div className="flex gap-1.5 text-xs">
+        <button onClick={() => setScope("date")}
+          className="flex-1 py-1.5 rounded-lg font-medium"
+          style={{
+            background: scope === "date" ? PRIMARY : "white",
+            color:      scope === "date" ? "white" : MUTED,
+            border:     `1px solid ${scope === "date" ? PRIMARY : BORDER}`,
+          }}>วันเฉพาะ</button>
+        <button onClick={() => setScope("dayOfWeek")}
+          className="flex-1 py-1.5 rounded-lg font-medium"
+          style={{
+            background: scope === "dayOfWeek" ? PRIMARY : "white",
+            color:      scope === "dayOfWeek" ? "white" : MUTED,
+            border:     `1px solid ${scope === "dayOfWeek" ? PRIMARY : BORDER}`,
+          }}>ทุกสัปดาห์</button>
+      </div>
+
+      {/* Scope value */}
+      {scope === "date" ? (
+        <div>
+          <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>วันที่</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            className="w-full px-2.5 py-1.5 text-sm rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+        </div>
+      ) : (
+        <div>
+          <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>วันในสัปดาห์</label>
+          <div className="grid grid-cols-7 gap-1">
+            {DOW_TH.map((d, i) => (
+              <button key={i} onClick={() => setDayOfWeek(i)}
+                className="py-1.5 rounded-lg text-xs font-medium"
+                style={{
+                  background: dayOfWeek === i ? PRIMARY : "white",
+                  color:      dayOfWeek === i ? "white" : TEXT,
+                  border:     `1px solid ${dayOfWeek === i ? PRIMARY : BORDER}`,
+                }}>{d}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Time window */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>เริ่ม</label>
+          <select value={startTime} onChange={e => setStartTime(e.target.value)}
+            className="w-full px-2.5 py-1.5 text-sm rounded-lg bg-white" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>สิ้นสุด</label>
+          <select value={endTime} onChange={e => setEndTime(e.target.value)}
+            className="w-full px-2.5 py-1.5 text-sm rounded-lg bg-white" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+            {timeOptions.filter(t => t > startTime).map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Capacity */}
+      <div>
+        <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>ความจุ (0 = ปิด)</label>
+        <input type="number" inputMode="numeric" min={0} value={capacity}
+          onChange={e => setCapacity(e.target.value.replace(/[^\d]/g, ""))}
+          className="w-full px-2.5 py-1.5 text-sm rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+      </div>
+
+      {/* Note */}
+      <div>
+        <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>หมายเหตุ (ไม่บังคับ)</label>
+        <input type="text" value={note} onChange={e => setNote(e.target.value)}
+          placeholder="เช่น ช่วงพักเที่ยง / วันหยุดพิเศษ"
+          className="w-full px-2.5 py-1.5 text-sm rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+      </div>
+
+      {err && <p className="text-xs" style={{ color: "#B91C1C" }}>{err}</p>}
+
+      <button onClick={submit} disabled={saving}
+        className="w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+        style={{ background: PRIMARY }}>
+        {saving ? "กำลังบันทึก..." : "เพิ่มกฎ"}
+      </button>
+    </div>
   );
 }

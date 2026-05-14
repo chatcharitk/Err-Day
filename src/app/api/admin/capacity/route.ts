@@ -8,7 +8,7 @@
  * online cap, available online slots, and a status flag.
  */
 import { NextResponse } from "next/server";
-import { loadDaySnapshot, timeToMins, shiftCovers } from "@/lib/capacity";
+import { loadDaySnapshot, timeToMins, shiftCovers, resolveCap } from "@/lib/capacity";
 
 interface HourRow {
   hour:        string;   // "HH:00"
@@ -56,10 +56,10 @@ export async function GET(request: Request) {
       && timeToMins(b.endTime) > timeToMins(hour),
     ).length;
 
-    // Effective online cap = min(branch.onlineCap, staffOnShift)
-    const cap = snapshot.onlineCap != null
-      ? Math.min(snapshot.onlineCap, staffOnShift)
-      : staffOnShift;
+    // Effective online cap = min(resolvedCap-for-this-hour, staffOnShift)
+    // resolvedCap = date-specific override > day-of-week override > branch.onlineCap
+    const resolved = resolveCap(snapshot, hour, endHour);
+    const cap = resolved != null ? Math.min(resolved, staffOnShift) : staffOnShift;
     const available = Math.max(0, cap - overlapping);
 
     let status: HourRow["status"];

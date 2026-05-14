@@ -35,6 +35,32 @@ model Branch {
   staff    Staff[]
   services BranchService[]
   bookings Booking[]
+  capacityOverrides CapacityOverride[]
+}
+
+/**
+ * Per-time-window override of the branch's default online cap.
+ * Either `date` (specific calendar day) or `dayOfWeek` (recurring weekly) is set.
+ * For a given query time the most specific match wins:
+ *     date-specific > day-of-week > branch.onlineCap > staff count
+ */
+model CapacityOverride {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  /** Specific date this override applies to (mutually exclusive with dayOfWeek). */
+  date      DateTime?
+  /** Recurring weekly: 0 = Sunday … 6 = Saturday (mutually exclusive with date). */
+  dayOfWeek Int?
+  startTime String   // "HH:mm"
+  endTime   String   // "HH:mm"
+  capacity  Int      // hard cap during this window (0 = closed)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, date])
+  @@index([branchId, dayOfWeek])
 }
 
 model Service {

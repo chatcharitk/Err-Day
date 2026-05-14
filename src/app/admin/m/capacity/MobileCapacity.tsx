@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, Save, CheckCircle2, AlertTriangle, XCircle,
-  Power, Users, Calendar, Info, Settings as SettingsIcon, X, Check,
+  Power, Users, Calendar, Info, Settings as SettingsIcon, X, Check, Plus, Trash2,
 } from "lucide-react";
 
 interface Branch {
@@ -415,6 +415,9 @@ function SettingsSheet({ branch, onClose }: { branch: Branch; onClose: () => voi
               style={{ accentColor: PRIMARY }}
             />
           </label>
+
+          {/* Per-hour overrides */}
+          <OverridesSection branchId={branch.id} />
         </div>
 
         <div className="p-4 flex-shrink-0" style={{ borderTop: `1px solid ${BORDER}` }}>
@@ -422,10 +425,217 @@ function SettingsSheet({ branch, onClose }: { branch: Branch; onClose: () => voi
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
             style={{ background: PRIMARY }}>
             <Save size={14} />
-            {saving ? "กำลังบันทึก..." : "บันทึก"}
+            {saving ? "กำลังบันทึก..." : "บันทึกค่าเริ่มต้น"}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Per-hour Overrides (inside settings sheet) ───────────────────────────────
+
+interface Override {
+  id:        string;
+  date:      string | null;
+  dayOfWeek: number | null;
+  startTime: string;
+  endTime:   string;
+  capacity:  number;
+  note:      string | null;
+}
+
+const DOW_TH = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+
+function OverridesSection({ branchId }: { branchId: string }) {
+  const [overrides, setOverrides] = useState<Override[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [adding,    setAdding]    = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/branches/${branchId}/capacity-overrides`);
+      if (res.ok) setOverrides(await res.json());
+    } finally { setLoading(false); }
+  }, [branchId]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [load]);
+
+  async function deleteOne(id: string) {
+    if (!confirm("ลบกฎนี้?")) return;
+    await fetch(`/api/admin/branches/${branchId}/capacity-overrides/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  return (
+    <div className="rounded-xl p-3" style={{ background: "#FAF5F0", border: `1px dashed ${BORDER}` }}>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: PRIMARY }}>
+            🕒 กฎความจุรายชั่วโมง
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
+            ใช้แทนค่าเริ่มต้นในช่วงเวลาที่ระบุ
+          </p>
+        </div>
+        <button
+          onClick={() => setAdding(v => !v)}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium"
+          style={{ background: adding ? "#FEF2F2" : "white", color: PRIMARY, border: `1px solid ${BORDER}` }}
+        >
+          {adding ? "ยกเลิก" : <><Plus size={11} /> เพิ่ม</>}
+        </button>
+      </div>
+
+      {adding && (
+        <MobileAddOverrideForm
+          branchId={branchId}
+          onDone={async () => { setAdding(false); await load(); }}
+        />
+      )}
+
+      {loading ? (
+        <p className="text-[11px] text-center py-2" style={{ color: MUTED }}>กำลังโหลด...</p>
+      ) : overrides.length === 0 && !adding ? (
+        <p className="text-[11px] text-center py-2" style={{ color: MUTED }}>ยังไม่มีกฎ</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {overrides.map(o => (
+            <li key={o.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold" style={{ color: TEXT }}>
+                  {o.date
+                    ? `📅 ${new Date(o.date + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" })}`
+                    : `🔁 ทุก${DOW_TH[o.dayOfWeek!]}`}
+                  <span className="mx-1" style={{ color: MUTED }}>·</span>
+                  {o.startTime}–{o.endTime}
+                  <span className="mx-1" style={{ color: MUTED }}>·</span>
+                  <span style={{ color: o.capacity === 0 ? "#B91C1C" : PRIMARY }}>
+                    {o.capacity === 0 ? "🔒 ปิด" : `${o.capacity} คิว`}
+                  </span>
+                </p>
+                {o.note && <p className="text-[10px]" style={{ color: MUTED }}>{o.note}</p>}
+              </div>
+              <button onClick={() => deleteOne(o.id)} className="p-1" style={{ color: "#B91C1C" }}>
+                <Trash2 size={11} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function MobileAddOverrideForm({ branchId, onDone }: { branchId: string; onDone: () => void | Promise<void> }) {
+  const [scope,     setScope]     = useState<"date" | "dayOfWeek">("date");
+  const [date,      setDate]      = useState<string>(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  });
+  const [dayOfWeek, setDayOfWeek] = useState<number>(0);
+  const [startTime, setStartTime] = useState<string>("10:00");
+  const [endTime,   setEndTime]   = useState<string>("13:00");
+  const [capacity,  setCapacity]  = useState<string>("2");
+  const [note,      setNote]      = useState<string>("");
+  const [saving,    setSaving]    = useState(false);
+  const [err,       setErr]       = useState<string>("");
+
+  const timeOptions: string[] = [];
+  for (let m = 8 * 60; m <= 21 * 60; m += 15) {
+    timeOptions.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  }
+
+  async function submit() {
+    setErr("");
+    if (endTime <= startTime) { setErr("เวลาสิ้นสุดต้องหลังเวลาเริ่ม"); return; }
+    if (capacity === "" || Number(capacity) < 0) { setErr("ความจุต้องเป็นจำนวนเต็มไม่ติดลบ"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/branches/${branchId}/capacity-overrides`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date:      scope === "date"      ? date      : undefined,
+          dayOfWeek: scope === "dayOfWeek" ? dayOfWeek : undefined,
+          startTime, endTime,
+          capacity:  Number(capacity),
+          note:      note.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErr(data.error ?? "บันทึกไม่สำเร็จ");
+        return;
+      }
+      await onDone();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="rounded-lg p-2.5 mb-2 space-y-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+      <div className="flex gap-1.5 text-[11px]">
+        <button onClick={() => setScope("date")}
+          className="flex-1 py-1.5 rounded-lg font-medium"
+          style={{
+            background: scope === "date" ? PRIMARY : "white",
+            color:      scope === "date" ? "white" : MUTED,
+            border:     `1px solid ${scope === "date" ? PRIMARY : BORDER}`,
+          }}>วันเฉพาะ</button>
+        <button onClick={() => setScope("dayOfWeek")}
+          className="flex-1 py-1.5 rounded-lg font-medium"
+          style={{
+            background: scope === "dayOfWeek" ? PRIMARY : "white",
+            color:      scope === "dayOfWeek" ? "white" : MUTED,
+            border:     `1px solid ${scope === "dayOfWeek" ? PRIMARY : BORDER}`,
+          }}>ทุกสัปดาห์</button>
+      </div>
+
+      {scope === "date" ? (
+        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-[11px] rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+      ) : (
+        <div className="grid grid-cols-7 gap-1">
+          {DOW_TH.map((d, i) => (
+            <button key={i} onClick={() => setDayOfWeek(i)}
+              className="py-1.5 rounded-lg text-[11px] font-medium"
+              style={{
+                background: dayOfWeek === i ? PRIMARY : "white",
+                color:      dayOfWeek === i ? "white" : TEXT,
+                border:     `1px solid ${dayOfWeek === i ? PRIMARY : BORDER}`,
+              }}>{d}</button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-1.5">
+        <select value={startTime} onChange={e => setStartTime(e.target.value)}
+          className="px-2 py-1.5 text-[11px] rounded-lg bg-white" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+          {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={endTime} onChange={e => setEndTime(e.target.value)}
+          className="px-2 py-1.5 text-[11px] rounded-lg bg-white" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+          {timeOptions.filter(t => t > startTime).map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <input type="number" inputMode="numeric" min={0} value={capacity}
+          onChange={e => setCapacity(e.target.value.replace(/[^\d]/g, ""))}
+          placeholder="คิว"
+          className="px-2 py-1.5 text-[11px] rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+      </div>
+
+      <input type="text" value={note} onChange={e => setNote(e.target.value)}
+        placeholder="หมายเหตุ (ไม่บังคับ)"
+        className="w-full px-2.5 py-1.5 text-[11px] rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+
+      {err && <p className="text-[10px]" style={{ color: "#B91C1C" }}>{err}</p>}
+
+      <button onClick={submit} disabled={saving}
+        className="w-full py-2 rounded-lg text-[11px] font-semibold text-white disabled:opacity-50"
+        style={{ background: PRIMARY }}>
+        {saving ? "กำลังบันทึก..." : "เพิ่มกฎ"}
+      </button>
     </div>
   );
 }
