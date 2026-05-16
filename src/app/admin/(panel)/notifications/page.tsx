@@ -5,36 +5,36 @@ export const dynamic   = "force-dynamic";
 export const metadata  = { title: "การแจ้งเตือน — err.day" };
 
 export default async function NotificationsPage() {
-  const logs = await prisma.notificationLog.findMany({
-    orderBy: { sentAt: "desc" },
-    take: 100,
-  });
-
-  // Stats for the last 7 days
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const recent = await prisma.notificationLog.findMany({
-    where:  { sentAt: { gte: since } },
-    select: { status: true, kind: true },
-  });
+
+  // Three log queries fired in parallel (previously sequential).
+  const [logs, recent, failed] = await Promise.all([
+    prisma.notificationLog.findMany({
+      orderBy: { sentAt: "desc" },
+      take: 100,
+    }),
+    prisma.notificationLog.findMany({
+      where:  { sentAt: { gte: since } },
+      select: { status: true, kind: true },
+    }),
+    prisma.notificationLog.findMany({
+      where: {
+        status:    "FAILED",
+        sentAt:    { gte: since },
+        recipient: { not: null },
+        error:     { contains: "Failed to send messages" },
+      },
+      select:  { recipient: true, error: true, sentAt: true, kind: true },
+      orderBy: { sentAt: "desc" },
+    }),
+  ]);
+
   const stats = {
     total:   recent.length,
     sent:    recent.filter((r) => r.status === "SENT").length,
     skipped: recent.filter((r) => r.status === "SKIPPED").length,
     failed:  recent.filter((r) => r.status === "FAILED").length,
   };
-
-  // Non-followers: customers with lineUserId whose pushes hit "Failed to send messages"
-  // (LINE API rejects pushes to users who haven't added the OA as a friend).
-  const failed = await prisma.notificationLog.findMany({
-    where: {
-      status:    "FAILED",
-      sentAt:    { gte: since },
-      recipient: { not: null },
-      error:     { contains: "Failed to send messages" },
-    },
-    select: { recipient: true, error: true, sentAt: true, kind: true },
-    orderBy: { sentAt: "desc" },
-  });
 
   // Group by lineUserId, keep the most recent failure per user
   const byUid = new Map<string, { lineUserId: string; lastError: string; lastAt: string; lastKind: string; count: number }>();
