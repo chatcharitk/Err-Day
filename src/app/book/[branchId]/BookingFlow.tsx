@@ -90,7 +90,6 @@ const UI = {
     hairColorNotice: "ย้อมผมให้บริการเฉพาะ 11:00–16:00 น.",
     availableSlots: "เวลาที่ว่าง",
     slotTaken: "จอง",
-    slotPast:  "ผ่านไปแล้ว",
     loadingSlots: "กำลังโหลด...",
     details: "ข้อมูลของคุณ", detailsSub: "Your Details",
     name: "ชื่อ-นามสกุล", namePh: "ชื่อของคุณ",
@@ -133,7 +132,6 @@ const UI = {
     hairColorNotice: "Hair color services available 11:00–16:00 only",
     availableSlots: "Available Times",
     slotTaken: "Taken",
-    slotPast:  "Past",
     loadingSlots: "Loading...",
     details: "Your Details", detailsSub: "ข้อมูลของคุณ",
     name: "Full Name", namePh: "Your name",
@@ -175,7 +173,6 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
-  const [pastSlots,  setPastSlots]  = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string }>(
     { name: "", phone: "", email: "", notes: "" }
@@ -257,7 +254,6 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     if (!selectedDate || !selectedService) return;
     setLoadingSlots(true);
     setTakenSlots([]);
-    setPastSlots([]);
     const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,"0")}-${String(selectedDate.getDate()).padStart(2,"0")}`;
     const params = new URLSearchParams({
       branchId: branch.id,
@@ -266,10 +262,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     });
     fetch(`/api/availability?${params}`)
       .then((r) => r.json())
-      .then((data) => {
-        setTakenSlots(data.taken ?? []);
-        setPastSlots(data.past ?? []);
-      })
+      .then((data) => setTakenSlots(data.taken ?? []))
       .catch(() => {})
       .finally(() => setLoadingSlots(false));
   }, [selectedDate, selectedService?.duration, branch.id]);
@@ -662,21 +655,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 </p>
                 <div className="grid grid-cols-4 gap-2">
                   {timeSlots.map((t) => {
-                    const isPast  = pastSlots.includes(t);
                     const isTaken = takenSlots.includes(t);
-                    const disabled = isPast || isTaken;
-                    // Distinct visual: past = washed-out grey; taken = warm muted
-                    const label = isPast ? u.slotPast : isTaken ? u.slotTaken : null;
                     return (
                       <button
                         key={t}
-                        onClick={() => !disabled && setSelectedTime(t)}
-                        disabled={disabled || loadingSlots}
+                        onClick={() => !isTaken && setSelectedTime(t)}
+                        disabled={isTaken || loadingSlots}
                         className="py-2 rounded-lg text-sm border-2 transition-all"
                         style={
-                          isPast
-                            ? { backgroundColor: "#F3EFEC", borderColor: "#E8E2DC", color: "#B5A99F", cursor: "not-allowed", opacity: 0.6 }
-                            : isTaken
+                          isTaken
                             ? { backgroundColor: "#F5F0EC", borderColor: "#E8D8CC", color: "#C4B0A4", cursor: "not-allowed" }
                             : selectedTime === t
                             ? { backgroundColor: "#8B1D24", borderColor: "#8B1D24", color: "white", fontWeight: 500 }
@@ -684,7 +671,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                         }
                       >
                         {t}
-                        {label && <span className="block text-xs" style={{ color: isPast ? "#B5A99F" : "#C4B0A4" }}>{label}</span>}
+                        {isTaken && <span className="block text-xs" style={{ color: "#C4B0A4" }}>{u.slotTaken}</span>}
                       </button>
                     );
                   })}

@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSlotAvailability } from "@/lib/capacity";
+import { getTakenSlots } from "@/lib/capacity";
 
 /**
  * GET /api/availability?branchId=...&date=YYYY-MM-DD&duration=60[&staffId=...]
+ * Returns the slots that are NOT bookable due to staff-capacity rules.
  *
- * Response:
- *   { taken: string[], past: string[] }
+ * Rule: a slot is bookable when (staff on shift covering the slot) > (overlapping bookings).
+ * If no shifts are defined for the branch on this date, every active staff member is
+ * treated as available (legacy fallback so the system works pre-shift-config).
  *
- * `taken` = slots that overlap with existing bookings or hit capacity caps.
- * `past`  = slots whose start time has already passed (today only).
- *
- * The UI should display the two reasons differently so customers understand
- * why a slot is unavailable. The legacy `taken` field used to combine both —
- * old clients that read only `taken` will see slightly fewer disabled slots
- * but the booking POST endpoint still enforces both rules server-side.
+ * Open hours are read from the Branch record:
+ *   Mon–Sat → branch.openTime  (default "08:00")
+ *   Sunday  → "10:00" override
+ *   Close   → branch.closeTime (default "21:00")
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -40,6 +39,6 @@ export async function GET(request: Request) {
   const openTime  = isSunday ? "10:00" : (branch?.openTime  ?? "08:00");
   const closeTime = branch?.closeTime ?? "21:00";
 
-  const { taken, past } = await getSlotAvailability(branchId, date, duration, staffId, undefined, openTime, closeTime);
-  return NextResponse.json({ taken, past });
+  const taken = await getTakenSlots(branchId, date, duration, staffId, undefined, openTime, closeTime);
+  return NextResponse.json({ taken });
 }
