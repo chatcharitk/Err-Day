@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown, Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -484,7 +484,16 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 style={{ color: TEXT }}
               >
                 <UserCog size={16} style={{ color: MUTED }} />
-                ช่าง / กะการทำงาน
+                ช่าง
+              </Link>
+              <Link
+                href="/admin/m/shifts"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <CalendarDays size={16} style={{ color: MUTED }} />
+                ตารางงาน
               </Link>
               <Link
                 href="/admin/m/capacity"
