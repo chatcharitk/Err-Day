@@ -279,7 +279,18 @@ export async function checkCapacity(args: {
 
 // ── Slot grid (used by /api/availability) ─────────────────────────────────────
 
-export async function getTakenSlots(
+export interface SlotAvailability {
+  /** Slots that overlap with existing bookings / hit capacity caps. */
+  taken: string[];
+  /** Slots whose start time has already passed (today only). */
+  past: string[];
+}
+
+/**
+ * Returns the slots that are NOT bookable, split by reason so the UI can
+ * label them differently ("ผ่านไปแล้ว" for past vs "จอง" for booked).
+ */
+export async function getSlotAvailability(
   branchId: string,
   date: string,
   duration: number,
@@ -287,13 +298,14 @@ export async function getTakenSlots(
   excludeBookingId?: string,
   openTime  = "08:00",   // Mon–Sat default; caller passes "10:00" for Sunday
   closeTime = "21:00",
-): Promise<string[]> {
+): Promise<SlotAvailability> {
   const snapshot = await loadDaySnapshot(branchId, date, excludeBookingId);
   const slots  = generateTimeSlots(openTime, closeTime);
   const taken: string[] = [];
+  const past:  string[] = [];
 
   // Past-slot cutoff: for today's date, mark any slot whose start has already
-  // passed as taken (online customers can't book a slot in the past).
+  // passed (online customers can't book a slot in the past).
   // Slot times are Thailand local (Asia/Bangkok = UTC+7); the server runs in
   // UTC, so we shift "now" by +7h before extracting the local date and time.
   const bkkNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
@@ -303,12 +315,29 @@ export async function getTakenSlots(
 
   for (const slot of slots) {
     if (isToday && timeToMins(slot) <= nowMin) {
-      taken.push(slot);
+      past.push(slot);
       continue;
     }
     const slotEnd = addMinutes(slot, duration);
     const result  = evaluateCapacity(snapshot, slot, slotEnd, staffId, /* online */ true);
     if (!result.ok) taken.push(slot);
   }
-  return taken;
+  return { taken, past };
+}
+
+/**
+ * Legacy: returns a single list of unbookable slots (past ∪ taken).
+ * Prefer `getSlotAvailability` for new callers so they can show the right reason.
+ */
+export async function getTakenSlots(
+  branchId: string,
+  date: string,
+  duration: number,
+  staffId: string | null = null,
+  excludeBookingId?: string,
+  openTime  = "08:00",
+  closeTime = "21:00",
+): Promise<string[]> {
+  const { taken, past } = await getSlotAvailability(branchId, date, duration, staffId, excludeBookingId, openTime, closeTime);
+  return [...past, ...taken];
 }
