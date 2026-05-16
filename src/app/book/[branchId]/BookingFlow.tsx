@@ -240,13 +240,16 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
   // Build the slot list for the selected day.
   // Sunday (0) opens at 10:00; Mon–Sat open at branch.openTime (default 08:00).
-  // Last slot is always 30 min before branch.closeTime (default 21:00) → 20:30.
+  // We stop offering new bookings 30 min before branch.closeTime so the last
+  // appointment finishes with some buffer. For a 21:00-close branch, that
+  // means the last bookable slot is 20:00 (not 20:30).
   const timeSlots = useMemo(() => {
     if (isHairColor) return HAIR_COLOR_SLOTS;
-    const isSunday  = selectedDate ? selectedDate.getDay() === 0 : false;
-    const openTime  = isSunday ? "10:00" : (branch.openTime  ?? "08:00");
-    const closeTime = branch.closeTime ?? "21:00";
-    return generateTimeSlots(openTime, closeTime);
+    const isSunday   = selectedDate ? selectedDate.getDay() === 0 : false;
+    const openTime   = isSunday ? "10:00" : (branch.openTime  ?? "08:00");
+    const closeTime  = branch.closeTime ?? "21:00";
+    const lastClose  = addMinutes(closeTime, -30);
+    return generateTimeSlots(openTime, lastClose);
   }, [isHairColor, selectedDate, branch.openTime, branch.closeTime]);
 
   // Fetch availability when date, staff, or service changes
