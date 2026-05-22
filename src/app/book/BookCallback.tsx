@@ -103,23 +103,23 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="px-6 py-16 text-center" style={{ backgroundColor: "#8B1D24" }}>
-        <p className="text-sm tracking-widest uppercase mb-3" style={{ color: "#D6BCAE" }}>ยินดีต้อนรับสู่</p>
-        <h1 className="mb-4"><BrandLogo light size="xl" /></h1>
-        <p className="text-lg max-w-md mx-auto" style={{ color: "rgba(255,255,255,0.85)" }}>
+      <section className="px-6 py-5 text-center" style={{ backgroundColor: "#8B1D24" }}>
+        <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: "#D6BCAE" }}>ยินดีต้อนรับสู่</p>
+        <h1 className="mb-1"><BrandLogo light size="lg" /></h1>
+        <p className="text-sm max-w-md mx-auto" style={{ color: "rgba(255,255,255,0.75)" }}>
           ประสบการณ์ความงามระดับพรีเมียม
         </p>
       </section>
 
       {/* Wave divider */}
       <div style={{ backgroundColor: "#8B1D24", lineHeight: 0 }}>
-        <svg viewBox="0 0 1440 40" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"
-          style={{ display: "block", width: "100%", height: 40 }}>
-          <path d="M0,40 C360,0 1080,0 1440,40 L1440,40 L0,40 Z" fill="#FDF8F3" />
+        <svg viewBox="0 0 1440 28" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"
+          style={{ display: "block", width: "100%", height: 28 }}>
+          <path d="M0,28 C360,0 1080,0 1440,28 L1440,28 L0,28 Z" fill="#FDF8F3" />
         </svg>
       </div>
 
-      <section className="max-w-lg mx-auto px-6 pt-8 pb-16">
+      <section className="max-w-lg mx-auto px-6 pt-4 pb-12">
 
         {/* ── Either show login choice OR proceed to branches ── */}
         {showLogin ? (
