@@ -288,6 +288,12 @@ model Booking {
   staff    Staff?         @relation(fields: [staffId], references: [id])
   customer Customer       @relation(fields: [customerId], references: [id])
   addons   BookingAddon[]
+
+  // Hot-path indexes — without these every booking query was a full table scan.
+  @@index([branchId, date])      // calendar, mobile home, availability checks
+  @@index([customerId])          // customer detail page → booking history
+  @@index([staffId, date])       // staff schedule view
+  @@index([status, date])        // sales history filtering + analytics
 }
 
 model BookingAddon {
@@ -298,6 +304,8 @@ model BookingAddon {
 
   booking Booking      @relation(fields: [bookingId], references: [id])
   addon   ServiceAddon @relation(fields: [addonId], references: [id])
+
+  @@index([bookingId])  // loaded on every calendar render
 }
 
 enum BookingStatus {

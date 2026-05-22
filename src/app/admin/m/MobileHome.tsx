@@ -287,6 +287,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 <li key={b.id}>
                   <Link
                     href={`/admin/m/${b.id}`}
+                    prefetch
                     className="block rounded-xl bg-white px-3 py-2.5 active:scale-[0.99]"
                     style={{ border: `1px solid ${BORDER}` }}
                   >
@@ -365,6 +366,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
       {/* Secondary: block schedule */}
       <Link
         href={`/admin/m/block?branchId=${activeBranchId}&date=${selectedDate}`}
+        prefetch
         aria-label="ปิดช่วงเวลา"
         className="fixed z-30 rounded-full shadow-md flex items-center justify-center text-white"
         style={{
@@ -379,6 +381,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
       {/* Primary: new booking */}
       <Link
         href={`/admin/m/new?branchId=${activeBranchId}&date=${selectedDate}`}
+        prefetch
         aria-label="เพิ่มการจอง"
         className="fixed bottom-6 z-30 rounded-full shadow-lg flex items-center justify-center text-white"
         style={{
