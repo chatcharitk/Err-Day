@@ -107,7 +107,7 @@ export default function BookCallback({ branches }: { branches: Branch[] }) {
         <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: "#D6BCAE" }}>ยินดีต้อนรับสู่</p>
         <h1 className="mb-1"><BrandLogo light size="lg" /></h1>
         <p className="text-sm max-w-md mx-auto" style={{ color: "rgba(255,255,255,0.75)" }}>
-          ประสบการณ์ความงามระดับพรีเมียม
+          สระไดร์ที่เข้าใจผู้หญิงที่สุด
         </p>
       </section>
 

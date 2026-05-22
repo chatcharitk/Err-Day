@@ -36,6 +36,7 @@ model Branch {
   services BranchService[]
   bookings Booking[]
   capacityOverrides CapacityOverride[]
+  blockedSlots      BlockedSlot[]
 }
 
 /**
@@ -106,9 +107,10 @@ model Staff {
   commissionRate Float   @default(0) // percentage, e.g. 30 = 30 %
   isActive       Boolean @default(true)
 
-  branch   Branch       @relation(fields: [branchId], references: [id])
-  bookings Booking[]
-  shifts   StaffShift[]
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  bookings     Booking[]
+  shifts       StaffShift[]
+  blockedSlots BlockedSlot[]
 }
 
 model StaffShift {
@@ -123,6 +125,27 @@ model StaffShift {
 
   @@unique([staffId, date, startTime])
   @@index([date])
+  @@index([staffId, date])
+}
+
+/**
+ * Admin-created time blocks — prevent customer bookings and show as "closed"
+ * on the calendar. staffId = null means the whole branch is blocked; a specific
+ * staffId blocks just that staff member.
+ */
+model BlockedSlot {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staffId   String?
+  staff     Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  date      String   // "YYYY-MM-DD" (Bangkok local)
+  startTime String   // "HH:mm"
+  endTime   String   // "HH:mm"
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([branchId, date])
   @@index([staffId, date])
 }
 

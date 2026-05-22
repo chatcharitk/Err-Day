@@ -113,6 +113,12 @@ export interface DaySnapshot {
   shifts: { staffId: string; startTime: string; endTime: string }[];
   /** Non-cancelled bookings for this branch on this date (excluding excludeBookingId). */
   bookings: { id: string; startTime: string; endTime: string; staffId: string | null }[];
+  /**
+   * Admin-created blocked slots.
+   *   staffId = null  → whole branch is blocked during this window
+   *   staffId = <id>  → only that staff member is blocked
+   */
+  blockedSlots: { staffId: string | null; startTime: string; endTime: string }[];
 }
 
 /**
@@ -150,7 +156,7 @@ export async function loadDaySnapshot(
   const [yy, mm, dd] = date.split("-").map(Number);
   const dow = new Date(yy, mm - 1, dd).getDay();
 
-  const [branchRow, activeStaff, overrideRows] = await Promise.all([
+  const [branchRow, activeStaff, overrideRows, blockedRows] = await Promise.all([
     prisma.branch.findUnique({ where: { id: branchId }, select: { onlineCap: true } }),
     prisma.staff.findMany({ where: { branchId, isActive: true }, select: { id: true } }),
     prisma.capacityOverride.findMany({
@@ -162,6 +168,10 @@ export async function loadDaySnapshot(
         ],
       },
       select: { date: true, startTime: true, endTime: true, capacity: true },
+    }),
+    prisma.blockedSlot.findMany({
+      where: { branchId, date },
+      select: { staffId: true, startTime: true, endTime: true },
     }),
   ]);
   const activeStaffIds = activeStaff.map((s) => s.id);
@@ -192,7 +202,8 @@ export async function loadDaySnapshot(
     }),
   ]);
 
-  return { branchId, onlineCap, overrides, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings };
+  const blockedSlots = blockedRows.map(r => ({ staffId: r.staffId, startTime: r.startTime, endTime: r.endTime }));
+  return { branchId, onlineCap, overrides, activeStaffIds, hasShifts: shifts.length > 0, shifts, bookings, blockedSlots };
 }
 
 // ── Capacity check (single window) ────────────────────────────────────────────
@@ -216,7 +227,15 @@ export function evaluateCapacity(
   staffId: string | null = null,
   online: boolean = false,
 ): CapacityResult {
-  const { activeStaffIds, hasShifts, shifts, bookings } = snapshot;
+  const { activeStaffIds, hasShifts, shifts, bookings, blockedSlots } = snapshot;
+
+  // Branch-wide block: any block with staffId=null overlapping this window → unavailable.
+  const branchBlocked = blockedSlots.some(
+    b => b.staffId === null && overlaps(startTime, endTime, b.startTime, b.endTime),
+  );
+  if (branchBlocked) {
+    return { ok: false, reason: "no_capacity", scheduledCount: 0, occupiedCount: 0 };
+  }
 
   // Staff scheduled to cover the window.
   // Online bookings ALWAYS require explicit shifts — no staff = unavailable.
@@ -237,6 +256,13 @@ export function evaluateCapacity(
       return { ok: false, reason: "selected_staff_off_shift", scheduledCount: scheduledIds.size, occupiedCount: 0 };
     }
     if (conflicting.some((b) => b.staffId === staffId)) {
+      return { ok: false, reason: "selected_staff_busy", scheduledCount: scheduledIds.size, occupiedCount: 0 };
+    }
+    // Staff-specific block
+    const staffBlocked = blockedSlots.some(
+      b => b.staffId === staffId && overlaps(startTime, endTime, b.startTime, b.endTime),
+    );
+    if (staffBlocked) {
       return { ok: false, reason: "selected_staff_busy", scheduledCount: scheduledIds.size, occupiedCount: 0 };
     }
     return { ok: true, scheduledCount: scheduledIds.size, occupiedCount: 0 };

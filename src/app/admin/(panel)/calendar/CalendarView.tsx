@@ -50,6 +50,16 @@ interface BranchServiceItem {
 }
 interface AddonItem { id: string; nameTh: string; price: number; }
 
+interface BlockedSlotItem {
+  id:        string;
+  date:      string;
+  startTime: string;
+  endTime:   string;
+  reason:    string | null;
+  staffId:   string | null;
+  staff:     { id: string; name: string } | null;
+}
+
 interface Props {
   weekBookings:    BookingItem[];
   staff:           StaffItem[];
@@ -215,7 +225,7 @@ function OffShiftShade({
 
 /* ─── Vertical Gantt — staff columns, one day ───────────── */
 function VerticalGantt({
-  dayBookings, staff, selectedDate, onClickBooking, staffShiftMap, hasShifts,
+  dayBookings, staff, selectedDate, onClickBooking, staffShiftMap, hasShifts, blockedSlots,
 }: {
   dayBookings:  BookingItem[];
   staff:        StaffItem[];
@@ -223,6 +233,7 @@ function VerticalGantt({
   onClickBooking: (b: BookingItem) => void;
   staffShiftMap:  StaffShiftMap;
   hasShifts:      boolean;
+  blockedSlots:   BlockedSlotItem[];
 }) {
   const totalHours = DAY_END - DAY_START;
   const gridHeight = totalHours * HOUR_PX;
@@ -350,6 +361,28 @@ function VerticalGantt({
                   </div>
                 );
               })}
+              {/* Blocked slot bars */}
+              {blockedSlots
+                .filter(bl => bl.staffId === null || bl.staffId === col.id)
+                .map(bl => {
+                  const top    = ((timeToMins(bl.startTime) - DAY_START * 60) / 60) * HOUR_PX;
+                  const height = Math.max(((timeToMins(bl.endTime) - timeToMins(bl.startTime)) / 60) * HOUR_PX, 18);
+                  return (
+                    <div key={bl.id}
+                      className="absolute left-1 right-1 rounded-lg border select-none"
+                      style={{
+                        top, height, zIndex: 6,
+                        backgroundColor: "rgba(75,85,99,0.12)",
+                        borderColor: "#9CA3AF",
+                        background: "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(75,85,99,0.12) 4px,rgba(75,85,99,0.12) 5px)",
+                      }}>
+                      <div className="px-1.5 py-1 text-[10px] leading-tight text-gray-500 font-medium truncate">
+                        🚫 {bl.reason || "ปิดเวลา"}
+                        {height > 32 && <div className="opacity-70">{bl.startTime}–{bl.endTime}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           );
         })}
@@ -837,6 +870,134 @@ function EditModal({
   );
 }
 
+/* ─── Block Slot Modal ───────────────────────────────────── */
+function BlockSlotModal({
+  defaultDate, branchId, staff, onClose, onSaved,
+}: {
+  defaultDate: string;
+  branchId:    string;
+  staff:       StaffItem[];
+  onClose:     () => void;
+  onSaved:     () => void;
+}) {
+  const timeSlots = makeTimeSlots(15);
+  const [date,      setDate]      = useState(defaultDate);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime,   setEndTime]   = useState("10:00");
+  const [staffId,   setStaffId]   = useState<string>(""); // "" = whole branch
+  const [reason,    setReason]    = useState("");
+  const [saving,    setSaving]    = useState(false);
+  const [error,     setError]     = useState("");
+
+  const endSlots = timeSlots.filter(t => timeToMins(t) > timeToMins(startTime));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!endTime || timeToMins(endTime) <= timeToMins(startTime)) {
+      setError("เวลาสิ้นสุดต้องหลังเวลาเริ่ม");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch(`/api/admin/branches/${branchId}/blocked-slots`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ date, startTime, endTime, staffId: staffId || null, reason: reason.trim() || null }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const d = await res.json();
+      setError(d.error ?? "เกิดข้อผิดพลาด");
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal>
+    <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      style={{ zIndex: 99999 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="px-5 py-4 flex items-center justify-between flex-shrink-0"
+          style={{ background: "#374151" }}>
+          <h2 className="font-bold text-base text-white">🚫 ปิดช่วงเวลา</h2>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <form onSubmit={submit} className="p-5 space-y-4">
+          {/* Date */}
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">วันที่</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800" />
+          </div>
+
+          {/* Time range */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">เวลาเริ่ม</label>
+              <select value={startTime} onChange={e => { setStartTime(e.target.value); if (timeToMins(e.target.value) >= timeToMins(endTime)) setEndTime(addMinutes(e.target.value, 60)); }}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none">
+                {timeSlots.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">เวลาสิ้นสุด</label>
+              <select value={endTime} onChange={e => setEndTime(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none">
+                {endSlots.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Staff (optional) */}
+          <div>
+            <label className="text-xs text-gray-500 block mb-1.5">ปิดสำหรับ</label>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => setStaffId("")}
+                className="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
+                style={staffId === "" ? { background: "#374151", color: "white", borderColor: "#374151" }
+                                      : { background: "white",   color: "#374151", borderColor: "#D1D5DB" }}>
+                ทั้งสาขา
+              </button>
+              {staff.map(s => (
+                <button key={s.id} type="button" onClick={() => setStaffId(s.id)}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
+                  style={staffId === s.id ? { background: "#374151", color: "white", borderColor: "#374151" }
+                                          : { background: "white",   color: "#374151", borderColor: "#D1D5DB" }}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Reason */}
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">เหตุผล (ไม่บังคับ)</label>
+            <input value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="เช่น พักกลางวัน, อบรม, ปิดปรับปรุง…"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none text-gray-800" />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button type="submit" disabled={saving}
+            className="w-full py-3 rounded-xl font-semibold text-sm text-white disabled:opacity-50 transition-colors"
+            style={{ background: "#374151" }}>
+            {saving ? "กำลังบันทึก..." : "🚫 ปิดช่วงเวลานี้"}
+          </button>
+        </form>
+      </div>
+    </div>
+    </Modal>
+  );
+}
+
 /* ─── Add Booking Modal ──────────────────────────────────── */
 function AddBookingModal({
   defaultDate, branchId, staff, branchServices, addons, onClose, onSaved,
@@ -1169,14 +1330,16 @@ export default function CalendarView({
   weekBookings, staff, selectedDate, branches, activeBranchId, branchServices, addons,
 }: Props) {
   const router = useRouter();
-  const [view,         setView]         = useState<ViewMode>("list");
-  const [period,       setPeriod]       = useState<PeriodType>("week");
-  const [editItem,     setEditItem]     = useState<BookingItem | null>(null);
-  const [addOpen,      setAddOpen]      = useState(false);
+  const [view,          setView]         = useState<ViewMode>("list");
+  const [period,        setPeriod]       = useState<PeriodType>("week");
+  const [editItem,      setEditItem]     = useState<BookingItem | null>(null);
+  const [addOpen,       setAddOpen]      = useState(false);
+  const [blockOpen,     setBlockOpen]    = useState(false);
   const [staffShiftMap, setStaffShiftMap] = useState<StaffShiftMap>({});
-  const [hasShifts,    setHasShifts]    = useState(false);
+  const [hasShifts,     setHasShifts]   = useState(false);
+  const [blockedSlots,  setBlockedSlots] = useState<BlockedSlotItem[]>([]);
 
-  // Fetch shifts for the selected date whenever date or branch changes
+  // Fetch shifts + blocked slots whenever date or branch changes
   useEffect(() => {
     if (!activeBranchId) return;
     fetch(`/api/admin/branches/${activeBranchId}/shifts?from=${selectedDate}&to=${selectedDate}`)
@@ -1185,7 +1348,7 @@ export default function CalendarView({
         const map: StaffShiftMap = {};
         let anyShifts = false;
         for (const s of data.staff ?? []) {
-          const shift = s.shifts[0] ?? null; // at most 1 shift per staff per day
+          const shift = s.shifts[0] ?? null;
           map[s.id] = shift;
           if (shift) anyShifts = true;
         }
@@ -1194,6 +1357,15 @@ export default function CalendarView({
       })
       .catch(() => {});
   }, [selectedDate, activeBranchId]);
+
+  function refreshBlocks() {
+    if (!activeBranchId) return;
+    fetch(`/api/admin/branches/${activeBranchId}/blocked-slots?date=${selectedDate}`)
+      .then(r => r.json())
+      .then((data: { slots: BlockedSlotItem[] }) => setBlockedSlots(data.slots ?? []))
+      .catch(() => {});
+  }
+  useEffect(() => { refreshBlocks(); }, [selectedDate, activeBranchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const monday   = getWeekMonday(selectedDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -1225,6 +1397,11 @@ export default function CalendarView({
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30">
             {branches.map(br => <option key={br.id} value={br.id}>{br.name}</option>)}
           </select>
+          <button onClick={() => setBlockOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+            style={{ background: "#374151", color: "white" }}>
+            🚫 ปิดเวลา
+          </button>
           <button onClick={() => setAddOpen(true)}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#8B1D24] text-white text-sm font-semibold hover:bg-[#7a1820] transition-colors">
             + จองใหม่
@@ -1337,10 +1514,38 @@ export default function CalendarView({
             dayBookings={dayBookings} staff={staff}
             selectedDate={selectedDate} onClickBooking={setEditItem}
             staffShiftMap={staffShiftMap} hasShifts={hasShifts}
+            blockedSlots={blockedSlots}
           />
         )}
         {view === "list" && (
-          <ListView weekBookings={dayBookings} onClickBooking={setEditItem} />
+          <>
+            {blockedSlots.length > 0 && (
+              <div className="mb-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ช่วงเวลาที่ปิด</p>
+                {blockedSlots.map(bl => (
+                  <div key={bl.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5">
+                    <span className="text-sm text-gray-400">🚫</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-700">{bl.startTime} – {bl.endTime}</span>
+                      {bl.staff && <span className="ml-2 text-xs text-gray-500">({bl.staff.name})</span>}
+                      {!bl.staff && <span className="ml-2 text-xs text-gray-500">(ทั้งสาขา)</span>}
+                      {bl.reason && <span className="ml-2 text-xs text-gray-400">· {bl.reason}</span>}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("ลบช่วงเวลาที่ปิดนี้?")) return;
+                        await fetch(`/api/admin/blocked-slots/${bl.id}`, { method: "DELETE" });
+                        refreshBlocks();
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded">
+                      ลบ
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <ListView weekBookings={dayBookings} onClickBooking={setEditItem} />
+          </>
         )}
       </div>
 
@@ -1358,6 +1563,13 @@ export default function CalendarView({
           branchServices={branchServices} addons={addons}
           onClose={() => setAddOpen(false)}
           onSaved={() => router.refresh()}
+        />
+      )}
+      {blockOpen && (
+        <BlockSlotModal
+          defaultDate={selectedDate} branchId={activeBranchId} staff={staff}
+          onClose={() => setBlockOpen(false)}
+          onSaved={() => { router.refresh(); refreshBlocks(); }}
         />
       )}
     </div>

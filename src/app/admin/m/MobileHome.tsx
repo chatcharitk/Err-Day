@@ -361,7 +361,22 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
         )}
       </section>
 
-      {/* ── FAB ── */}
+      {/* ── FABs ── */}
+      {/* Secondary: block schedule */}
+      <Link
+        href={`/admin/m/block?branchId=${activeBranchId}&date=${selectedDate}`}
+        aria-label="ปิดช่วงเวลา"
+        className="fixed z-30 rounded-full shadow-md flex items-center justify-center text-white"
+        style={{
+          background: "#374151",
+          width: 44, height: 44,
+          bottom: "calc(1.5rem + 56px + 12px)",
+          right: "max(1.5rem, calc((100vw - 28rem)/2 + 1.5rem + 6px))",
+        }}
+      >
+        <span className="text-sm font-bold">🚫</span>
+      </Link>
+      {/* Primary: new booking */}
       <Link
         href={`/admin/m/new?branchId=${activeBranchId}&date=${selectedDate}`}
         aria-label="เพิ่มการจอง"

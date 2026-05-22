@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+/** GET /api/admin/staff?branchId=... — list active staff for a branch */
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const branchId = searchParams.get("branchId");
+  const staff = await prisma.staff.findMany({
+    where: { isActive: true, ...(branchId ? { branchId } : {}) },
+    select: { id: true, name: true, branchId: true },
+    orderBy: { name: "asc" },
+  });
+  return NextResponse.json({ staff });
+}
+
 export async function POST(request: Request) {
   try {
     const { name, phone, branchId, commissionRate } = await request.json();
