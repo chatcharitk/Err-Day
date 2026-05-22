@@ -37,11 +37,26 @@ function isMobileDevice() {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-export default function BookCallback({ branches }: { branches: Branch[] }) {
+// Explicit display order — first IDs listed appear first; unknown branches fall to the end.
+const BRANCH_DISPLAY_ORDER = ["branch-sukhumvit", "branch-bangna"];
+
+function orderBranches(input: Branch[]): Branch[] {
+  return [...input].sort((a, b) => {
+    const ia = BRANCH_DISPLAY_ORDER.indexOf(a.id);
+    const ib = BRANCH_DISPLAY_ORDER.indexOf(b.id);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+}
+
+export default function BookCallback({ branches: branchesProp }: { branches: Branch[] }) {
   const router = useRouter();
   const liff   = useLiff();
   const [skipLine,     setSkipLine]     = useState(false);
   const [showBranches, setShowBranches] = useState(false);
+
+  // Always force Sukhumvit to appear first regardless of how the server
+  // delivers the array (belt-and-suspenders: also sorted in page.tsx).
+  const branches = orderBranches(branchesProp);
 
   // Mobile → deep link to LINE app (seamless auth, no code).
   // Desktop → liff.login() web OAuth (no LINE app available).
