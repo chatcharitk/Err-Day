@@ -30,6 +30,7 @@ export default function EditModal({
   const [saving,        setSaving]        = useState(false);
   const [checkedOut,    setCheckedOut]    = useState(booking.status === "COMPLETED");
   const [currentStatus, setCurrentStatus] = useState(booking.status);
+  const [statusError,   setStatusError]   = useState("");
 
   const c = STATUS_COLOR[currentStatus] ?? STATUS_COLOR.PENDING;
 
@@ -64,16 +65,31 @@ export default function EditModal({
   }
 
   async function patchStatus(status: string) {
-    setSaving(true);
-    await fetch(`/api/bookings/${booking.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    setSaving(false);
+    // Optimistic: flip the status in the UI immediately so the admin sees
+    // instant feedback. The network round-trip happens in the background;
+    // on failure we roll back and surface the error.
+    const prevStatus     = currentStatus;
+    const prevCheckedOut = checkedOut;
+    setStatusError("");
     setCurrentStatus(status);
     if (status === "COMPLETED") setCheckedOut(true);
-    onSaved();
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("update failed");
+      onSaved();
+    } catch {
+      // Roll back the optimistic update
+      setCurrentStatus(prevStatus);
+      setCheckedOut(prevCheckedOut);
+      setStatusError("ไม่สามารถอัปเดตสถานะได้ — ลองอีกครั้ง");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function save() {
@@ -184,6 +200,9 @@ export default function EditModal({
                   </button>
                 )}
               </div>
+              {statusError && (
+                <p className="text-xs text-red-600 mt-2">{statusError}</p>
+              )}
             </div>
           )}
           <ServiceTimeFields services={services} serviceId={bsId} startTime={startTime} endTime={endTime}

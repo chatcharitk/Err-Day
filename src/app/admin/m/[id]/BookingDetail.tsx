@@ -118,11 +118,33 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     } finally { setBusy(false); }
   };
 
-  /** Optimistic-ish: refresh from server after status change to capture related computed fields. */
+  /**
+   * Truly optimistic: flip the status in local state immediately so the admin
+   * sees instant feedback, then issue the PATCH in the background. On failure
+   * we roll back and surface the error from `patch()`'s setErr.
+   */
   const setStatus = async (status: Status) => {
-    const updated = await patch({ status });
-    if (!updated) return;
-    setB((x) => ({ ...x, status }));
+    const prev = b.status;
+    setB((x) => ({ ...x, status }));   // optimistic
+    setErr("");
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/bookings/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setErr(json.error ?? "ไม่สามารถอัปเดตได้");
+        setB((x) => ({ ...x, status: prev })); // rollback
+      }
+    } catch {
+      setErr("ไม่สามารถอัปเดตได้");
+      setB((x) => ({ ...x, status: prev })); // rollback
+    } finally {
+      setBusy(false);
+    }
   };
 
   const setStaff = async (staffId: string | null) => {

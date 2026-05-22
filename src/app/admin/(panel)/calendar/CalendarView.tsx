@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 
 // Modals are lazy-loaded — only fetched when the user actually opens one.
@@ -490,12 +490,15 @@ function ListView({ weekBookings, onClickBooking }: {
   weekBookings: BookingItem[];
   onClickBooking: (b: BookingItem) => void;
 }) {
-  const grouped: Record<string, BookingItem[]> = {};
-  for (const b of weekBookings) {
-    const day = b.date.slice(0, 10);
-    (grouped[day] ??= []).push(b);
-  }
-  const sortedDays = Object.keys(grouped).sort();
+  // Group + sort by day once — recomputing on every parent render was wasteful.
+  const { grouped, sortedDays } = useMemo(() => {
+    const map: Record<string, BookingItem[]> = {};
+    for (const b of weekBookings) {
+      const day = b.date.slice(0, 10);
+      (map[day] ??= []).push(b);
+    }
+    return { grouped: map, sortedDays: Object.keys(map).sort() };
+  }, [weekBookings]);
 
   if (sortedDays.length === 0)
     return <div className="text-center py-16 text-gray-400">ไม่มีการจองในช่วงนี้</div>;
@@ -608,17 +611,32 @@ export default function CalendarView({
   }
   useEffect(() => { refreshBlocks(); }, [selectedDate, activeBranchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const monday   = getWeekMonday(selectedDate);
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const today    = todayStr();
+  // Memoize derived data — these were recomputed on every render (including
+  // every status flip, every modal toggle). For a calendar with hundreds of
+  // bookings the filter/reduce was wasted work.
+  const weekDays = useMemo(() => {
+    const monday = getWeekMonday(selectedDate);
+    return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  }, [selectedDate]);
+
+  const today = todayStr();
 
   function navigate(date: string, branch?: string) {
     router.push(`/admin/calendar?date=${date}&branchId=${branch ?? activeBranchId}`);
   }
 
-  const dayBookings  = weekBookings.filter(b => b.date.slice(0, 10) === selectedDate);
-  const totalForDay  = dayBookings.reduce((s, b) => s + b.totalPrice, 0);
-  const totalForWeek = weekBookings.reduce((s, b) => s + b.totalPrice, 0);
+  const dayBookings = useMemo(
+    () => weekBookings.filter(b => b.date.slice(0, 10) === selectedDate),
+    [weekBookings, selectedDate],
+  );
+  const totalForDay = useMemo(
+    () => dayBookings.reduce((s, b) => s + b.totalPrice, 0),
+    [dayBookings],
+  );
+  const totalForWeek = useMemo(
+    () => weekBookings.reduce((s, b) => s + b.totalPrice, 0),
+    [weekBookings],
+  );
 
   const selDayIndex = dayIndex(selectedDate);
 
