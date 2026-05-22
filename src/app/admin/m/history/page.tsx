@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import MobileSalesHistory from "./MobileSalesHistory";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 function bkkNow(): Date {
   return new Date(Date.now() + 7 * 3600 * 1000);

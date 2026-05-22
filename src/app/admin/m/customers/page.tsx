@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import CustomersList from "./CustomersList";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function MobileCustomersPage() {
   const customers = await prisma.customer.findMany({

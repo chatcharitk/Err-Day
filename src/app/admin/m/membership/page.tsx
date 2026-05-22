@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import MembershipList from "./MembershipList";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function MobileMembershipPage() {
   // Fetch all customers who have memberships, ordered by expiry

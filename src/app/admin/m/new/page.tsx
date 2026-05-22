@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import NewBookingForm from "./NewBookingForm";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

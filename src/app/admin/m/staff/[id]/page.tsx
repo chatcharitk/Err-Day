@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import StaffShifts from "./StaffShifts";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function MobileStaffShiftPage({
   params,

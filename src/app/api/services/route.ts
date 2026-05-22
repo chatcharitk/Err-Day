@@ -9,9 +9,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "branchId is required" }, { status: 400 });
   }
 
+  // Lean projection — list views need name/category/price/duration and the
+  // membership fields. Skips description, descriptionTh, imageUrl,
+  // availableFrom/To which are unused by the booking flow.
   const branchServices = await prisma.branchService.findMany({
-    where: { branchId, isActive: true },
-    include: { service: true },
+    where:   { branchId, isActive: true },
+    select: {
+      id: true,
+      price: true,
+      duration: true,
+      service: {
+        select: {
+          id: true,
+          name: true,
+          nameTh: true,
+          category: true,
+          memberPrice: true,
+          memberDiscountPercent: true,
+          advanceBookingRequired: true,
+        },
+      },
+    },
     orderBy: { service: { category: "asc" } },
   });
 

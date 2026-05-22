@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import UsersManager from "./UsersManager";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata = { title: "จัดการผู้ใช้ — err.day" };
 
 export default async function UsersPage() {

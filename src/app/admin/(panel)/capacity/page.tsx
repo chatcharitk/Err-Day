@@ -3,7 +3,7 @@ import { getCachedBranches } from "@/lib/branches-cache";
 import { defaultBranchId } from "@/lib/utils";
 import CapacityView from "./CapacityView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata = { title: "ความจุการจอง — err.day" };
 
 export default async function CapacityPage({

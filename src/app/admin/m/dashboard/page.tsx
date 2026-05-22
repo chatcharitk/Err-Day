@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import MobileDashboard, { MobileDashData } from "./MobileDashboard";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function bkkNow(): Date {

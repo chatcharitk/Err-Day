@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import ServicesManager from "./ServicesManager";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function ServicesPage() {
   const [services, branches] = await Promise.all([

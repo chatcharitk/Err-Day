@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { findCustomerPackagesForAdmin } from "@/lib/packages";
 import CustomerDetail from "./CustomerDetail";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function MobileCustomerDetailPage({
   params,

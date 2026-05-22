@@ -3,7 +3,7 @@ import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
 import MobileCapacity from "./MobileCapacity";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata = { title: "ความจุการจอง — err.day" };
 
 export default async function MobileCapacityPage({

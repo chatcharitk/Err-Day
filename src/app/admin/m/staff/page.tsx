@@ -3,7 +3,7 @@ import { getCachedBranches } from "@/lib/branches-cache";
 import { defaultBranchId } from "@/lib/utils";
 import StaffList from "./StaffList";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function MobileStaffPage({
   searchParams,

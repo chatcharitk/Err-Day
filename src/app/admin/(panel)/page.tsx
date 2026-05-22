@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import DashboardView, { DashboardData } from "./DashboardView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 

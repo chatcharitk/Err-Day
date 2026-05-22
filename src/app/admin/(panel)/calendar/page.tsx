@@ -3,7 +3,7 @@ import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches, getCachedBranchStaff, getCachedBranchServices, getCachedAddons } from "@/lib/branches-cache";
 import CalendarView from "./CalendarView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 /**
  * Parse a "YYYY-MM-DD" string as LOCAL noon to avoid UTC-offset

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import CustomersManager from "./CustomersManager";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function CustomersPage() {
   const customers = await prisma.customer.findMany({

@@ -18,6 +18,8 @@ interface Props {
   branchCloseTime:  string;
   staff:            Staff[];
   initialWeek:      string | null;  // "YYYY-MM-DD" of Monday
+  /** Server-preloaded shifts for the initial week so first paint isn't blank. */
+  initialShifts:    { staffId: string; shifts: Shift[] }[];
 }
 
 const PRIMARY = "#8B1D24";
@@ -54,7 +56,7 @@ function fmtMonDay(d: Date): string {
 // ── Top-level component ──────────────────────────────────────────────────────
 
 export default function MobileShiftsManager({
-  branches, activeBranchId, branchOpenTime, branchCloseTime, staff, initialWeek,
+  branches, activeBranchId, branchOpenTime, branchCloseTime, staff, initialWeek, initialShifts,
 }: Props) {
   const router = useRouter();
 
@@ -72,8 +74,17 @@ export default function MobileShiftsManager({
   const weekEnd  = addDays(weekStart, 6);
   const weekRangeLabel = `${fmtMonDay(weekStart)} – ${fmtMonDay(weekEnd)}`;
 
-  const [shiftsByStaff, setShiftsByStaff] = useState<Map<string, Shift[]>>(new Map());
-  const [loading,       setLoading]       = useState(true);
+  // Seed the shift map from server-preloaded data so first paint isn't blank.
+  const [shiftsByStaff, setShiftsByStaff] = useState<Map<string, Shift[]>>(() => {
+    const m = new Map<string, Shift[]>();
+    for (const s of initialShifts) m.set(s.staffId, s.shifts);
+    return m;
+  });
+  // Initial week is already populated from the server → no loading flash.
+  const [loading,       setLoading]       = useState(false);
+  // Track whether this is the first render (initial week is server-rendered);
+  // skip the client refetch on mount to avoid double-loading the same data.
+  const [hasMounted,    setHasMounted]    = useState(false);
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const [showTools,        setShowTools]        = useState(false);
   const [editCell,         setEditCell]         = useState<{ staff: Staff; date: Date } | null>(null);
@@ -104,8 +115,12 @@ export default function MobileShiftsManager({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBranchId, weekStartMs]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadWeek(); }, [loadWeek]);
+  // Skip the initial client fetch — the server already preloaded this week.
+  // Subsequent week/branch changes still trigger loadWeek().
+  useEffect(() => {
+    if (!hasMounted) { setHasMounted(true); return; }
+    void loadWeek();
+  }, [loadWeek, hasMounted]);
 
   // Auto-hide toast
   useEffect(() => {

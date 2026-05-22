@@ -3,7 +3,7 @@ import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
 import MobileHome from "./MobileHome";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 /** Build "YYYY-MM-DD" from a local Date (no UTC offset). */
 function toLocalDateStr(d: Date): string {

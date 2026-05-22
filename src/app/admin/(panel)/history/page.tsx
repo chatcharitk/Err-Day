@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import SalesHistory from "./SalesHistory";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function HistoryPage() {
   const [sales, branches, allStaff, allServices] = await Promise.all([

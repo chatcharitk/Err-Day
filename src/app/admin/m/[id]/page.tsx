@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCachedBranchServices, getCachedBranchStaff, getCachedAddons } from "@/lib/branches-cache";
 import BookingDetail from "./BookingDetail";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function MobileBookingDetailPage({
   params,

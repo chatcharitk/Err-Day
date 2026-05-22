@@ -3,8 +3,17 @@ import { getCachedBranches } from "@/lib/branches-cache";
 import { defaultBranchId } from "@/lib/utils";
 import MobileShiftsManager from "./MobileShiftsManager";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 export const metadata = { title: "ตารางงาน — err.day" };
+
+// Compute Monday of the requested week (or today's week) in local time.
+function mondayOf(d: Date): Date {
+  const c = new Date(d);
+  const dow = c.getDay();
+  c.setDate(c.getDate() + (dow === 0 ? -6 : 1 - dow));
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
 
 export default async function MobileShiftsPage({
   searchParams,
@@ -15,13 +24,17 @@ export default async function MobileShiftsPage({
   const branches = await getCachedBranches();
   const activeBranchId = branchId ?? defaultBranchId(branches);
 
-  // Branch info (open/close used as default shift times) + active staff list.
-  // The week's shift rows are fetched client-side on mount so navigating the
-  // week strip doesn't trigger a full server re-render.
-  const [branch, staff] = await Promise.all([
+  // Preload the requested week's shifts server-side so the page renders fully
+  // populated on first paint instead of flashing a loading state. Subsequent
+  // week navigation still uses the client-side API call.
+  const weekMonday = week ? mondayOf(new Date(week + "T12:00:00")) : mondayOf(new Date());
+  const weekSunday = new Date(weekMonday); weekSunday.setDate(weekSunday.getDate() + 6);
+  weekSunday.setHours(23, 59, 59, 999);
+
+  const [branch, staffWithShifts] = await Promise.all([
     activeBranchId
       ? prisma.branch.findUnique({
-          where: { id: activeBranchId },
+          where:  { id: activeBranchId },
           select: { id: true, name: true, openTime: true, closeTime: true },
         })
       : Promise.resolve(null),
@@ -29,10 +42,28 @@ export default async function MobileShiftsPage({
       ? prisma.staff.findMany({
           where:   { branchId: activeBranchId, isActive: true },
           orderBy: { name: "asc" },
-          select:  { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            shifts: {
+              where: { date: { gte: weekMonday, lte: weekSunday } },
+              select: { id: true, date: true, startTime: true, endTime: true },
+            },
+          },
         })
       : Promise.resolve([]),
   ]);
+
+  const staff = staffWithShifts.map(s => ({ id: s.id, name: s.name }));
+  const initialShifts = staffWithShifts.map(s => ({
+    staffId: s.id,
+    shifts:  s.shifts.map(sh => ({
+      id:        sh.id,
+      date:      sh.date.toISOString().slice(0, 10),
+      startTime: sh.startTime,
+      endTime:   sh.endTime,
+    })),
+  }));
 
   return (
     <MobileShiftsManager
@@ -42,6 +73,7 @@ export default async function MobileShiftsPage({
       branchCloseTime={branch?.closeTime ?? "21:00"}
       staff={staff}
       initialWeek={week ?? null}
+      initialShifts={initialShifts}
     />
   );
 }

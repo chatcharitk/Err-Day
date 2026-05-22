@@ -85,7 +85,24 @@ export async function POST(request: Request) {
             }
           : {}),
       },
-      include: { branch: true, service: true, staff: true, customer: true },
+      // Lean response: callers (CalendarView, NewBookingForm, BookingFlow) just
+      // use this to redirect or refresh — they don't need the full Customer
+      // (lineUserId, dateOfBirth, pictureUrl, etc.) or full Branch/Service.
+      select: {
+        id: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+        totalPrice: true,
+        status: true,
+        branchId: true,
+        serviceId: true,
+        staffId: true,
+        customerId: true,
+        customer: { select: { id: true, name: true, phone: true } },
+        service:  { select: { id: true, name: true, nameTh: true, category: true } },
+        staff:    { select: { id: true, name: true } },
+      },
     });
 
     // Fire-and-forget: customer confirmation (skipped if no LINE link) + staff alert.
@@ -103,10 +120,27 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const branchId = searchParams.get("branchId");
 
+  // Capped at 500 rows — without a cap the unfiltered fetch could pull every
+  // booking ever made. Callers needing more should paginate via ?cursor/?take.
   const bookings = await prisma.booking.findMany({
-    where: branchId ? { branchId } : undefined,
-    include: { branch: true, service: true, staff: true, customer: true },
-    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    where:   branchId ? { branchId } : undefined,
+    select: {
+      id: true,
+      date: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+      totalPrice: true,
+      notes: true,
+      branchId: true,
+      serviceId: true,
+      staffId: true,
+      customer: { select: { id: true, name: true, phone: true } },
+      service:  { select: { id: true, name: true, nameTh: true, category: true } },
+      staff:    { select: { id: true, name: true } },
+    },
+    orderBy: [{ date: "desc" }, { startTime: "desc" }],
+    take: 500,
   });
 
   return NextResponse.json(bookings);

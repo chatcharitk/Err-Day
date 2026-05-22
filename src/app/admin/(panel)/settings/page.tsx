@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import SettingsManager from "./SettingsManager";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function SettingsPage() {
   const branches = await prisma.branch.findMany({
