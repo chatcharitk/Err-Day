@@ -9,7 +9,8 @@
  * Docs: https://developers.line.biz/en/reference/messaging-api/
  */
 
-const PUSH_URL = "https://api.line.me/v2/bot/message/push";
+const PUSH_URL  = "https://api.line.me/v2/bot/message/push";
+const REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 
 export type LineMessage =
   | { type: "text"; text: string }
@@ -65,4 +66,50 @@ export async function pushLine(
 /** Convenience helper for the common single-text-message case. */
 export async function pushText(toLineUserId: string, text: string): Promise<PushResult> {
   return pushLine(toLineUserId, [{ type: "text", text }]);
+}
+
+/**
+ * Reply to an inbound LINE message using its `replyToken`.
+ *
+ * Replies vs push: reply messages are **free** and don't count toward the
+ * monthly push-message quota. Each replyToken is valid for ~30 seconds and
+ * can only be used once — if the user expects a follow-up message later,
+ * use pushLine() instead.
+ *
+ * Used by /api/line/webhook to send AI agent / auto-reply messages.
+ */
+export async function replyLine(
+  replyToken: string,
+  messages: LineMessage[],
+): Promise<PushResult> {
+  const token = getToken();
+  if (!token)                  return { ok: false, error: "no_token" };
+  if (!replyToken)             return { ok: false, error: "no_reply_token" };
+  if (messages.length === 0)   return { ok: false, error: "no_messages" };
+  if (messages.length > 5)     return { ok: false, error: "too_many_messages" };
+
+  try {
+    const res = await fetch(REPLY_URL, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ replyToken, messages }),
+    });
+
+    if (res.ok) return { ok: true };
+
+    let body = "";
+    try { body = await res.text(); } catch { /* ignore */ }
+    return { ok: false, error: `${res.status} ${body.slice(0, 300)}` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "fetch_failed";
+    return { ok: false, error: msg };
+  }
+}
+
+/** Convenience: reply with a single text message. */
+export async function replyText(replyToken: string, text: string): Promise<PushResult> {
+  return replyLine(replyToken, [{ type: "text", text }]);
 }
