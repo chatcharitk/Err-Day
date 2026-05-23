@@ -39,7 +39,16 @@ const THAI_MONTHS_SHORT = [
 
 // ── Server component ──────────────────────────────────────────────────────────
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ branchId?: string }>;
+}) {
+  const { branchId: rawBranchId } = await searchParams;
+  // "all" / "" / missing → no branch filter; specific id → narrow all booking queries to that branch.
+  const branchFilter = rawBranchId && rawBranchId !== "all" ? { branchId: rawBranchId } : {};
+  const activeBranchId = (rawBranchId && rawBranchId !== "all") ? rawBranchId : "all";
+
   const now           = bkkNow();
   const todayStr      = now.toISOString().slice(0, 10);
   const thisYear      = Number(todayStr.slice(0, 4));
@@ -74,15 +83,15 @@ export default async function AdminDashboard() {
       select: { id: true, name: true },
     }),
 
-    // Today: completed bookings
+    // Today: completed bookings (branch-filtered if applicable)
     prisma.booking.findMany({
-      where: { status: "COMPLETED", date: { gte: todayB.start, lte: todayB.end } },
+      where: { ...branchFilter, status: "COMPLETED", date: { gte: todayB.start, lte: todayB.end } },
       select: { totalPrice: true },
     }),
 
     // This month: completed bookings (need full detail for breakdowns)
     prisma.booking.findMany({
-      where: { status: "COMPLETED", date: { gte: thisMonthFullB.start, lte: thisMonthFullB.end } },
+      where: { ...branchFilter, status: "COMPLETED", date: { gte: thisMonthFullB.start, lte: thisMonthFullB.end } },
       select: {
         totalPrice: true,
         serviceId:  true,
@@ -96,7 +105,7 @@ export default async function AdminDashboard() {
 
     // Last month MTD aggregate (1st → same day of month)
     prisma.booking.aggregate({
-      where: { status: "COMPLETED", date: { gte: lastMonthMTDB.start, lte: lastMonthMTDB.end } },
+      where: { ...branchFilter, status: "COMPLETED", date: { gte: lastMonthMTDB.start, lte: lastMonthMTDB.end } },
       _sum: { totalPrice: true },
       _count: true,
     }),
@@ -202,6 +211,7 @@ export default async function AdminDashboard() {
 
   const dashData: DashboardData = {
     branches,
+    activeBranchId,
     todayRevenue, todayCount,
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue, lastMonthCount,

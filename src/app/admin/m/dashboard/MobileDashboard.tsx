@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ function fmt(satang: number) {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface MobileDashData {
+  branches: { id: string; name: string }[];
+  activeBranchId: string;  // "all" or branch id
   todayRevenue: number;
   todayCount: number;
   thisMonthRevenue: number;       // MTD
@@ -166,7 +169,9 @@ function WeekBars({ weeks }: { weeks: { label: string; total: number }[] }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MobileDashboard({ data }: { data: MobileDashData }) {
+  const router = useRouter();
   const {
+    branches, activeBranchId,
     todayRevenue, todayCount,
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue,
@@ -176,6 +181,17 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
     avgTicket,
     currentMonthLabel, thisMonthRangeLabel, lastMonthRangeLabel,
   } = data;
+
+  const isAllBranches = activeBranchId === "all";
+  const branchOptions: { id: string; label: string }[] = [
+    { id: "all", label: "ทุกสาขา" },
+    ...branches.map(b => ({ id: b.id, label: b.name.replace(/^err\.day\s*/i, "") })),
+  ];
+  function selectBranch(id: string) {
+    const params = new URLSearchParams();
+    if (id !== "all") params.set("branchId", id);
+    router.push(`/admin/m/dashboard${params.toString() ? `?${params}` : ""}`);
+  }
 
   const momDiff = thisMonthRevenue - lastMonthRevenue;
   const momPct  = lastMonthRevenue > 0 ? (momDiff / lastMonthRevenue) * 100 : 0;
@@ -204,19 +220,38 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
     <main className="pb-10" style={{ background: "#FDF7F2", minHeight: "100vh" }}>
       {/* Header */}
       <header
-        className="sticky top-0 z-10 bg-white px-4 py-3 flex items-center gap-3"
+        className="sticky top-0 z-10 bg-white"
         style={{ borderBottom: `1px solid ${BORDER}` }}
       >
-        <Link
-          href="/admin/m"
-          className="w-9 h-9 flex items-center justify-center rounded-full"
-          style={{ color: TEXT }}
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <p className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>Business Intelligence</p>
-          <h1 className="text-base font-semibold leading-tight" style={{ color: TEXT }}>ภาพรวมธุรกิจ</h1>
+        <div className="px-4 py-3 flex items-center gap-3">
+          <Link
+            href="/admin/m"
+            className="w-9 h-9 flex items-center justify-center rounded-full"
+            style={{ color: TEXT }}
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>Business Intelligence</p>
+            <h1 className="text-base font-semibold leading-tight" style={{ color: TEXT }}>ภาพรวมธุรกิจ</h1>
+          </div>
+        </div>
+        {/* Branch picker — horizontal scroll if many branches */}
+        <div className="px-4 pb-3 flex gap-1.5 overflow-x-auto">
+          {branchOptions.map(o => {
+            const active = o.id === activeBranchId;
+            return (
+              <button key={o.id} onClick={() => selectBranch(o.id)}
+                className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: active ? PRIMARY : "white",
+                  color:      active ? "white"  : TEXT,
+                  border:     `1px solid ${active ? PRIMARY : BORDER}`,
+                }}>
+                {o.label}
+              </button>
+            );
+          })}
         </div>
       </header>
 
@@ -265,7 +300,10 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
 
           {/* Active members */}
           <div className="rounded-2xl bg-white p-4" style={{ border: `1.5px solid ${BORDER}` }}>
-            <p className="text-[11px] mb-1.5" style={{ color: MUTED }}>สมาชิกที่ใช้งานได้</p>
+            <p className="text-[11px] mb-1.5" style={{ color: MUTED }}>
+              สมาชิกที่ใช้งานได้
+              {!isAllBranches && <span className="ml-1 text-[9px]">(ทั่วระบบ)</span>}
+            </p>
             <p className="text-xl font-bold leading-tight" style={{ color: TEXT }}>{activeMembers}</p>
             {newMembersThisMonth > 0 && (
               <p className="text-[11px] mt-0.5" style={{ color: "#166534" }}>+{newMembersThisMonth} ใหม่</p>

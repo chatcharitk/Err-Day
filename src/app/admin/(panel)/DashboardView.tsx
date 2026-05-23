@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PRIMARY = "#8B1D24";
@@ -21,6 +22,8 @@ function fmt(satang: number) {
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface DashboardData {
   branches: { id: string; name: string }[];
+  /** "all" or a specific branch id — drives the pill picker and the page URL. */
+  activeBranchId: string;
   todayRevenue: number;
   todayCount: number;
   thisMonthRevenue: number;       // MTD: 1 → today
@@ -223,9 +226,46 @@ function KpiCard({
   );
 }
 
+// ── Branch filter pills ───────────────────────────────────────────────────────
+function BranchPicker({
+  branches, activeBranchId,
+}: {
+  branches: { id: string; name: string }[];
+  activeBranchId: string;
+}) {
+  const router = useRouter();
+  function select(id: string) {
+    const params = new URLSearchParams();
+    if (id !== "all") params.set("branchId", id);
+    router.push(`/admin${params.toString() ? `?${params}` : ""}`);
+  }
+  const options: { id: string; label: string }[] = [
+    { id: "all", label: "ทุกสาขา" },
+    ...branches.map(b => ({ id: b.id, label: b.name.replace(/^err\.day\s*/i, "") })),
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5 bg-white rounded-full p-1 self-start" style={{ border: `1.5px solid ${BORDER}` }}>
+      {options.map(o => {
+        const active = o.id === activeBranchId;
+        return (
+          <button key={o.id} onClick={() => select(o.id)}
+            className="px-4 py-1.5 rounded-full text-xs font-semibold transition-colors"
+            style={{
+              background: active ? PRIMARY : "transparent",
+              color:      active ? "white"  : TEXT,
+            }}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardView({ data }: { data: DashboardData }) {
   const {
+    branches, activeBranchId,
     todayRevenue, todayCount,
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue,
@@ -235,6 +275,11 @@ export default function DashboardView({ data }: { data: DashboardData }) {
     avgTicket,
     currentMonthLabel, lastMonthRangeLabel, thisMonthRangeLabel,
   } = data;
+
+  const activeBranchName = activeBranchId === "all"
+    ? "ทุกสาขา"
+    : branches.find(b => b.id === activeBranchId)?.name ?? "—";
+  const isAllBranches = activeBranchId === "all";
 
   const momDiff = thisMonthRevenue - lastMonthRevenue;
   const momPct  = lastMonthRevenue > 0 ? (momDiff / lastMonthRevenue) * 100 : 0;
@@ -260,9 +305,15 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   return (
     <div className="max-w-6xl">
       {/* Header */}
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Business Intelligence</p>
-        <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ภาพรวมธุรกิจ</h1>
+      <div className="mb-6 flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Business Intelligence</p>
+          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>
+            ภาพรวมธุรกิจ
+            <span className="ml-2 text-sm font-normal" style={{ color: MUTED }}>· {activeBranchName}</span>
+          </h1>
+        </div>
+        <BranchPicker branches={branches} activeBranchId={activeBranchId} />
       </div>
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
@@ -291,7 +342,10 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           </p>
         </div>
         <div className="rounded-2xl bg-white p-5" style={{ border: `1.5px solid ${BORDER}` }}>
-          <p className="text-xs mb-2" style={{ color: MUTED }}>สมาชิกที่ใช้งานได้</p>
+          <p className="text-xs mb-2" style={{ color: MUTED }}>
+            สมาชิกที่ใช้งานได้
+            {!isAllBranches && <span className="ml-1 text-[10px]">(ทั่วระบบ)</span>}
+          </p>
           <p className="text-2xl font-bold mb-1 leading-tight" style={{ color: TEXT }}>{activeMembers}</p>
           <p className="text-xs" style={{ color: "#166534" }}>
             {newMembersThisMonth > 0 ? `+${newMembersThisMonth} ใหม่เดือนนี้` : "ไม่มีสมาชิกใหม่เดือนนี้"}

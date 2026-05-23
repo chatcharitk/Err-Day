@@ -34,7 +34,15 @@ const THAI_MONTHS_SHORT = [
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default async function MobileDashboardPage() {
+export default async function MobileDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ branchId?: string }>;
+}) {
+  const { branchId: rawBranchId } = await searchParams;
+  const branchFilter   = rawBranchId && rawBranchId !== "all" ? { branchId: rawBranchId } : {};
+  const activeBranchId = (rawBranchId && rawBranchId !== "all") ? rawBranchId : "all";
+
   const now           = bkkNow();
   const todayStr      = now.toISOString().slice(0, 10);
   const thisYear      = Number(todayStr.slice(0, 4));
@@ -53,19 +61,25 @@ export default async function MobileDashboardPage() {
   const thisMonthFullB = partialMonthBounds(thisYear, thisMonthIdx, fullMonthEnd);
 
   const [
+    branches,
     todayCompleted,
     thisMonthCompleted,
     lastMonthAgg,
     activeMembersList,
     newMembersThisMonth,
   ] = await Promise.all([
+    prisma.branch.findMany({
+      where: { isActive: true }, orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+
     prisma.booking.findMany({
-      where: { status: "COMPLETED", date: { gte: todayB.start, lte: todayB.end } },
+      where: { ...branchFilter, status: "COMPLETED", date: { gte: todayB.start, lte: todayB.end } },
       select: { totalPrice: true },
     }),
 
     prisma.booking.findMany({
-      where: { status: "COMPLETED", date: { gte: thisMonthFullB.start, lte: thisMonthFullB.end } },
+      where: { ...branchFilter, status: "COMPLETED", date: { gte: thisMonthFullB.start, lte: thisMonthFullB.end } },
       select: {
         totalPrice: true,
         serviceId:  true,
@@ -78,7 +92,7 @@ export default async function MobileDashboardPage() {
     }),
 
     prisma.booking.aggregate({
-      where: { status: "COMPLETED", date: { gte: lastMonthMTDB.start, lte: lastMonthMTDB.end } },
+      where: { ...branchFilter, status: "COMPLETED", date: { gte: lastMonthMTDB.start, lte: lastMonthMTDB.end } },
       _sum: { totalPrice: true },
       _count: true,
     }),
@@ -163,6 +177,8 @@ export default async function MobileDashboardPage() {
   }
 
   const dashData: MobileDashData = {
+    branches,
+    activeBranchId,
     todayRevenue, todayCount,
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue,
