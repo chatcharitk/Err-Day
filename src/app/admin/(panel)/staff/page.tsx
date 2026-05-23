@@ -23,7 +23,19 @@ export default async function StaffPage({
   const [allStaff, branches, revenueStats] = await Promise.all([
     prisma.staff.findMany({
       where:   { isActive: true },
-      include: { branch: true },
+      // Explicit select — NEVER send passcodeHash to the client.
+      select: {
+        id:             true,
+        name:           true,
+        phone:          true,
+        avatarUrl:      true,
+        commissionRate: true,
+        isActive:       true,
+        branchId:       true,
+        passcodeHash:   true,   // selected here so we can derive hasPasscode, stripped below
+        lastLoginAt:    true,
+        branch:         { select: { id: true, name: true } },
+      },
       orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
     }),
     prisma.branch.findMany({
@@ -47,8 +59,12 @@ export default async function StaffPage({
 
   const staffWithStats = allStaff.map(s => {
     const revenue = revenueByStaff.get(s.id) ?? 0;
+    // Strip the hash before sending to the client; just expose a boolean.
+    const { passcodeHash, ...safe } = s;
     return {
-      ...s,
+      ...safe,
+      hasPasscode:       !!passcodeHash,
+      lastLoginAt:       s.lastLoginAt ? s.lastLoginAt.toISOString() : null,
       monthlyRevenue:    revenue,
       monthlyCommission: Math.round((revenue * s.commissionRate) / 100),
     };

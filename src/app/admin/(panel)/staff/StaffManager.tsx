@@ -4,13 +4,23 @@ import { useState } from "react";
 import { defaultBranchId } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import {
-  UserPlus, Pencil, Trash2, Check, X, ChevronLeft, ChevronRight, Save,
+  UserPlus, Pencil, Trash2, Check, X, ChevronLeft, ChevronRight, Save, KeyRound,
 } from "lucide-react";
-import type { Branch, Staff } from "@/generated/prisma/client";
+import type { Branch } from "@/generated/prisma/client";
 
-type StaffWithStats = Staff & {
-  branch: Branch;
-  monthlyRevenue: number;
+// The page.tsx omits passcodeHash and exposes a derived hasPasscode boolean.
+type StaffWithStats = {
+  id:                string;
+  name:              string;
+  phone:             string | null;
+  avatarUrl:         string | null;
+  commissionRate:    number;
+  isActive:          boolean;
+  branchId:          string;
+  hasPasscode:       boolean;
+  lastLoginAt:       string | null;
+  branch:            { id: string; name: string };
+  monthlyRevenue:    number;
   monthlyCommission: number;
 };
 
@@ -62,6 +72,33 @@ export default function StaffManager({ staff, branches, monthLabel, currentMonth
 
   /* ── Delete confirm ── */
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  /* ── Staff portal PIN ── */
+  const [pinStaffId, setPinStaffId] = useState<string | null>(null);
+  const [pinInput,   setPinInput]   = useState("");
+  const [pinBusy,    setPinBusy]    = useState(false);
+  const [pinMsg,     setPinMsg]     = useState("");
+
+  const submitPin = async (staffId: string) => {
+    if (!/^\d{4}$/.test(pinInput)) { setPinMsg("PIN ต้องเป็นตัวเลข 4 หลัก"); return; }
+    setPinBusy(true); setPinMsg("");
+    const res = await fetch(`/api/admin/staff/${staffId}/passcode`, {
+      method:  "PUT",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ pin: pinInput }),
+    });
+    setPinBusy(false);
+    if (!res.ok) { const j = await res.json().catch(() => ({})); setPinMsg(j.error ?? "บันทึกไม่สำเร็จ"); return; }
+    setPinStaffId(null);
+    setPinInput("");
+    router.refresh();
+  };
+
+  const clearPin = async (staffId: string) => {
+    if (!confirm("ลบ PIN ของพนักงานนี้? พนักงานจะไม่สามารถเข้าพอร์ทัลได้จนกว่าจะตั้งใหม่")) return;
+    await fetch(`/api/admin/staff/${staffId}/passcode`, { method: "DELETE" });
+    router.refresh();
+  };
 
   const switchTab = (t: "manage" | "commission") => {
     setTab(t);
@@ -314,6 +351,42 @@ export default function StaffManager({ staff, branches, monthLabel, currentMonth
                                 ยกเลิก
                               </button>
                             </div>
+                          ) : pinStaffId === s.id ? (
+                            /* PIN entry row */
+                            <div className="px-5 py-4 flex items-center gap-3 flex-wrap" style={{ backgroundColor: "#FFF8F4" }}>
+                              <div className="flex-1 min-w-[150px]">
+                                <p className="text-xs font-medium mb-1" style={{ color: "#6B5245" }}>
+                                  ตั้ง PIN 4 หลักสำหรับ {s.name}
+                                </p>
+                                <input
+                                  type="tel"
+                                  inputMode="numeric"
+                                  maxLength={4}
+                                  autoFocus
+                                  value={pinInput}
+                                  onChange={e => { setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinMsg(""); }}
+                                  placeholder="0000"
+                                  className="w-32 px-3 py-1.5 rounded-lg border text-sm tracking-[0.4em] font-bold text-center"
+                                  style={{ borderColor: "#E8D8CC", color: "#3B2A24" }}
+                                />
+                                {pinMsg && <p className="text-xs mt-1 text-red-600">{pinMsg}</p>}
+                              </div>
+                              <button
+                                onClick={() => submitPin(s.id)}
+                                disabled={pinBusy}
+                                className="px-3 py-1.5 rounded-lg text-sm text-white disabled:opacity-50"
+                                style={{ backgroundColor: "#8B1D24" }}
+                              >
+                                {pinBusy ? "..." : "บันทึก PIN"}
+                              </button>
+                              <button
+                                onClick={() => { setPinStaffId(null); setPinInput(""); setPinMsg(""); }}
+                                className="px-3 py-1.5 rounded-lg text-sm"
+                                style={{ color: "#6B5245" }}
+                              >
+                                ยกเลิก
+                              </button>
+                            </div>
                           ) : (
                             /* Normal row */
                             <div className="px-5 py-4 flex items-center justify-between gap-4">
@@ -325,11 +398,38 @@ export default function StaffManager({ staff, branches, monthLabel, currentMonth
                                   {s.name[0]}
                                 </div>
                                 <div>
-                                  <p className="font-medium text-sm" style={{ color: "#3B2A24" }}>{s.name}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="font-medium text-sm" style={{ color: "#3B2A24" }}>{s.name}</p>
+                                    {s.hasPasscode && (
+                                      <span title="พนักงานเข้าพอร์ทัลได้"
+                                        className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                                        style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #BBF7D0" }}>
+                                        <KeyRound className="w-2.5 h-2.5" /> พอร์ทัล
+                                      </span>
+                                    )}
+                                  </div>
                                   {s.phone && <p className="text-xs" style={{ color: "#A08070" }}>{s.phone}</p>}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => { setPinStaffId(s.id); setPinInput(""); setPinMsg(""); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors"
+                                  style={{ borderColor: "#D6BCAE", color: "#6B5245" }}
+                                  title={s.hasPasscode ? "เปลี่ยน PIN" : "ตั้ง PIN เพื่อให้พนักงานเข้าพอร์ทัล"}
+                                >
+                                  <KeyRound className="w-3 h-3" /> {s.hasPasscode ? "เปลี่ยน PIN" : "ตั้ง PIN"}
+                                </button>
+                                {s.hasPasscode && (
+                                  <button
+                                    onClick={() => clearPin(s.id)}
+                                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border transition-colors"
+                                    style={{ borderColor: "#FECACA", color: "#DC2626" }}
+                                    title="ปิดการเข้าใช้พอร์ทัล"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => startEdit(s)}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors"

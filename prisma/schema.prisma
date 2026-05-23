@@ -107,6 +107,10 @@ model Staff {
   commissionRate Float   @default(0) // percentage, e.g. 30 = 30 %
   isActive       Boolean @default(true)
 
+  // Self-service portal credentials (set by admin). Staff signs in with phone + 4-digit PIN at /staff/login.
+  passcodeHash   String?   // bcrypt hash of the PIN — null = no portal access yet
+  lastLoginAt    DateTime?
+
   branch       Branch        @relation(fields: [branchId], references: [id])
   bookings     Booking[]
   shifts       StaffShift[]
