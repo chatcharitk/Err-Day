@@ -49,35 +49,48 @@ export function createLineWebhookHandler(config: WebhookConfig) {
     let body: { events?: LineEvent[] };
     try { body = JSON.parse(rawBody); } catch { return NextResponse.json({ ok: true }); }
 
-    for (const event of body.events ?? []) {
-      const userId = event.source?.userId;
+    const events = body.events ?? [];
+    console.log(`[webhook:${config.label}] received ${events.length} event(s)`);
 
-      if (userId) {
-        captureProfile(userId, config.accessToken, config.label)
-          .catch(e => console.error(`[webhook:${config.label}] capture failed`, e));
-      }
-
-      if (isTextMessage(event)) {
-        // Don't block the LINE retry timeout — fire reply in the background.
-        (async () => {
-          try {
-            const text = await config.buildReply(event);
-            const result = await replyText(event.replyToken, text, { token: config.accessToken });
-            if (!result.ok) console.error(`[webhook:${config.label}] reply failed`, result.error);
-          } catch (e) {
-            console.error(`[webhook:${config.label}] reply pipeline error`, e);
-            // Fallback: send a generic apology so the customer isn't left hanging.
-            replyText(event.replyToken,
-              "ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาติดต่อร้านโดยตรงได้เลยค่ะ",
-              { token: config.accessToken },
-            ).catch(() => {});
-          }
-        })();
-      }
-    }
+    // Process all events. Reply must be AWAITED — Vercel terminates the
+    // function shortly after the response is sent, so fire-and-forget
+    // async work isn't guaranteed to complete.
+    await Promise.all(events.map(event => processEvent(event, config)));
 
     return NextResponse.json({ ok: true });
   };
+}
+
+async function processEvent(event: LineEvent, config: WebhookConfig): Promise<void> {
+  const userId = event.source?.userId;
+
+  // Profile capture is independent of the reply path — fire it off in parallel.
+  const captureP = userId
+    ? captureProfile(userId, config.accessToken, config.label).catch(e =>
+        console.error(`[webhook:${config.label}] capture failed`, e))
+    : Promise.resolve();
+
+  if (isTextMessage(event)) {
+    console.log(`[webhook:${config.label}] text from ${userId}: "${event.message.text.slice(0, 60)}"`);
+    try {
+      const text   = await config.buildReply(event);
+      const result = await replyText(event.replyToken, text, { token: config.accessToken });
+      if (!result.ok) {
+        console.error(`[webhook:${config.label}] reply failed:`, result.error);
+      } else {
+        console.log(`[webhook:${config.label}] reply sent ok`);
+      }
+    } catch (e) {
+      console.error(`[webhook:${config.label}] reply pipeline error`, e);
+      // Fallback so the customer isn't left hanging.
+      await replyText(event.replyToken,
+        "ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาติดต่อร้านโดยตรงได้เลยค่ะ",
+        { token: config.accessToken },
+      ).catch(() => {});
+    }
+  }
+
+  await captureP;
 }
 
 
