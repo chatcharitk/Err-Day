@@ -23,16 +23,17 @@ export default async function StaffHome() {
   const me = await getCurrentStaff();
   if (!me) redirect("/staff/login");
 
-  const now      = new Date();
-  const monday   = mondayOf(now);
-  const sunday   = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23, 59, 59, 999);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const now    = new Date();
+  const monday = mondayOf(now);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23, 59, 59, 999);
 
-  const [weekBookings, shifts, monthRevenueAgg] = await Promise.all([
+  // Branch-wide bookings — staff can see every appointment at their branch
+  // so they know who is coming in (greeting, prep, coverage). The "ของฉัน"
+  // pill on each row still highlights which ones they're assigned to.
+  const [weekBookings, shifts] = await Promise.all([
     prisma.booking.findMany({
       where: {
-        staffId:   me.id,
+        branchId:  me.branchId,
         date:      { gte: monday, lte: sunday },
         status:    { notIn: ["CANCELLED"] },
         serviceId: { notIn: SALE_ONLY_SKUS },
@@ -45,8 +46,10 @@ export default async function StaffHome() {
         status:     true,
         totalPrice: true,
         notes:      true,
+        staffId:    true,
         service:    { select: { name: true, nameTh: true } },
         customer:   { select: { name: true, phone: true, nickname: true } },
+        staff:      { select: { id: true, name: true } },
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
@@ -55,35 +58,25 @@ export default async function StaffHome() {
       select: { date: true, startTime: true, endTime: true },
       orderBy: { date: "asc" },
     }),
-    prisma.booking.aggregate({
-      where: {
-        staffId: me.id,
-        status:  "COMPLETED",
-        date:    { gte: monthStart, lte: monthEnd },
-      },
-      _sum:   { totalPrice: true },
-      _count: true,
-    }),
   ]);
 
-  const monthRevenue    = monthRevenueAgg._sum.totalPrice ?? 0;
-  const monthCommission = Math.round((monthRevenue * me.commissionRate) / 100);
-
-  // Serialize for the client component
   const todayStr = ymd(now);
   const weekData = {
     todayStr,
     bookings: weekBookings.map(b => ({
-      id:           b.id,
-      date:         ymd(b.date),
-      startTime:    b.startTime,
-      endTime:      b.endTime,
-      status:       b.status as string,
-      totalPrice:   b.totalPrice,
-      notes:        b.notes,
-      serviceName:  b.service.nameTh || b.service.name,
-      customerName: b.customer.name,
-      customerPhone: b.customer.phone,
+      id:               b.id,
+      date:             ymd(b.date),
+      startTime:        b.startTime,
+      endTime:          b.endTime,
+      status:           b.status as string,
+      totalPrice:       b.totalPrice,
+      notes:            b.notes,
+      staffId:          b.staffId,
+      staffName:        b.staff?.name ?? null,
+      isMine:           b.staffId === me.id,
+      serviceName:      b.service.nameTh || b.service.name,
+      customerName:     b.customer.name,
+      customerPhone:    b.customer.phone,
       customerNickname: b.customer.nickname,
     })),
     shifts: shifts.map(s => ({
@@ -91,12 +84,6 @@ export default async function StaffHome() {
       startTime: s.startTime,
       endTime:   s.endTime,
     })),
-    monthStats: {
-      bookings:    monthRevenueAgg._count,
-      revenue:     monthRevenue,
-      commission:  monthCommission,
-      commissionRate: me.commissionRate,
-    },
   };
 
   return <StaffDashboard me={me} week={weekData} />;

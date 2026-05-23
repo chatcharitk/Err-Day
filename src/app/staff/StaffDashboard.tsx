@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Calendar as CalendarIcon, Clock, User, Phone, Sparkles, TrendingUp } from "lucide-react";
+import { LogOut, Calendar as CalendarIcon, Clock, Sparkles } from "lucide-react";
 import type { CurrentStaff } from "@/lib/staff-auth";
 
 const PRIMARY = "#8B1D24";
@@ -20,23 +20,19 @@ interface Booking {
   status:           string;
   totalPrice:       number;
   notes:            string | null;
+  staffId:          string | null;
+  staffName:        string | null;
+  isMine:           boolean;
   serviceName:      string;
   customerName:     string;
   customerPhone:    string;
   customerNickname: string | null;
 }
 interface Shift { date: string; startTime: string; endTime: string }
-interface MonthStats {
-  bookings:       number;
-  revenue:        number;
-  commission:     number;
-  commissionRate: number;
-}
 interface WeekData {
-  todayStr:   string;
-  bookings:   Booking[];
-  shifts:     Shift[];
-  monthStats: MonthStats;
+  todayStr: string;
+  bookings: Booking[];
+  shifts:   Shift[];
 }
 
 const STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
@@ -66,9 +62,6 @@ function mondayOf(d: Date): Date {
   c.setHours(0, 0, 0, 0);
   return c;
 }
-function formatBaht(satang: number): string {
-  return `฿${(satang / 100).toLocaleString("th-TH")}`;
-}
 function thaiDayShort(d: Date): string {
   const di = (d.getDay() + 6) % 7; // 0 = Mon
   return DOW_TH_SHORT[di];
@@ -91,7 +84,7 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
   );
   const tomorrowStr = ymd(addDays(today, 1));
   const tomorrowBookings = useMemo(
-    () => week.bookings.filter(b => b.date === tomorrowStr).slice(0, 3),
+    () => week.bookings.filter(b => b.date === tomorrowStr),
     [week.bookings, tomorrowStr],
   );
 
@@ -113,9 +106,9 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
 
   return (
     <main className="min-h-screen pb-12" style={{ background: BG }}>
-      {/* Header */}
+      {/* Header — full-width red bar */}
       <header className="px-4 pt-4 pb-3" style={{ background: PRIMARY }}>
-        <div className="flex items-center justify-between">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
             <p className="text-white/70 text-xs">สวัสดี · พนักงาน</p>
             <h1 className="text-white text-lg font-bold leading-tight">{me.name}</h1>
@@ -130,29 +123,8 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
         </div>
       </header>
 
-      {/* Month stats */}
-      <section className="px-4 -mt-1 mb-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white rounded-xl p-3" style={{ border: `1px solid ${BORDER}` }}>
-            <p className="text-[10px]" style={{ color: MUTED }}>เดือนนี้</p>
-            <p className="text-base font-bold mt-0.5" style={{ color: TEXT }}>{week.monthStats.bookings}</p>
-            <p className="text-[10px]" style={{ color: MUTED }}>การจอง</p>
-          </div>
-          <div className="bg-white rounded-xl p-3" style={{ border: `1px solid ${BORDER}` }}>
-            <p className="text-[10px]" style={{ color: MUTED }}>รายได้</p>
-            <p className="text-base font-bold mt-0.5" style={{ color: TEXT }}>{formatBaht(week.monthStats.revenue)}</p>
-            <p className="text-[10px]" style={{ color: MUTED }}>เสร็จสิ้น</p>
-          </div>
-          <div className="bg-white rounded-xl p-3" style={{ border: `1px solid ${BORDER}` }}>
-            <p className="text-[10px]" style={{ color: MUTED }}>ค่าคอม</p>
-            <p className="text-base font-bold mt-0.5" style={{ color: PRIMARY }}>{formatBaht(week.monthStats.commission)}</p>
-            <p className="text-[10px]" style={{ color: MUTED }}>{week.monthStats.commissionRate}%</p>
-          </div>
-        </div>
-      </section>
-
       {/* Tabs */}
-      <div className="px-4 mb-3 flex gap-2">
+      <div className="px-4 pt-4 mb-3 max-w-2xl mx-auto flex gap-2">
         <TabButton active={tab === "today"} onClick={() => setTab("today")} icon={<Clock size={14} />}>
           วันนี้
         </TabButton>
@@ -162,7 +134,7 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
       </div>
 
       {/* Body */}
-      <section className="px-4 space-y-3">
+      <section className="px-4 space-y-3 max-w-2xl mx-auto">
         {tab === "today" && (
           <>
             {/* Today's shift card */}
@@ -195,10 +167,13 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
               )}
             </div>
 
-            {/* Tomorrow preview */}
+            {/* Tomorrow */}
             {tomorrowBookings.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold px-1 mb-2" style={{ color: TEXT }}>พรุ่งนี้ (ตัวอย่าง)</h2>
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <h2 className="text-sm font-bold" style={{ color: TEXT }}>พรุ่งนี้</h2>
+                  <span className="text-xs" style={{ color: MUTED }}>{tomorrowBookings.length} รายการ</span>
+                </div>
                 <ul className="space-y-2 opacity-90">
                   {tomorrowBookings.map(b => <BookingRow key={b.id} b={b} dim />)}
                 </ul>
@@ -279,17 +254,31 @@ function BookingRow({ b, dim = false, compact = false }: { b: Booking; dim?: boo
     <Link href={`/staff/bookings/${b.id}`}
       prefetch
       className={`flex items-center gap-3 px-3 py-2.5 active:scale-[0.99] transition-transform ${compact ? "" : "bg-white rounded-xl"}`}
-      style={compact ? {} : { border: `1px solid ${BORDER}`, opacity: dim ? 0.75 : 1 }}>
+      style={compact
+        ? { background: b.isMine ? "#FFF8F4" : "transparent" }
+        : { border: `1.5px solid ${b.isMine ? PRIMARY : BORDER}`, opacity: dim ? 0.75 : 1, background: b.isMine ? "#FFF8F4" : "white" }}>
       <div className="flex flex-col items-center justify-center" style={{ minWidth: 46 }}>
         <span className="text-sm font-bold leading-none" style={{ color: PRIMARY }}>{b.startTime}</span>
         <span className="text-[10px] mt-0.5 leading-none" style={{ color: MUTED }}>{b.endTime}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>
-          {b.customerName}
-          {b.customerNickname && <span className="font-normal text-xs ml-1" style={{ color: MUTED }}>({b.customerNickname})</span>}
+        <p className="text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: TEXT }}>
+          <span className="truncate">
+            {b.customerName}
+            {b.customerNickname && <span className="font-normal text-xs ml-1" style={{ color: MUTED }}>({b.customerNickname})</span>}
+          </span>
+          {b.isMine && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+              style={{ background: PRIMARY, color: "white" }}>
+              ของฉัน
+            </span>
+          )}
         </p>
-        <p className="text-xs truncate" style={{ color: MUTED }}>{b.serviceName}</p>
+        <p className="text-xs truncate" style={{ color: MUTED }}>
+          {b.serviceName}
+          {b.staffName && <span className="ml-1.5" style={{ color: b.isMine ? PRIMARY : MUTED }}>· {b.staffName}</span>}
+          {!b.staffName && <span className="ml-1.5 italic" style={{ color: MUTED }}>· ไม่ระบุช่าง</span>}
+        </p>
       </div>
       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
         style={{ background: meta.bg, color: meta.fg }}>

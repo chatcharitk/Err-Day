@@ -49,13 +49,15 @@ export default async function StaffBookingDetailPage({
       branchId:   true,
       service:    { select: { name: true, nameTh: true } },
       customer:   { select: { name: true, nickname: true, phone: true } },
+      staff:      { select: { id: true, name: true } },
       addons:     { select: { id: true, price: true, addon: { select: { name: true, nameTh: true } } } },
     },
   });
 
-  // Ownership check — staff can ONLY see their own bookings.
-  // Returning 404 (not 403) avoids leaking the existence of other bookings.
-  if (!b || b.staffId !== me.id) notFound();
+  // Branch-scoped: staff can view any booking at their branch (so they can
+  // assist coverage, prep, etc.). 404 on bookings outside their branch to
+  // avoid leaking existence of bookings at other branches.
+  if (!b || b.branchId !== me.branchId) notFound();
 
   const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;
   const duration = timeToMins(b.endTime) - timeToMins(b.startTime);
@@ -80,15 +82,33 @@ export default async function StaffBookingDetailPage({
       <div className="p-4 space-y-3 max-w-lg mx-auto">
         {/* Customer card */}
         <section className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${BORDER}` }}>
-          <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>ลูกค้า</p>
-          <p className="text-lg font-bold mt-1" style={{ color: TEXT }}>
-            {b.customer.name}
-            {b.customer.nickname && (
-              <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customer.nickname})</span>
-            )}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>ลูกค้า</p>
+              <p className="text-lg font-bold mt-1" style={{ color: TEXT }}>
+                {b.customer.name}
+                {b.customer.nickname && (
+                  <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customer.nickname})</span>
+                )}
+              </p>
+            </div>
+            {/* Assignment badge — who's the appointment for? */}
+            <div className="text-right flex-shrink-0">
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>ช่าง</p>
+              {b.staffId === me.id ? (
+                <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full mt-1"
+                  style={{ background: PRIMARY, color: "white" }}>
+                  ของฉัน
+                </span>
+              ) : b.staff ? (
+                <p className="text-sm font-semibold mt-1" style={{ color: TEXT }}>{b.staff.name}</p>
+              ) : (
+                <p className="text-sm font-medium italic mt-1" style={{ color: MUTED }}>ไม่ระบุ</p>
+              )}
+            </div>
+          </div>
           <a href={`tel:${b.customer.phone}`}
-            className="mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
+            className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
             style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #BBF7D0" }}>
             <Phone size={14} />
             {b.customer.phone}
@@ -153,7 +173,7 @@ export default async function StaffBookingDetailPage({
         )}
 
         <p className="text-xs text-center pt-2" style={{ color: MUTED }}>
-          การจองนี้สามารถดูได้เท่านั้น · หากต้องการเปลี่ยนแปลง กรุณาแจ้งผู้จัดการ
+          ดูได้เท่านั้น · หากต้องการเปลี่ยนแปลง กรุณาแจ้งผู้จัดการ
         </p>
       </div>
     </main>
