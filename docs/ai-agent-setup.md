@@ -4,10 +4,21 @@ This is the rollout plan for the LINE chatbot AI agent that answers customer que
 
 ## Status
 
-- ✅ **Phase 1**: Webhook receives messages, sends a stub reply. (THIS COMMIT)
-- ⏳ Phase 2: Connect Claude API + first read-only tool (`lookup_branches`).
+- ✅ **Phase 1**: Webhook receives messages, sends a stub reply.
+- ✅ **Phase 1b**: Test channel architecture — separate sandbox OA. (THIS COMMIT)
+- ⏳ Phase 2: Connect Claude API + first read-only tool (`lookup_branches`) on the TEST channel first.
 - ⏳ Phase 3: All read-only tools (services, availability, my-bookings, membership).
 - ⏳ Phase 4: Conversation history, fallback to human, rate limiting.
+- ⏳ Phase 5: Promote agent to the production channel.
+
+## Channel layout
+
+| Channel | Webhook URL | Env vars | Who sees it |
+|---|---|---|---|
+| **Production** @err.day | `/api/line/webhook` | `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` | Real customers |
+| **Test** @err.day-test | `/api/line/webhook-test` | `LINE_CHANNEL_SECRET_TEST`, `LINE_CHANNEL_ACCESS_TOKEN_TEST` | Only people you add as friends |
+
+Both webhooks share the same Next.js deployment but read different env vars. Experimental code lands on the test webhook first; once it works there, promote to production.
 
 ---
 
@@ -55,6 +66,52 @@ If it doesn't reply:
 - Confirm `LINE_CHANNEL_ACCESS_TOKEN` is set (already is)
 - Confirm `LINE_CHANNEL_SECRET` is set (newly required)
 - Confirm "Auto-reply messages" is OFF in LINE console (otherwise LINE intercepts first)
+
+---
+
+---
+
+## Set up the TEST channel (do this before Phase 2)
+
+### 1. Create the test LINE Messaging API channel
+
+1. [LINE Developers Console](https://developers.line.biz/) → your provider → **Create a new channel** → **Messaging API**
+2. Channel name: `err.day [TEST]` (or whatever you want — only you see it)
+3. Category, subcategory, description: any values, doesn't matter
+4. Once created → **Basic settings** tab → copy the **Channel secret**
+5. → **Messaging API** tab → scroll to **Channel access token** → **Issue** (long-lived) → copy the token
+
+### 2. Add to Vercel env vars
+
+```
+LINE_CHANNEL_SECRET_TEST=<test channel secret>
+LINE_CHANNEL_ACCESS_TOKEN_TEST=<test channel access token>
+```
+
+For all environments (Production, Preview, Development).
+
+### 3. Configure the test channel's webhook
+
+In the test channel's **Messaging API** tab:
+- **Webhook URL**: `https://err-day.vercel.app/api/line/webhook-test`
+- **Use webhook**: ON → click **Verify** (should be ✓)
+- **Auto-reply messages**: OFF
+
+### 4. Add the test OA as a friend
+
+In the **Messaging API** tab → scroll to **QR code** → scan with your LINE app. You're now friends with the test OA.
+
+### 5. Smoke-test
+
+Send any text message to the test OA. You should get back:
+
+> 🧪 [TEST CHANNEL] สวัสดีค่ะ
+> นี่คือช่องทดสอบของ err.day — กำลังเตรียม AI ผู้ช่วย
+> ...
+> — ข้อความที่ได้รับ —
+> "<your message echoed back>"
+
+If you see your message echoed, the test channel is wired up correctly.
 
 ---
 

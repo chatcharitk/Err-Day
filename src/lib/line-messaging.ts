@@ -21,9 +21,18 @@ export interface PushResult {
   error?: string;
 }
 
-function getToken(): string | null {
-  const t = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+function getToken(override?: string | null): string | null {
+  // Allow callers (e.g. the test webhook) to pass their own channel token so a
+  // single deployment can serve multiple LINE Messaging API channels.
+  const candidate = override ?? process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const t = candidate?.trim();
   return t && t.length > 0 ? t : null;
+}
+
+/** Options accepted by all push/reply helpers. */
+export interface LineOptions {
+  /** Override the default channel access token (defaults to LINE_CHANNEL_ACCESS_TOKEN env). */
+  token?: string | null;
 }
 
 /**
@@ -34,8 +43,9 @@ function getToken(): string | null {
 export async function pushLine(
   toLineUserId: string,
   messages: LineMessage[],
+  options?: LineOptions,
 ): Promise<PushResult> {
-  const token = getToken();
+  const token = getToken(options?.token);
   if (!token) return { ok: false, error: "no_token" };
   if (!toLineUserId) return { ok: false, error: "no_recipient" };
   if (messages.length === 0) return { ok: false, error: "no_messages" };
@@ -64,8 +74,8 @@ export async function pushLine(
 }
 
 /** Convenience helper for the common single-text-message case. */
-export async function pushText(toLineUserId: string, text: string): Promise<PushResult> {
-  return pushLine(toLineUserId, [{ type: "text", text }]);
+export async function pushText(toLineUserId: string, text: string, options?: LineOptions): Promise<PushResult> {
+  return pushLine(toLineUserId, [{ type: "text", text }], options);
 }
 
 /**
@@ -81,8 +91,9 @@ export async function pushText(toLineUserId: string, text: string): Promise<Push
 export async function replyLine(
   replyToken: string,
   messages: LineMessage[],
+  options?: LineOptions,
 ): Promise<PushResult> {
-  const token = getToken();
+  const token = getToken(options?.token);
   if (!token)                  return { ok: false, error: "no_token" };
   if (!replyToken)             return { ok: false, error: "no_reply_token" };
   if (messages.length === 0)   return { ok: false, error: "no_messages" };
@@ -110,6 +121,6 @@ export async function replyLine(
 }
 
 /** Convenience: reply with a single text message. */
-export async function replyText(replyToken: string, text: string): Promise<PushResult> {
-  return replyLine(replyToken, [{ type: "text", text }]);
+export async function replyText(replyToken: string, text: string, options?: LineOptions): Promise<PushResult> {
+  return replyLine(replyToken, [{ type: "text", text }], options);
 }
