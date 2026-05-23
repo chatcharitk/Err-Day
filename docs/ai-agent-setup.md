@@ -5,8 +5,8 @@ This is the rollout plan for the LINE chatbot AI agent that answers customer que
 ## Status
 
 - ✅ **Phase 1**: Webhook receives messages, sends a stub reply.
-- ✅ **Phase 1b**: Test channel architecture — separate sandbox OA. (THIS COMMIT)
-- ⏳ Phase 2: Connect Claude API + first read-only tool (`lookup_branches`) on the TEST channel first.
+- ✅ **Phase 1b**: Test channel architecture — separate sandbox OA.
+- ✅ **Phase 2**: Claude API + first read-only tool (`lookup_branches`) on the test channel, gated by allowlist. (THIS COMMIT)
 - ⏳ Phase 3: All read-only tools (services, availability, my-bookings, membership).
 - ⏳ Phase 4: Conversation history, fallback to human, rate limiting.
 - ⏳ Phase 5: Promote agent to the production channel.
@@ -115,15 +115,51 @@ If you see your message echoed, the test channel is wired up correctly.
 
 ---
 
-## When you're ready for Phase 2
+## Phase 2 setup (just shipped)
 
-Tell me to "build Phase 2" and I'll:
-1. Install `@anthropic-ai/sdk`
-2. Add `ANTHROPIC_API_KEY` to env (you create one at [console.anthropic.com](https://console.anthropic.com))
-3. Wire Claude with the first tool: `lookup_branches`
-4. Replace the stub reply with the agent's response
+### Get an Anthropic API key
 
-Cost estimate: ~$0.003–0.01 per customer message, depending on tool use. ~100 messages/day ≈ ~$30/month.
+1. Go to [console.anthropic.com](https://console.anthropic.com) → sign up (free)
+2. **Settings → API Keys** → create a new key → copy it (starts with `sk-ant-`)
+3. **Top up billing** with at least $5 — Claude doesn't have a free tier; pay-as-you-go from your balance
+
+### Add to Vercel env
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+LINE_USER_ID_TEST=Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   # see below
+```
+
+For the `LINE_USER_ID_TEST` value, do this:
+1. With the test webhook deployed, send the text **`myid`** to the test OA
+2. The bot replies with your LINE userId (`Uxxxxxx...`, 33 chars)
+3. Paste that exact string as `LINE_USER_ID_TEST` in Vercel
+4. (Optional) comma-separate multiple IDs if you want to grant access to a teammate: `Uxxx...,Uyyy...`
+5. Redeploy
+
+### How Phase 2 behaves
+
+| Sender | Reply |
+|---|---|
+| You (in allowlist) | Claude's AI response (uses `lookup_branches` when relevant) |
+| Anyone else | The standard stub (safe fallback) |
+| Anyone who sends "myid" | Their own LINE userId echoed back |
+
+### Test prompts to try
+
+- "ร้านอยู่ที่ไหน?" → branch addresses + phone + hours
+- "เปิดกี่โมง?" → branch hours
+- "ขอจองคิวพรุ่งนี้" → Claude should say booking isn't supported yet and link to `/book`
+- "myid" → utility for the allowlist
+
+### Cost
+
+- **Model**: `claude-sonnet-4-5` (~$3 input / $15 output per million tokens)
+- **Per message**: ~$0.003 simple, ~$0.01 with tool use
+- **Estimated at 100 messages/day**: ~$30/month
+- Set spending limits in Anthropic Console under Billing.
+
+---
 
 ---
 
