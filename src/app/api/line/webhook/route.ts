@@ -1,25 +1,36 @@
 /**
- * PRODUCTION LINE webhook — connected to the live @err.day Messaging API
- * channel. Customers see whatever this returns.
+ * PRODUCTION LINE webhook — @err.day Messaging API channel.
  *
- * Phase 1: stub reply pointing to /book + /membership.
- * Phase 2+: routed to the Claude AI agent (lookup_branches, availability, …).
+ * SILENT MODE (current): the webhook does NOT send any auto-reply to
+ * customer messages. The reasoning is that any visible bot message reveals
+ * "we're using AI" — which the salon wants to keep hidden during the
+ * private beta on the test channel.
  *
- * The TEST channel uses /api/line/webhook-test which can run experimental
- * agent code without affecting live customers.
+ * What this webhook DOES do:
+ *   - Verify LINE signature (when LINE_CHANNEL_SECRET is set)
+ *   - Capture lineUserId → displayName into NotificationLog so admin can
+ *     send staff alerts (internal, invisible to customers)
+ *   - Return 200 quickly so LINE doesn't retry
+ *
+ * What it does NOT do:
+ *   - Auto-reply to text messages (silent mode)
+ *   - Call the AI agent
+ *   - Send any push messages
+ *
+ * Staff continue to reply manually via the @err.day LINE OA chat interface.
+ *
+ * When you're ready to expose the agent to real customers, replace
+ * `buildReply: silent` below with the agent call — see the test webhook at
+ * /api/line/webhook-test for the full implementation pattern.
  */
 import { createLineWebhookHandler } from "@/lib/line-webhook";
 
-const STUB_REPLY =
-  "สวัสดีค่ะ 🌸 ขอบคุณที่ติดต่อ err.day\n\n" +
-  "ขณะนี้ระบบ AI ผู้ช่วยกำลังเตรียมพร้อม\n" +
-  "📅 จองคิวออนไลน์: https://err-day.vercel.app/book\n" +
-  "👥 สมาชิก: https://err-day.vercel.app/membership\n\n" +
-  "หรือพิมพ์ข้อความรอแอดมินตอบกลับได้เลยค่ะ";
+// Return null = "do not reply" — handler skips the LINE Reply API call.
+const silent = async () => null;
 
 export const POST = createLineWebhookHandler({
   label:         "prod",
   channelSecret: process.env.LINE_CHANNEL_SECRET,
   accessToken:   process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  buildReply:    async () => STUB_REPLY,
+  buildReply:    silent,
 });

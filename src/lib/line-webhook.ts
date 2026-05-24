@@ -15,8 +15,13 @@ export interface WebhookConfig {
   channelSecret: string | undefined;
   /** Channel access token (used for fetching profile + sending replies). */
   accessToken:   string | undefined;
-  /** Async function that produces the reply text for a given inbound message. */
-  buildReply:    (event: TextMessageEvent) => Promise<string>;
+  /**
+   * Async function that produces the reply text for an inbound message.
+   * **Return `null` to skip sending any reply** — useful for "silent mode"
+   * where staff replies manually and the bot should be invisible to
+   * customers (no auto-reply leaks that an AI is involved).
+   */
+  buildReply:    (event: TextMessageEvent) => Promise<string | null>;
 }
 
 export interface LineEvent {
@@ -73,20 +78,26 @@ async function processEvent(event: LineEvent, config: WebhookConfig): Promise<vo
   if (isTextMessage(event)) {
     console.log(`[webhook:${config.label}] text from ${userId}: "${event.message.text.slice(0, 60)}"`);
     try {
-      const text   = await config.buildReply(event);
-      const result = await replyText(event.replyToken, text, { token: config.accessToken });
-      if (!result.ok) {
-        console.error(`[webhook:${config.label}] reply failed:`, result.error);
+      const text = await config.buildReply(event);
+
+      // null = silent mode — buildReply explicitly opted out of replying.
+      // Used in production where staff handle replies manually and we don't
+      // want any visible auto-message to the customer.
+      if (text === null) {
+        console.log(`[webhook:${config.label}] silent — no reply sent`);
       } else {
-        console.log(`[webhook:${config.label}] reply sent ok`);
+        const result = await replyText(event.replyToken, text, { token: config.accessToken });
+        if (!result.ok) {
+          console.error(`[webhook:${config.label}] reply failed:`, result.error);
+        } else {
+          console.log(`[webhook:${config.label}] reply sent ok`);
+        }
       }
     } catch (e) {
       console.error(`[webhook:${config.label}] reply pipeline error`, e);
-      // Fallback so the customer isn't left hanging.
-      await replyText(event.replyToken,
-        "ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาติดต่อร้านโดยตรงได้เลยค่ะ",
-        { token: config.accessToken },
-      ).catch(() => {});
+      // No fallback message here — if the agent errored on the prod channel
+      // in silent mode, we still don't want to leak "AI" to the customer.
+      // The test channel handles its own fallback inside buildReply.
     }
   }
 
