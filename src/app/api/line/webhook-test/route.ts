@@ -50,9 +50,14 @@ async function buildReply(event: TextMessageEvent): Promise<string> {
     return STUB_REPLY;
   }
 
-  // Tester is allowed → call the Claude agent.
+  // Tester is allowed → call the Claude agent. Pass the sender's LINE userId
+  // so per-user tools (lookup_my_bookings, check_membership_status) can scope
+  // to this customer.
   try {
-    const { text, toolsUsed, iterations } = await runAgent(userText);
+    const { text, toolsUsed, iterations } = await runAgent({
+      userMessage: userText,
+      lineUserId:  userId,
+    });
     console.log(`[agent] iterations=${iterations} tools=${toolsUsed.join(",") || "none"}`);
     return text;
   } catch (e) {

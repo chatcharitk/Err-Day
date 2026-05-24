@@ -6,8 +6,8 @@ This is the rollout plan for the LINE chatbot AI agent that answers customer que
 
 - ✅ **Phase 1**: Webhook receives messages, sends a stub reply.
 - ✅ **Phase 1b**: Test channel architecture — separate sandbox OA.
-- ✅ **Phase 2**: Claude API + first read-only tool (`lookup_branches`) on the test channel, gated by allowlist. (THIS COMMIT)
-- ⏳ Phase 3: All read-only tools (services, availability, my-bookings, membership).
+- ✅ **Phase 2**: Claude API + first read-only tool (`lookup_branches`) on the test channel, gated by allowlist.
+- ✅ **Phase 3**: All five read-only tools — branches, services, availability, my-bookings, membership. (THIS COMMIT)
 - ⏳ Phase 4: Conversation history, fallback to human, rate limiting.
 - ⏳ Phase 5: Promote agent to the production channel.
 
@@ -145,12 +145,25 @@ For the `LINE_USER_ID_TEST` value, do this:
 | Anyone else | The standard stub (safe fallback) |
 | Anyone who sends "myid" | Their own LINE userId echoed back |
 
-### Test prompts to try
+### Test prompts to try (Phase 3 — 5 tools)
 
-- "ร้านอยู่ที่ไหน?" → branch addresses + phone + hours
-- "เปิดกี่โมง?" → branch hours
-- "ขอจองคิวพรุ่งนี้" → Claude should say booking isn't supported yet and link to `/book`
-- "myid" → utility for the allowlist
+| Prompt | Tools Claude should use | Expected behavior |
+|---|---|---|
+| "ร้านอยู่ที่ไหน?" | lookup_branches | Lists both branches with address + phone |
+| "มีบริการอะไรบ้างที่สาขาสุขุมวิท?" | lookup_branches → lookup_services | Lists services with prices + durations |
+| "สระไดร์ราคาเท่าไหร่?" | lookup_branches → lookup_services | Returns 350 baht (100 member) |
+| "พรุ่งนี้สระไดร์ว่ามั้ย?" | lookup_branches → lookup_services → check_availability | Returns available time slots |
+| "วันเสาร์มีคิว 13:00 มั้ย สาขาบางนา?" | lookup_branches → check_availability | Yes/no with available alternatives |
+| "ฉันมีนัดเมื่อไหร่?" | lookup_my_bookings | List of upcoming bookings or "no bookings" |
+| "ฉันเป็นสมาชิกอยู่มั้ย?" | check_membership_status | Active/expired + expiry date |
+| "ขอเปลี่ยนเวลานัด" | (no tool) | Explains it can't change bookings, suggests LINE chat with admin |
+| "myid" | (no tool, special command) | Echoes the sender's LINE userId |
+
+### Privacy
+
+- Per-user tools (`lookup_my_bookings`, `check_membership_status`) **never expose other people's data**. The LINE userId is injected from the webhook into the agent context — Claude can't override it.
+- Bookings are filtered to the sender's customer record (matched by `lineUserId`).
+- Customers who've never linked LINE (no `lineUserId` on their `Customer` row) get a polite "please book once via the web to link your account" response.
 
 ### Cost
 
