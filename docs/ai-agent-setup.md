@@ -7,9 +7,31 @@ This is the rollout plan for the LINE chatbot AI agent that answers customer que
 - ✅ **Phase 1**: Webhook receives messages, sends a stub reply.
 - ✅ **Phase 1b**: Test channel architecture — separate sandbox OA.
 - ✅ **Phase 2**: Claude API + first read-only tool (`lookup_branches`) on the test channel, gated by allowlist.
-- ✅ **Phase 3**: All five read-only tools — branches, services, availability, my-bookings, membership. (THIS COMMIT)
-- ⏳ Phase 4: Conversation history, fallback to human, rate limiting.
+- ✅ **Phase 3**: All five read-only tools — branches, services, availability, my-bookings, membership.
+- ✅ **Phase 4**: Conversation memory, rate limiting, reset/handoff commands. (THIS COMMIT)
 - ⏳ Phase 5: Promote agent to the production channel.
+
+## Phase 4 features
+
+### Multi-turn memory
+Conversation history per `lineUserId` is persisted in the `ChatMessage` table. The agent loads the last ~10 turns on every message, so it can answer follow-ups naturally:
+
+> You: ร้านอยู่ที่ไหน?
+> Agent: สาขาสุขุมวิท และบางนาค่ะ ✨
+> You: บางนาเปิดกี่โมง?    ← Agent knows you mean Bangna
+
+### Rate limiting
+Backed by database row count, not in-memory (survives Vercel cold starts):
+- **5 messages per minute** per user → polite cooldown message
+- **100 messages per day** per user → polite "come back tomorrow"
+
+### Special commands
+
+| Type | Reply |
+|---|---|
+| `reset` / `เริ่มใหม่` / `ล้าง` | Clears conversation history (inserts a `[RESET]` marker; older messages excluded from next load) |
+| `ติดต่อแอดมิน` / `พูดกับคน` / `human` | Logs a handoff request; pauses agent for that turn; gives the customer the salon phone numbers |
+| `myid` | Echoes the sender's LINE userId (utility for allowlisting) |
 
 ## Channel layout
 

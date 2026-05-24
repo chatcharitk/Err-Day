@@ -13,6 +13,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_DEFS, executeTool, type ToolContext } from "./tools";
+import { loadHistory, saveTurn } from "./memory";
 
 const MODEL          = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
 const MAX_ITERATIONS = 5;
@@ -58,6 +59,11 @@ function buildSystemPrompt(ctx: ToolContext): string {
 - ห้ามให้ข้อมูลของลูกค้าคนอื่น — เครื่องมือเฉพาะตัวจะคืนเฉพาะข้อมูลของผู้ส่งข้อความเท่านั้น
 - ถ้าไม่แน่ใจ ให้บอกตรงๆ และเสนอติดต่อทีมงาน
 
+**บริบทสนทนา:**
+- คุณจะเห็นประวัติสนทนา ~10 รอบล่าสุด ใช้ติดตามคำถามต่อเนื่อง (เช่น "บางนาเปิดกี่โมง?" หลังจากเพิ่งบอกว่ามีสาขาสุขุมวิทกับบางนา)
+- ลูกค้าสามารถพิมพ์ "เริ่มใหม่" หรือ "reset" เพื่อล้างประวัติได้
+- ลูกค้าสามารถพิมพ์ "ติดต่อแอดมิน" เพื่อหยุดระบบและรอทีมงานตอบ — คุณไม่ต้องแนะนำ webhook จะจัดการ
+
 **ข้อมูลปัจจุบัน:**
 - วันนี้: ${todayThai} (รูปแบบ YYYY-MM-DD: ${todayIso})
 - เขตเวลา: Asia/Bangkok (UTC+7)
@@ -84,10 +90,29 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
   const ctx: ToolContext = { lineUserId: input.lineUserId };
   const system = buildSystemPrompt(ctx);
 
+  // Load prior conversation turns (up to ~10) so the agent has context for
+  // follow-up questions. Skip when there's no userId (LINE always provides
+  // one, but the type allows undefined for safety).
+  const history = input.lineUserId ? await loadHistory(input.lineUserId) : [];
+
   const messages: Anthropic.MessageParam[] = [
+    ...history,
     { role: "user", content: input.userMessage },
   ];
   const toolsUsed: string[] = [];
+
+  // Helper — save the turn (best-effort, never blocks the reply) and return.
+  const finish = async (text: string, iterations: number): Promise<AgentResult> => {
+    if (input.lineUserId && text) {
+      saveTurn({
+        lineUserId: input.lineUserId,
+        userText:   input.userMessage,
+        agentText:  text,
+        toolsUsed,
+      }).catch(e => console.error("[agent] saveTurn failed", e));
+    }
+    return { text, toolsUsed, iterations };
+  };
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const response = await client.messages.create({
@@ -99,8 +124,8 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
     });
 
     if (response.stop_reason === "end_turn" || response.stop_reason === "stop_sequence") {
-      const text = extractText(response.content);
-      return { text: text || "ขออภัยค่ะ ระบบขัดข้องชั่วคราว", toolsUsed, iterations: i + 1 };
+      const text = extractText(response.content) || "ขออภัยค่ะ ระบบขัดข้องชั่วคราว";
+      return finish(text, i + 1);
     }
 
     if (response.stop_reason === "tool_use") {
@@ -134,19 +159,11 @@ export async function runAgent(input: AgentInput): Promise<AgentResult> {
       continue;
     }
 
-    const text = extractText(response.content);
-    return {
-      text: text || "ขออภัยค่ะ ลองอีกครั้งหรือพิมพ์ข้อความใหม่นะคะ",
-      toolsUsed,
-      iterations: i + 1,
-    };
+    const text = extractText(response.content) || "ขออภัยค่ะ ลองอีกครั้งหรือพิมพ์ข้อความใหม่นะคะ";
+    return finish(text, i + 1);
   }
 
-  return {
-    text: "ขออภัยค่ะ ระบบใช้เวลาประมวลผลนานเกินไป กรุณาลองพิมพ์คำถามอีกครั้งนะคะ",
-    toolsUsed,
-    iterations: MAX_ITERATIONS,
-  };
+  return finish("ขออภัยค่ะ ระบบใช้เวลาประมวลผลนานเกินไป กรุณาลองพิมพ์คำถามอีกครั้งนะคะ", MAX_ITERATIONS);
 }
 
 function extractText(content: Anthropic.ContentBlock[]): string {

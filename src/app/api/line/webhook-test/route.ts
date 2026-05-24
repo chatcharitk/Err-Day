@@ -1,21 +1,23 @@
 /**
  * TEST LINE webhook — sandbox @err.day [TEST] channel.
  *
- * Phase 2: routes inbound text messages through the Claude AI agent — BUT
- * only for LINE user IDs in the LINE_USER_ID_TEST allowlist (comma-separated).
- * Anyone else who happens to message the test OA gets a safe stub.
+ * Phase 4: full AI agent with memory, rate-limiting, reset, and handoff.
+ *
+ * Special commands (case-insensitive, work for anyone, no allowlist needed):
+ *   "myid"                                — returns sender's LINE userId
+ *   "reset" / "เริ่มใหม่" / "ล้าง"          — clears conversation history
+ *   "ติดต่อแอดมิน" / "พูดกับคน" / "human"  — handoff: pause agent, log request
  *
  * Env vars:
  *   LINE_CHANNEL_SECRET_TEST       — test channel signing secret
  *   LINE_CHANNEL_ACCESS_TOKEN_TEST — test channel access token
- *   LINE_USER_ID_TEST              — comma-separated allowlist of LINE userIds
- *                                    (Uxxxxx,Uyyyyy). If unset, falls back
- *                                    to "stub for all" behavior.
- *   ANTHROPIC_API_KEY              — Claude API key (console.anthropic.com)
- *   ANTHROPIC_MODEL                — optional override (default sonnet-4.5)
+ *   LINE_USER_ID_TEST              — comma-separated allowlist
+ *   ANTHROPIC_API_KEY              — Claude API key
  */
 import { createLineWebhookHandler, type TextMessageEvent } from "@/lib/line-webhook";
 import { runAgent } from "@/lib/agent";
+import { recordReset, recordHandoffRequest } from "@/lib/agent/memory";
+import { checkRateLimit, rateLimitMessage } from "@/lib/agent/rate-limit";
 
 const STUB_REPLY =
   "🧪 [TEST CHANNEL] สวัสดีค่ะ\n" +
@@ -23,36 +25,72 @@ const STUB_REPLY =
   "📅 จองคิว: https://err-day.vercel.app/book\n" +
   "👥 สมาชิก: https://err-day.vercel.app/membership";
 
+const RESET_KEYWORDS   = ["reset", "เริ่มใหม่", "ล้าง", "ล้างประวัติ"];
+const HANDOFF_PATTERNS = [
+  /ติดต่อ.*(แอดมิน|คน|พนักงาน|ทีมงาน)/i,
+  /พูด(กับ)?(คน|แอดมิน|ทีมงาน)/i,
+  /\b(human|admin|staff|operator)\b/i,
+];
 
-/** Parse the LINE_USER_ID_TEST env var into a Set for O(1) lookup. */
+const HANDOFF_REPLY =
+  "🤝 รับเรื่องแล้วค่ะ — ระบบจะหยุดตอบอัตโนมัติ\n" +
+  "ทีมงานจะติดต่อกลับเร็วๆ นี้ค่ะ 🌸\n\n" +
+  "หรือโทรหาสาขาโดยตรง:\n" +
+  "• สุขุมวิท 0996061465\n" +
+  "• บางนา 0962121465\n\n" +
+  "(พิมพ์ \"reset\" เพื่อกลับมาคุยกับ AI ใหม่)";
+
+
 function getAllowedUserIds(): Set<string> {
   const raw = process.env.LINE_USER_ID_TEST ?? "";
-  return new Set(
-    raw.split(",").map(s => s.trim()).filter(Boolean),
-  );
+  return new Set(raw.split(",").map(s => s.trim()).filter(Boolean));
 }
+
+function isResetCommand(text: string): boolean {
+  return RESET_KEYWORDS.includes(text.trim().toLowerCase());
+}
+function isHandoffCommand(text: string): boolean {
+  return HANDOFF_PATTERNS.some(re => re.test(text));
+}
+
 
 async function buildReply(event: TextMessageEvent): Promise<string> {
   const userId   = event.source?.userId;
   const userText = event.message.text.trim();
   const allowed  = getAllowedUserIds();
 
-  // myid: utility for getting one's own LINE userId so it can be added to the
-  // allowlist. Works for anyone — not gated by the allowlist itself.
+  // ── Magic command: myid — works for anyone, no allowlist required ─────────
   if (userText.toLowerCase() === "myid") {
     return userId
       ? `LINE userId ของคุณคือ:\n${userId}\n\nคัดลอกไปวางใน LINE_USER_ID_TEST บน Vercel เพื่อรับการตอบจาก AI`
       : "ไม่พบ LINE userId ของคุณ — ลองส่งข้อความใหม่อีกครั้งค่ะ";
   }
 
-  // Allowlist gate: only specific testers get the AI agent.
+  // ── Allowlist gate (only testers reach the agent) ─────────────────────────
   if (!userId || allowed.size === 0 || !allowed.has(userId)) {
     return STUB_REPLY;
   }
 
-  // Tester is allowed → call the Claude agent. Pass the sender's LINE userId
-  // so per-user tools (lookup_my_bookings, check_membership_status) can scope
-  // to this customer.
+  // ── Reset command — clear conversation history ────────────────────────────
+  if (isResetCommand(userText)) {
+    await recordReset(userId);
+    return "เริ่มต้นการสนทนาใหม่แล้วค่ะ 🌸\nมีอะไรให้ช่วยมั้ยคะ?";
+  }
+
+  // ── Handoff command — pause agent, log request ────────────────────────────
+  if (isHandoffCommand(userText)) {
+    await recordHandoffRequest(userId, userText);
+    return HANDOFF_REPLY;
+  }
+
+  // ── Rate limit ────────────────────────────────────────────────────────────
+  const limit = await checkRateLimit(userId);
+  if (!limit.ok) {
+    console.warn(`[agent] rate limit hit for ${userId}: reason=${limit.reason} per_minute=${limit.per_minute} per_day=${limit.per_day}`);
+    return rateLimitMessage(limit.reason!);
+  }
+
+  // ── Run the AI agent ──────────────────────────────────────────────────────
   try {
     const { text, toolsUsed, iterations } = await runAgent({
       userMessage: userText,
@@ -62,7 +100,7 @@ async function buildReply(event: TextMessageEvent): Promise<string> {
     return text;
   } catch (e) {
     console.error("[agent] error:", e);
-    return "🧪 [TEST] ขออภัยค่ะ AI ขัดข้องชั่วคราว — กรุณาลองอีกครั้ง";
+    return "🧪 [TEST] ขออภัยค่ะ AI ขัดข้องชั่วคราว — กรุณาลองอีกครั้ง\n(หากเร่งด่วน พิมพ์ \"ติดต่อแอดมิน\" ค่ะ)";
   }
 }
 
