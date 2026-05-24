@@ -9,8 +9,7 @@
  * Docs: https://developers.line.biz/en/reference/messaging-api/
  */
 
-const PUSH_URL  = "https://api.line.me/v2/bot/message/push";
-const REPLY_URL = "https://api.line.me/v2/bot/message/reply";
+const PUSH_URL = "https://api.line.me/v2/bot/message/push";
 
 export type LineMessage =
   | { type: "text"; text: string }
@@ -21,18 +20,9 @@ export interface PushResult {
   error?: string;
 }
 
-function getToken(override?: string | null): string | null {
-  // Allow callers (e.g. the test webhook) to pass their own channel token so a
-  // single deployment can serve multiple LINE Messaging API channels.
-  const candidate = override ?? process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  const t = candidate?.trim();
+function getToken(): string | null {
+  const t = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   return t && t.length > 0 ? t : null;
-}
-
-/** Options accepted by all push/reply helpers. */
-export interface LineOptions {
-  /** Override the default channel access token (defaults to LINE_CHANNEL_ACCESS_TOKEN env). */
-  token?: string | null;
 }
 
 /**
@@ -43,9 +33,8 @@ export interface LineOptions {
 export async function pushLine(
   toLineUserId: string,
   messages: LineMessage[],
-  options?: LineOptions,
 ): Promise<PushResult> {
-  const token = getToken(options?.token);
+  const token = getToken();
   if (!token) return { ok: false, error: "no_token" };
   if (!toLineUserId) return { ok: false, error: "no_recipient" };
   if (messages.length === 0) return { ok: false, error: "no_messages" };
@@ -74,53 +63,6 @@ export async function pushLine(
 }
 
 /** Convenience helper for the common single-text-message case. */
-export async function pushText(toLineUserId: string, text: string, options?: LineOptions): Promise<PushResult> {
-  return pushLine(toLineUserId, [{ type: "text", text }], options);
-}
-
-/**
- * Reply to an inbound LINE message using its `replyToken`.
- *
- * Replies vs push: reply messages are **free** and don't count toward the
- * monthly push-message quota. Each replyToken is valid for ~30 seconds and
- * can only be used once — if the user expects a follow-up message later,
- * use pushLine() instead.
- *
- * Used by /api/line/webhook to send AI agent / auto-reply messages.
- */
-export async function replyLine(
-  replyToken: string,
-  messages: LineMessage[],
-  options?: LineOptions,
-): Promise<PushResult> {
-  const token = getToken(options?.token);
-  if (!token)                  return { ok: false, error: "no_token" };
-  if (!replyToken)             return { ok: false, error: "no_reply_token" };
-  if (messages.length === 0)   return { ok: false, error: "no_messages" };
-  if (messages.length > 5)     return { ok: false, error: "too_many_messages" };
-
-  try {
-    const res = await fetch(REPLY_URL, {
-      method:  "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({ replyToken, messages }),
-    });
-
-    if (res.ok) return { ok: true };
-
-    let body = "";
-    try { body = await res.text(); } catch { /* ignore */ }
-    return { ok: false, error: `${res.status} ${body.slice(0, 300)}` };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "fetch_failed";
-    return { ok: false, error: msg };
-  }
-}
-
-/** Convenience: reply with a single text message. */
-export async function replyText(replyToken: string, text: string, options?: LineOptions): Promise<PushResult> {
-  return replyLine(replyToken, [{ type: "text", text }], options);
+export async function pushText(toLineUserId: string, text: string): Promise<PushResult> {
+  return pushLine(toLineUserId, [{ type: "text", text }]);
 }

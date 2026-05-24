@@ -1,36 +1,52 @@
 /**
- * PRODUCTION LINE webhook — @err.day Messaging API channel.
- *
- * SILENT MODE (current): the webhook does NOT send any auto-reply to
- * customer messages. The reasoning is that any visible bot message reveals
- * "we're using AI" — which the salon wants to keep hidden during the
- * private beta on the test channel.
- *
- * What this webhook DOES do:
- *   - Verify LINE signature (when LINE_CHANNEL_SECRET is set)
- *   - Capture lineUserId → displayName into NotificationLog so admin can
- *     send staff alerts (internal, invisible to customers)
- *   - Return 200 quickly so LINE doesn't retry
- *
- * What it does NOT do:
- *   - Auto-reply to text messages (silent mode)
- *   - Call the AI agent
- *   - Send any push messages
- *
- * Staff continue to reply manually via the @err.day LINE OA chat interface.
- *
- * When you're ready to expose the agent to real customers, replace
- * `buildReply: silent` below with the agent call — see the test webhook at
- * /api/line/webhook-test for the full implementation pattern.
+ * LINE Messaging API webhook.
+ * On any event (follow, message, postback) from a LINE user, we fetch their
+ * profile and store (userId → displayName) in NotificationLog so admin can
+ * retrieve the correct LINE user IDs.
  */
-import { createLineWebhookHandler } from "@/lib/line-webhook";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-// Return null = "do not reply" — handler skips the LINE Reply API call.
-const silent = async () => null;
+interface LineEvent {
+  type: string;
+  source?: { type: string; userId?: string };
+}
 
-export const POST = createLineWebhookHandler({
-  label:         "prod",
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
-  accessToken:   process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  buildReply:    silent,
-});
+export async function POST(request: Request) {
+  let body: { events?: LineEvent[] };
+  try { body = await request.json(); } catch { return NextResponse.json({ ok: true }); }
+
+  for (const event of body.events ?? []) {
+    const userId = event.source?.userId;
+    if (!userId) continue;
+
+    try {
+      const profile = await fetchProfile(userId);
+      const displayName = profile?.displayName ?? "unknown";
+
+      // Store using NotificationLog — kind=BOOKING_REMINDER_4H, targetId=line-cap-{userId}
+      // so it doesn't conflict with real booking notifications.
+      await prisma.notificationLog.upsert({
+        where:  { kind_targetId: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}` } },
+        create: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}`, status: "SKIPPED", recipient: userId, error: displayName },
+        update: { recipient: userId, error: displayName },
+      });
+
+      console.log(`[webhook] captured userId=${userId} displayName=${displayName}`);
+    } catch (e) {
+      console.error("[webhook] error processing event", e);
+    }
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+async function fetchProfile(userId: string) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  if (!token) return null;
+  const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json() as Promise<{ userId: string; displayName: string }>;
+}

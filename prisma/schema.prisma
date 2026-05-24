@@ -390,27 +390,3 @@ enum NotificationStatus {
   FAILED
   SKIPPED   // customer has no LINE link, or feature disabled
 }
-
-/**
- * Multi-turn conversation history with the err.day AI agent on LINE.
- *
- * Each row is one message in a conversation, identified by the LINE userId
- * of the customer. The agent loads the most recent ~10 turns to provide
- * context for natural follow-up questions.
- *
- * `role` is the standard chat role:
- *   - "user"      — what the customer typed
- *   - "assistant" — what the agent replied (final text only)
- *   - "system"    — marker rows (RESET, HANDOFF_REQUESTED). Filtered out of
- *                   the conversation Claude sees; used for auditing + reset.
- */
-model ChatMessage {
-  id          String   @id @default(cuid())
-  lineUserId  String
-  role        String   // user | assistant | system
-  content     String   @db.Text
-  toolsUsed   String?  // CSV: "lookup_branches,check_availability" (assistant only)
-  createdAt   DateTime @default(now())
-
-  @@index([lineUserId, createdAt])
-}
