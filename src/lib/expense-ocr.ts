@@ -94,8 +94,12 @@ export async function parseInvoiceImage(
   imageBase64: string,
   mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif",
 ): Promise<ParsedInvoice> {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
+  // Prefer the expense-scoped key so the salon can use different keys for
+  // different features (and the unused chatbot keys can stay null).
+  // Falls back to the generic ANTHROPIC_API_KEY if the scoped one isn't set.
+  const apiKey = (process.env.ANTHROPIC_API_KEY_EXPENSE?.trim()
+                ?? process.env.ANTHROPIC_API_KEY?.trim());
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY_EXPENSE (or ANTHROPIC_API_KEY) is not set");
 
   const client = new Anthropic({ apiKey });
 
