@@ -318,17 +318,22 @@ export async function getTakenSlots(
   const slots  = generateTimeSlots(openTime, closeTime);
   const taken: string[] = [];
 
-  // Past-slot cutoff: for today's date, mark any slot whose start has already
-  // passed as taken (online customers can't book a slot in the past).
+  // Past-slot cutoff + minimum lead time. For today's date, mark any slot
+  // whose start is in the past OR within MIN_LEAD_MINUTES from now as taken.
+  // This prevents customers from booking "right now" without giving the
+  // salon time to prepare (chair, staff, walk-up customers, etc.).
+  //
   // Slot times are Thailand local (Asia/Bangkok = UTC+7); the server runs in
   // UTC, so we shift "now" by +7h before extracting the local date and time.
+  const MIN_LEAD_MINUTES = 30;
   const bkkNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
   const todayStr = `${bkkNow.getUTCFullYear()}-${String(bkkNow.getUTCMonth() + 1).padStart(2, "0")}-${String(bkkNow.getUTCDate()).padStart(2, "0")}`;
   const isToday = date === todayStr;
   const nowMin  = isToday ? (bkkNow.getUTCHours() * 60 + bkkNow.getUTCMinutes()) : -1;
+  const earliestBookableMin = nowMin + MIN_LEAD_MINUTES;
 
   for (const slot of slots) {
-    if (isToday && timeToMins(slot) <= nowMin) {
+    if (isToday && timeToMins(slot) < earliestBookableMin) {
       taken.push(slot);
       continue;
     }
