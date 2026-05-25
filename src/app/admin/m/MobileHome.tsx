@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown, Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Scissors, Settings, Bell,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -530,33 +530,6 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               >
                 <Gauge size={16} style={{ color: MUTED }} />
                 ความจุการจอง
-              </Link>
-              <Link
-                href="/admin/m/services"
-                prefetch
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Scissors size={16} style={{ color: MUTED }} />
-                รายการบริการ
-              </Link>
-              <Link
-                href="/admin/m/settings"
-                prefetch
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Settings size={16} style={{ color: MUTED }} />
-                ตั้งค่าร้าน
-              </Link>
-              <Link
-                href="/admin/m/notifications"
-                prefetch
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Bell size={16} style={{ color: MUTED }} />
-                การแจ้งเตือน
               </Link>
               <Link
                 href="/admin"
