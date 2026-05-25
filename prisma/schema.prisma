@@ -37,6 +37,7 @@ model Branch {
   bookings Booking[]
   capacityOverrides CapacityOverride[]
   blockedSlots      BlockedSlot[]
+  expenses          Expense[]
 }
 
 /**
@@ -389,4 +390,56 @@ enum NotificationStatus {
   SENT
   FAILED
   SKIPPED   // customer has no LINE link, or feature disabled
+}
+
+
+/**
+ * Admin expense tracking — costs the salon incurs (supplies, rent, marketing,
+ * utilities, equipment, etc.). Two entry paths:
+ *   1. Manual form
+ *   2. Upload an invoice photo → Claude vision extracts → admin reviews
+ *
+ * branchId is OPTIONAL — null means a shared / HQ expense (e.g. accounting,
+ * marketing campaign across all branches). Per-branch expenses use the id.
+ *
+ * Amounts are stored in satang (THB * 100), matching the Booking convention.
+ */
+model Expense {
+  id            String    @id @default(cuid())
+  branchId      String?   // null = shared / HQ
+  branch        Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  category      String    // free string; UI offers a predefined list
+  vendor        String?   // supplier name
+  date          DateTime  // expense date (stored at noon local, like Booking)
+  totalAmount   Int       // satang
+  vatAmount     Int?      // satang — null = no VAT or unknown
+  paymentMethod String?   // CASH | TRANSFER | CARD | OTHER
+  receiptUrl    String?   // Vercel Blob URL of the invoice photo / PDF
+  notes         String?
+  status        String    @default("CONFIRMED")  // CONFIRMED | DRAFT
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items         ExpenseItem[]
+
+  @@index([branchId, date])
+  @@index([category, date])
+  @@index([date])
+}
+
+/**
+ * Line items on an expense (one row per product/service on the invoice).
+ * Useful when an invoice has multiple SKUs (e.g. 3 boxes of shampoo +
+ * 2 boxes of dye on the same receipt).
+ */
+model ExpenseItem {
+  id          String   @id @default(cuid())
+  expenseId   String
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Int      // satang per unit
+  totalPrice  Int      // satang — line total (quantity * unitPrice)
+
+  @@index([expenseId])
 }
