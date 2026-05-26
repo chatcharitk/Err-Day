@@ -1,45 +1,127 @@
 /**
- * LINE Messaging API webhook.
- * On any event (follow, message, postback) from a LINE user, we fetch their
- * profile and store (userId → displayName) in NotificationLog so admin can
- * retrieve the correct LINE user IDs.
+ * LINE Messaging API webhook for @err.day.
+ *
+ * REPLY POLICY (very narrow on purpose):
+ *
+ *   ✓ Reply WITH 2 Flex messages — tarot card + Google review CTA —
+ *     ONLY when the inbound text exactly matches a tarot keyword
+ *     ("คำทำนาย <English card name>"). This is what the printed QR codes
+ *     send when scanned.
+ *
+ *   ✗ For ANY other message (regular customer chat, stickers, photos,
+ *     unrelated text), the webhook stays SILENT. Staff continue to reply
+ *     manually — there is no AI auto-reply, no fallback message, nothing.
+ *
+ * Also captures (lineUserId → displayName) into NotificationLog so admin
+ * can look up the right LINE userIds — invisible to the customer.
+ *
+ * Signature verification runs only if LINE_CHANNEL_SECRET is set, so dev
+ * environments still work. Production should set the secret.
  */
 import { NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { replyLine } from "@/lib/line-messaging";
+import { findCardByKeyword } from "@/lib/flex/tarot-cards";
+import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
 
 interface LineEvent {
-  type: string;
-  source?: { type: string; userId?: string };
+  type:        string;
+  replyToken?: string;
+  source?:     { type: string; userId?: string };
+  message?:    { type: string; text?: string };
 }
 
+
 export async function POST(request: Request) {
-  let body: { events?: LineEvent[] };
-  try { body = await request.json(); } catch { return NextResponse.json({ ok: true }); }
+  // Read raw body once (needed for signature verification).
+  const rawBody = await request.text();
 
-  for (const event of body.events ?? []) {
-    const userId = event.source?.userId;
-    if (!userId) continue;
-
-    try {
-      const profile = await fetchProfile(userId);
-      const displayName = profile?.displayName ?? "unknown";
-
-      // Store using NotificationLog — kind=BOOKING_REMINDER_4H, targetId=line-cap-{userId}
-      // so it doesn't conflict with real booking notifications.
-      await prisma.notificationLog.upsert({
-        where:  { kind_targetId: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}` } },
-        create: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}`, status: "SKIPPED", recipient: userId, error: displayName },
-        update: { recipient: userId, error: displayName },
-      });
-
-      console.log(`[webhook] captured userId=${userId} displayName=${displayName}`);
-    } catch (e) {
-      console.error("[webhook] error processing event", e);
-    }
+  if (!verifySignature(request, rawBody)) {
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
+
+  let body: { events?: LineEvent[] };
+  try { body = JSON.parse(rawBody); } catch { return NextResponse.json({ ok: true }); }
+
+  const events = body.events ?? [];
+
+  // Process all events in parallel. Vercel terminates the function shortly
+  // after the response is returned, so we MUST await everything before
+  // returning the 200 OK.
+  await Promise.all(events.map(processEvent));
 
   return NextResponse.json({ ok: true });
 }
+
+
+async function processEvent(event: LineEvent): Promise<void> {
+  const userId = event.source?.userId;
+
+  // 1. Profile capture (invisible to customer, kept from original webhook).
+  if (userId) {
+    captureProfile(userId).catch(e => console.error("[webhook] capture failed", e));
+  }
+
+  // 2. Narrow reply rule: ONLY tarot keywords. Everything else is silent.
+  if (event.type !== "message")               return;
+  if (event.message?.type !== "text")         return;
+  if (!event.replyToken)                      return;
+
+  const text = event.message.text?.trim() ?? "";
+  const card = findCardByKeyword(text);
+  if (!card) {
+    // Not a tarot keyword — stay silent (let staff reply manually).
+    return;
+  }
+
+  console.log(`[webhook] tarot keyword matched: "${text}" → card=${card.id} user=${userId}`);
+  try {
+    const messages = [
+      buildTarotFlex(card),
+      buildReviewFlex(),
+    ];
+    const result = await replyLine(event.replyToken, messages);
+    if (!result.ok) {
+      console.error("[webhook] tarot reply failed:", result.error);
+    }
+  } catch (e) {
+    console.error("[webhook] tarot reply error:", e);
+    // No fallback message — never leak that the bot is processing.
+  }
+}
+
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function verifySignature(request: Request, rawBody: string): boolean {
+  const secret = process.env.LINE_CHANNEL_SECRET?.trim();
+  if (!secret) {
+    // No secret configured → skip verification (dev / unconfigured env)
+    return true;
+  }
+  const provided = request.headers.get("x-line-signature");
+  if (!provided) return false;
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("base64");
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+
+async function captureProfile(userId: string) {
+  const profile = await fetchProfile(userId);
+  const displayName = profile?.displayName ?? "unknown";
+
+  await prisma.notificationLog.upsert({
+    where:  { kind_targetId: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}` } },
+    create: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}`, status: "SKIPPED", recipient: userId, error: displayName },
+    update: { recipient: userId, error: displayName },
+  });
+}
+
 
 async function fetchProfile(userId: string) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
