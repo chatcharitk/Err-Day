@@ -103,6 +103,107 @@ export function buildTarotFlex(card: TarotCard): LineMessage {
 
 
 /**
+ * "Thanks — please review us on Google" Flex card with TWO buttons (one
+ * per branch). The QR text doesn't tell us which branch the customer
+ * came from, so we offer both and let the customer pick.
+ *
+ * Configure URLs via env vars:
+ *   GOOGLE_REVIEW_URL_SUKHUMVIT
+ *   GOOGLE_REVIEW_URL_BANGNA
+ *
+ * Get them from Google Maps → your salon listing → "Write a review" link.
+ */
+export function buildReviewFlex(): LineMessage {
+  const sukhumvitUrl = process.env.GOOGLE_REVIEW_URL_SUKHUMVIT
+    ?? "https://www.google.com/maps";
+  const bangnaUrl    = process.env.GOOGLE_REVIEW_URL_BANGNA
+    ?? "https://www.google.com/maps";
+
+  return {
+    type: "flex",
+    altText: "ขอบคุณที่ใช้บริการ — รีวิว err.day 5 ดาวด้วยนะคะ ⭐",
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      body: {
+        type:       "box",
+        layout:     "vertical",
+        spacing:    "sm",
+        paddingAll: "20px",
+        backgroundColor: BG_BEIGE,
+        contents: [
+          {
+            type:   "text",
+            text:   "ขอบคุณที่ใช้บริการค่ะ 🙏",
+            size:   "lg",
+            weight: "bold",
+            color:  TEXT,
+            align:  "center",
+          },
+          {
+            type:   "text",
+            text:   "★★★★★",
+            size:   "xxl",
+            color:  "#FFB400",
+            align:  "center",
+            margin: "md",
+          },
+          {
+            type:   "text",
+            text:   "หากชอบ ช่วยรีวิวร้านเรา 5 ดาว เป็นกำลังใจเล็กๆ ให้ทีมงานด้วยนะคะ 🌟",
+            size:   "sm",
+            color:  TEXT,
+            wrap:   true,
+            align:  "center",
+            margin: "md",
+          },
+          {
+            type:   "text",
+            text:   "เลือกสาขาที่คุณเพิ่งใช้บริการ",
+            size:   "xs",
+            color:  MUTED,
+            align:  "center",
+            margin: "md",
+          },
+        ],
+      },
+      footer: {
+        type:       "box",
+        layout:     "vertical",
+        spacing:    "sm",
+        paddingAll: "16px",
+        backgroundColor: BG_BEIGE,
+        contents: [
+          {
+            type:   "button",
+            style:  "primary",
+            color:  PRIMARY,
+            height: "sm",
+            action: {
+              type:  "uri",
+              label: "⭐ รีวิว · สาขาสุขุมวิท",
+              uri:   sukhumvitUrl,
+            },
+          },
+          {
+            type:   "button",
+            style:  "primary",
+            color:  PRIMARY,
+            height: "sm",
+            action: {
+              type:  "uri",
+              label: "⭐ รีวิว · สาขาบางนา",
+              uri:   bangnaUrl,
+            },
+          },
+        ],
+      },
+    },
+  };
+}
+
+
+/**
  * Carousel: all 5 cards side-by-side, swipeable.
  * Use for a "pick a card" or "deck preview" message.
  */
