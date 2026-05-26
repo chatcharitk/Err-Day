@@ -1,29 +1,27 @@
 /**
- * The err.day tarot deck — bunny + salon themed cards used for the
- * "ดวงวันนี้" (daily fortune) LINE message.
+ * The err.day tarot deck — bunny + salon themed Major Arcana cards used
+ * for the "ดวงวันนี้" (daily fortune) LINE message.
  *
  * Each card has:
- *   - A title (English + Thai numeral)
- *   - A short Thai affirmation/description
- *   - A public image URL (must be HTTPS — LINE requires it)
+ *   - A title (English + Roman numeral)
+ *   - A short Thai affirmation tied to salon / beauty themes
+ *   - The PNG filename in public/tarot/ (case-sensitive — must match exactly)
  *
- * To swap or add cards, just edit this file. The Flex builder in
- * ./tarot.ts reads from here.
+ * To add/remove cards, just edit this file. The Flex builder reads from here.
  *
- * Image hosting note: LINE Flex Messages need PUBLIC HTTPS URLs for
- * images. Recommended approach — drop the 5 PNGs into `public/tarot/`
- * in the repo. Vercel serves them at `https://err-day.vercel.app/tarot/*`.
- * Alternative: upload to Vercel Blob and use the returned URL.
+ * Image hosting: the PNGs in public/tarot/ are served at
+ *   https://err-day.vercel.app/tarot/<filename>
+ * by Vercel automatically.
  */
 
 export interface TarotCard {
   id:          string;
-  numeral:     string;   // I, II, … XXI (or empty)
-  name:        string;   // English: THE SUN
-  nameTh:      string;   // Thai display: เดอะ ซัน
-  affirmation: string;   // Short Thai sentence to encourage the customer
+  numeral:     string;
+  name:        string;
+  nameTh:      string;
+  affirmation: string;
   emoji:       string;
-  image:       string;   // Filename in public/tarot/ (NOT full URL — builder prepends host)
+  image:       string;   // PNG filename in public/tarot/
 }
 
 export const TAROT_CARDS: TarotCard[] = [
@@ -32,50 +30,131 @@ export const TAROT_CARDS: TarotCard[] = [
     numeral:     "0",
     name:        "THE FOOL",
     nameTh:      "เดอะ ฟูล",
-    affirmation: "วันนี้เป็นวันใหม่ ลองเปลี่ยนทรงผมที่ไม่เคยทำดู — โอกาสรอคุณอยู่ ✨",
+    affirmation: "วันใหม่ ลุคใหม่! กล้าลองทรงผมที่ไม่เคยทำมาก่อน โอกาสรอคุณอยู่ ✨",
     emoji:       "🐰",
-    image:       "the-fool.png",
+    image:       "The-Fool.png",
   },
   {
     id:          "magician",
     numeral:     "I",
     name:        "THE MAGICIAN",
     nameTh:      "เดอะ เมจิเชียน",
-    affirmation: "คุณมีพลังในตัวเอง วันนี้ลองสไตล์ใหม่ที่กล้าและโดดเด่นกว่าเดิม 💫",
+    affirmation: "คุณมีพลังในตัว วันนี้ลองสไตล์ใหม่ที่กล้าและโดดเด่นกว่าเดิม 💫",
     emoji:       "✂️",
-    image:       "the-magician.png",
+    image:       "The-Magician.png",
   },
   {
     id:          "high-priestess",
     numeral:     "II",
     name:        "THE HIGH PRIESTESS",
     nameTh:      "เดอะ ไฮ พรีสเตส",
-    affirmation: "ช่วงเวลาแห่งการพักผ่อนและฟื้นฟู ลองทรีตเมนต์ผมเพื่อกลับมาเปล่งปลั่งอีกครั้ง 🌙",
+    affirmation: "ช่วงเวลาฟื้นฟู ทรีตเมนต์ผมคืนความเปล่งปลั่งให้กับคุณ 🌙",
     emoji:       "🌙",
-    image:       "the-high-priestess.png",
+    image:       "The-High-Priestess.png",
+  },
+  {
+    id:          "hierophant",
+    numeral:     "V",
+    name:        "THE HIEROPHANT",
+    nameTh:      "เดอะ ไฮโรแฟนต์",
+    affirmation: "กลับสู่พื้นฐาน — ทรงคลาสสิคที่ไม่มีวันตกยุค พร้อมเสริมความมั่นใจ 🎓",
+    emoji:       "📜",
+    image:       "The-Hierophan.png",
+  },
+  {
+    id:          "lovers",
+    numeral:     "VI",
+    name:        "THE LOVERS",
+    nameTh:      "เดอะ เลิฟเวอร์ส",
+    affirmation: "พาคนรู้ใจมาทำผมพร้อมกัน — โมเมนต์พิเศษที่ err.day รอคุณอยู่ 💕",
+    emoji:       "💞",
+    image:       "The-Lovers.png",
+  },
+  {
+    id:          "chariot",
+    numeral:     "VII",
+    name:        "THE CHARIOT",
+    nameTh:      "เดอะ แชริออท",
+    affirmation: "มุ่งมั่นและพร้อมลุย! ทรงผมใหม่ที่บูสต์พลังให้คุณก้าวต่อไป 🏆",
+    emoji:       "🏇",
+    image:       "The-Chariot.png",
+  },
+  {
+    id:          "strength",
+    numeral:     "VIII",
+    name:        "STRENGTH",
+    nameTh:      "สเตรงท์",
+    affirmation: "ความแข็งแกร่งของคุณอยู่ในตัว เริ่มจากผมสวยและสุขภาพดี 💪",
+    emoji:       "🦁",
+    image:       "The-Strength.png",
+  },
+  {
+    id:          "hermit",
+    numeral:     "IX",
+    name:        "THE HERMIT",
+    nameTh:      "เดอะ เฮอร์มิท",
+    affirmation: "เวลาส่วนตัวของคุณ มาผ่อนคลายเงียบๆ ที่ err.day 🕯️",
+    emoji:       "🔦",
+    image:       "The-Hermit.png",
+  },
+  {
+    id:          "wheel-of-fortune",
+    numeral:     "X",
+    name:        "WHEEL OF FORTUNE",
+    nameTh:      "วีล ออฟ ฟอร์จูน",
+    affirmation: "โชคดีกำลังจะมา! เปิดรับสิ่งใหม่ด้วยลุคใหม่ที่สดใส 🍀",
+    emoji:       "🎡",
+    image:       "Wheel of Fortune.png",
+  },
+  {
+    id:          "justice",
+    numeral:     "XI",
+    name:        "JUSTICE",
+    nameTh:      "จัสติส",
+    affirmation: "สมดุลและลงตัว — ทรงผมที่เข้ากับชีวิตของคุณ ⚖️",
+    emoji:       "⚖️",
+    image:       "Justice.png",
+  },
+  {
+    id:          "star",
+    numeral:     "XVII",
+    name:        "THE STAR",
+    nameTh:      "เดอะ สตาร์",
+    affirmation: "แสงดาวส่องทาง ทรีตเมนต์ที่ทำให้ผมเปล่งประกายเหมือนดาว ⭐",
+    emoji:       "⭐",
+    image:       "The-Star.png",
+  },
+  {
+    id:          "moon",
+    numeral:     "XVIII",
+    name:        "THE MOON",
+    nameTh:      "เดอะ มูน",
+    affirmation: "ฟังเสียงในใจ ลองทรงที่บ่งบอกความเป็นคุณจริงๆ 🌕",
+    emoji:       "🌕",
+    image:       "The-Moon.png",
   },
   {
     id:          "sun",
     numeral:     "XIX",
     name:        "THE SUN",
     nameTh:      "เดอะ ซัน",
-    affirmation: "วันนี้คุณจะเปล่งประกาย ☀️ ผมสวย หน้าใส ทุกคนต้องชม! แวะมาเสริมพลังกัน",
+    affirmation: "วันนี้คุณจะเปล่งประกาย ☀️ ผมสวย หน้าใส ทุกคนต้องชม!",
     emoji:       "☀️",
-    image:       "the-sun.png",
+    image:       "The-Sun.png",
   },
   {
     id:          "world",
     numeral:     "XXI",
     name:        "THE WORLD",
     nameTh:      "เดอะ เวิลด์",
-    affirmation: "สำเร็จและสมหวัง! วันที่ทุกอย่างลงตัว เฉลิมฉลองด้วยทรงผมที่คุณภูมิใจ 👑",
+    affirmation: "สำเร็จและสมหวัง! เฉลิมฉลองด้วยทรงผมที่คุณภูมิใจ 👑",
     emoji:       "🌍",
-    image:       "the-world.png",
+    image:       "The-World.png",
   },
 ];
 
 /** Pick a deterministic "today's card" so the same customer sees the same
- * card all day — and the deck rotates predictably. */
+ * card all day — and the deck rotates predictably across days. */
 export function todaysCard(seed?: string): TarotCard {
   const today = new Date().toISOString().slice(0, 10);
   const key   = (seed ?? "") + today;

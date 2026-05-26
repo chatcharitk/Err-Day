@@ -16,7 +16,9 @@ const APP_HOST = process.env.NEXT_PUBLIC_APP_URL ?? "https://err-day.vercel.app"
 
 
 export function buildTarotFlex(card: TarotCard): LineMessage {
-  const imageUrl = `${APP_HOST}/tarot/${card.image}`;
+  // URL-encode the filename so spaces ("Wheel of Fortune.png") and other
+  // characters work in LINE — which fetches the URL strictly.
+  const imageUrl = `${APP_HOST}/tarot/${encodeURIComponent(card.image)}`;
   const bookUrl  = `${APP_HOST}/book`;
 
   return {
