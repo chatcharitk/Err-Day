@@ -114,10 +114,13 @@ export function buildTarotFlex(card: TarotCard): LineMessage {
  * Get them from Google Maps → your salon listing → "Write a review" link.
  */
 export function buildReviewFlex(): LineMessage {
+  // Defaults are the real review URLs Google Maps provided when we shared the
+  // listings (g.page short-link format). Override per environment via the
+  // GOOGLE_REVIEW_URL_* env vars if the listings ever move/rename.
   const sukhumvitUrl = process.env.GOOGLE_REVIEW_URL_SUKHUMVIT
-    ?? "https://www.google.com/maps";
+    ?? "https://g.page/r/CQaI2r3lJUNJEAI/review";
   const bangnaUrl    = process.env.GOOGLE_REVIEW_URL_BANGNA
-    ?? "https://www.google.com/maps";
+    ?? "https://g.page/r/Cf6Hn2PnBH5XEAI/review";
 
   return {
     type: "flex",
