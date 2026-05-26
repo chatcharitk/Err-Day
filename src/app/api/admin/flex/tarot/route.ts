@@ -23,7 +23,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const card = getCard(searchParams.get("card"));
   const message = buildTarotFlex(card);
-  return NextResponse.json({ card: card.id, message });
+  // Explicit charset so browsers / text viewers don't fall back to Latin-1
+  // and mangle the Thai characters in the affirmation strings.
+  return new NextResponse(JSON.stringify({ card: card.id, message }, null, 2), {
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
 }
 
 
