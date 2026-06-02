@@ -808,6 +808,28 @@ function PackageRow({
     }
   }
 
+  async function handleUseNow() {
+    if (p.usageLimit > 0 && p.usagesUsed >= p.usageLimit) {
+      setError("ใช้ครบแล้ว");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}/packages/${p.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ usagesUsed: p.usagesUsed + 1 }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
+      onChanged();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete() {
     if (!confirm(`ลบแพ็กเกจ "${p.nameTh}" ออกจากลูกค้านี้?`)) return;
     setSaving(true);
@@ -843,7 +865,7 @@ function PackageRow({
           {isPending ? "รอเปิดใช้งาน" : "ใช้งานได้"}
         </span>
         {!editing && (
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             {isPending && (
               <button
                 onClick={handleActivate}
@@ -852,6 +874,17 @@ function PackageRow({
                 style={{ background: PRIMARY }}
               >
                 <Zap size={11} /> เปิดใช้
+              </button>
+            )}
+            {!isPending && p.usageLimit > 0 && p.usagesUsed < p.usageLimit && (
+              <button
+                onClick={handleUseNow}
+                disabled={saving}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white"
+                style={{ background: "#374151" }}
+                title="นับการใช้งาน 1 ครั้งทันที"
+              >
+                <Zap size={11} /> ใช้ 1 ครั้ง
               </button>
             )}
             <button
@@ -1665,15 +1698,20 @@ function SummaryBar({ customers }: { customers: Customer[] }) {
 
 type SortKey = "newest" | "oldest" | "name" | "bookings";
 
+function isWalkinCustomer(c: { name: string; phone: string }) {
+  return c.phone.startsWith("walkin-") || c.phone.startsWith("pos-") || c.name === "Walk-in";
+}
+
 export default function CustomersManager({ customers: initial }: Props) {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  const [customers, setCustomers] = useState<Customer[]>(initial);
-  const [showAdd,   setShowAdd]   = useState(false);
-  const [openId,    setOpenId]    = useState<string | null>(null);
-  const [search,    setSearch]    = useState("");
-  const [sort,      setSort]      = useState<SortKey>("name");
+  const [customers,    setCustomers]    = useState<Customer[]>(initial);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [openId,       setOpenId]       = useState<string | null>(null);
+  const [search,       setSearch]       = useState("");
+  const [sort,         setSort]         = useState<SortKey>("name");
+  const [showWalkin,   setShowWalkin]   = useState(false);
 
   const focusRef = useRef<HTMLDivElement | null>(null);
 
@@ -1714,6 +1752,12 @@ export default function CustomersManager({ customers: initial }: Props) {
 
   const filtered = useMemo(() => {
     let list = customers;
+    // Separate walk-in from regular customers unless explicitly showing walk-ins
+    if (!search.trim()) {
+      list = showWalkin
+        ? list.filter(isWalkinCustomer)
+        : list.filter(c => !isWalkinCustomer(c));
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c =>
@@ -1729,7 +1773,7 @@ export default function CustomersManager({ customers: initial }: Props) {
       if (sort === "bookings") return b._count.bookings - a._count.bookings;
       return 0;
     });
-  }, [customers, search, sort]);
+  }, [customers, search, sort, showWalkin]);
 
   // Group by first letter of name when sorting alphabetically
   const grouped = useMemo(() => {
@@ -1779,6 +1823,17 @@ export default function CustomersManager({ customers: initial }: Props) {
             style={{ borderColor: BORDER, color: TEXT }}
           />
         </div>
+        <button
+          onClick={() => setShowWalkin(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border font-medium"
+          style={
+            showWalkin
+              ? { background: "#374151", color: "white", borderColor: "#374151" }
+              : { background: "white", color: MUTED, borderColor: BORDER }
+          }
+        >
+          Walk-in
+        </button>
         <div className="relative">
           <select
             value={sort}
@@ -1793,7 +1848,7 @@ export default function CustomersManager({ customers: initial }: Props) {
           </select>
           <ChevronDown size={13} className="absolute right-2 top-2.5 pointer-events-none" color={MUTED} />
         </div>
-        <p className="text-xs" style={{ color: MUTED }}>{filtered.length} คน</p>
+        <p className="text-xs" style={{ color: MUTED }}>{filtered.length} คน{showWalkin ? " (walk-in)" : ""}</p>
       </div>
 
       {/* customer list */}

@@ -19,11 +19,12 @@ const DAY_LABELS_TH = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อ�
 const DAY_LABELS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const PRESETS: Array<{ label: string; start: string; end: string }> = [
-  { label: "10:00 — 18:00", start: "10:00", end: "18:00" },
-  { label: "11:00 — 19:00", start: "11:00", end: "19:00" },
-  { label: "12:00 — 20:00", start: "12:00", end: "20:00" },
-  { label: "10:00 — 14:00", start: "10:00", end: "14:00" },
-  { label: "14:00 — 20:00", start: "14:00", end: "20:00" },
+  { label: "เช้า  8:00–17:00",  start: "08:00", end: "17:00" },
+  { label: "บ่าย 12:00–21:00",  start: "12:00", end: "21:00" },
+  { label: "อาทิตย์ 10:00–21:00", start: "10:00", end: "21:00" },
+  { label: "เต็มวัน 8:00–21:00", start: "08:00", end: "21:00" },
+  { label: "10:00–18:00", start: "10:00", end: "18:00" },
+  { label: "11:00–19:00", start: "11:00", end: "19:00" },
 ];
 
 // ── Date helpers ──────────────────────────────────────────────────────────────

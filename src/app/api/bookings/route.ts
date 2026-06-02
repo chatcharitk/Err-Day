@@ -9,9 +9,10 @@ export async function POST(request: Request) {
     const {
       branchId, serviceId, staffId, date, startTime, endTime,
       totalPrice, name, nickname, phone, email, notes, addonIds,
-      lineUserId, linePictureUrl,  // from Line LIFF — links customer + profile pic
+      lineUserId, linePictureUrl, lineDisplayName, // from Line LIFF
       skipConflictCheck,            // trusted flag for POS / admin use
       isWalkin,                     // admin flag — skip customer info, use placeholder
+      extraStaffIds,                // optional array of additional staff IDs
     } = body;
 
     // For walk-in bookings name/phone are optional; everything else is required
@@ -48,18 +49,20 @@ export async function POST(request: Request) {
       where: { phone: finalPhone },
       update: {
         name: finalName,
-        ...(nickname       ? { nickname }                   : {}),
+        ...(nickname          ? { nickname }                      : {}),
         email: email || undefined,
-        ...(lineUserId     ? { lineUserId }                 : {}),
-        ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
+        ...(lineUserId        ? { lineUserId }                    : {}),
+        ...(linePictureUrl    ? { pictureUrl: linePictureUrl }    : {}),
+        ...(lineDisplayName   ? { lineDisplayName }               : {}),
       },
       create: {
         name: finalName,
         phone: finalPhone,
-        ...(nickname       ? { nickname }                   : {}),
+        ...(nickname          ? { nickname }                      : {}),
         email: email || undefined,
-        ...(lineUserId     ? { lineUserId }                 : {}),
-        ...(linePictureUrl ? { pictureUrl: linePictureUrl } : {}),
+        ...(lineUserId        ? { lineUserId }                    : {}),
+        ...(linePictureUrl    ? { pictureUrl: linePictureUrl }    : {}),
+        ...(lineDisplayName   ? { lineDisplayName }               : {}),
       },
     });
 
@@ -83,6 +86,9 @@ export async function POST(request: Request) {
                   .then((addons) => addons.map((a) => ({ addonId: a.id, price: a.price }))),
               },
             }
+          : {}),
+        ...(Array.isArray(extraStaffIds) && extraStaffIds.length > 0
+          ? { extraStaff: { create: extraStaffIds.map((sid: string) => ({ staffId: sid })) } }
           : {}),
       },
       // Lean response: callers (CalendarView, NewBookingForm, BookingFlow) just

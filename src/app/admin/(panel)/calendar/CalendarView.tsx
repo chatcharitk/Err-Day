@@ -31,8 +31,9 @@ interface BookingItem {
   notes: string | null;
   serviceId: string;
   service: { name: string; nameTh: string; category: string };
-  customer: { id: string; name: string; phone: string };
+  customer: { id: string; name: string; nickname: string | null; phone: string };
   staff: { id: string; name: string } | null;
+  extraStaff: { id: string; name: string }[];
   addons: BookingAddon[];
 }
 interface StaffItem    { id: string; name: string }
@@ -341,7 +342,11 @@ function VerticalGantt({
                     style={{ top, height, zIndex: 5 }}
                     onClick={() => onClickBooking(b)}>
                     <div className={`px-1.5 py-1 text-[11px] leading-tight ${c.text}`}>
-                      <div className="font-semibold truncate">{b.customer.name}</div>
+                      <div className="font-semibold truncate">
+                        {b.customer.nickname
+                          ? `${b.customer.name.split(" ")[0]} (${b.customer.nickname})`
+                          : b.customer.name.split(" ")[0]}
+                      </div>
                       <div className="opacity-70 truncate">{b.startTime}</div>
                       {height > 44 && (
                         <div className="opacity-60 truncate text-[10px]">
@@ -470,7 +475,11 @@ function HorizontalGantt({
                       style={{ left, width, top: 8, height: ROW_H - 16, zIndex: 5 }}
                       onClick={() => onClickBooking(b)}>
                       <div className={`px-2 py-1 text-xs leading-tight truncate ${c.text}`}>
-                        <span className="font-semibold">{b.customer.name}</span>
+                        <span className="font-semibold">
+                          {b.customer.nickname
+                            ? `${b.customer.name.split(" ")[0]} (${b.customer.nickname})`
+                            : b.customer.name.split(" ")[0]}
+                        </span>
                         <span className="opacity-70 ml-1">{b.startTime}</span>
                       </div>
                     </div>
@@ -534,7 +543,9 @@ function ListView({ weekBookings, onClickBooking }: {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`font-semibold text-sm truncate ${c.text}`}>
-                        {b.customer.name}
+                        {b.customer.nickname
+                          ? `${b.customer.name.split(" ")[0]} (${b.customer.nickname})`
+                          : b.customer.name}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
                         {b.service.nameTh || b.service.name} · {b.customer.phone}
@@ -811,7 +822,7 @@ export default function CalendarView({
       {/* ── Modals ── */}
       {editItem && (
         <EditModal
-          booking={editItem} branchId={activeBranchId} staff={staff}
+          booking={editItem} branchId={activeBranchId} branches={branches} staff={staff}
           onClose={() => setEditItem(null)}
           onSaved={() => router.refresh()}
         />

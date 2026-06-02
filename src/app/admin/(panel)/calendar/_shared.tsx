@@ -23,8 +23,9 @@ export interface BookingItem {
   notes: string | null;
   serviceId: string;
   service: { name: string; nameTh: string; category: string };
-  customer: { id: string; name: string; phone: string };
+  customer: { id: string; name: string; nickname: string | null; phone: string };
   staff: { id: string; name: string } | null;
+  extraStaff: { id: string; name: string }[];
   addons: BookingAddon[];
 }
 export interface StaffItem    { id: string; name: string }

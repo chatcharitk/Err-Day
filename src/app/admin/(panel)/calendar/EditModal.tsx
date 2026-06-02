@@ -11,26 +11,36 @@ import {
 } from "./_shared";
 
 export default function EditModal({
-  booking, branchId, staff, onClose, onSaved,
+  booking, branchId, branches, staff, onClose, onSaved,
 }: {
   booking: BookingItem;
   branchId: string;
+  branches: { id: string; name: string }[];
   staff: StaffItem[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const router = useRouter();
-  const [services,      setServices]      = useState<ServiceOption[]>([]);
-  const [bsId,          setBsId]          = useState("");
-  const [startTime,     setStartTime]     = useState(booking.startTime);
-  const [endTime,       setEndTime]       = useState(booking.endTime);
-  const [price,         setPrice]         = useState(booking.totalPrice);
-  const [selectedStaff, setSelectedStaff] = useState(booking.staff?.id ?? "");
-  const [notes,         setNotes]         = useState(booking.notes ?? "");
-  const [saving,        setSaving]        = useState(false);
-  const [checkedOut,    setCheckedOut]    = useState(booking.status === "COMPLETED");
-  const [currentStatus, setCurrentStatus] = useState(booking.status);
-  const [statusError,   setStatusError]   = useState("");
+  const [services,        setServices]        = useState<ServiceOption[]>([]);
+  const [bsId,            setBsId]            = useState("");
+  const [startTime,       setStartTime]       = useState(booking.startTime);
+  const [endTime,         setEndTime]         = useState(booking.endTime);
+  const [price,           setPrice]           = useState(booking.totalPrice);
+  const [selectedStaff,   setSelectedStaff]   = useState(booking.staff?.id ?? "");
+  const [extraStaffIds,   setExtraStaffIds]   = useState<string[]>(booking.extraStaff.map(s => s.id));
+  const [customerName,    setCustomerName]    = useState(booking.customer.name);
+  const [selectedBranch,  setSelectedBranch]  = useState(branchId);
+  const [notes,           setNotes]           = useState(booking.notes ?? "");
+  const [saving,          setSaving]          = useState(false);
+  const [checkedOut,      setCheckedOut]      = useState(booking.status === "COMPLETED");
+  const [currentStatus,   setCurrentStatus]   = useState(booking.status);
+  const [statusError,     setStatusError]     = useState("");
+
+  function toggleExtraStaff(id: string) {
+    setExtraStaffIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }
 
   const c = STATUS_COLOR[currentStatus] ?? STATUS_COLOR.PENDING;
 
@@ -104,7 +114,10 @@ export default function EditModal({
         endTime,
         totalPrice: price,
         staffId: selectedStaff || null,
+        extraStaffIds,
         notes: notes || null,
+        customerName: customerName.trim() || undefined,
+        branchId: selectedBranch !== branchId ? selectedBranch : undefined,
       }),
     });
     setSaving(false);
@@ -207,14 +220,65 @@ export default function EditModal({
           )}
           <ServiceTimeFields services={services} serviceId={bsId} startTime={startTime} endTime={endTime}
             onServiceChange={handleServiceChange} onStartChange={handleStartChange} onEndChange={setEndTime} />
+          {/* Customer name */}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">พนักงาน</label>
+            <label className="text-xs text-gray-500 block mb-1">ชื่อลูกค้า</label>
+            <input
+              type="text"
+              value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30"
+              placeholder="ชื่อลูกค้า"
+            />
+          </div>
+
+          {/* Branch */}
+          {branches.length > 1 && (
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">สาขา</label>
+              <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30">
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Primary staff */}
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">ช่างหลัก</label>
             <select value={selectedStaff} onChange={e => setSelectedStaff(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30">
               <option value="">ไม่ระบุ</option>
               {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+
+          {/* Extra staff */}
+          {staff.length > 1 && (
+            <div>
+              <label className="text-xs text-gray-500 block mb-1.5">ช่างเพิ่มเติม (หลายคน)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {staff.filter(s => s.id !== selectedStaff).map(s => {
+                  const active = extraStaffIds.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => toggleExtraStaff(s.id)}
+                      className="px-2.5 py-1 rounded-full text-xs font-medium border transition-colors"
+                      style={{
+                        background:   active ? "#8B1D24" : "white",
+                        color:        active ? "white"   : "#3B2A24",
+                        borderColor:  active ? "#8B1D24" : "#E8D8CC",
+                      }}
+                    >
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div>
             <label className="text-xs text-gray-500 block mb-1">หมายเหตุ</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}

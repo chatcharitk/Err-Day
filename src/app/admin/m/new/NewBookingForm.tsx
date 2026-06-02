@@ -76,10 +76,11 @@ function generateTimeSlots(openTime: string, closeTime: string): string[] {
 
 export default function NewBookingForm({ branches, activeBranchId, defaultDate, branchServices, branchStaff, addons }: Props) {
   const router = useRouter();
-  const [branchId,  setBranchId]  = useState(activeBranchId);
-  const [date,      setDate]      = useState(defaultDate);
-  const [serviceId, setServiceId] = useState<string>("");
-  const [staffId,   setStaffId]   = useState<string>("");
+  const [branchId,      setBranchId]      = useState(activeBranchId);
+  const [date,          setDate]          = useState(defaultDate);
+  const [serviceId,     setServiceId]     = useState<string>("");
+  const [staffId,       setStaffId]       = useState<string>("");
+  const [extraStaffIds, setExtraStaffIds] = useState<string[]>([]);
   const [time,      setTime]      = useState<string>("");
 
   // Customer
@@ -213,9 +214,10 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           name:       name.trim() || undefined,
           phone:      phone.trim() || undefined,
           nickname:   finalNickname || undefined,
-          notes:      notes.trim() || undefined,
-          addonIds:   selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
-          isWalkin,
+          notes:         notes.trim() || undefined,
+          addonIds:      selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
+          extraStaffIds: extraStaffIds.length > 0 ? extraStaffIds : undefined,
+          isWalkin:      isWalkin && !(name.trim() && phone.trim()),
           skipConflictCheck: true,
         }),
       });
@@ -426,9 +428,14 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                 style={{ color: TEXT }}
               />
             </div>
-            {isWalkin && (
+            {isWalkin && !(name.trim() && phone.trim()) && (
               <p className="text-[10px]" style={{ color: MUTED }}>
                 หากไม่กรอกชื่อ ระบบจะบันทึกเป็น &quot;Walk-in&quot; โดยอัตโนมัติ
+              </p>
+            )}
+            {isWalkin && name.trim() && phone.trim() && (
+              <p className="text-[10px] px-2 py-1.5 rounded-lg" style={{ background: "#F0FDF4", color: "#166534" }}>
+                ✓ จะลงทะเบียนเป็นลูกค้าในระบบอัตโนมัติ
               </p>
             )}
           </div>
@@ -513,7 +520,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
 
       {/* Staff */}
       <section className="px-4 pt-5">
-        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>ช่าง <span style={{ color: MUTED }}>(ไม่บังคับ)</span></p>
+        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>ช่างหลัก <span style={{ color: MUTED }}>(ไม่บังคับ)</span></p>
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setStaffId("")}
@@ -541,6 +548,30 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
             </button>
           ))}
         </div>
+        {branchStaff.length > 1 && (
+          <>
+            <p className="text-[10px] uppercase tracking-widest mt-3 mb-2" style={{ color: MUTED }}>ช่างเพิ่มเติม</p>
+            <div className="flex flex-wrap gap-1.5">
+              {branchStaff.filter(s => s.id !== staffId).map((s) => {
+                const active = extraStaffIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setExtraStaffIds(prev => active ? prev.filter(x => x !== s.id) : [...prev, s.id])}
+                    className="px-3 py-1.5 rounded-full text-xs"
+                    style={{
+                      background: active ? "#374151" : "white",
+                      color:      active ? "white"   : TEXT,
+                      border:     `1px solid ${active ? "#374151" : BORDER}`,
+                    }}
+                  >
+                    {s.name}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </section>
 
       {/* Time */}

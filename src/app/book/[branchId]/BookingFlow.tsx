@@ -174,9 +174,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const [selectedTime, setSelectedTime] = useState("");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string }>(
-    { name: "", phone: "", email: "", notes: "" }
+  const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string; nickname: string }>(
+    { name: "", phone: "", email: "", notes: "", nickname: "" }
   );
+  const [lineName, setLineName] = useState("");
 
   // Restore booking state after Line LIFF login redirect (runs client-side only)
   useEffect(() => {
@@ -196,30 +197,30 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-fill name & email from Line profile, then look up returning customer for phone
+  // Store LINE display name separately; look up returning customer for pre-fill
   useEffect(() => {
     if (!liff.profile) return;
 
-    // Always fill name/email from LINE profile
+    // Store LINE name for reference — do NOT auto-fill the booking name field
+    setLineName(liff.profile.displayName || "");
     setForm(f => ({
       ...f,
-      name:  f.name  || liff.profile!.displayName,
       email: f.email || liff.profile!.email || "",
     }));
 
-    // Look up by LINE user ID — if they've booked before, pre-fill their phone too
+    // Look up by LINE user ID — if they've booked before, pre-fill phone + nickname
     const uid = liff.profile.userId;
     if (!uid) return;
     fetch(`/api/customer/me?lineUserId=${encodeURIComponent(uid)}`)
       .then(r => r.json())
-      .then((customer: { name: string; phone: string; email: string | null } | null) => {
+      .then((customer: { name: string; nickname: string | null; phone: string; email: string | null } | null) => {
         if (!customer) return;
         setForm(f => ({
           ...f,
-          // Only overwrite if the field is still empty (don't stomp restored session state)
-          name:  f.name  || customer.name,
-          phone: f.phone || customer.phone,
-          email: f.email || customer.email || "",
+          name:     f.name     || customer.name,
+          nickname: f.nickname || customer.nickname || "",
+          phone:    f.phone    || customer.phone,
+          email:    f.email    || customer.email || "",
         }));
       })
       .catch(() => {});
@@ -315,11 +316,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
           totalPrice: grandTotal,
           addonIds: [...selectedAddons],
           name: form.name,
+          nickname: form.nickname || null,
           phone: form.phone,
           email: form.email || null,
           notes: form.notes || null,
-          lineUserId:     liff.profile?.userId     || null,
-          linePictureUrl: liff.profile?.pictureUrl || null,
+          lineUserId:       liff.profile?.userId      || null,
+          linePictureUrl:   liff.profile?.pictureUrl  || null,
+          lineDisplayName:  lineName || null,
         }),
       });
 
@@ -709,10 +712,28 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               </div>
             )}
 
+            {lineName && (
+              <div className="mb-3 rounded-xl border px-4 py-2.5 flex items-center gap-3" style={{ borderColor: "#BBF7D0", background: "#F0FFF4" }}>
+                <span className="text-xs" style={{ color: "#166534" }}>
+                  {lang === "th" ? "ชื่อ LINE:" : "LINE name:"}
+                </span>
+                <span className="text-sm font-medium" style={{ color: "#3B2A24" }}>{lineName}</span>
+                <span className="text-xs ml-auto" style={{ color: "#A0A0A0" }}>
+                  {lang === "th" ? "(เพื่อความถูกต้อง กรุณากรอกชื่อจริงด้านล่าง)" : "(please enter your real name below)"}
+                </span>
+              </div>
+            )}
             <div className="bg-white rounded-xl border p-6 space-y-4" style={{ borderColor: "#E8D8CC" }}>
               <div className="space-y-1.5">
                 <Label htmlFor="name" style={{ color: "#5C4A42" }}>{u.name} <span className="text-red-500">*</span></Label>
                 <Input id="name" placeholder={u.namePh} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nickname" style={{ color: "#5C4A42" }}>
+                  {lang === "th" ? "ชื่อเล่น" : "Nickname"}
+                  <span className="text-sm font-normal ml-1" style={{ color: "#A08070" }}>{u.optional}</span>
+                </Label>
+                <Input id="nickname" placeholder={lang === "th" ? "เช่น แอม, บิ๊ก" : "e.g. Aim, Big"} value={form.nickname} onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="phone" style={{ color: "#5C4A42" }}>{u.phone} <span className="text-red-500">*</span></Label>

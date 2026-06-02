@@ -16,27 +16,51 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, staffId, notes, startTime, endTime, totalPrice, serviceId, date, completedAt, receiptUrl } = body;
+    const {
+      status, staffId, notes, startTime, endTime, totalPrice, serviceId, date,
+      completedAt, receiptUrl,
+      extraStaffIds, customerName, branchId: newBranchId,
+    } = body;
 
     // Capture previous fields we need to compare after the update
-    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined;
+    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined || customerName !== undefined;
     const prev = needsPrev
-      ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true } })
+      ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true, customerId: true } })
       : null;
+
+    // Update customer name if provided
+    if (customerName?.trim() && prev?.customerId) {
+      await prisma.customer.update({
+        where: { id: prev.customerId },
+        data: { name: customerName.trim() },
+      });
+    }
+
+    // Update extra staff if provided
+    if (Array.isArray(extraStaffIds)) {
+      await prisma.bookingStaff.deleteMany({ where: { bookingId: id } });
+      if (extraStaffIds.length > 0) {
+        await prisma.bookingStaff.createMany({
+          data: extraStaffIds.map((sid: string) => ({ bookingId: id, staffId: sid })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     const booking = await prisma.booking.update({
       where: { id },
       data: {
-        ...(status      !== undefined ? { status }                                : {}),
-        ...(staffId     !== undefined ? { staffId: staffId || null }              : {}),
-        ...(notes       !== undefined ? { notes: notes || null }                  : {}),
-        ...(startTime   !== undefined ? { startTime }                             : {}),
-        ...(endTime     !== undefined ? { endTime }                               : {}),
-        ...(totalPrice  !== undefined ? { totalPrice: Number(totalPrice) }        : {}),
-        ...(serviceId   !== undefined ? { serviceId }                             : {}),
-        ...(date        !== undefined ? { date: new Date(date + "T12:00:00") }   : {}),
-        ...(completedAt !== undefined ? { completedAt: completedAt ? new Date(completedAt) : null } : {}),
-        ...(receiptUrl  !== undefined ? {
+        ...(status         !== undefined ? { status }                                : {}),
+        ...(staffId        !== undefined ? { staffId: staffId || null }              : {}),
+        ...(notes          !== undefined ? { notes: notes || null }                  : {}),
+        ...(startTime      !== undefined ? { startTime }                             : {}),
+        ...(endTime        !== undefined ? { endTime }                               : {}),
+        ...(totalPrice     !== undefined ? { totalPrice: Number(totalPrice) }        : {}),
+        ...(serviceId      !== undefined ? { serviceId }                             : {}),
+        ...(date           !== undefined ? { date: new Date(date + "T12:00:00") }   : {}),
+        ...(newBranchId    !== undefined ? { branchId: newBranchId }                : {}),
+        ...(completedAt    !== undefined ? { completedAt: completedAt ? new Date(completedAt) : null } : {}),
+        ...(receiptUrl     !== undefined ? {
           receiptUrl: receiptUrl || null,
           receiptUploadedAt: receiptUrl ? new Date() : null,
         } : {}),

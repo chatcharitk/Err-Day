@@ -21,6 +21,7 @@ export default function AddBookingModal({
   const [date,             setDate]             = useState(defaultDate);
   const [serviceId,        setServiceId]        = useState("");
   const [staffId,          setStaffId]          = useState("");
+  const [extraStaffIds,    setExtraStaffIds]    = useState<string[]>([]);
   const [time,             setTime]             = useState("");
   const [customer,         setCustomer]         = useState<CustomerValue>({ id: null, name: "", phone: "" });
   const [isWalkin,         setIsWalkin]         = useState(false);
@@ -30,6 +31,10 @@ export default function AddBookingModal({
   const [saving,           setSaving]           = useState(false);
   const [error,            setError]            = useState("");
   const [isMember,         setIsMember]         = useState(false);
+
+  function toggleExtraStaff(id: string) {
+    setExtraStaffIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   useEffect(() => {
     if (!customer.id || !customer.phone) { setIsMember(false); return; }
@@ -112,6 +117,7 @@ export default function AddBookingModal({
         branchId,
         serviceId,
         staffId:           staffId || null,
+        extraStaffIds:     extraStaffIds.length > 0 ? extraStaffIds : undefined,
         date,
         startTime:         time,
         endTime:           addMinutes(time, selectedSvc!.duration),
@@ -173,6 +179,11 @@ export default function AddBookingModal({
               )}
               {isWalkin && !customer.name && (
                 <p className="text-xs text-[#A08070] mt-1">หากไม่กรอกชื่อ จะบันทึกเป็น &quot;Walk-in&quot; อัตโนมัติ</p>
+              )}
+              {isWalkin && customer.name.trim() && customer.phone.trim() && (
+                <p className="text-xs mt-1 px-2 py-1 rounded-lg" style={{ background: "#F0FDF4", color: "#166534" }}>
+                  ✓ จะลงทะเบียนเป็นลูกค้าในระบบอัตโนมัติ
+                </p>
               )}
             </div>
             <div>
@@ -238,7 +249,7 @@ export default function AddBookingModal({
               </div>
             )}
             <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ช่าง (ไม่บังคับ)</label>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ช่างหลัก (ไม่บังคับ)</label>
               <div className="flex flex-wrap gap-1.5">
                 <button type="button" onClick={() => setStaffId("")}
                   className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
@@ -258,6 +269,25 @@ export default function AddBookingModal({
                 ))}
               </div>
             </div>
+            {staff.length > 1 && (
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ช่างเพิ่มเติม (หลายคน)</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {staff.filter(s => s.id !== staffId).map(s => {
+                    const active = extraStaffIds.includes(s.id);
+                    return (
+                      <button key={s.id} type="button" onClick={() => toggleExtraStaff(s.id)}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                        style={{
+                          background: active ? "#374151" : "white",
+                          color:      active ? "white"   : "#3B2A24",
+                          border:     `1px solid ${active ? "#374151" : "#E8D8CC"}`,
+                        }}>{s.name}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">เวลา</label>
               <div className="grid grid-cols-5 gap-1.5">

@@ -536,9 +536,10 @@ function CellEditor({
   const [err,   setErr]   = useState("");
 
   const presets: { label: string; start: string; end: string }[] = [
-    { label: "เริ่มต้น", start: defaultStart, end: defaultEnd },
-    { label: "เช้า",     start: "08:00",      end: "16:00" },
-    { label: "บ่าย",     start: "13:00",      end: "21:00" },
+    { label: "เช้า 8–17",    start: "08:00", end: "17:00" },
+    { label: "บ่าย 12–21",   start: "12:00", end: "21:00" },
+    { label: "อาทิตย์ 10–21", start: "10:00", end: "21:00" },
+    { label: "เต็มวัน 8–21", start: "08:00", end: "21:00" },
   ];
 
   function submit() {

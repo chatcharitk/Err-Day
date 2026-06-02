@@ -8,230 +8,217 @@ datasource db {
 }
 
 model Branch {
-  id        String   @id @default(cuid())
-  name      String
-  address   String
-  phone     String
-  imageUrl  String?
-  mapUrl    String?  // Google Maps link shown to customers (e.g. maps.app.goo.gl short link)
-  mapLat    Float?   // Latitude for precise embed pin
-  mapLng    Float?   // Longitude for precise embed pin
-  openTime  String?  // Daily open time "HH:mm", e.g. "10:00"
-  closeTime String?  // Daily close time "HH:mm", e.g. "20:00"
-  isActive        Boolean  @default(true)  // visible in admin panel
-  bookingEnabled  Boolean  @default(true)  // open for customer booking
-  /**
-   * Concurrency cap for ONLINE (LIFF/customer-facing) bookings.
-   *   null → no cap (use staff-on-shift count)
-   *   0    → online booking effectively disabled
-   *   N    → cap online bookings at N overlapping appointments
-   * Admin/POS bookings bypass this entirely.
-   * Use to reserve some chairs for walk-ins on busy branches.
-   */
-  onlineCap Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  staff    Staff[]
-  services BranchService[]
-  bookings Booking[]
-  capacityOverrides CapacityOverride[]
+  id                String             @id @default(cuid())
+  name              String
+  address           String
+  phone             String
+  imageUrl          String?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  mapLat            Float?
+  mapLng            Float?
+  mapUrl            String?
+  closeTime         String?
+  openTime          String?
+  bookingEnabled    Boolean            @default(true)
+  /// *
+  ///    * Concurrency cap for ONLINE (LIFF/customer-facing) bookings.
+  ///    *   null → no cap (use staff-on-shift count)
+  ///    *   0    → online booking effectively disabled
+  ///    *   N    → cap online bookings at N overlapping appointments
+  ///    * Admin/POS bookings bypass this entirely.
+  ///    * Use to reserve some chairs for walk-ins on busy branches.
+  onlineCap         Int?
   blockedSlots      BlockedSlot[]
+  bookings          Booking[]
+  services          BranchService[]
+  capacityOverrides CapacityOverride[]
   expenses          Expense[]
+  staff             Staff[]
 }
 
-/**
- * Per-time-window override of the branch's default online cap.
- * Either `date` (specific calendar day) or `dayOfWeek` (recurring weekly) is set.
- * For a given query time the most specific match wins:
- *     date-specific > day-of-week > branch.onlineCap > staff count
- */
+/// *
+///  * Per-time-window override of the branch's default online cap.
+///  * Either `date` (specific calendar day) or `dayOfWeek` (recurring weekly) is set.
+///  * For a given query time the most specific match wins:
+///  *     date-specific > day-of-week > branch.onlineCap > staff count
 model CapacityOverride {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   branchId  String
-  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  /** Specific date this override applies to (mutually exclusive with dayOfWeek). */
+  /// * Specific date this override applies to (mutually exclusive with dayOfWeek).
   date      DateTime?
-  /** Recurring weekly: 0 = Sunday … 6 = Saturday (mutually exclusive with date). */
+  /// * Recurring weekly: 0 = Sunday … 6 = Saturday (mutually exclusive with date).
   dayOfWeek Int?
-  startTime String   // "HH:mm"
-  endTime   String   // "HH:mm"
-  capacity  Int      // hard cap during this window (0 = closed)
+  startTime String
+  endTime   String
+  capacity  Int
   note      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@index([branchId, date])
   @@index([branchId, dayOfWeek])
 }
 
 model Service {
-  id                     String  @id @default(cuid())
+  id                     String          @id @default(cuid())
   name                   String
-  nameTh                 String  @default("")
   description            String?
-  descriptionTh          String?
   imageUrl               String?
   category               String
-  advanceBookingRequired Boolean @default(false) // e.g. hair color
-  availableFrom          String? // "HH:mm" — null = all day
-  availableTo            String? // "HH:mm"
-  memberPrice            Int?    // optional member-discounted price in satang (legacy / manual override)
-  memberDiscountPercent  Int     @default(0) // % discount for members on this service
-  isActive               Boolean @default(true)
-
-  branches BranchService[]
-  bookings Booking[]
+  isActive               Boolean         @default(true)
+  advanceBookingRequired Boolean         @default(false)
+  availableFrom          String?
+  availableTo            String?
+  descriptionTh          String?
+  memberPrice            Int?
+  nameTh                 String          @default("")
+  memberDiscountPercent  Int             @default(0)
+  bookings               Booking[]
+  branches               BranchService[]
 }
 
-// Pivot: a service can be offered at multiple branches with different prices/durations
 model BranchService {
   id        String  @id @default(cuid())
   branchId  String
   serviceId String
-  price     Int     // stored in satang (THB * 100)
-  duration  Int     // minutes
+  price     Int
+  duration  Int
   isActive  Boolean @default(true)
-
-  branch  Branch  @relation(fields: [branchId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
+  branch    Branch  @relation(fields: [branchId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
 
   @@unique([branchId, serviceId])
 }
 
 model Staff {
-  id             String  @id @default(cuid())
+  id             String         @id @default(cuid())
   branchId       String
   name           String
-  phone          String?
   avatarUrl      String?
-  commissionRate Float   @default(0) // percentage, e.g. 30 = 30 %
-  isActive       Boolean @default(true)
-
-  // Self-service portal credentials (set by admin). Staff signs in with phone + 4-digit PIN at /staff/login.
-  passcodeHash   String?   // bcrypt hash of the PIN — null = no portal access yet
+  isActive       Boolean        @default(true)
+  commissionRate Float          @default(0)
+  phone          String?
+  passcodeHash   String?
   lastLoginAt    DateTime?
-
-  branch       Branch        @relation(fields: [branchId], references: [id])
-  bookings     Booking[]
-  shifts       StaffShift[]
-  blockedSlots BlockedSlot[]
+  blockedSlots   BlockedSlot[]
+  bookings       Booking[]
+  bookingStaff   BookingStaff[]
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  shifts         StaffShift[]
 }
 
 model StaffShift {
   id        String   @id @default(cuid())
   staffId   String
-  date      DateTime // day of the shift (stored at noon local)
-  startTime String   // "HH:mm"
-  endTime   String   // "HH:mm" (exclusive end)
+  date      DateTime
+  startTime String
+  endTime   String
   createdAt DateTime @default(now())
-
-  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@unique([staffId, date, startTime])
   @@index([date])
   @@index([staffId, date])
 }
 
-/**
- * Admin-created time blocks — prevent customer bookings and show as "closed"
- * on the calendar. staffId = null means the whole branch is blocked; a specific
- * staffId blocks just that staff member.
- */
+/// *
+///  * Admin-created time blocks — prevent customer bookings and show as "closed"
+///  * on the calendar. staffId = null means the whole branch is blocked; a specific
+///  * staffId blocks just that staff member.
 model BlockedSlot {
   id        String   @id @default(cuid())
   branchId  String
-  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   staffId   String?
-  staff     Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
-  date      String   // "YYYY-MM-DD" (Bangkok local)
-  startTime String   // "HH:mm"
-  endTime   String   // "HH:mm"
+  date      String
+  startTime String
+  endTime   String
   reason    String?
   createdAt DateTime @default(now())
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff     Staff?   @relation(fields: [staffId], references: [id])
 
   @@index([branchId, date])
   @@index([staffId, date])
 }
 
 model Customer {
-  id         String   @id @default(cuid())
-  name       String
-  nickname   String?  // ชื่อเล่น — used in booking & shown to staff
-  phone      String   @unique
-  email      String?
-  gender      String?   // "MALE" | "FEMALE" | "OTHER"
-  dateOfBirth DateTime? // customer's date of birth
-  pictureUrl  String?   // profile picture (auto-pulled from Line, or manually set)
-  lineUserId String?  @unique // Line user ID — set automatically when customer signs in via LIFF
-  createdAt  DateTime @default(now())
-
-  // PDPA consent — captured at signup, only set when customer explicitly agrees
-  pdpaConsentAt DateTime?
-  pdpaVersion   String?    // policy version at time of consent (e.g. "2025-04-29")
-  pdpaSource    String?    // "signup" | "booking" | "staff" | "liff"
-
-  // Internal staff notes and photo gallery
-  notes     String?  // free-text staff notes about this customer
-  photoUrls String?  // JSON array of Vercel Blob URLs
-
-  bookings        Booking[]
-  membership      Membership?
+  id               String            @id @default(cuid())
+  name             String
+  phone            String            @unique
+  email            String?
+  lineUserId       String?           @unique
+  createdAt        DateTime          @default(now())
+  gender           String?
+  pictureUrl       String?
+  pdpaConsentAt    DateTime?
+  pdpaSource       String?
+  pdpaVersion      String?
+  nickname         String?
+  notes            String?
+  photoUrls        String?
+  dateOfBirth      DateTime?
+  lineDisplayName  String?
+  bookings         Booking[]
+  packages         CustomerPackage[]
+  membership       Membership?
   membershipCycles MembershipCycle[]
-  packages        CustomerPackage[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Customer_name_trgm_idx", type: Gin)
+  @@index([nickname(ops: raw("gin_trgm_ops"))], map: "Customer_nickname_trgm_idx", type: Gin)
+  @@index([phone(ops: raw("gin_trgm_ops"))], map: "Customer_phone_trgm_idx", type: Gin)
 }
 
 model MembershipTier {
-  id              String  @id @default(cuid())
-  name            String  // e.g. "Silver", "Gold", "Platinum"
-  nameTh          String  // e.g. "ซิลเวอร์", "โกลด์", "แพลทินัม"
-  minPoints       Int     // points required to reach this tier
-  discountPercent Int     @default(0) // discount % for members of this tier
-  color           String  @default("#6b7280") // UI accent color
-  validityDays    Int     @default(30) // days until membership expires after activation
-  maxUsages       Int     @default(0)  // 0 = unlimited discount usages
-  isActive        Boolean @default(true)
-
-  memberships Membership[]
+  id              String       @id @default(cuid())
+  name            String
+  nameTh          String
+  minPoints       Int
+  discountPercent Int          @default(0)
+  color           String       @default("#6b7280")
+  isActive        Boolean      @default(true)
+  maxUsages       Int          @default(0)
+  validityDays    Int          @default(30)
+  memberships     Membership[]
 }
 
 model Membership {
-  id            String    @id @default(cuid())
-  customerId    String    @unique
-  tierId        String?   // optional — kept for backward compat, not shown in UI
-  label         String    @default("สมาชิก") // display label
-  points        Int       @default(0)
-  joinedAt      DateTime  @default(now())
-  activatedAt   DateTime  @default(now())
-  expiresAt     DateTime? // directly editable in admin
-  usagesUsed    Int       @default(0)
-  usagesAllowed Int       @default(0) // 0 = unlimited
-  pendingActivation Boolean @default(false) // paid but not yet started — excluded from active checks
-  updatedAt     DateTime  @updatedAt
-
-  customer Customer        @relation(fields: [customerId], references: [id])
-  tier     MembershipTier? @relation(fields: [tierId], references: [id])
-  cycles   MembershipCycle[]
+  id                String            @id @default(cuid())
+  customerId        String            @unique
+  tierId            String?
+  points            Int               @default(0)
+  joinedAt          DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  activatedAt       DateTime          @default(now())
+  expiresAt         DateTime?
+  usagesAllowed     Int               @default(0)
+  usagesUsed        Int               @default(0)
+  label             String            @default("สมาชิก")
+  pendingActivation Boolean           @default(false)
+  customer          Customer          @relation(fields: [customerId], references: [id])
+  tier              MembershipTier?   @relation(fields: [tierId], references: [id])
+  cycles            MembershipCycle[]
 }
 
 /// One row per membership "cycle" (each 30-day period the customer pays for).
 /// Created when staff sells the membership SKU in POS, or when admin uses
 /// the manual renew button. Lets us keep history across renewals.
 model MembershipCycle {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   customerId    String
   membershipId  String
-  startedAt     DateTime  @default(now())
-  endedAt       DateTime  // = startedAt + tier.validityDays
-  closedAt      DateTime? // set when the next cycle starts (or when expired)
-  paidAmount    Int       @default(0)        // satang — what they paid for this cycle
-  paymentMethod String?   // "POS" | "PromptPay" | "Manual"
-  bookingsUsed  Int       @default(0)        // snapshotted at close
-  bookingId     String?   // link to the POS Booking that activated this cycle
+  startedAt     DateTime   @default(now())
+  endedAt       DateTime
+  closedAt      DateTime?
+  paidAmount    Int        @default(0)
+  paymentMethod String?
+  bookingsUsed  Int        @default(0)
+  bookingId     String?
   notes         String?
-
-  customer   Customer   @relation(fields: [customerId], references: [id])
-  membership Membership @relation(fields: [membershipId], references: [id])
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  membership    Membership @relation(fields: [membershipId], references: [id])
 
   @@index([customerId, startedAt])
   @@index([membershipId])
@@ -240,77 +227,182 @@ model MembershipCycle {
 /// One row per package purchase (Buffet 30d / 5-pack 90d).
 /// Each customer can hold multiple active packages; redemption decrements usagesUsed.
 model CustomerPackage {
-  id            String    @id @default(cuid())
-  customerId    String
-  packageSku    String    // e.g. "svc-buffet" | "svc-pkg5"
-  startedAt     DateTime  @default(now())
-  expiresAt     DateTime
-  usagesUsed    Int       @default(0)
-  usageLimit    Int       // 0 = unlimited (buffet), positive = capped (5-pack)
-  paidAmount    Int       @default(0)        // satang
-  paymentMethod String?   // "POS" | "Manual"
-  bookingId     String?   // POS Booking that activated this package
-  closedAt      DateTime? // set when manually cancelled
-  pendingActivation Boolean @default(false) // paid but not yet started — excluded from active redemption
-  notes         String?
-
-  customer Customer @relation(fields: [customerId], references: [id])
+  id                String    @id @default(cuid())
+  customerId        String
+  packageSku        String
+  startedAt         DateTime  @default(now())
+  expiresAt         DateTime
+  usagesUsed        Int       @default(0)
+  usageLimit        Int
+  paidAmount        Int       @default(0)
+  paymentMethod     String?
+  bookingId         String?
+  closedAt          DateTime?
+  notes             String?
+  pendingActivation Boolean   @default(false)
+  customer          Customer  @relation(fields: [customerId], references: [id])
 
   @@index([customerId, packageSku])
   @@index([expiresAt])
 }
 
 model ServiceAddon {
-  id       String  @id @default(cuid())
-  name     String  // English name
-  nameTh   String  // Thai name
-  price    Int     // in satang
-  isActive Boolean @default(true)
-
+  id            String         @id @default(cuid())
+  name          String
+  nameTh        String
+  price         Int
+  isActive      Boolean        @default(true)
   bookingAddons BookingAddon[]
 }
 
+model BookingStaff {
+  id        String  @id @default(cuid())
+  bookingId String
+  staffId   String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staff     Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, staffId])
+  @@index([bookingId])
+}
+
 model Booking {
-  id         String        @id @default(cuid())
-  branchId   String
-  serviceId  String
-  staffId    String?
-  customerId String
-  date        DateTime      // date of appointment
-  startTime   String        // "HH:mm"
-  endTime     String        // "HH:mm"
-  status      BookingStatus @default(PENDING)
-  notes       String?
-  totalPrice  Int           // in satang
-  completedAt DateTime?     // set when payment is processed via POS (UTC)
-  receiptUrl  String?       // Vercel Blob URL of uploaded receipt photo
+  id                String         @id @default(cuid())
+  branchId          String
+  serviceId         String
+  staffId           String?
+  customerId        String
+  date              DateTime
+  startTime         String
+  endTime           String
+  status            BookingStatus  @default(PENDING)
+  notes             String?
+  totalPrice        Int
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  completedAt       DateTime?
   receiptUploadedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  receiptUrl        String?
+  branch            Branch         @relation(fields: [branchId], references: [id])
+  customer          Customer       @relation(fields: [customerId], references: [id])
+  service           Service        @relation(fields: [serviceId], references: [id])
+  staff             Staff?         @relation(fields: [staffId], references: [id])
+  addons            BookingAddon[]
+  extraStaff        BookingStaff[]
 
-  branch   Branch         @relation(fields: [branchId], references: [id])
-  service  Service        @relation(fields: [serviceId], references: [id])
-  staff    Staff?         @relation(fields: [staffId], references: [id])
-  customer Customer       @relation(fields: [customerId], references: [id])
-  addons   BookingAddon[]
-
-  // Hot-path indexes — without these every booking query was a full table scan.
-  @@index([branchId, date])      // calendar, mobile home, availability checks
-  @@index([customerId])          // customer detail page → booking history
-  @@index([staffId, date])       // staff schedule view
-  @@index([status, date])        // sales history filtering + analytics
+  @@index([branchId, date])
+  @@index([customerId])
+  @@index([staffId, date])
+  @@index([status, date])
 }
 
 model BookingAddon {
-  id        String @id @default(cuid())
+  id        String       @id @default(cuid())
   bookingId String
   addonId   String
-  price     Int    // snapshot at booking time
+  price     Int
+  addon     ServiceAddon @relation(fields: [addonId], references: [id])
+  booking   Booking      @relation(fields: [bookingId], references: [id])
 
-  booking Booking      @relation(fields: [bookingId], references: [id])
-  addon   ServiceAddon @relation(fields: [addonId], references: [id])
+  @@index([bookingId])
+}
 
-  @@index([bookingId])  // loaded on every calendar render
+model AdminUser {
+  id        String         @id @default(cuid())
+  username  String         @unique
+  password  String
+  name      String
+  role      AdminRole      @default(ADMIN)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  sessions  AdminSession[]
+}
+
+model AdminSession {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+model NotificationLog {
+  id        String             @id @default(cuid())
+  kind      NotificationKind
+  targetId  String
+  channel   String             @default("line")
+  status    NotificationStatus
+  recipient String?
+  error     String?
+  payload   String?
+  sentAt    DateTime           @default(now())
+
+  @@unique([kind, targetId])
+  @@index([sentAt])
+  @@index([status])
+}
+
+/// *
+///  * Admin expense tracking — costs the salon incurs (supplies, rent, marketing,
+///  * utilities, equipment, etc.). Two entry paths:
+///  *   1. Manual form
+///  *   2. Upload an invoice photo → Claude vision extracts → admin reviews
+///  *
+///  * branchId is OPTIONAL — null means a shared / HQ expense (e.g. accounting,
+///  * marketing campaign across all branches). Per-branch expenses use the id.
+///  *
+///  * Amounts are stored in satang (THB * 100), matching the Booking convention.
+model Expense {
+  id            String        @id @default(cuid())
+  branchId      String?
+  category      String
+  vendor        String?
+  date          DateTime
+  totalAmount   Int
+  vatAmount     Int?
+  paymentMethod String?
+  receiptUrl    String?
+  notes         String?
+  status        String        @default("CONFIRMED")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  branch        Branch?       @relation(fields: [branchId], references: [id])
+  items         ExpenseItem[]
+
+  @@index([branchId, date])
+  @@index([category, date])
+  @@index([date])
+}
+
+/// *
+///  * Line items on an expense (one row per product/service on the invoice).
+///  * Useful when an invoice has multiple SKUs (e.g. 3 boxes of shampoo +
+///  * 2 boxes of dye on the same receipt).
+model ExpenseItem {
+  id          String  @id @default(cuid())
+  expenseId   String
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Int
+  totalPrice  Int
+  expense     Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model ChatMessage {
+  id         String   @id
+  lineUserId String
+  role       String
+  content    String
+  toolsUsed  String?
+  createdAt  DateTime @default(now())
+
+  @@index([lineUserId, createdAt])
 }
 
 enum BookingStatus {
@@ -321,125 +413,23 @@ enum BookingStatus {
   NO_SHOW
 }
 
-// ─── Admin auth ───────────────────────────────────────────────────────────────
-
-model AdminUser {
-  id        String    @id @default(cuid())
-  username  String    @unique
-  password  String    // bcrypt hash
-  name      String
-  role      AdminRole @default(ADMIN)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  sessions AdminSession[]
-}
-
-model AdminSession {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique // random opaque token stored in cookie
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([token])
-}
-
 enum AdminRole {
   OWNER
   ADMIN
 }
 
-// ─── Notifications ────────────────────────────────────────────────────────────
-//
-// Records every customer-facing notification we attempt to send (e.g. LINE
-// push). The unique constraint on (kind, targetId) makes the system
-// idempotent — once a row exists, the same notification will not be sent
-// again no matter how many times the cron runs.
-
-model NotificationLog {
-  id        String             @id @default(cuid())
-  kind      NotificationKind
-  targetId  String             // bookingId / membershipId / customerPackageId — depends on kind
-  channel   String             @default("line")  // future: "sms", "email"
-  status    NotificationStatus
-  recipient String?            // lineUserId or other channel-specific id (audit only)
-  error     String?            // LINE API error message if status = FAILED
-  payload   String?            // optional JSON snapshot for debugging
-  sentAt    DateTime           @default(now())
-
-  @@unique([kind, targetId])
-  @@index([sentAt])
-  @@index([status])
-}
-
 enum NotificationKind {
-  BOOKING_CREATED
-  BOOKING_CONFIRMED
   BOOKING_REMINDER_4H
   MEMBERSHIP_ACTIVATED
   MEMBERSHIP_EXPIRY_1D
   PACKAGE_ACTIVATED
   PACKAGE_EXPIRY_1D
+  BOOKING_CREATED
+  BOOKING_CONFIRMED
 }
 
 enum NotificationStatus {
   SENT
   FAILED
-  SKIPPED   // customer has no LINE link, or feature disabled
-}
-
-
-/**
- * Admin expense tracking — costs the salon incurs (supplies, rent, marketing,
- * utilities, equipment, etc.). Two entry paths:
- *   1. Manual form
- *   2. Upload an invoice photo → Claude vision extracts → admin reviews
- *
- * branchId is OPTIONAL — null means a shared / HQ expense (e.g. accounting,
- * marketing campaign across all branches). Per-branch expenses use the id.
- *
- * Amounts are stored in satang (THB * 100), matching the Booking convention.
- */
-model Expense {
-  id            String    @id @default(cuid())
-  branchId      String?   // null = shared / HQ
-  branch        Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  category      String    // free string; UI offers a predefined list
-  vendor        String?   // supplier name
-  date          DateTime  // expense date (stored at noon local, like Booking)
-  totalAmount   Int       // satang
-  vatAmount     Int?      // satang — null = no VAT or unknown
-  paymentMethod String?   // CASH | TRANSFER | CARD | OTHER
-  receiptUrl    String?   // Vercel Blob URL of the invoice photo / PDF
-  notes         String?
-  status        String    @default("CONFIRMED")  // CONFIRMED | DRAFT
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  items         ExpenseItem[]
-
-  @@index([branchId, date])
-  @@index([category, date])
-  @@index([date])
-}
-
-/**
- * Line items on an expense (one row per product/service on the invoice).
- * Useful when an invoice has multiple SKUs (e.g. 3 boxes of shampoo +
- * 2 boxes of dye on the same receipt).
- */
-model ExpenseItem {
-  id          String   @id @default(cuid())
-  expenseId   String
-  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  description String
-  quantity    Float    @default(1)
-  unitPrice   Int      // satang per unit
-  totalPrice  Int      // satang — line total (quantity * unitPrice)
-
-  @@index([expenseId])
+  SKIPPED
 }

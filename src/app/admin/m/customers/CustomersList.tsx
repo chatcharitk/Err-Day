@@ -85,10 +85,15 @@ function groupByInitial(list: CustomerRow[]) {
   return groups;
 }
 
+function isWalkin(c: CustomerRow) {
+  return c.phone.startsWith("walkin-") || c.phone.startsWith("pos-") || c.name === "Walk-in";
+}
+
 export default function CustomersList({ initialCustomers }: { initialCustomers: CustomerRow[] }) {
   const router = useRouter();
-  const [query,      setQuery]      = useState("");
-  const [memberOnly, setMemberOnly] = useState(false);
+  const [query,       setQuery]       = useState("");
+  const [memberOnly,  setMemberOnly]  = useState(false);
+  const [walkinOnly,  setWalkinOnly]  = useState(false);
   const [results, setResults] = useState<CustomerRow[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -116,7 +121,13 @@ export default function CustomersList({ initialCustomers }: { initialCustomers: 
   }, [query]);
 
   const baseList = results ?? initialCustomers;
-  const list     = memberOnly ? baseList.filter(c => c.isMember || c.isPending) : baseList;
+  const nonWalkinBase = baseList.filter(c => !isWalkin(c));
+  const walkinBase    = baseList.filter(isWalkin);
+  let list = walkinOnly
+    ? walkinBase
+    : memberOnly
+      ? nonWalkinBase.filter(c => c.isMember || c.isPending)
+      : nonWalkinBase;
 
   return (
     <main className="pb-32">
@@ -147,9 +158,9 @@ export default function CustomersList({ initialCustomers }: { initialCustomers: 
             />
           </div>
           {/* Filter pills */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setMemberOnly(v => !v)}
+              onClick={() => { setMemberOnly(v => !v); setWalkinOnly(false); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
               style={memberOnly
                 ? { background: "#F0FDF4", color: "#166534", border: "1.5px solid #86EFAC" }
@@ -161,6 +172,21 @@ export default function CustomersList({ initialCustomers }: { initialCustomers: 
               {memberOnly && (
                 <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "#DCFCE7", color: "#166534" }}>
                   {list.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => { setWalkinOnly(v => !v); setMemberOnly(false); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+              style={walkinOnly
+                ? { background: "#F1F5F9", color: "#374151", border: "1.5px solid #94A3B8" }
+                : { background: "white", color: MUTED, border: `1.5px solid ${BORDER}` }
+              }
+            >
+              Walk-in
+              {walkinOnly && (
+                <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "#E2E8F0", color: "#374151" }}>
+                  {walkinBase.length}
                 </span>
               )}
             </button>

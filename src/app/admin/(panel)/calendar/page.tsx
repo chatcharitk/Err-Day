@@ -61,9 +61,10 @@ export default async function CalendarPage({
         notes:      true,
         serviceId:  true,
         service:    { select: { name: true, nameTh: true, category: true } },
-        customer:   { select: { id: true, name: true, phone: true } },
+        customer:   { select: { id: true, name: true, nickname: true, phone: true } },
         staff:      { select: { id: true, name: true } },
         addons:     { select: { addonId: true, price: true, addon: { select: { nameTh: true, name: true } } } },
+        extraStaff: { select: { staffId: true, staff: { select: { id: true, name: true } } } },
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
@@ -81,8 +82,9 @@ export default async function CalendarPage({
     notes: b.notes,
     serviceId: b.serviceId,
     service: { name: b.service.name, nameTh: b.service.nameTh, category: b.service.category },
-    customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
+    customer: { id: b.customer.id, name: b.customer.name, nickname: b.customer.nickname, phone: b.customer.phone },
     staff: b.staff ? { id: b.staff.id, name: b.staff.name } : null,
+    extraStaff: b.extraStaff.map((es) => ({ id: es.staff.id, name: es.staff.name })),
     addons: b.addons.map((a) => ({ id: a.addonId, nameTh: a.addon.nameTh, name: a.addon.name, price: a.price })),
   }));
 

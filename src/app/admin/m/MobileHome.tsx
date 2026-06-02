@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ChevronDown, Plus, Search, MoreVertical, LogOut, RefreshCw,
+  Plus, Search, MoreVertical, LogOut, RefreshCw,
   Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
@@ -86,8 +86,7 @@ const DOW_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
 export default function MobileHome({ branches, activeBranchId, selectedDate, bookings, todayDate }: Props) {
   const router = useRouter();
-  const [showBranchPicker, setShowBranchPicker] = useState(false);
-  const [showMenu,         setShowMenu]         = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const [isNavigating, startNavigate] = useTransition();
 
@@ -120,7 +119,6 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
     const url = new URL(window.location.href);
     url.searchParams.set("branchId", id);
     router.replace(url.pathname + url.search);
-    setShowBranchPicker(false);
   };
 
   const switchDate = (dateStr: string) => {
@@ -196,17 +194,32 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
           </div>
         </div>
 
-        {/* Branch picker pill */}
-        <div className="px-4 pb-3">
-          <button
-            onClick={() => setShowBranchPicker(true)}
-            className="w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-medium"
-            style={{ background: "#FFF8F4", border: `1px solid ${BORDER}`, color: TEXT }}
-          >
-            <span className="truncate">{activeBranch?.name ?? "เลือกสาขา"}</span>
-            <ChevronDown size={16} style={{ color: MUTED }} />
-          </button>
-        </div>
+        {/* Branch buttons — one tap to switch */}
+        {branches.length > 1 && (
+          <div className="px-4 pb-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {branches.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => switchBranch(b.id)}
+                className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background:  b.id === activeBranchId ? PRIMARY : "#FFF8F4",
+                  color:       b.id === activeBranchId ? "white"  : TEXT,
+                  border:      `1px solid ${b.id === activeBranchId ? PRIMARY : BORDER}`,
+                }}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {branches.length === 1 && (
+          <div className="px-4 pb-3">
+            <div className="rounded-xl px-4 py-2.5 text-sm font-medium" style={{ background: "#FFF8F4", border: `1px solid ${BORDER}`, color: TEXT }}>
+              {activeBranch?.name}
+            </div>
+          </div>
+        )}
 
         {/* Date strip */}
         <div className="px-2 pb-3 flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", opacity: isNavigating ? 0.6 : 1, transition: "opacity 100ms" }}>
@@ -392,45 +405,6 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
       >
         <Plus size={26} />
       </Link>
-
-      {/* ── Branch picker bottom sheet ── */}
-      {showBranchPicker && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ background: "rgba(0,0,0,0.4)" }}
-          onClick={() => setShowBranchPicker(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-t-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-              <p className="font-medium" style={{ color: TEXT }}>เลือกสาขา</p>
-              <button onClick={() => setShowBranchPicker(false)} className="p-1" style={{ color: MUTED }}>
-                <X size={18} />
-              </button>
-            </div>
-            <ul className="p-3 max-h-80 overflow-y-auto">
-              {branches.map((b) => (
-                <li key={b.id}>
-                  <button
-                    onClick={() => switchBranch(b.id)}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl"
-                    style={{
-                      background: b.id === activeBranchId ? "#FFF8F4" : "transparent",
-                      color: TEXT,
-                    }}
-                  >
-                    <span className="text-sm">{b.name}</span>
-                    {b.id === activeBranchId && <Check size={16} style={{ color: PRIMARY }} />}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="h-4" />
-          </div>
-        </div>
-      )}
 
       {/* ── Menu sheet ── */}
       {showMenu && (
