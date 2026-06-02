@@ -14,7 +14,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { pushText } from "@/lib/line-messaging";
+import { pushText, pushLine } from "@/lib/line-messaging";
+import { buildBookingFlex } from "@/lib/flex/booking";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -146,22 +147,10 @@ export async function sendBookingTimeChanged(
     weekday: "long", day: "numeric", month: "short", year: "numeric",
   });
 
-  const text =
-`⏰ err·day — เปลี่ยนเวลานัดค่ะ
-
-สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
-ทีมงานได้ปรับเวลานัดของคุณใหม่แล้วนะคะ
-
-📅 ${dateStr}
-⏰ ${oldStart}–${oldEnd} → ${b.startTime}–${b.endTime}
-💆 ${b.service.nameTh}
-👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
-📍 ${b.branch.name}
-
-หากมีคำถามกรุณาติดต่อเราได้เลยนะคะ 🌸`;
-
-  // Customer notification
-  const r = await pushText(b.customer.lineUserId, text);
+  // Customer notification — rich Flex card with Map + Reschedule buttons
+  const r = await pushLine(b.customer.lineUserId, [
+    buildBookingFlex(b, "rescheduled", { oldStart, oldEnd }),
+  ]);
   if (!r.ok) console.error("[notify] time changed (customer) failed", bookingId, r.error);
   else        console.log("[notify] time changed (customer) sent",    bookingId);
 
@@ -213,22 +202,7 @@ export async function sendBookingCreated(bookingId: string): Promise<SendResult>
     return { kind, targetId: bookingId, status: "SKIPPED", reason: "no_line_link" };
   }
 
-  const text =
-`✨ err·day — ได้รับการจองของคุณแล้วค่ะ
-
-สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
-ทางร้านได้รับการจองของคุณเรียบร้อยแล้วนะคะ 🙏
-ทีมงานจะตรวจสอบและส่งข้อความยืนยันกลับให้คุณอีกครั้งในไม่ช้านะคะ
-
-📅 ${formatDateTh(b.date)}
-⏰ ${b.startTime} – ${b.endTime}
-💆 ${b.service.nameTh}
-👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
-📍 ${b.branch.name}
-
-ดูรายละเอียดได้ที่ "การจองของฉัน" นะคะ 🌸`;
-
-  const r = await pushText(b.customer.lineUserId, text);
+  const r = await pushLine(b.customer.lineUserId, [buildBookingFlex(b, "created")]);
   if (r.ok) {
     await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
     return { kind, targetId: bookingId, status: "SENT" };
@@ -254,21 +228,7 @@ export async function sendBookingConfirmed(bookingId: string): Promise<SendResul
     return { kind, targetId: bookingId, status: "SKIPPED", reason: "no_line_link" };
   }
 
-  const text =
-`✅ err·day — ยืนยันการจองแล้วค่ะ
-
-สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
-ทีมงานได้ยืนยันการจองของคุณเรียบร้อยแล้วนะคะ 🎉
-
-📅 ${formatDateTh(b.date)}
-⏰ ${b.startTime} – ${b.endTime}
-💆 ${b.service.nameTh}
-👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
-📍 ${b.branch.name}
-
-แล้วพบกันนะคะ 🌸`;
-
-  const r = await pushText(b.customer.lineUserId, text);
+  const r = await pushLine(b.customer.lineUserId, [buildBookingFlex(b, "confirmed")]);
   if (r.ok) {
     await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
     return { kind, targetId: bookingId, status: "SENT" };
@@ -298,21 +258,7 @@ export async function sendBookingReminder4h(bookingId: string): Promise<SendResu
     return { kind, targetId: bookingId, status: "SKIPPED", reason: "non_active_status" };
   }
 
-  const text =
-`🌸 err·day reminder
-
-สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
-นัดของคุณกำลังจะมาถึงในอีกประมาณ 4 ชั่วโมงนะคะ
-
-📅 ${formatDateTh(b.date)}
-⏰ ${b.startTime} – ${b.endTime}
-💆 ${b.service.nameTh}
-👤 ช่าง: ${b.staff?.name ?? "ที่ว่างให้บริการ"}
-📍 ${b.branch.name}
-
-หากต้องการเปลี่ยนแปลงหรือยกเลิก กรุณาแจ้งล่วงหน้านะคะ ขอบคุณค่ะ 🙏`;
-
-  const r = await pushText(b.customer.lineUserId, text);
+  const r = await pushLine(b.customer.lineUserId, [buildBookingFlex(b, "reminder")]);
   if (r.ok) {
     await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
     return { kind, targetId: bookingId, status: "SENT" };
