@@ -36,6 +36,11 @@ interface ServiceItem {
 interface Props {
   services: ServiceItem[];
   branches: BranchInfo[];
+  /** Categories actually in use (loaded server-side from distinct Service.category).
+   *  Replaces the old hardcoded "Hair Cut, Hair Color…" list so the dropdown
+   *  matches reality. Empty = no existing categories yet; admin can still type
+   *  a custom one. */
+  categories: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,9 +55,10 @@ function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
 }
 
-const CATEGORIES = [
-  "Hair Cut", "Hair Color", "Hair Treatment", "Nail", "Facial", "Massage", "Eyelash", "Eyebrow", "Other",
-];
+// Fallback categories when the DB has none yet (brand-new install). Production
+// salons receive their actual categories via the Props.categories prop and
+// these are never shown. Kept short on purpose — not a "menu of everything".
+const FALLBACK_CATEGORIES = ["บริการทั่วไป", "Hair"];
 
 const PRIMARY = "#8B1D24";
 const BG      = "#FDF7F2";
@@ -136,20 +142,24 @@ function BranchPricingRow({ branch, price, duration, isActive, onChange }: Branc
 interface ServiceFormProps {
   initial?: ServiceItem;
   branches: BranchInfo[];
+  categories: string[];
   onClose: () => void;
   onSaved: () => void;
 }
 
 type BranchPricingState = Record<string, { price: string; duration: string; isActive: boolean }>;
 
-function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormProps) {
+function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: ServiceFormProps) {
   const isEdit = !!initial;
+
+  // Real categories from DB; fall back only on brand-new install where none exist yet.
+  const categoryOptions = categories.length > 0 ? categories : FALLBACK_CATEGORIES;
 
   const [name, setName]         = useState(initial?.name ?? "");
   const [nameTh, setNameTh]     = useState(initial?.nameTh ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [customCat, setCustomCat] = useState(
-    initial?.category && !CATEGORIES.includes(initial.category) ? initial.category : "",
+    initial?.category && !categoryOptions.includes(initial.category) ? initial.category : "",
   );
   const [advance, setAdvance]   = useState(initial?.advanceBookingRequired ?? false);
 
@@ -312,7 +322,7 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
             <div>
               <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>หมวดหมู่ *</label>
               <select
-                value={CATEGORIES.includes(category) ? category : category ? "__custom__" : ""}
+                value={categoryOptions.includes(category) ? category : category ? "__custom__" : ""}
                 onChange={e => {
                   if (e.target.value === "__custom__") {
                     setCategory("__custom__");
@@ -325,10 +335,10 @@ function ServiceFormModal({ initial, branches, onClose, onSaved }: ServiceFormPr
                 style={{ borderColor: BORDER, color: TEXT }}
               >
                 <option value="">-- เลือกหมวดหมู่ --</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__custom__">อื่นๆ (ระบุเอง)</option>
               </select>
-              {(category === "__custom__" || (category && !CATEGORIES.includes(category))) && (
+              {(category === "__custom__" || (category && !categoryOptions.includes(category))) && (
                 <input
                   value={customCat}
                   onChange={e => setCustomCat(e.target.value)}
@@ -669,7 +679,7 @@ function ServiceCard({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ServicesManager({ services: initialServices, branches }: Props) {
+export default function ServicesManager({ services: initialServices, branches, categories }: Props) {
   const router = useRouter();
   const [services, setServices] = useState<ServiceItem[]>(initialServices);
   const [showAdd, setShowAdd]   = useState(false);
@@ -766,6 +776,7 @@ export default function ServicesManager({ services: initialServices, branches }:
       {showAdd && (
         <ServiceFormModal
           branches={branches}
+          categories={categories}
           onClose={() => setShowAdd(false)}
           onSaved={refresh}
         />
@@ -776,6 +787,7 @@ export default function ServicesManager({ services: initialServices, branches }:
         <ServiceFormModal
           initial={editing}
           branches={branches}
+          categories={categories}
           onClose={() => setEditing(null)}
           onSaved={refresh}
         />
