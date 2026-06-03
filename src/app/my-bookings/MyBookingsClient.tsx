@@ -377,6 +377,14 @@ function EntitlementCards({ data }: { data: EntitlementsPayload | "none" }) {
   );
 }
 
+// Promo artwork (served from public/membership/). Same images used on the
+// LINE Flex cards — buffet has none yet, so it falls back to the plain layout.
+const MEMBERSHIP_IMG = "/membership/membership.jpg";
+const PACKAGE_IMG: Record<string, string> = {
+  "svc-pkg5": "/membership/pack5.jpg",
+  // "svc-buffet": "/membership/buffet.jpg",  // add when the artwork is ready
+};
+
 function MembershipCard({ m }: { m: MembershipStatus }) {
   const isActive = !m.isExpired && !m.isUsagesExhausted;
   const expiresDate = m.expiresAt
@@ -385,38 +393,29 @@ function MembershipCard({ m }: { m: MembershipStatus }) {
   const usagesLeft = m.usagesAllowed > 0
     ? Math.max(0, m.usagesAllowed - m.usagesUsed)
     : null;
+  const statusText = m.isExpired ? "หมดอายุ" : m.isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้";
 
   return (
-    <div
-      className="rounded-2xl p-4"
-      style={{
-        background: isActive ? "#ECFDF5" : "#FEF2F2",
-        border: `1.5px solid ${isActive ? "#BBF7D0" : "#FECACA"}`,
-      }}
-    >
-      <div className="flex items-center gap-3">
-        <UserCheck className="w-8 h-8 flex-shrink-0" style={{ color: isActive ? "#059669" : "#DC2626" }} />
+    <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${isActive ? "#BBF7D0" : "#FECACA"}`, background: "white" }}>
+      {/* Promo artwork */}
+      <div style={{ position: "relative" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={MEMBERSHIP_IMG} alt="err.day membership" className="w-full block" style={{ opacity: isActive ? 1 : 0.5 }} />
+        <span
+          className="absolute top-2.5 right-2.5 text-xs px-2 py-0.5 rounded-full font-semibold"
+          style={isActive ? { background: "#D1FAE5", color: "#065F46" } : { background: "#FEE2E2", color: "#991B1B" }}
+        >
+          {statusText}
+        </span>
+      </div>
+      {/* Live details */}
+      <div className="px-4 py-3 flex items-center gap-3" style={{ background: isActive ? "#ECFDF5" : "#FEF2F2" }}>
+        <UserCheck className="w-7 h-7 flex-shrink-0" style={{ color: isActive ? "#059669" : "#DC2626" }} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold" style={{ color: isActive ? "#065F46" : "#991B1B" }}>
-              {m.label}
-            </p>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium"
-              style={isActive
-                ? { background: "#D1FAE5", color: "#065F46" }
-                : { background: "#FEE2E2", color: "#991B1B" }
-              }
-            >
-              {m.isExpired ? "หมดอายุ" : m.isUsagesExhausted ? "ใช้ครบแล้ว" : "ใช้งานได้"}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-xs flex-wrap" style={{ color: isActive ? "#059669" : "#DC2626" }}>
-            {expiresDate && <span>หมดอายุ {expiresDate}</span>}
-            {!expiresDate && <span>ไม่หมดอายุ</span>}
-            {usagesLeft !== null && (
-              <span>· เหลือ {usagesLeft}/{m.usagesAllowed} ครั้ง</span>
-            )}
+          <p className="text-sm font-bold" style={{ color: isActive ? "#065F46" : "#991B1B" }}>{m.label}</p>
+          <div className="flex items-center gap-3 mt-0.5 text-xs flex-wrap" style={{ color: isActive ? "#059669" : "#DC2626" }}>
+            <span>{expiresDate ? `หมดอายุ ${expiresDate}` : "ไม่หมดอายุ"}</span>
+            {usagesLeft !== null && <span>· เหลือ {usagesLeft}/{m.usagesAllowed} ครั้ง</span>}
           </div>
         </div>
       </div>
@@ -425,33 +424,51 @@ function MembershipCard({ m }: { m: MembershipStatus }) {
 }
 
 function PackageCard({ pkg }: { pkg: ActivePackage }) {
+  const img = PACKAGE_IMG[pkg.sku];
   const expiresDate = new Date(pkg.expiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
   const daysLeft = Math.max(0, Math.ceil((new Date(pkg.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+
+  const details = (
+    <div className="flex items-center gap-3 mt-0.5 text-xs flex-wrap" style={{ color: "#2563EB" }}>
+      <span>เหลือ {daysLeft} วัน · หมดอายุ {expiresDate}</span>
+      {pkg.usagesLeft !== null ? (
+        <span>· เหลือ {pkg.usagesLeft}/{pkg.usageLimit} ครั้ง</span>
+      ) : (
+        <span>· ใช้แล้ว {pkg.usagesUsed} ครั้ง (ไม่จำกัด)</span>
+      )}
+    </div>
+  );
+
+  // No artwork (e.g. buffet) → compact icon layout.
+  if (!img) {
+    return (
+      <div className="rounded-2xl p-4" style={{ background: "#EFF6FF", border: "1.5px solid #BFDBFE" }}>
+        <div className="flex items-center gap-3">
+          <PackageIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#2563EB" }} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-bold" style={{ color: "#1E3A8A" }}>{pkg.nameTh}</p>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#DBEAFE", color: "#1E40AF" }}>ใช้งานได้</span>
+            </div>
+            {details}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="rounded-2xl p-4"
-      style={{ background: "#EFF6FF", border: "1.5px solid #BFDBFE" }}
-    >
-      <div className="flex items-center gap-3">
-        <PackageIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#2563EB" }} />
+    <div className="rounded-2xl overflow-hidden" style={{ border: "1.5px solid #BFDBFE", background: "white" }}>
+      <div style={{ position: "relative" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={img} alt={pkg.nameTh} className="w-full block" />
+        <span className="absolute top-2.5 right-2.5 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "#DBEAFE", color: "#1E40AF" }}>ใช้งานได้</span>
+      </div>
+      <div className="px-4 py-3 flex items-center gap-3" style={{ background: "#EFF6FF" }}>
+        <PackageIcon className="w-7 h-7 flex-shrink-0" style={{ color: "#2563EB" }} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold" style={{ color: "#1E3A8A" }}>{pkg.nameTh}</p>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{ background: "#DBEAFE", color: "#1E40AF" }}
-            >
-              ใช้งานได้
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-xs flex-wrap" style={{ color: "#2563EB" }}>
-            <span>เหลือ {daysLeft} วัน · หมดอายุ {expiresDate}</span>
-            {pkg.usagesLeft !== null ? (
-              <span>· เหลือ {pkg.usagesLeft}/{pkg.usageLimit} ครั้ง</span>
-            ) : (
-              <span>· ใช้แล้ว {pkg.usagesUsed} ครั้ง (ไม่จำกัด)</span>
-            )}
-          </div>
+          <p className="text-sm font-bold" style={{ color: "#1E3A8A" }}>{pkg.nameTh}</p>
+          {details}
         </div>
       </div>
     </div>
