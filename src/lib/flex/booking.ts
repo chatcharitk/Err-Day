@@ -21,6 +21,15 @@ const BG_BEIGE = "#FDF8F3";
 // login — the vercel.app alias is NOT registered with LIFF and login fails there.
 const APP_HOST = process.env.NEXT_PUBLIC_APP_URL ?? "https://book.err-daysalon.com";
 
+// Open /my-bookings through the LIFF deep link (not a plain URL) so the page
+// gets a LINE login context automatically — a plain https link opens in LINE's
+// in-app browser with NO LIFF session, leaving the user "not signed in" and the
+// page stuck loading. Falls back to a plain URL if the LIFF id isn't configured.
+const LIFF_ID        = process.env.NEXT_PUBLIC_LIFF_ID;
+const MY_BOOKINGS_URL = LIFF_ID
+  ? `https://liff.line.me/${LIFF_ID}/my-bookings`
+  : `${APP_HOST}/my-bookings`;
+
 export type BookingFlexVariant = "created" | "confirmed" | "reminder" | "rescheduled";
 
 /** Minimal shape needed to render the card — matches the senders' Prisma includes. */
@@ -142,7 +151,7 @@ export function buildBookingFlex(
           },
           {
             type: "button", style: "secondary", height: "sm",
-            action: { type: "uri", label: "📅 เปลี่ยน/จัดการนัด", uri: `${APP_HOST}/my-bookings` },
+            action: { type: "uri", label: "📅 เปลี่ยน/จัดการนัด", uri: MY_BOOKINGS_URL },
           },
         ],
       },
