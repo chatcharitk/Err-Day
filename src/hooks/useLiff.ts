@@ -32,19 +32,32 @@ export function useLiff(): LiffState {
       .then(async (liff) => {
         setIsInClient(liff.isInClient());
 
-        if (liff.isLoggedIn()) {
-          setIsLoggedIn(true);
-          const p     = await liff.getProfile();
-          const token = liff.getDecodedIDToken();
-          setProfile({
-            userId:      p.userId,
-            displayName: p.displayName,
-            pictureUrl:  p.pictureUrl,
-            email:       token?.email ?? undefined,
-          });
+        if (!liff.isLoggedIn()) return;
+
+        // getProfile() needs the `profile` scope — this is the call that matters
+        // (gives us userId + displayName). If it fails we are effectively NOT
+        // usable as a logged-in user, so leave isLoggedIn false.
+        const p = await liff.getProfile();
+
+        // Email is BEST-EFFORT: getDecodedIDToken() throws when the `openid`
+        // scope wasn't granted. Never let that discard the profile we just got —
+        // doing so left profile=null and broke booking/registration/my-bookings.
+        let email: string | undefined;
+        try {
+          email = liff.getDecodedIDToken()?.email ?? undefined;
+        } catch {
+          /* no openid/email scope — fine, continue without email */
         }
+
+        setProfile({
+          userId:      p.userId,
+          displayName: p.displayName,
+          pictureUrl:  p.pictureUrl,
+          email,
+        });
+        setIsLoggedIn(true);
       })
-      .catch(err => console.error("LIFF init failed:", err))
+      .catch(err => console.error("LIFF init/profile failed:", err))
       .finally(() => setReady(true));
   }, []);
 
