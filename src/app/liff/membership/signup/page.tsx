@@ -96,10 +96,8 @@ export default function LiffMembershipSignupPage() {
         setName(p.displayName);
         setStep("form");
       })
-      .catch((err) => {
-        // Surface the real LIFF error so we can diagnose (scope / endpoint / id).
-        const detail = err instanceof Error ? err.message : String(err);
-        setErrMsg(`กรุณาเปิดหน้านี้ผ่าน LINE\n\n[debug] ${detail}`);
+      .catch(() => {
+        setErrMsg("กรุณาเปิดหน้านี้ผ่าน LINE");
         setStep("error");
       });
   }, []);
@@ -172,7 +170,7 @@ export default function LiffMembershipSignupPage() {
         <div className="text-center max-w-xs">
           <AlertCircle className="mx-auto mb-3" size={44} style={{ color: PRIMARY }} />
           <p className="font-semibold mb-1" style={{ color: TEXT }}>เกิดข้อผิดพลาด</p>
-          <p className="text-sm" style={{ color: MUTED, whiteSpace: "pre-line" }}>{errMsg}</p>
+          <p className="text-sm" style={{ color: MUTED }}>{errMsg}</p>
         </div>
       </div>
     );

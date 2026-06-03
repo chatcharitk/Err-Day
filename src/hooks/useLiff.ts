@@ -15,7 +15,6 @@ export interface LiffState {
   isLoggedIn: boolean;   // user is authenticated with LINE
   isInClient: boolean;   // opened inside the LINE app
   profile:    LiffProfile | null;
-  error:      string | null;  // last LIFF init/profile error (for diagnostics)
   login:      () => void;
   logout:     () => void;
 }
@@ -25,7 +24,6 @@ export function useLiff(): LiffState {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isInClient, setIsInClient] = useState(false);
   const [profile,    setProfile]    = useState<LiffProfile | null>(null);
-  const [error,      setError]      = useState<string | null>(null);
 
   useEffect(() => {
     if (!process.env.NEXT_PUBLIC_LIFF_ID) { setReady(true); return; }
@@ -59,11 +57,7 @@ export function useLiff(): LiffState {
         });
         setIsLoggedIn(true);
       })
-      .catch(err => {
-        const msg = err instanceof Error ? `${err.message}` : String(err);
-        console.error("LIFF init/profile failed:", err);
-        setError(msg);
-      })
+      .catch(err => console.error("LIFF init/profile failed:", err))
       .finally(() => setReady(true));
   }, []);
 
@@ -79,5 +73,5 @@ export function useLiff(): LiffState {
     });
   }, []);
 
-  return { ready, isLoggedIn, isInClient, profile, error, login, logout };
+  return { ready, isLoggedIn, isInClient, profile, login, logout };
 }
