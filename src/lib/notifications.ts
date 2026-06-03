@@ -16,6 +16,7 @@
 import { prisma } from "@/lib/prisma";
 import { pushText, pushLine } from "@/lib/line-messaging";
 import { buildBookingFlex } from "@/lib/flex/booking";
+import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex } from "@/lib/flex/membership";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -327,17 +328,17 @@ export async function sendMembershipActivated(membershipId: string): Promise<Sen
     return { kind, targetId: membershipId, status: "SKIPPED", reason: "no_line_link" };
   }
 
-  const text =
-`🎉 ยินดีต้อนรับสู่ครอบครัว err·day ค่ะ!
+  const flex = buildEntitlementActivatedFlex({
+    greetName:   m.customer.nickname || m.customer.name,
+    productName: m.label || m.tier?.nameTh || "สมาชิกรายเดือน",
+    startedAt:   m.activatedAt,
+    expiresAt:   m.expiresAt,
+    usageText:   m.usagesAllowed > 0
+      ? `${m.usagesAllowed} ครั้ง`
+      : "ราคาสมาชิกทุกบริการ (ไม่จำกัดครั้ง)",
+  });
 
-คุณ${m.customer.nickname || m.customer.name} สมาชิก${m.tier?.nameTh ?? "รายเดือน"} ของคุณเริ่มต้นแล้วนะคะ
-
-📅 ใช้ได้ถึง: ${m.expiresAt ? formatDateTh(m.expiresAt) : "ตลอดชีพ"}
-✨ สิทธิ์: ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100
-
-ทีมงานพร้อมต้อนรับคุณนะคะ 🌸`;
-
-  const r = await pushText(m.customer.lineUserId, text);
+  const r = await pushLine(m.customer.lineUserId, [flex]);
   if (r.ok) {
     await recordLog({ kind, targetId: membershipId, status: "SENT", recipient: m.customer.lineUserId });
     return { kind, targetId: membershipId, status: "SENT" };
@@ -403,24 +404,44 @@ export async function sendPackageActivated(packageId: string): Promise<SendResul
   }
 
   const productName = PACKAGE_NAME_TH[p.packageSku] ?? p.packageSku;
-  const usagesNote  = p.usageLimit > 0 ? `🎟 ใช้ได้ ${p.usageLimit} ครั้ง\n` : "🎟 ไม่จำกัดจำนวนครั้ง\n";
 
-  const text =
-`🎉 ยินดีต้อนรับสู่ครอบครัว err·day ค่ะ!
+  const flex = buildEntitlementActivatedFlex({
+    greetName:   p.customer.nickname || p.customer.name,
+    productName,
+    startedAt:   p.startedAt,
+    expiresAt:   p.expiresAt,
+    usageText:   p.usageLimit > 0 ? `${p.usageLimit} ครั้ง` : "ไม่จำกัดจำนวนครั้ง",
+  });
 
-คุณ${p.customer.nickname || p.customer.name} ${productName} ของคุณเริ่มต้นแล้วนะคะ
-
-📅 ใช้ได้ถึง: ${formatDateTh(p.expiresAt)}
-${usagesNote}
-ทีมงานพร้อมต้อนรับคุณนะคะ 🌸`;
-
-  const r = await pushText(p.customer.lineUserId, text);
+  const r = await pushLine(p.customer.lineUserId, [flex]);
   if (r.ok) {
     await recordLog({ kind, targetId: packageId, status: "SENT", recipient: p.customer.lineUserId });
     return { kind, targetId: packageId, status: "SENT" };
   }
   await recordLog({ kind, targetId: packageId, status: "FAILED", recipient: p.customer.lineUserId, error: r.error });
   return { kind, targetId: packageId, status: "FAILED", reason: r.error };
+}
+
+// ── Entitlement "application received" (sent on LIFF self-signup, pre-payment) ──
+
+/**
+ * Fire-and-forget "we received your application, please pay at the counter"
+ * push. No NotificationLog/dedup — the signup route only calls this when a
+ * pending entitlement is newly created, so it won't double-send on its own.
+ */
+export async function sendEntitlementReceived(args: {
+  lineUserId:  string;
+  greetName:   string;
+  productName: string;
+  priceTh:     string;
+}): Promise<void> {
+  const flex = buildEntitlementReceivedFlex({
+    greetName:   args.greetName,
+    productName: args.productName,
+    priceTh:     args.priceTh,
+  });
+  const r = await pushLine(args.lineUserId, [flex]);
+  if (!r.ok) console.error("[notify] entitlement received failed", r.error);
 }
 
 // ── Package expiry warning (1 day) ───────────────────────────────────────────

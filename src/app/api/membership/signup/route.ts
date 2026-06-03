@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDPA_VERSION } from "@/lib/pdpa";
 import { startOfTodayUTC } from "@/lib/utils";
+import { MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
+import { PACKAGE_SPECS, BUFFET_SKU, FIVE_PACK_SKU } from "@/lib/packages";
+import { sendEntitlementReceived } from "@/lib/notifications";
+
+/** Map the LIFF product key (from `source`) to its entitlement details. */
+type ProductKey = "membership" | "buffet" | "5pack";
+function parseProduct(source: string): ProductKey {
+  if (source.endsWith("buffet")) return "buffet";
+  if (source.endsWith("5pack"))  return "5pack";
+  return "membership";
+}
+function bahtTh(satang: number): string {
+  return `฿${(satang / 100).toLocaleString("en-US")}`;
+}
 
 interface SignupBody {
   name:         string;
@@ -39,6 +53,7 @@ export async function POST(request: Request) {
     }
 
     const phoneClean = phone.trim();
+    const product    = parseProduct(source);
 
     // Check if customer already exists
     const existing = await prisma.customer.findUnique({
@@ -46,10 +61,10 @@ export async function POST(request: Request) {
       include: { membership: true },
     });
 
-    // If customer exists AND has an active membership, short-circuit
-    if (existing?.membership) {
+    // If signing up for MEMBERSHIP and they already have an active one, short-circuit.
+    // (Package signups are unaffected — a member can still buy a Buffet / 5-pack.)
+    if (product === "membership" && existing?.membership) {
       const m = existing.membership;
-      const now = new Date();
       const expired = m.expiresAt != null && new Date(m.expiresAt) < startOfTodayUTC();
       const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
       const isValid = !expired && !usedUp && !m.pendingActivation;
@@ -92,6 +107,62 @@ export async function POST(request: Request) {
         ...(pictureUrl  ? { pictureUrl } : {}),
       },
     });
+
+    // ── Create a PENDING entitlement so staff see "รอเปิดใช้" in POS search ──
+    // and so we can send a "received" acknowledgement. Only flips to active when
+    // staff complete the sale at POS (activateOrRenewMembership / activatePackage).
+    const now = new Date();
+    let newlyPending = false;
+    let productName  = "สมาชิกรายเดือน";
+    let priceTh      = bahtTh(MEMBERSHIP_PRICE_SATANG);
+
+    if (product === "membership") {
+      const m = await prisma.membership.findUnique({ where: { customerId: customer.id } });
+      if (!m?.pendingActivation) {
+        await prisma.membership.upsert({
+          where:  { customerId: customer.id },
+          update: { pendingActivation: true, expiresAt: null, usagesUsed: 0 },
+          create: { customerId: customer.id, pendingActivation: true, expiresAt: null, usagesUsed: 0 },
+        });
+        newlyPending = true;
+      }
+    } else {
+      const sku  = product === "buffet" ? BUFFET_SKU : FIVE_PACK_SKU;
+      const spec = PACKAGE_SPECS[sku];
+      productName = spec.nameTh;
+      priceTh     = bahtTh(spec.priceSatang);
+
+      const existingPkg = await prisma.customerPackage.findFirst({
+        where:   { customerId: customer.id, packageSku: sku, closedAt: null },
+        orderBy: { startedAt: "desc" },
+      });
+      if (!existingPkg?.pendingActivation) {
+        await prisma.customerPackage.create({
+          data: {
+            customerId:        customer.id,
+            packageSku:        sku,
+            pendingActivation: true,
+            startedAt:         now,
+            // placeholder — reset to real dates on activation at POS
+            expiresAt:         new Date(now.getTime() + (spec.validityDays - 1) * 24 * 60 * 60 * 1000),
+            usagesUsed:        0,
+            usageLimit:        spec.usageLimit,
+            paidAmount:        0,
+          },
+        });
+        newlyPending = true;
+      }
+    }
+
+    // Fire-and-forget "we got your application, pay at the counter" card.
+    if (newlyPending && customer.lineUserId) {
+      sendEntitlementReceived({
+        lineUserId:  customer.lineUserId,
+        greetName:   customer.nickname || customer.name,
+        productName,
+        priceTh,
+      }).catch(e => console.error("[notify] entitlement received failed", e));
+    }
 
     return NextResponse.json({
       status: "pending_payment",

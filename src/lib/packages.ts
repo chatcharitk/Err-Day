@@ -88,14 +88,36 @@ export async function activatePackage(opts: ActivateOpts) {
   const expiresAt = new Date(now.getTime() + (spec.validityDays - 1) * 24 * 60 * 60 * 1000);
 
   return prisma.$transaction(async (tx) => {
-    // Close any open package of the same SKU
+    // If the customer self-registered via LIFF, a *pending* package of this SKU
+    // already exists — activate that row in place (set fresh dates + clear the
+    // pending flag) rather than orphaning it and creating a duplicate.
+    const pending = await tx.customerPackage.findFirst({
+      where: { customerId, packageSku, pendingActivation: true, closedAt: null },
+      orderBy: { startedAt: "desc" },
+    });
+
+    if (pending) {
+      return tx.customerPackage.update({
+        where: { id: pending.id },
+        data: {
+          startedAt:         now,
+          expiresAt,
+          usagesUsed:        0,
+          usageLimit:        spec.usageLimit,
+          paidAmount,
+          paymentMethod,
+          bookingId,
+          notes,
+          pendingActivation: false,
+        },
+      });
+    }
+
+    // Otherwise (normal POS sale): close any open package of the same SKU and
+    // create a fresh active one.
     await tx.customerPackage.updateMany({
-      where: {
-        customerId,
-        packageSku,
-        closedAt: null,
-      },
-      data: { closedAt: now },
+      where: { customerId, packageSku, closedAt: null },
+      data:  { closedAt: now },
     });
 
     return tx.customerPackage.create({

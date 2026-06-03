@@ -32,24 +32,29 @@ export async function GET(request: Request) {
       membership: {
         select: { pendingActivation: true, expiresAt: true },
       },
+      // Fetch open packages — both active and still-pending (self-registered,
+      // not yet paid) — so we can drive both the "แพ็กเกจ" and "รอเปิดใช้" badges.
       packages: {
-        where: { expiresAt: { gte: now }, pendingActivation: false },
-        select: { id: true },
-        take: 1,
+        where:  { closedAt: null, OR: [{ pendingActivation: true }, { expiresAt: { gte: now } }] },
+        select: { id: true, pendingActivation: true },
       },
     },
   });
 
-  return NextResponse.json(customers.map(c => ({
-    id:             c.id,
-    name:           c.name,
-    nickname:       c.nickname,
-    phone:          c.phone,
-    email:          c.email,
-    isMember:       !!c.membership && !c.membership.pendingActivation && (!c.membership.expiresAt || c.membership.expiresAt >= now),
-    isPending:      !!c.membership?.pendingActivation,
-    hasPackage:     c.packages.length > 0,
-  })));
+  return NextResponse.json(customers.map(c => {
+    const pendingPkg = c.packages.some(p => p.pendingActivation);
+    const activePkg  = c.packages.some(p => !p.pendingActivation);
+    return {
+      id:         c.id,
+      name:       c.name,
+      nickname:   c.nickname,
+      phone:      c.phone,
+      email:      c.email,
+      isMember:   !!c.membership && !c.membership.pendingActivation && (!c.membership.expiresAt || c.membership.expiresAt >= now),
+      isPending:  !!c.membership?.pendingActivation || pendingPkg,
+      hasPackage: activePkg,
+    };
+  }));
 }
 
 // POST /api/admin/customers — register a new customer

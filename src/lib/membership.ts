@@ -62,19 +62,23 @@ export async function activateOrRenewMembership(opts: ActivateOpts) {
       });
     }
 
-    // Upsert membership with fresh dates
+    // Upsert membership with fresh dates. pendingActivation is forced false so
+    // that a membership created in a "pending" state at LIFF self-signup becomes
+    // fully active once staff complete the sale at POS.
     const membership = await tx.membership.upsert({
       where:  { customerId },
       update: {
-        activatedAt: now,
+        activatedAt:       now,
         expiresAt,
-        usagesUsed:  0,
+        usagesUsed:        0,
+        pendingActivation: false,
       },
       create: {
         customerId,
-        activatedAt: now,
+        activatedAt:       now,
         expiresAt,
-        usagesUsed:  0,
+        usagesUsed:        0,
+        pendingActivation: false,
         // tierId left null — flat membership
       },
     });
