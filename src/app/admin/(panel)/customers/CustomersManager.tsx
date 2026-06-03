@@ -1762,6 +1762,7 @@ export default function CustomersManager({ customers: initial }: Props) {
       const q = search.toLowerCase();
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
+        (c.nickname ?? "").toLowerCase().includes(q) ||   // many customers are known by nickname (name = LINE display name)
         c.phone.includes(q) ||
         (c.email ?? "").toLowerCase().includes(q),
       );
