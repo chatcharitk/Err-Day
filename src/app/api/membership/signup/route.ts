@@ -5,6 +5,7 @@ import { startOfTodayUTC } from "@/lib/utils";
 import { MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
 import { PACKAGE_SPECS, BUFFET_SKU, FIVE_PACK_SKU } from "@/lib/packages";
 import { sendEntitlementReceived } from "@/lib/notifications";
+import { promoHeroUrl } from "@/lib/flex/membership";
 
 /** Map the LIFF product key (from `source`) to its entitlement details. */
 type ProductKey = "membership" | "buffet" | "5pack";
@@ -161,6 +162,7 @@ export async function POST(request: Request) {
         greetName:   customer.nickname || customer.name,
         productName,
         priceTh,
+        heroUrl:     promoHeroUrl(product),
       }).catch(e => console.error("[notify] entitlement received failed", e));
     }
 

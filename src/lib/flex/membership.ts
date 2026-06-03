@@ -19,6 +19,33 @@ const LIFF_ID  = process.env.NEXT_PUBLIC_LIFF_ID;
 const APP_HOST = process.env.NEXT_PUBLIC_APP_URL ?? "https://book.err-daysalon.com";
 const BOOK_URL = LIFF_ID ? `https://liff.line.me/${LIFF_ID}` : `${APP_HOST}/book`;
 
+// Promo hero images served from public/membership/. Keyed by both the LIFF
+// product key ("membership"|"5pack"|"buffet") and the package SKU so either
+// caller can resolve it. Returns undefined when there's no image (→ no hero).
+const PROMO_HERO: Record<string, string> = {
+  membership:   `${APP_HOST}/membership/membership.jpg`,
+  "5pack":      `${APP_HOST}/membership/pack5.jpg`,
+  "svc-pkg5":   `${APP_HOST}/membership/pack5.jpg`,
+};
+export function promoHeroUrl(key: string | null | undefined): string | undefined {
+  return key ? PROMO_HERO[key] : undefined;
+}
+
+/** A bubble `hero` image block, or {} when there's no image for this product. */
+function heroBlock(heroUrl?: string) {
+  if (!heroUrl) return {};
+  return {
+    hero: {
+      type:        "image",
+      url:         heroUrl,
+      size:        "full",
+      aspectRatio: "4:3",
+      aspectMode:  "fit",          // show the whole promo card, don't crop the price
+      backgroundColor: "#F1E9DC",  // cream — matches the artwork's border
+    },
+  };
+}
+
 /** Format a Date as "พ. 30 เม.ย. 2569" in Thai local time. */
 function formatDateTh(d: Date): string {
   return d.toLocaleDateString("th-TH", {
@@ -42,13 +69,15 @@ export function buildEntitlementReceivedFlex(args: {
   greetName:   string;
   productName: string;
   priceTh:     string;
+  heroUrl?:    string;
 }): LineMessage {
   return {
     type: "flex",
-    altText: `ได้รับใบสมัคร ${args.productName} แล้ว — รอชำระที่เคาน์เตอร์`,
+    altText: `ได้รับใบสมัคร ${args.productName} แล้ว — กำลังตรวจสอบการชำระเงิน`,
     contents: {
       type: "bubble",
       size: "kilo",
+      ...heroBlock(args.heroUrl),
       header: {
         type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: "#9A3412",
         contents: [
@@ -60,12 +89,12 @@ export function buildEntitlementReceivedFlex(args: {
         type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", backgroundColor: BG_BEIGE,
         contents: [
           { type: "text", text: `สวัสดีค่ะ คุณ${args.greetName}`, weight: "bold", size: "sm", color: TEXT, wrap: true },
-          { type: "text", text: "เราได้รับใบสมัครของคุณแล้วนะคะ 🙏 กรุณาชำระเงินที่เคาน์เตอร์เพื่อเปิดใช้งานค่ะ", size: "xs", color: MUTED, wrap: true, margin: "sm" },
+          { type: "text", text: "เราได้รับใบสมัครของคุณแล้วนะคะ 🙏 ทางทีมงานกำลังตรวจสอบการชำระเงินเพื่อเปิดใช้งานสมาชิกค่ะ", size: "xs", color: MUTED, wrap: true, margin: "sm" },
           { type: "separator", margin: "md", color: "#EADBCF" },
           { type: "box", layout: "vertical", spacing: "sm", margin: "md", contents: [
             row("แพ็กเกจ", args.productName, true),
             row("ราคา", args.priceTh),
-            row("สถานะ", "⏳ รอชำระเงิน"),
+            row("สถานะ", "⏳ กำลังตรวจสอบ"),
           ] },
         ],
       },
@@ -80,6 +109,7 @@ export function buildEntitlementActivatedFlex(args: {
   startedAt:   Date;
   expiresAt:   Date | null;
   usageText:   string;   // e.g. "ไม่จำกัดจำนวนครั้ง" or "5 ครั้ง"
+  heroUrl?:    string;
 }): LineMessage {
   return {
     type: "flex",
@@ -87,6 +117,7 @@ export function buildEntitlementActivatedFlex(args: {
     contents: {
       type: "bubble",
       size: "kilo",
+      ...heroBlock(args.heroUrl),
       header: {
         type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: "#166534",
         contents: [

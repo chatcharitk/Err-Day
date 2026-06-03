@@ -16,7 +16,7 @@
 import { prisma } from "@/lib/prisma";
 import { pushText, pushLine } from "@/lib/line-messaging";
 import { buildBookingFlex } from "@/lib/flex/booking";
-import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex } from "@/lib/flex/membership";
+import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -336,6 +336,7 @@ export async function sendMembershipActivated(membershipId: string): Promise<Sen
     usageText:   m.usagesAllowed > 0
       ? `${m.usagesAllowed} ครั้ง`
       : "ราคาสมาชิกทุกบริการ (ไม่จำกัดครั้ง)",
+    heroUrl:     promoHeroUrl("membership"),
   });
 
   const r = await pushLine(m.customer.lineUserId, [flex]);
@@ -411,6 +412,7 @@ export async function sendPackageActivated(packageId: string): Promise<SendResul
     startedAt:   p.startedAt,
     expiresAt:   p.expiresAt,
     usageText:   p.usageLimit > 0 ? `${p.usageLimit} ครั้ง` : "ไม่จำกัดจำนวนครั้ง",
+    heroUrl:     promoHeroUrl(p.packageSku),
   });
 
   const r = await pushLine(p.customer.lineUserId, [flex]);
@@ -434,11 +436,13 @@ export async function sendEntitlementReceived(args: {
   greetName:   string;
   productName: string;
   priceTh:     string;
+  heroUrl?:    string;
 }): Promise<void> {
   const flex = buildEntitlementReceivedFlex({
     greetName:   args.greetName,
     productName: args.productName,
     priceTh:     args.priceTh,
+    heroUrl:     args.heroUrl,
   });
   const r = await pushLine(args.lineUserId, [flex]);
   if (!r.ok) console.error("[notify] entitlement received failed", r.error);
