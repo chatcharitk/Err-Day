@@ -420,6 +420,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 </div>
                 <p className="flex-1 text-xs" style={{ color: "#6B5245" }}>
                   {lang === "th" ? "ยังไม่ได้เข้าสู่ระบบ LINE" : "Not signed in with LINE"}
+                  {liff.error && <span className="block text-[10px] text-red-500">[debug] {liff.error}</span>}
                 </p>
                 <button
                   onClick={handleLineLogin}
