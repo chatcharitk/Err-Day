@@ -17,6 +17,7 @@ export default async function MobileBookingDetailPage({
     select: {
       id:         true,
       branchId:   true,
+      customerId: true,
       serviceId:  true,
       staffId:    true,
       date:       true,
@@ -59,10 +60,11 @@ export default async function MobileBookingDetailPage({
     && !(mem.expiresAt != null && new Date(mem.expiresAt) < todayUTC)
     && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
 
-  const [branchServices, branchStaff, allAddons] = await Promise.all([
+  const [branchServices, branchStaff, allAddons, branches] = await Promise.all([
     getCachedBranchServices(booking.branchId),
     getCachedBranchStaff(booking.branchId),
     getCachedAddons(),
+    prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
   // Auto-apply the member discount to the saved totalPrice when:
@@ -98,6 +100,7 @@ export default async function MobileBookingDetailPage({
     id:           booking.id,
     branchId:     booking.branchId,
     branchName:   booking.branch.name,
+    customerId:   booking.customerId,
     serviceId:    booking.serviceId,
     serviceName:  booking.service.nameTh,
     staffId:      booking.staffId,
@@ -134,6 +137,7 @@ export default async function MobileBookingDetailPage({
       }))}
       branchStaff={branchStaff}
       allAddons={allAddons}
+      branches={branches}
     />
   );
 }

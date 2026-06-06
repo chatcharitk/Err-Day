@@ -8,6 +8,7 @@ import {
   AlertCircle, Sparkles, RefreshCw,
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
+import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -20,6 +21,7 @@ interface Booking {
   id:            string;
   branchId:      string;
   branchName:    string;
+  customerId:    string;
   serviceId:     string;
   serviceName:   string;
   staffId:       string | null;
@@ -63,6 +65,7 @@ interface Props {
   branchServices: Service[];
   branchStaff:    Staff[];
   allAddons:      Addon[];
+  branches:       { id: string; name: string }[];
 }
 
 const STATUS_META: Record<Status, { label: string; bg: string; fg: string }> = {
@@ -81,7 +84,7 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-export default function BookingDetail({ booking: initial, branchServices, branchStaff, allAddons }: Props) {
+export default function BookingDetail({ booking: initial, branchServices, branchStaff, allAddons, branches }: Props) {
   const router = useRouter();
   const [b, setB] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -93,6 +96,11 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const [showStaffSheet, setShowStaffSheet] = useState(false);
   const [showServiceSheet, setShowServiceSheet] = useState(false);
   const [showTimeEditor, setShowTimeEditor] = useState(false);
+  const [showCustomerSheet, setShowCustomerSheet] = useState(false);
+  const [showBranchSheet, setShowBranchSheet] = useState(false);
+  const [pickedCustomer, setPickedCustomer] = useState<CustomerValue>({
+    id: initial.customerId, name: initial.customerName, phone: initial.customerPhone,
+  });
 
   const [editStart, setEditStart] = useState(b.startTime);
   const [notesDraft, setNotesDraft] = useState(b.notes ?? "");
@@ -177,6 +185,33 @@ export default function BookingDetail({ booking: initial, branchServices, branch
       totalPrice: newTotal,
     }));
     setShowServiceSheet(false);
+  };
+
+  // Reassign the booking to a different customer (wrong customer chosen).
+  const saveCustomer = async () => {
+    if (!pickedCustomer.id || pickedCustomer.id === b.customerId) { setShowCustomerSheet(false); return; }
+    const updated = await patch({ customerId: pickedCustomer.id });
+    if (!updated) return;
+    setB((x) => ({
+      ...x,
+      customerId:       pickedCustomer.id!,
+      customerName:     pickedCustomer.name,
+      customerNickname: null,
+      customerPhone:    pickedCustomer.phone,
+    }));
+    setShowCustomerSheet(false);
+    router.refresh();   // resync nickname / member status from the server
+  };
+
+  // Move the booking to a different branch; refresh reloads that branch's services/staff.
+  const changeBranch = async (branchId: string) => {
+    if (branchId === b.branchId) { setShowBranchSheet(false); return; }
+    const updated = await patch({ branchId });
+    if (!updated) return;
+    const br = branches.find((x) => x.id === branchId);
+    setB((x) => ({ ...x, branchId, branchName: br?.name ?? x.branchName }));
+    setShowBranchSheet(false);
+    router.refresh();
   };
 
   const updateTime = async () => {
@@ -334,7 +369,8 @@ export default function BookingDetail({ booking: initial, branchServices, branch
       {/* ── Booking details rows ── */}
       <section className="px-4 mt-5">
         <div className="rounded-2xl bg-white" style={{ border: `1px solid ${BORDER}` }}>
-          <Row label="ลูกค้า">
+          <div className="w-full flex items-center gap-3 px-4 py-3.5" style={{ minHeight: 56 }}>
+            <span className="text-xs flex-shrink-0 w-12" style={{ color: MUTED }}>ลูกค้า</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm font-medium" style={{ color: TEXT }}>
@@ -351,7 +387,14 @@ export default function BookingDetail({ booking: initial, branchServices, branch
                 <Phone size={11} /> {b.customerPhone}
               </a>
             </div>
-          </Row>
+            <button
+              onClick={() => { setPickedCustomer({ id: b.customerId, name: b.customerName, phone: b.customerPhone }); setShowCustomerSheet(true); }}
+              className="flex items-center gap-1 text-xs flex-shrink-0 px-2 py-1 rounded-lg"
+              style={{ color: PRIMARY, border: `1px solid ${BORDER}` }}
+            >
+              <Pencil size={12} /> เปลี่ยน
+            </button>
+          </div>
 
           <Divider />
 
@@ -378,8 +421,11 @@ export default function BookingDetail({ booking: initial, branchServices, branch
 
           <Divider />
 
-          <Row label="สาขา">
-            <p className="text-sm flex-1" style={{ color: TEXT }}>{b.branchName}</p>
+          <Row label="สาขา" onClick={branches.length > 1 ? () => setShowBranchSheet(true) : undefined}>
+            <div className="flex items-center justify-between flex-1">
+              <p className="text-sm" style={{ color: TEXT }}>{b.branchName}</p>
+              {branches.length > 1 && <Pencil size={13} style={{ color: MUTED }} />}
+            </div>
           </Row>
 
           <Divider />
@@ -629,6 +675,48 @@ export default function BookingDetail({ booking: initial, branchServices, branch
                 >
                   <span className="text-sm">{s.nameTh}</span>
                   <span className="text-sm font-medium" style={{ color: PRIMARY }}>{formatPrice(s.price)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </BottomSheet>
+      )}
+
+      {showCustomerSheet && (
+        <BottomSheet title="เปลี่ยนลูกค้า (จองผิดคน)" onClose={() => setShowCustomerSheet(false)}>
+          <div className="p-4 space-y-3">
+            <CustomerSearch value={pickedCustomer} onChange={setPickedCustomer} showManualPhone={false} />
+            {pickedCustomer.id && pickedCustomer.id !== b.customerId && (
+              <p className="text-[11px] px-2 py-1.5 rounded-lg" style={{ background: "#FFF7ED", color: "#9A3412" }}>
+                จะย้ายการจองนี้ไปยัง <b>{pickedCustomer.name}</b>
+              </p>
+            )}
+            <button
+              onClick={saveCustomer}
+              disabled={busy || !pickedCustomer.id || pickedCustomer.id === b.customerId}
+              className="w-full py-3 rounded-xl text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background: PRIMARY }}
+            >
+              {busy && <Loader2 size={14} className="animate-spin" />}
+              ย้ายการจอง
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {showBranchSheet && (
+        <BottomSheet title="เปลี่ยนสาขา" onClose={() => setShowBranchSheet(false)}>
+          <ul className="p-3 max-h-96 overflow-y-auto space-y-1">
+            {branches.map((br) => (
+              <li key={br.id}>
+                <button
+                  onClick={() => changeBranch(br.id)}
+                  disabled={busy}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left"
+                  style={{ background: b.branchId === br.id ? "#FFF8F4" : "transparent", color: TEXT }}
+                >
+                  <span className="text-sm">{br.name}</span>
+                  {b.branchId === br.id && <Check size={14} style={{ color: PRIMARY }} />}
                 </button>
               </li>
             ))}
