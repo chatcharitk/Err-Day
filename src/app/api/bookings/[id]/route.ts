@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendBookingConfirmed, sendBookingTimeChanged } from "@/lib/notifications";
+import { sendBookingConfirmed, sendBookingTimeChanged, sendBookingCancelled } from "@/lib/notifications";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,6 +64,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // Fire-and-forget LINE confirmation when status flips to CONFIRMED.
     if (status === "CONFIRMED" && prev?.status !== "CONFIRMED") {
       sendBookingConfirmed(booking.id).catch(e => console.error("[notify] booking confirmed failed", e));
+    }
+
+    // Notify customer + staff when the booking is cancelled by the shop.
+    if (status === "CANCELLED" && prev?.status !== "CANCELLED") {
+      sendBookingCancelled(booking.id).catch(e => console.error("[notify] booking cancelled failed", e));
     }
 
     // Notify customer when start time changes (admin reschedule).

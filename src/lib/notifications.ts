@@ -186,6 +186,70 @@ ${memberLineR}`;
   );
 }
 
+// ── Booking cancellation (customer + staff) ──────────────────────────────────
+
+/**
+ * Sent when a booking is cancelled — by the shop (admin) or by the customer
+ * themselves. Notifies the customer (if LINE-linked) and always alerts staff
+ * (STAFF_LINE_IDS). Fire-and-forget, no dedup: a booking is normally cancelled
+ * once, and the callers already guard against re-firing on an already-cancelled
+ * booking.
+ */
+export async function sendBookingCancelled(
+  bookingId: string,
+  opts?: { byCustomer?: boolean },
+): Promise<void> {
+  const b = await prisma.booking.findUnique({
+    where:   { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b) return;
+
+  const dateStr = b.date.toLocaleDateString("th-TH", {
+    weekday: "long", day: "numeric", month: "short", year: "numeric",
+  });
+
+  // Customer notification (skipped silently if no LINE link)
+  if (b.customer.lineUserId) {
+    const text =
+`❌ err·day — ยกเลิกการจองแล้วค่ะ
+
+สวัสดีค่ะ คุณ${b.customer.nickname || b.customer.name}
+การจองของคุณถูกยกเลิกเรียบร้อยแล้วนะคะ
+
+📅 ${dateStr}
+⏰ ${b.startTime} – ${b.endTime}
+💆 ${b.service.nameTh}
+📍 ${b.branch.name}
+
+หากต้องการจองใหม่ ทักเราได้เลยนะคะ 🌸`;
+    const r = await pushText(b.customer.lineUserId, text);
+    if (!r.ok) console.error("[notify] booking cancelled (customer) failed", bookingId, r.error);
+    else        console.log("[notify] booking cancelled (customer) sent",    bookingId);
+  }
+
+  // Staff alert
+  const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
+  const who = opts?.byCustomer ? "ลูกค้ายกเลิกเอง" : "ยกเลิกโดยร้าน";
+  const staffText =
+`❌ ยกเลิกการจอง - ${branchShort}
+(${who})
+
+👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
+📅 ${dateStr}
+⏰ ${b.startTime}–${b.endTime}
+💆 ${b.service.nameTh}
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
+
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const rs = await pushText(uid, staffText);
+      if (!rs.ok) console.error("[notify] booking cancelled (staff) failed", uid, rs.error);
+      else        console.log("[notify] booking cancelled (staff) sent",    uid);
+    })
+  );
+}
+
 // ── Booking confirmation (sent immediately on creation) ────────────────────
 
 export async function sendBookingCreated(bookingId: string): Promise<SendResult> {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity } from "@/lib/capacity";
+import { sendBookingCancelled } from "@/lib/notifications";
 
 /**
  * Verifies that the booking belongs to the customer with the given LINE user ID.
@@ -125,6 +126,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       where: { id },
       data: { status: "CANCELLED" },
     });
+
+    // Notify staff (and confirm to the customer) — the customer cancelled it themselves.
+    sendBookingCancelled(id, { byCustomer: true })
+      .catch(e => console.error("[notify] booking cancelled failed", e));
 
     return NextResponse.json({ ok: true });
   } catch (error) {
