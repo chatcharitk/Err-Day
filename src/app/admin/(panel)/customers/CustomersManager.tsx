@@ -1713,20 +1713,7 @@ export default function CustomersManager({ customers: initial }: Props) {
   const [sort,         setSort]         = useState<SortKey>("name");
   const [showWalkin,   setShowWalkin]   = useState(false);
 
-  const focusRef  = useRef<HTMLDivElement | null>(null);
-  const searchRef = useRef<HTMLInputElement | null>(null);
-
-  // Thai/IME fix: the native 'input' event fires on every keystroke INCLUDING
-  // during composition, whereas React's onChange is suppressed mid-composition
-  // (which left the search a full query behind — box showed "ปอ" but results
-  // were still "เก"). Mirror the DOM value into state on every native input.
-  useEffect(() => {
-    const el = searchRef.current;
-    if (!el) return;
-    const onInput = () => setSearch(el.value);
-    el.addEventListener("input", onInput);
-    return () => el.removeEventListener("input", onInput);
-  }, []);
+  const focusRef = useRef<HTMLDivElement | null>(null);
 
   // Open the modal automatically when navigated with ?id=xxx or ?phone=xxx (from POS)
   useEffect(() => {
@@ -1789,17 +1776,22 @@ export default function CustomersManager({ customers: initial }: Props) {
     });
   }, [customers, search, sort, showWalkin]);
 
-  // Group by first letter of name when sorting alphabetically
+  // Group by first letter of name when sorting alphabetically.
+  // NOTE: Thai locale sort doesn't keep same-initial names contiguous (e.g. "เก๋"
+  // collates under ก, not เ), so a "consecutive run" grouping produced MULTIPLE
+  // groups with the same initial → duplicate React keys → broken list reconciliation
+  // (the list stopped updating on search). Merge all same-initial names into one
+  // group via a Map so every `initial` key is unique.
   const grouped = useMemo(() => {
     if (sort !== "name") return null;
-    const groups: { initial: string; items: Customer[] }[] = [];
+    const map = new Map<string, Customer[]>();
     for (const c of filtered) {
       const initial = c.name.charAt(0) || "#";
-      const last    = groups[groups.length - 1];
-      if (last && last.initial === initial) last.items.push(c);
-      else groups.push({ initial, items: [c] });
+      const arr = map.get(initial);
+      if (arr) arr.push(c);
+      else map.set(initial, [c]);
     }
-    return groups;
+    return [...map.entries()].map(([initial, items]) => ({ initial, items }));
   }, [filtered, sort]);
 
   const focusId   = searchParams.get("id");
@@ -1830,12 +1822,8 @@ export default function CustomersManager({ customers: initial }: Props) {
         <div className="relative flex-1 min-w-48">
           <Search size={14} className="absolute left-3 top-2.5" color={MUTED} />
           <input
-            ref={searchRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            // Belt-and-suspenders for IME; the native 'input' listener above is
-            // the real fix (fires during Thai composition).
-            onCompositionEnd={e => setSearch((e.target as HTMLInputElement).value)}
             placeholder="ค้นหาชื่อ, เบอร์, อีเมล..."
             className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border"
             style={{ borderColor: BORDER, color: TEXT }}

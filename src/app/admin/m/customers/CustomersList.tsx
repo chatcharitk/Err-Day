@@ -73,16 +73,20 @@ function CustomerRow({ c }: { c: CustomerRow }) {
   );
 }
 
-/** Group a sorted list by the first character of each customer's name. */
+/** Group a sorted list by the first character of each customer's name.
+ * Merge all same-initial names into ONE group (via Map). Thai locale sort
+ * doesn't keep same-initial names contiguous, so a "consecutive run" grouping
+ * produced multiple groups sharing the same initial → duplicate React keys
+ * (`key={initial}`) → broken list reconciliation. */
 function groupByInitial(list: CustomerRow[]) {
-  const groups: { initial: string; items: CustomerRow[] }[] = [];
+  const map = new Map<string, CustomerRow[]>();
   for (const c of list) {
     const initial = c.name.charAt(0) || "#";
-    const last    = groups[groups.length - 1];
-    if (last && last.initial === initial) last.items.push(c);
-    else groups.push({ initial, items: [c] });
+    const arr = map.get(initial);
+    if (arr) arr.push(c);
+    else map.set(initial, [c]);
   }
-  return groups;
+  return [...map.entries()].map(([initial, items]) => ({ initial, items }));
 }
 
 function isWalkin(c: CustomerRow) {
