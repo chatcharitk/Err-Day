@@ -7,6 +7,7 @@ import { MapPin, Phone, ArrowRight, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import BrandLogo from "@/components/BrandLogo";
+import { bookingBranchLabel } from "@/lib/branch-display";
 
 interface Branch {
   id:             string;
@@ -213,7 +214,7 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
                   >
                     <div className="px-6 pt-6 pb-4">
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
-                        <h3 className="text-lg font-medium" style={{ color: "#3B2A24" }}>{branch.name}</h3>
+                        <h3 className="text-lg font-medium" style={{ color: "#3B2A24" }}>{bookingBranchLabel(branch.name)}</h3>
                         <span className="text-xs px-2 py-0.5 rounded-full"
                           style={{ backgroundColor: "#FFF0E8", color: "#8B1D24" }}>
                           เปิดให้บริการ
@@ -249,7 +250,7 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
                   >
                     <div className="px-6 pt-6 pb-4">
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
-                        <h3 className="text-lg font-medium" style={{ color: "#6B5245" }}>{branch.name}</h3>
+                        <h3 className="text-lg font-medium" style={{ color: "#6B5245" }}>{bookingBranchLabel(branch.name)}</h3>
                         <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
                           style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>
                           เร็วๆ นี้
