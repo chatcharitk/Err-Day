@@ -1713,7 +1713,20 @@ export default function CustomersManager({ customers: initial }: Props) {
   const [sort,         setSort]         = useState<SortKey>("name");
   const [showWalkin,   setShowWalkin]   = useState(false);
 
-  const focusRef = useRef<HTMLDivElement | null>(null);
+  const focusRef  = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  // Thai/IME fix: the native 'input' event fires on every keystroke INCLUDING
+  // during composition, whereas React's onChange is suppressed mid-composition
+  // (which left the search a full query behind — box showed "ปอ" but results
+  // were still "เก"). Mirror the DOM value into state on every native input.
+  useEffect(() => {
+    const el = searchRef.current;
+    if (!el) return;
+    const onInput = () => setSearch(el.value);
+    el.addEventListener("input", onInput);
+    return () => el.removeEventListener("input", onInput);
+  }, []);
 
   // Open the modal automatically when navigated with ?id=xxx or ?phone=xxx (from POS)
   useEffect(() => {
@@ -1817,10 +1830,11 @@ export default function CustomersManager({ customers: initial }: Props) {
         <div className="relative flex-1 min-w-48">
           <Search size={14} className="absolute left-3 top-2.5" color={MUTED} />
           <input
+            ref={searchRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            // Thai/IME: React suppresses onChange during composition, so the
-            // value lags. Commit again on compositionEnd so search stays in sync.
+            // Belt-and-suspenders for IME; the native 'input' listener above is
+            // the real fix (fires during Thai composition).
             onCompositionEnd={e => setSearch((e.target as HTMLInputElement).value)}
             placeholder="ค้นหาชื่อ, เบอร์, อีเมล..."
             className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border"
