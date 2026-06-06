@@ -160,6 +160,13 @@ export default function CustomerSearch({
               onChange({ id: null, name: v, phone: value.phone });
               search(v);
             }}
+            // Thai/IME: React suppresses onChange during composition; re-commit
+            // on compositionEnd so the query + suggestions stay in sync.
+            onCompositionEnd={(e) => {
+              const v = (e.target as HTMLInputElement).value;
+              onChange({ id: null, name: v, phone: value.phone });
+              search(v);
+            }}
             onFocus={() => { if (suggestions.length > 0) setShowSug(true); }}
             className="flex-1 text-sm outline-none bg-transparent min-w-0"
             style={{ color: "#3B2A24" }}

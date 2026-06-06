@@ -1819,6 +1819,9 @@ export default function CustomersManager({ customers: initial }: Props) {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
+            // Thai/IME: React suppresses onChange during composition, so the
+            // value lags. Commit again on compositionEnd so search stays in sync.
+            onCompositionEnd={e => setSearch((e.target as HTMLInputElement).value)}
             placeholder="ค้นหาชื่อ, เบอร์, อีเมล..."
             className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border"
             style={{ borderColor: BORDER, color: TEXT }}
