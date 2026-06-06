@@ -9,6 +9,7 @@ import {
   parseLocal, dayIndex, addMinutes, formatPrice,
   type BookingItem, type StaffItem, type ServiceOption,
 } from "./_shared";
+import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
 export default function EditModal({
   booking, branchId, branches, staff, onClose, onSaved,
@@ -28,7 +29,9 @@ export default function EditModal({
   const [price,           setPrice]           = useState(booking.totalPrice);
   const [selectedStaff,   setSelectedStaff]   = useState(booking.staff?.id ?? "");
   const [extraStaffIds,   setExtraStaffIds]   = useState<string[]>(booking.extraStaff.map(s => s.id));
-  const [customerName,    setCustomerName]    = useState(booking.customer.name);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerValue>({
+    id: booking.customer.id, name: booking.customer.name, phone: booking.customer.phone,
+  });
   const [selectedBranch,  setSelectedBranch]  = useState(branchId);
   const [notes,           setNotes]           = useState(booking.notes ?? "");
   const [saving,          setSaving]          = useState(false);
@@ -45,7 +48,7 @@ export default function EditModal({
   const c = STATUS_COLOR[currentStatus] ?? STATUS_COLOR.PENDING;
 
   useEffect(() => {
-    fetch(`/api/services?branchId=${branchId}`)
+    fetch(`/api/services?branchId=${selectedBranch}`)
       .then(r => r.json())
       .then((data: ServiceOption[]) => {
         setServices(data);
@@ -57,7 +60,7 @@ export default function EditModal({
           setBsId(data[0].id);
         }
       });
-  }, [branchId, booking.serviceId]);
+  }, [selectedBranch, booking.serviceId]);
 
   function handleServiceChange(id: string) {
     setBsId(id);
@@ -116,7 +119,7 @@ export default function EditModal({
         staffId: selectedStaff || null,
         extraStaffIds,
         notes: notes || null,
-        customerName: customerName.trim() || undefined,
+        customerId: (selectedCustomer.id && selectedCustomer.id !== booking.customer.id) ? selectedCustomer.id : undefined,
         branchId: selectedBranch !== branchId ? selectedBranch : undefined,
       }),
     });
@@ -220,16 +223,15 @@ export default function EditModal({
           )}
           <ServiceTimeFields services={services} serviceId={bsId} startTime={startTime} endTime={endTime}
             onServiceChange={handleServiceChange} onStartChange={handleStartChange} onEndChange={setEndTime} />
-          {/* Customer name */}
+          {/* Customer — reassign the booking to a different customer */}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">ชื่อลูกค้า</label>
-            <input
-              type="text"
-              value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30"
-              placeholder="ชื่อลูกค้า"
-            />
+            <label className="text-xs text-gray-500 block mb-1">ลูกค้า (เปลี่ยนได้หากจองผิดคน)</label>
+            <CustomerSearch value={selectedCustomer} onChange={setSelectedCustomer} showManualPhone={false} />
+            {selectedCustomer.id && selectedCustomer.id !== booking.customer.id && (
+              <p className="text-[11px] mt-1.5 px-2 py-1 rounded-lg" style={{ background: "#FFF7ED", color: "#9A3412" }}>
+                จะย้ายการจองนี้ไปยัง <b>{selectedCustomer.name}</b>
+              </p>
+            )}
           </div>
 
           {/* Branch */}

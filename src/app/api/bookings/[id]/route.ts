@@ -19,22 +19,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const {
       status, staffId, notes, startTime, endTime, totalPrice, serviceId, date,
       completedAt, receiptUrl,
-      extraStaffIds, customerName, branchId: newBranchId,
+      extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
 
     // Capture previous fields we need to compare after the update
-    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined || customerName !== undefined;
+    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined;
     const prev = needsPrev
       ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true, customerId: true } })
       : null;
-
-    // Update customer name if provided
-    if (customerName?.trim() && prev?.customerId) {
-      await prisma.customer.update({
-        where: { id: prev.customerId },
-        data: { name: customerName.trim() },
-      });
-    }
 
     // Update extra staff if provided
     if (Array.isArray(extraStaffIds)) {
@@ -59,6 +51,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(serviceId      !== undefined ? { serviceId }                             : {}),
         ...(date           !== undefined ? { date: new Date(date + "T12:00:00") }   : {}),
         ...(newBranchId    !== undefined ? { branchId: newBranchId }                : {}),
+        ...(newCustomerId  !== undefined ? { customerId: newCustomerId }            : {}),
         ...(completedAt    !== undefined ? { completedAt: completedAt ? new Date(completedAt) : null } : {}),
         ...(receiptUrl     !== undefined ? {
           receiptUrl: receiptUrl || null,
