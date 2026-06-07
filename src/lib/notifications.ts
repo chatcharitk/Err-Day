@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { pushText, pushLine } from "@/lib/line-messaging";
 import { buildBookingFlex } from "@/lib/flex/booking";
 import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
+import { branchGroupId } from "@/lib/line-groups";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -248,6 +249,95 @@ export async function sendBookingCancelled(
       else        console.log("[notify] booking cancelled (staff) sent",    uid);
     })
   );
+
+  // Post to the branch's LINE group too (no-op if group not configured).
+  await sendGroupBookingNotice(bookingId, "cancelled").catch(e => console.error("[notify] group cancel failed", e));
+}
+
+// ── Branch LINE-group notifications (per-branch staff group chat) ────────────
+
+type GroupBooking = {
+  startTime: string;
+  totalPrice: number;
+  notes: string | null;
+  date: Date;
+  customer: { name: string; nickname: string | null };
+};
+
+/** "วันที่ : พฤหัสบดี 7/6/2569" — date is stored as UTC-noon of the Bangkok day. */
+function fmtGroupDate(date: Date): string {
+  const weekday = date.toLocaleDateString("th-TH", { weekday: "long", timeZone: "UTC" });
+  const d = date.getUTCDate();
+  const m = date.getUTCMonth() + 1;
+  const y = date.getUTCFullYear() + 543;   // Buddhist era
+  return `วันที่ : ${weekday} ${d}/${m}/${y}`;
+}
+
+/** "14:00 : ชื่อลูกค้า - ฿500 - โน้ต" (note appended only when present). */
+function fmtGroupBookingLine(b: GroupBooking): string {
+  const name  = b.customer.nickname || b.customer.name;
+  const price = `฿${(b.totalPrice / 100).toLocaleString()}`;
+  const note  = b.notes?.trim();
+  return `${b.startTime} : ${name} - ${price}${note ? ` - ${note}` : ""}`;
+}
+
+/**
+ * Post a single booking (created / cancelled) to its branch's LINE group.
+ * No-op if the branch has no group configured (LINE_GROUP_* env unset).
+ */
+export async function sendGroupBookingNotice(
+  bookingId: string,
+  action: "created" | "cancelled",
+): Promise<void> {
+  const b = await prisma.booking.findUnique({
+    where:   { id: bookingId },
+    select:  {
+      branchId: true, startTime: true, totalPrice: true, notes: true, date: true,
+      customer: { select: { name: true, nickname: true } },
+    },
+  });
+  if (!b) return;
+  const groupId = branchGroupId(b.branchId);
+  if (!groupId) return;
+
+  const header = action === "created" ? "🆕 จองใหม่" : "❌ ยกเลิกการจอง";
+  const text = `${header}\n${fmtGroupDate(b.date)}\n${fmtGroupBookingLine(b)}`;
+  const r = await pushLine(groupId, [{ type: "text", text }]);
+  if (!r.ok) console.error("[notify] group booking notice failed", b.branchId, r.error);
+  else        console.log("[notify] group booking notice sent", b.branchId, action);
+}
+
+interface SummaryResult { branchId: string; status: "SENT" | "FAILED" | "SKIPPED"; count?: number; reason?: string; }
+
+/**
+ * Post tomorrow's booking list to a branch's LINE group (the 22:00 daily summary).
+ * Tomorrow = the Bangkok calendar day after "now".
+ */
+export async function sendBranchDailySummary(branchId: string): Promise<SummaryResult> {
+  const groupId = branchGroupId(branchId);
+  if (!groupId) return { branchId, status: "SKIPPED", reason: "no_group" };
+
+  // Bookings store `date` as UTC-noon of the Bangkok calendar day. Compute the
+  // Bangkok "tomorrow" and match the whole UTC day around its noon.
+  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const y = bkk.getUTCFullYear(), mo = bkk.getUTCMonth(), d = bkk.getUTCDate() + 1;
+  const dayStart    = new Date(Date.UTC(y, mo, d, 0, 0, 0));
+  const dayEnd      = new Date(Date.UTC(y, mo, d, 23, 59, 59));
+  const tomorrowNoon = new Date(Date.UTC(y, mo, d, 12, 0, 0));
+
+  const bookings = await prisma.booking.findMany({
+    where:  { branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] } },
+    select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
+    orderBy: { startTime: "asc" },
+  });
+
+  const lines = bookings.length
+    ? bookings.map(fmtGroupBookingLine).join("\n")
+    : "— ยังไม่มีการจองสำหรับวันพรุ่งนี้ —";
+  const text = `📋 สรุปการจองพรุ่งนี้\n${fmtGroupDate(tomorrowNoon)}\n\n${lines}`;
+
+  const r = await pushLine(groupId, [{ type: "text", text }]);
+  return { branchId, status: r.ok ? "SENT" : "FAILED", count: bookings.length, reason: r.error };
 }
 
 // ── Booking confirmation (sent immediately on creation) ────────────────────

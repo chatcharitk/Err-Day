@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity } from "@/lib/capacity";
-import { sendBookingCreated, sendStaffBookingAlert } from "@/lib/notifications";
+import { sendBookingCreated, sendStaffBookingAlert, sendGroupBookingNotice } from "@/lib/notifications";
 
 export async function POST(request: Request) {
   try {
@@ -111,9 +111,10 @@ export async function POST(request: Request) {
       },
     });
 
-    // Fire-and-forget: customer confirmation (skipped if no LINE link) + staff alert.
+    // Fire-and-forget: customer confirmation (skipped if no LINE link) + staff alert + branch group.
     sendBookingCreated(booking.id).catch(e => console.error("[notify] booking created failed", e));
     sendStaffBookingAlert(booking.id).catch(e => console.error("[notify] staff alert failed", e));
+    sendGroupBookingNotice(booking.id, "created").catch(e => console.error("[notify] group new booking failed", e));
 
     return NextResponse.json(booking, { status: 201 });
   } catch (error) {

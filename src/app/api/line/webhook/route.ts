@@ -28,7 +28,7 @@ import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
 interface LineEvent {
   type:        string;
   replyToken?: string;
-  source?:     { type: string; userId?: string };
+  source?:     { type: string; userId?: string; groupId?: string; roomId?: string };
   message?:    { type: string; text?: string };
 }
 
@@ -69,6 +69,16 @@ async function processEvent(event: LineEvent): Promise<void> {
   if (!event.replyToken)                      return;
 
   const text = event.message.text?.trim() ?? "";
+
+  // Group/room helper: reply with the chat id on demand, so staff can wire the
+  // branch → group notifications. Works in any group/room the OA is a member of.
+  const groupId = event.source?.groupId ?? event.source?.roomId;
+  if (groupId && /^(groupid|group\s*id|ไอดีกลุ่ม|\/id)$/i.test(text)) {
+    console.log(`[webhook] group id requested: ${groupId}`);
+    await replyLine(event.replyToken, [{ type: "text", text: `Group ID:\n${groupId}` }]);
+    return;
+  }
+
   const card = findCardByKeyword(text);
   if (!card) {
     // Not a tarot keyword — stay silent (let staff reply manually).

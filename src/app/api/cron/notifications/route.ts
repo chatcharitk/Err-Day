@@ -26,7 +26,9 @@ import {
   sendBookingReminder4h,
   sendMembershipExpiryWarning1d,
   sendPackageExpiryWarning1d,
+  sendBranchDailySummary,
 } from "@/lib/notifications";
+import { branchesWithGroups } from "@/lib/line-groups";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +138,30 @@ export async function GET(request: Request) {
     results.push(await sendPackageExpiryWarning1d(p.id));
   }
 
+  // ── 4) Branch daily summary — fires at 22:00 Bangkok, once per branch/day ──
+  // Lists TOMORROW's bookings to each branch's LINE group. Deduped via a
+  // NotificationLog row keyed by the target (tomorrow) date so repeated cron
+  // ticks within the 22:00 hour only send once.
+  const summaryResults: { branchId: string; status: string; count?: number; reason?: string }[] = [];
+  const bkkHour = new Date(now.getTime() + 7 * 60 * 60 * 1000).getUTCHours();
+  if (bkkHour === 22) {
+    const bkk = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const tomorrow = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate() + 1));
+    const dstr = tomorrow.toISOString().slice(0, 10);
+    for (const branchId of branchesWithGroups()) {
+      try {
+        // dedup marker — unique (kind,targetId). Reuses an existing kind value.
+        await prisma.notificationLog.create({
+          data: { kind: "BOOKING_REMINDER_4H", targetId: `dsum:${branchId}:${dstr}`, status: "SENT" },
+        });
+      } catch (e) {
+        if ((e as { code?: string }).code === "P2002") continue; // already sent today
+        throw e;
+      }
+      summaryResults.push(await sendBranchDailySummary(branchId));
+    }
+  }
+
   const stats = {
     bookings:    dueBookings.length,
     memberships: dueMemberships.length,
@@ -147,7 +173,7 @@ export async function GET(request: Request) {
     ranAt:   now.toISOString(),
   };
 
-  return NextResponse.json({ ok: true, stats, results });
+  return NextResponse.json({ ok: true, stats, results, summaryResults });
 }
 
 // Allow POST too — some cron services send POST instead of GET
