@@ -27,6 +27,7 @@ import {
   sendMembershipExpiryWarning1d,
   sendPackageExpiryWarning1d,
   sendBranchDailySummary,
+  sendStaffShiftSummary,
 } from "@/lib/notifications";
 import { branchesWithGroups } from "@/lib/line-groups";
 
@@ -159,6 +160,17 @@ export async function GET(request: Request) {
         throw e;
       }
       summaryResults.push(await sendBranchDailySummary(branchId));
+    }
+
+    // Staff shift schedule → DM the owners (Looklipair + Chatcharit), once/day.
+    try {
+      await prisma.notificationLog.create({
+        data: { kind: "BOOKING_REMINDER_4H", targetId: `shiftsum:${dstr}`, status: "SENT" },
+      });
+      const sh = await sendStaffShiftSummary();
+      summaryResults.push({ branchId: "shifts", status: sh.status, count: sh.count });
+    } catch (e) {
+      if ((e as { code?: string }).code !== "P2002") throw e; // P2002 = already sent today
     }
   }
 

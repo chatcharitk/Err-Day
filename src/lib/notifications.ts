@@ -340,6 +340,48 @@ export async function sendBranchDailySummary(branchId: string): Promise<SummaryR
   return { branchId, status: r.ok ? "SENT" : "FAILED", count: bookings.length, reason: r.error };
 }
 
+/**
+ * DM the owners (STAFF_LINE_IDS = Looklipair + Chatcharit) tomorrow's staff
+ * shift schedule, grouped by branch. Fired from the 22:00 cron.
+ */
+export async function sendStaffShiftSummary(): Promise<{ status: string; count: number }> {
+  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const y = bkk.getUTCFullYear(), mo = bkk.getUTCMonth(), d = bkk.getUTCDate() + 1;
+  const dayStart     = new Date(Date.UTC(y, mo, d, 0, 0, 0));
+  const dayEnd       = new Date(Date.UTC(y, mo, d, 23, 59, 59));
+  const tomorrowNoon = new Date(Date.UTC(y, mo, d, 12, 0, 0));
+
+  const shifts = await prisma.staffShift.findMany({
+    where:  { date: { gte: dayStart, lte: dayEnd } },
+    select: { startTime: true, endTime: true, staff: { select: { name: true, branch: { select: { name: true } } } } },
+    orderBy: [{ startTime: "asc" }],
+  });
+
+  // Group lines by branch name
+  const byBranch = new Map<string, string[]>();
+  for (const s of shifts) {
+    const bn   = s.staff.branch?.name ?? "ไม่ระบุสาขา";
+    const line = `${s.startTime}–${s.endTime} : ${s.staff.name}`;
+    const arr  = byBranch.get(bn);
+    if (arr) arr.push(line); else byBranch.set(bn, [line]);
+  }
+
+  const body = shifts.length === 0
+    ? "— ยังไม่มีตารางงานสำหรับวันพรุ่งนี้ —"
+    : [...byBranch.entries()].map(([bn, lines]) => `📍 ${bn}\n${lines.join("\n")}`).join("\n\n");
+
+  const text = `👥 ตารางงานพรุ่งนี้\n${fmtGroupDate(tomorrowNoon)}\n\n${body}`;
+
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const r = await pushText(uid, text);
+      if (!r.ok) console.error("[notify] shift summary failed", uid, r.error);
+      else        console.log("[notify] shift summary sent", uid);
+    })
+  );
+  return { status: "SENT", count: shifts.length };
+}
+
 // ── Booking confirmation (sent immediately on creation) ────────────────────
 
 export async function sendBookingCreated(bookingId: string): Promise<SendResult> {
