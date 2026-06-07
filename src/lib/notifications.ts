@@ -282,11 +282,13 @@ function fmtGroupBookingLine(b: GroupBooking): string {
 }
 
 /**
- * On a booking create/cancel, re-post the branch group's CURRENT booking list
- * for that booking's day (so a new one appears, a cancelled one drops off).
- * For today, already-passed times are omitted ("upcoming only"). No-op if the
- * branch has no group configured. The cancel caller runs after the booking is
- * already CANCELLED, so the active-status query naturally excludes it.
+ * On a booking create/cancel, re-post the branch group's TODAY upcoming list
+ * (the live same-day schedule). A new booking appears, a cancelled one drops off
+ * (the cancel caller runs after status=CANCELLED, so the active query excludes it).
+ *
+ * Only fires for TODAY's bookings — create/cancel for any other day posts nothing
+ * here (future bookings appear only in the 22:00 summary). No-op if the branch
+ * has no group configured.
  */
 export async function sendGroupBookingNotice(
   bookingId: string,
@@ -300,32 +302,33 @@ export async function sendGroupBookingNotice(
   const groupId = branchGroupId(b.branchId);
   if (!groupId) return;
 
-  // Whole UTC day around the booking's date (stored as UTC-noon of Bangkok day).
+  const pad2 = (n: number) => String(n).padStart(2, "0");
   const Y = b.date.getUTCFullYear(), M = b.date.getUTCMonth(), D = b.date.getUTCDate();
+  const bkkNow   = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const todayStr = `${bkkNow.getUTCFullYear()}-${pad2(bkkNow.getUTCMonth() + 1)}-${pad2(bkkNow.getUTCDate())}`;
+  const dayStr   = `${Y}-${pad2(M + 1)}-${pad2(D)}`;
+
+  // Only the same-day schedule is posted live; other days are silent here.
+  if (dayStr !== todayStr) return;
+
   const dayStart = new Date(Date.UTC(Y, M, D, 0, 0, 0));
   const dayEnd   = new Date(Date.UTC(Y, M, D, 23, 59, 59));
+  const nowHHmm  = `${pad2(bkkNow.getUTCHours())}:${pad2(bkkNow.getUTCMinutes())}`;
 
   const bookings = await prisma.booking.findMany({
     where:  { branchId: b.branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] } },
     select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
     orderBy: { startTime: "asc" },
   });
-
-  // If the booking's day is TODAY (Bangkok), drop already-passed times.
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const bkkNow   = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const todayStr = `${bkkNow.getUTCFullYear()}-${pad2(bkkNow.getUTCMonth() + 1)}-${pad2(bkkNow.getUTCDate())}`;
-  const dayStr   = `${Y}-${pad2(M + 1)}-${pad2(D)}`;
-  const nowHHmm  = `${pad2(bkkNow.getUTCHours())}:${pad2(bkkNow.getUTCMinutes())}`;
-  const list = dayStr === todayStr ? bookings.filter(x => x.startTime >= nowHHmm) : bookings;
+  const list = bookings.filter(x => x.startTime >= nowHHmm);   // upcoming only
 
   const header = action === "created" ? "🆕 จองใหม่" : "❌ ยกเลิกการจอง";
-  const lines  = list.length ? list.map(fmtGroupBookingLine).join("\n") : "— ไม่มีคิวที่เหลือ —";
+  const lines  = list.length ? list.map(fmtGroupBookingLine).join("\n") : "— ไม่มีคิวที่เหลือวันนี้ —";
   const text   = `${header}\n${fmtGroupDate(b.date)}\n\n${lines}`;
 
   const r = await pushLine(groupId, [{ type: "text", text }]);
   if (!r.ok) console.error("[notify] group booking list failed", b.branchId, r.error);
-  else        console.log("[notify] group booking list sent", b.branchId, action, list.length);
+  else        console.log("[notify] group today-list sent", b.branchId, action, list.length);
 }
 
 interface SummaryResult { branchId: string; status: "SENT" | "FAILED" | "SKIPPED"; count?: number; reason?: string; }
