@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, ChevronDown, Trash2, Phone, Calendar, X, Loader2 } from "lucide-react";
@@ -27,6 +27,9 @@ interface Props {
 export default function StaffList({ branches, activeBranchId, staff: initial }: Props) {
   const router = useRouter();
   const [staff, setStaff] = useState(initial);
+  // Re-sync when the server sends a new list (branch switch / refresh / add).
+  // Without this, useState(initial) keeps the first branch's staff forever.
+  useEffect(() => { setStaff(initial); }, [initial]);
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const [showAddForm, setShowAddForm]           = useState(false);
   const [newName,     setNewName]               = useState("");
