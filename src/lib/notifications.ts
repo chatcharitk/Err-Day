@@ -282,29 +282,50 @@ function fmtGroupBookingLine(b: GroupBooking): string {
 }
 
 /**
- * Post a single booking (created / cancelled) to its branch's LINE group.
- * No-op if the branch has no group configured (LINE_GROUP_* env unset).
+ * On a booking create/cancel, re-post the branch group's CURRENT booking list
+ * for that booking's day (so a new one appears, a cancelled one drops off).
+ * For today, already-passed times are omitted ("upcoming only"). No-op if the
+ * branch has no group configured. The cancel caller runs after the booking is
+ * already CANCELLED, so the active-status query naturally excludes it.
  */
 export async function sendGroupBookingNotice(
   bookingId: string,
   action: "created" | "cancelled",
 ): Promise<void> {
   const b = await prisma.booking.findUnique({
-    where:   { id: bookingId },
-    select:  {
-      branchId: true, startTime: true, totalPrice: true, notes: true, date: true,
-      customer: { select: { name: true, nickname: true } },
-    },
+    where:  { id: bookingId },
+    select: { branchId: true, date: true },
   });
   if (!b) return;
   const groupId = branchGroupId(b.branchId);
   if (!groupId) return;
 
+  // Whole UTC day around the booking's date (stored as UTC-noon of Bangkok day).
+  const Y = b.date.getUTCFullYear(), M = b.date.getUTCMonth(), D = b.date.getUTCDate();
+  const dayStart = new Date(Date.UTC(Y, M, D, 0, 0, 0));
+  const dayEnd   = new Date(Date.UTC(Y, M, D, 23, 59, 59));
+
+  const bookings = await prisma.booking.findMany({
+    where:  { branchId: b.branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] } },
+    select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
+    orderBy: { startTime: "asc" },
+  });
+
+  // If the booking's day is TODAY (Bangkok), drop already-passed times.
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const bkkNow   = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const todayStr = `${bkkNow.getUTCFullYear()}-${pad2(bkkNow.getUTCMonth() + 1)}-${pad2(bkkNow.getUTCDate())}`;
+  const dayStr   = `${Y}-${pad2(M + 1)}-${pad2(D)}`;
+  const nowHHmm  = `${pad2(bkkNow.getUTCHours())}:${pad2(bkkNow.getUTCMinutes())}`;
+  const list = dayStr === todayStr ? bookings.filter(x => x.startTime >= nowHHmm) : bookings;
+
   const header = action === "created" ? "🆕 จองใหม่" : "❌ ยกเลิกการจอง";
-  const text = `${header}\n${fmtGroupDate(b.date)}\n${fmtGroupBookingLine(b)}`;
+  const lines  = list.length ? list.map(fmtGroupBookingLine).join("\n") : "— ไม่มีคิวที่เหลือ —";
+  const text   = `${header}\n${fmtGroupDate(b.date)}\n\n${lines}`;
+
   const r = await pushLine(groupId, [{ type: "text", text }]);
-  if (!r.ok) console.error("[notify] group booking notice failed", b.branchId, r.error);
-  else        console.log("[notify] group booking notice sent", b.branchId, action);
+  if (!r.ok) console.error("[notify] group booking list failed", b.branchId, r.error);
+  else        console.log("[notify] group booking list sent", b.branchId, action, list.length);
 }
 
 interface SummaryResult { branchId: string; status: "SENT" | "FAILED" | "SKIPPED"; count?: number; reason?: string; }
