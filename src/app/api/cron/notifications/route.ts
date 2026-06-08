@@ -139,13 +139,14 @@ export async function GET(request: Request) {
     results.push(await sendPackageExpiryWarning1d(p.id));
   }
 
-  // ── 4) Branch daily summary — fires at 22:00 Bangkok, once per branch/day ──
-  // Lists TOMORROW's bookings to each branch's LINE group. Deduped via a
-  // NotificationLog row keyed by the target (tomorrow) date so repeated cron
-  // ticks within the 22:00 hour only send once.
+  // ── 4) Branch daily summary — fires in the 22:00–23:59 Bangkok window ──
+  // Lists TOMORROW's bookings to each branch's LINE group. The window is two
+  // hours (not a single hour) so it survives imprecise/missed cron ticks; the
+  // NotificationLog row keyed by the target (tomorrow) date means only the
+  // FIRST qualifying tick of the evening actually sends — the rest no-op.
   const summaryResults: { branchId: string; status: string; count?: number; reason?: string }[] = [];
   const bkkHour = new Date(now.getTime() + 7 * 60 * 60 * 1000).getUTCHours();
-  if (bkkHour === 22) {
+  if (bkkHour >= 22) {
     const bkk = new Date(now.getTime() + 7 * 60 * 60 * 1000);
     const tomorrow = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate() + 1));
     const dstr = tomorrow.toISOString().slice(0, 10);
