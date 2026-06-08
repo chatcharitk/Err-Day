@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,6 +34,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(bookingEnabled !== undefined ? { bookingEnabled: Boolean(bookingEnabled) } : {}),
       },
     });
+    revalidateReferenceData();
     return NextResponse.json(branch);
   } catch (error) {
     console.error(error);

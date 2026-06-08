@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 // PUT /api/admin/services/[id]/branches
 // Body: [{ branchId, price (baht), duration (mins), isActive }]
@@ -32,6 +33,7 @@ export async function PUT(
     );
 
     const results = await prisma.$transaction(ops);
+    revalidateReferenceData();
     return NextResponse.json(results);
   } catch (error) {
     console.error(error);

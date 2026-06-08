@@ -5,6 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 export async function GET() {
   const addons = await prisma.serviceAddon.findMany({
@@ -31,5 +32,6 @@ export async function POST(request: Request) {
       isActive: isActive ?? true,
     },
   });
+  revalidateReferenceData();
   return NextResponse.json({ addon }, { status: 201 });
 }

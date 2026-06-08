@@ -6,6 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 export async function PATCH(
   request: Request,
@@ -25,6 +26,7 @@ export async function PATCH(
         ...(isActive !== undefined ? { isActive: Boolean(isActive)     } : {}),
       },
     });
+    revalidateReferenceData();
     return NextResponse.json({ addon });
   } catch (e) {
     console.error("[addons PATCH]", e);
@@ -41,6 +43,7 @@ export async function DELETE(
   try {
     // Soft-delete to preserve BookingAddon history.
     await prisma.serviceAddon.update({ where: { id }, data: { isActive: false } });
+    revalidateReferenceData();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[addons DELETE]", e);

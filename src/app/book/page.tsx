@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import BookCallback from "./BookCallback";
 
-export const dynamic = "force-dynamic";
+// The branch list is reference data — cache the render (ISR) so the entry page
+// is served from the edge instead of a cold dynamic render + DB hit per open.
+export const revalidate = 60;
 
 /**
  * /book — Handles the LIFF OAuth callback (Line endpoint URL points here).

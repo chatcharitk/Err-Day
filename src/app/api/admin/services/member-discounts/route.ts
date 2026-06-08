@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 // GET — return all active services with memberDiscountPercent + branch prices
 export async function GET() {
@@ -40,6 +41,7 @@ export async function PATCH(request: Request) {
       ),
     );
 
+    revalidateReferenceData();
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 // PATCH /api/admin/services/[id] — update service metadata
 export async function PATCH(
@@ -34,6 +35,7 @@ export async function PATCH(
       },
     });
 
+    revalidateReferenceData();
     return NextResponse.json(service);
   } catch (error) {
     console.error(error);
@@ -52,6 +54,7 @@ export async function DELETE(
       where: { id },
       data: { isActive: false },
     });
+    revalidateReferenceData();
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

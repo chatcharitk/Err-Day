@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { getLiff } from "@/lib/liff-client";
 
 /**
@@ -19,8 +19,14 @@ import { getLiff } from "@/lib/liff-client";
  */
 export function LiffProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
+    // LIFF is only used by the customer-facing routes. Admin (/admin) and staff
+    // (/staff) portals never touch LINE, so skip init there — otherwise every
+    // admin/staff page downloads the LIFF SDK chunk and pays the 1–3s
+    // liff.init() cost (especially painful in the Android LINE WebView).
+    if (pathname.startsWith("/admin") || pathname.startsWith("/staff")) return;
     if (!process.env.NEXT_PUBLIC_LIFF_ID) return;
 
     getLiff()
@@ -38,7 +44,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .catch(err => console.error("LIFF init failed:", err));
-  }, [router]);
+  }, [router, pathname]);
 
   return <>{children}</>;
 }

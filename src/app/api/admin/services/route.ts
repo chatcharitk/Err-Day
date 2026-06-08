@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidateReferenceData } from "@/lib/revalidate";
 
 // GET /api/admin/services — all services (incl. inactive) with branch pricing
 export async function GET() {
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       },
     });
 
+    revalidateReferenceData();
     return NextResponse.json(service, { status: 201 });
   } catch (error) {
     console.error(error);
