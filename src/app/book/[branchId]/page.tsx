@@ -8,6 +8,18 @@ import BookingFlow from "./BookingFlow";
 // from /api/availability, so cached HTML never shows stale slots.
 export const revalidate = 60;
 
+// A dynamic [branchId] segment with no generateStaticParams renders
+// dynamically on every request (even with `revalidate` set) — so list the
+// branches to prerender them at build and turn this into a cached ISR page.
+// There are only a couple of branches; new ones fall back to on-demand render.
+export async function generateStaticParams() {
+  const branches = await prisma.branch.findMany({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  return branches.map((b) => ({ branchId: b.id }));
+}
+
 export default async function BookPage({ params }: { params: Promise<{ branchId: string }> }) {
   const { branchId } = await params;
 
