@@ -31,16 +31,20 @@ export default function AddBookingModal({
   const [saving,           setSaving]           = useState(false);
   const [error,            setError]            = useState("");
   const [isMember,         setIsMember]         = useState(false);
+  const [memberLoading,    setMemberLoading]    = useState(false);
 
   function toggleExtraStaff(id: string) {
     setExtraStaffIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
   useEffect(() => {
-    if (!customer.id || !customer.phone) { setIsMember(false); return; }
+    if (!customer.id || !customer.phone) { setIsMember(false); setMemberLoading(false); return; }
+    let cancelled = false;
+    setMemberLoading(true);
     fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
+        if (cancelled) return;
         if (data?.membership) {
           const m = data.membership;
           const today = new Date(); today.setUTCHours(0, 0, 0, 0);
@@ -49,7 +53,9 @@ export default function AddBookingModal({
           setIsMember(!expired && !usedUp && !m.pendingActivation);
         } else { setIsMember(false); }
       })
-      .catch(() => setIsMember(false));
+      .catch(() => { if (!cancelled) setIsMember(false); })
+      .finally(() => { if (!cancelled) setMemberLoading(false); });
+    return () => { cancelled = true; };
   }, [customer.id, customer.phone]);
 
   function computeMemberPrice(svc: BranchServiceItem): number | null {
@@ -109,6 +115,8 @@ export default function AddBookingModal({
       setError("กรุณากรอกชื่อและเบอร์โทร หรือเลือก Walk-in");
       return;
     }
+    // Wait for the membership check so a member is never saved at full price.
+    if (memberLoading) { setError("กำลังตรวจสอบสถานะสมาชิก กรุณารอสักครู่"); return; }
     setSaving(true);
     const res = await fetch("/api/bookings", {
       method:  "POST",
@@ -325,9 +333,11 @@ export default function AddBookingModal({
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button type="submit"
-              disabled={saving || !serviceId || !time || (!isWalkin && !customer.name)}
+              disabled={saving || memberLoading || !serviceId || !time || (!isWalkin && !customer.name)}
               className="w-full py-3 rounded-xl bg-[#8B1D24] text-white font-semibold text-sm disabled:opacity-50">
-              {saving ? "กำลังบันทึก..." : `✓ บันทึกการจอง${selectedSvc ? ` · ${formatPrice(finalPrice)}` : ""}`}
+              {saving ? "กำลังบันทึก..."
+                : memberLoading ? "กำลังตรวจสอบสมาชิก..."
+                : `✓ บันทึกการจอง${selectedSvc ? ` · ${formatPrice(finalPrice)}` : ""}`}
             </button>
           </div>
         </form>

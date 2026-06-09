@@ -54,6 +54,35 @@ function formatPrice(satang: number) {
   return `฿${(satang / 100).toLocaleString()}`;
 }
 
+/** Effective member price for a service (null = no member discount configured). */
+function computeMemberPrice(
+  svc: { memberPrice: number | null; memberDiscountPercent: number },
+  branchPrice: number,
+): number | null {
+  if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;
+  if (svc.memberDiscountPercent) return Math.round(branchPrice * (1 - svc.memberDiscountPercent / 100));
+  return null;
+}
+
+/** Whether a phone belongs to an active (non-expired, non-pending, not-used-up) member. */
+async function fetchIsMember(phone: string): Promise<boolean> {
+  const p = phone.trim();
+  if (p.length < 8) return false;
+  try {
+    const r = await fetch(`/api/membership?phone=${encodeURIComponent(p)}`);
+    if (!r.ok) return false;
+    const data = await r.json();
+    const m = data?.membership;
+    if (!m) return false;
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const expired = m.expiresAt && new Date(m.expiresAt) < today;
+    const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
+    return !expired && !usedUp && !m.pendingActivation;
+  } catch {
+    return false;
+  }
+}
+
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + minutes;
@@ -287,8 +316,6 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
   const selectedAddonItems = addons.filter((a) => selectedAddons.has(a.id));
   const addonsTotal = selectedAddonItems.reduce((sum, a) => sum + a.price, 0);
-  const servicePrice = selectedService?.price ?? 0;
-  const grandTotal = servicePrice + addonsTotal;
 
   const canProceed = () => {
     if (step === 0) return !!selectedService;
@@ -303,6 +330,18 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     setError("");
 
     try {
+      // Resolve member pricing authoritatively before storing. A member must be
+      // charged the member price from the start — otherwise the booking is saved at
+      // full price and the LINE group notification (which fires on create and reads
+      // the stored totalPrice) reports the wrong amount. Checked at submit so it's
+      // race-free regardless of when the phone was entered.
+      const memberPrice = computeMemberPrice(selectedService.service, selectedService.price);
+      const servicePrice =
+        memberPrice != null && memberPrice < selectedService.price && (await fetchIsMember(form.phone))
+          ? memberPrice
+          : selectedService.price;
+      const totalPrice = servicePrice + addonsTotal;
+
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -313,7 +352,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
           date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,"0")}-${String(selectedDate.getDate()).padStart(2,"0")}`,
           startTime: selectedTime,
           endTime: addMinutes(selectedTime, selectedService.duration),
-          totalPrice: grandTotal,
+          totalPrice,
           addonIds: [...selectedAddons],
           name: form.name,
           nickname: form.nickname || null,
