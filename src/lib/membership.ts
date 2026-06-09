@@ -46,6 +46,9 @@ export async function activateOrRenewMembership(opts: ActivateOpts) {
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.membership.findUnique({ where: { customerId } });
+    // Renewal = the customer already had a fully-activated membership (not a
+    // first-time activation, and not a pending LIFF self-signup awaiting payment).
+    const renewed = !!existing?.activatedAt && !existing.pendingActivation;
 
     // Close any open cycle of this membership
     if (existing) {
@@ -97,6 +100,6 @@ export async function activateOrRenewMembership(opts: ActivateOpts) {
       },
     });
 
-    return { membership, cycle };
+    return { membership, cycle, renewed };
   });
 }

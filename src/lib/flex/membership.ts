@@ -110,10 +110,16 @@ export function buildEntitlementActivatedFlex(args: {
   expiresAt:   Date | null;
   usageText:   string;   // e.g. "ไม่จำกัดจำนวนครั้ง" or "5 ครั้ง"
   heroUrl?:    string;
+  renewed?:    boolean;  // true → renewal wording instead of first-time activation
 }): LineMessage {
+  const title    = args.renewed ? "✅ ต่ออายุแล้ว" : "✅ เปิดใช้งานแล้ว";
+  const altText  = `${args.renewed ? "ต่ออายุ" : "เปิดใช้งาน"} ${args.productName} แล้ว 🎉`;
+  const greeting = args.renewed
+    ? `ต่ออายุสมาชิกเรียบร้อยแล้วค่ะ คุณ${args.greetName} 🎉`
+    : `ยินดีต้อนรับค่ะ คุณ${args.greetName} 🎉`;
   return {
     type: "flex",
-    altText: `เปิดใช้งาน ${args.productName} แล้ว 🎉`,
+    altText,
     contents: {
       type: "bubble",
       size: "kilo",
@@ -121,14 +127,14 @@ export function buildEntitlementActivatedFlex(args: {
       header: {
         type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: "#166534",
         contents: [
-          { type: "text", text: "✅ เปิดใช้งานแล้ว", color: "#FFFFFF", weight: "bold", size: "md", wrap: true },
+          { type: "text", text: title, color: "#FFFFFF", weight: "bold", size: "md", wrap: true },
           { type: "text", text: "err·day membership", color: "#FFFFFF", size: "xs", margin: "xs" },
         ],
       },
       body: {
         type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", backgroundColor: BG_BEIGE,
         contents: [
-          { type: "text", text: `ยินดีต้อนรับค่ะ คุณ${args.greetName} 🎉`, weight: "bold", size: "sm", color: TEXT, wrap: true },
+          { type: "text", text: greeting, weight: "bold", size: "sm", color: TEXT, wrap: true },
           { type: "separator", margin: "md", color: "#EADBCF" },
           { type: "box", layout: "vertical", spacing: "sm", margin: "md", contents: [
             row("แพ็กเกจ", args.productName, true),

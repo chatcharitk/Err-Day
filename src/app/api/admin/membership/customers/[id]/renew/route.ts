@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { activateOrRenewMembership, MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
+import { sendMembershipActivated } from "@/lib/notifications";
 
 /** POST /api/admin/membership/customers/[id]/renew
  *  Manual admin renewal — extends membership +30 days, resets cycle counter,
@@ -29,12 +30,17 @@ export async function POST(
     if (typeof body.notes === "string")      notes      = body.notes;
   } catch { /* no body */ }
 
-  const { membership, cycle } = await activateOrRenewMembership({
+  const { membership, cycle, renewed } = await activateOrRenewMembership({
     customerId,
     paidAmount,
     paymentMethod: "Manual",
     notes:         notes ?? "Manual renew via admin",
   });
+
+  // Send the LINE confirmation flex (deduped per cycle). Fire-and-forget so a
+  // LINE failure never blocks the renewal.
+  sendMembershipActivated(membership.id, { cycleId: cycle.id, renewed })
+    .catch((e) => console.error("[notify] membership renew flex failed", e));
 
   return NextResponse.json({ membership, cycle, defaultPrice: MEMBERSHIP_PRICE_SATANG });
 }

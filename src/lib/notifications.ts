@@ -537,18 +537,24 @@ export async function sendStaffMembershipAlert(membershipId: string): Promise<vo
 
 // ── Membership activated ─────────────────────────────────────────────────────
 
-export async function sendMembershipActivated(membershipId: string): Promise<SendResult> {
+export async function sendMembershipActivated(
+  membershipId: string,
+  opts: { cycleId?: string; renewed?: boolean } = {},
+): Promise<SendResult> {
   const kind: Kind = "MEMBERSHIP_ACTIVATED";
-  if (await alreadySent(kind, membershipId)) return { kind, targetId: membershipId, status: "SENT", reason: "already" };
+  // Dedupe per cycle so each renewal sends its own confirmation flex. Falls back
+  // to the membership id when no cycle is supplied (legacy callers).
+  const targetId = opts.cycleId ?? membershipId;
+  if (await alreadySent(kind, targetId)) return { kind, targetId, status: "SENT", reason: "already" };
 
   const m = await prisma.membership.findUnique({
     where:   { id: membershipId },
     include: { customer: true, tier: true },
   });
-  if (!m) return { kind, targetId: membershipId, status: "FAILED", reason: "not_found" };
+  if (!m) return { kind, targetId, status: "FAILED", reason: "not_found" };
   if (!m.customer.lineUserId) {
-    await recordLog({ kind, targetId: membershipId, status: "SKIPPED", error: "no_line_link" });
-    return { kind, targetId: membershipId, status: "SKIPPED", reason: "no_line_link" };
+    await recordLog({ kind, targetId, status: "SKIPPED", error: "no_line_link" });
+    return { kind, targetId, status: "SKIPPED", reason: "no_line_link" };
   }
 
   const flex = buildEntitlementActivatedFlex({
@@ -560,15 +566,16 @@ export async function sendMembershipActivated(membershipId: string): Promise<Sen
       ? `${m.usagesAllowed} ครั้ง`
       : "ราคาสมาชิกทุกบริการ (ไม่จำกัดครั้ง)",
     heroUrl:     promoHeroUrl("membership"),
+    renewed:     opts.renewed,
   });
 
   const r = await pushLine(m.customer.lineUserId, [flex]);
   if (r.ok) {
-    await recordLog({ kind, targetId: membershipId, status: "SENT", recipient: m.customer.lineUserId });
-    return { kind, targetId: membershipId, status: "SENT" };
+    await recordLog({ kind, targetId, status: "SENT", recipient: m.customer.lineUserId });
+    return { kind, targetId, status: "SENT" };
   }
-  await recordLog({ kind, targetId: membershipId, status: "FAILED", recipient: m.customer.lineUserId, error: r.error });
-  return { kind, targetId: membershipId, status: "FAILED", reason: r.error };
+  await recordLog({ kind, targetId, status: "FAILED", recipient: m.customer.lineUserId, error: r.error });
+  return { kind, targetId, status: "FAILED", reason: r.error };
 }
 
 // ── Membership expiry warning (1 day) ────────────────────────────────────────
