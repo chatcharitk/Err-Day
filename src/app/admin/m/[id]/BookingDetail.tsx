@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, Clock, User, Plus, Trash2, Check, X,
   XCircle, Calendar, Pencil, Loader2, CreditCard,
-  AlertCircle, Sparkles, RefreshCw,
+  AlertCircle, Sparkles, RefreshCw, ChevronRight,
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
@@ -373,10 +373,17 @@ export default function BookingDetail({ booking: initial, branchServices, branch
             <span className="text-xs flex-shrink-0 w-12" style={{ color: MUTED }}>ลูกค้า</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-medium" style={{ color: TEXT }}>
-                  {b.customerName}
-                  {b.customerNickname && <span className="font-normal" style={{ color: MUTED }}> · {b.customerNickname}</span>}
-                </p>
+                <button
+                  onClick={() => router.push(`/admin/m/customers/${b.customerId}`)}
+                  className="text-sm font-medium text-left inline-flex items-center gap-0.5"
+                  style={{ color: PRIMARY }}
+                >
+                  <span>
+                    {b.customerName}
+                    {b.customerNickname && <span className="font-normal" style={{ color: MUTED }}> · {b.customerNickname}</span>}
+                  </span>
+                  <ChevronRight size={13} className="flex-shrink-0" />
+                </button>
                 {b.isMember && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-0.5" style={{ background: "#F0FDF4", color: "#166534" }}>
                     <Sparkles size={9} />สมาชิก
