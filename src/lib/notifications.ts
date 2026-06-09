@@ -376,7 +376,10 @@ export async function sendStaffShiftSummary(): Promise<{ status: string; count: 
   const tomorrowNoon = new Date(Date.UTC(y, mo, d, 12, 0, 0));
 
   const shifts = await prisma.staffShift.findMany({
-    where:  { date: { gte: dayStart, lte: dayEnd } },
+    // Only active staff. Removing staff is a soft delete (isActive=false) and
+    // does not clear their future shift rows, so without this filter a removed
+    // staff member still appears in tomorrow's schedule.
+    where:  { date: { gte: dayStart, lte: dayEnd }, staff: { isActive: true } },
     select: { startTime: true, endTime: true, staff: { select: { name: true, branch: { select: { name: true } } } } },
     orderBy: [{ startTime: "asc" }],
   });
