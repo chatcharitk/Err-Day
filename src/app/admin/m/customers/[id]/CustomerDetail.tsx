@@ -7,6 +7,7 @@ import {
   Loader2, AlertCircle, Check, Clock, MapPin, Camera, Plus, Trash2, X,
   Receipt, Info, FileImage, NotebookPen, Cake,
 } from "lucide-react";
+import LineLinkButton from "@/components/LineLinkButton";
 
 const PACKAGE_OPTIONS: { sku: string; nameTh: string; price: number }[] = [
   { sku: "svc-buffet", nameTh: "Buffet 30 วัน",   price: 3500 },
@@ -393,6 +394,12 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
             <p className="text-xs mt-0.5" style={{ color: MUTED }}>{c.bookingsCount} การจอง</p>
           </div>
         </div>
+
+        {!editing && (
+          <div className="mb-3">
+            <LineLinkButton customerId={c.id} linked={!!c.lineUserId} />
+          </div>
+        )}
 
         {editing ? (
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: "#FAFAFA" }}>

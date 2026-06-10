@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useLiff } from "@/hooks/useLiff";
 import BrandLogo from "@/components/BrandLogo";
-import { Phone, CheckCircle, Loader2, LogIn } from "lucide-react";
+import { Phone, CheckCircle, Loader2, LogIn, XCircle } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const MUTED   = "#A08070";
@@ -18,8 +18,20 @@ export default function LinkPage() {
   const [message,   setMessage]   = useState("");
   const [linkedName, setLinkedName] = useState("");
 
-  // If already linked, detect it immediately after login
+  // `ct` = signed per-customer token from a staff-generated one-tap link.
+  // Read client-side only (window is undefined during SSR of this client page).
+  const [ct,        setCt]        = useState<string | null>(null);
+  const [ctChecked, setCtChecked] = useState(false);
+  const [autoTried, setAutoTried] = useState(false);
   useEffect(() => {
+    setCt(new URLSearchParams(window.location.search).get("ct"));
+    setCtChecked(true);
+  }, []);
+
+  // Phone flow only: if this LINE is already linked, detect it after login.
+  // (The token flow learns this from the link API instead.)
+  useEffect(() => {
+    if (!ctChecked || ct) return;
     if (!ready || !isLoggedIn || !profile) return;
     fetch(`/api/customer/me?lineUserId=${encodeURIComponent(profile.userId)}`)
       .then(r => r.ok ? r.json() : null)
@@ -30,7 +42,32 @@ export default function LinkPage() {
         }
       })
       .catch(() => {});
-  }, [ready, isLoggedIn, profile]);
+  }, [ready, isLoggedIn, profile, ctChecked, ct]);
+
+  // Token flow: one-tap auto-link once the customer is logged in with LINE.
+  useEffect(() => {
+    if (!ctChecked || !ct || autoTried) return;
+    if (!ready || !isLoggedIn || !profile) return;
+    setAutoTried(true);
+    setStatus("loading");
+    fetch("/api/liff/link", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lineUserId:  profile.userId,
+        token:       ct,
+        displayName: profile.displayName,
+        pictureUrl:  profile.pictureUrl,
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) { setStatus("error"); setMessage(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่"); return; }
+        setLinkedName(data.name);
+        setStatus(data.already ? "already" : "success");
+      })
+      .catch(() => { setStatus("error"); setMessage("เกิดข้อผิดพลาด กรุณาลองใหม่"); });
+  }, [ctChecked, ct, autoTried, ready, isLoggedIn, profile]);
 
   async function handleLink() {
     if (!profile || !phone.trim()) return;
@@ -62,7 +99,7 @@ export default function LinkPage() {
   }
 
   // ── Loading skeleton ──
-  if (!ready) {
+  if (!ready || !ctChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#FDF7F2" }}>
         <Loader2 size={28} className="animate-spin" style={{ color: PRIMARY }} />
@@ -130,6 +167,28 @@ export default function LinkPage() {
             ขณะนี้คุณสามารถรับการแจ้งเตือนการจองและตรวจสอบสถานะสมาชิกผ่าน LINE ได้
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // ── Token (one-tap) flow: auto-linking spinner, or error ──
+  if (ct) {
+    if (status === "error") {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-4" style={{ background: "#FDF7F2" }}>
+          <BrandLogo />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "#FEF2F2" }}>
+            <XCircle size={32} color="#DC2626" />
+          </div>
+          <p className="text-sm text-center max-w-xs" style={{ color: TEXT }}>{message}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-4" style={{ background: "#FDF7F2" }}>
+        <BrandLogo />
+        <Loader2 size={28} className="animate-spin" style={{ color: PRIMARY }} />
+        <p className="text-sm" style={{ color: MUTED }}>กำลังเชื่อมต่อบัญชีของคุณ...</p>
       </div>
     );
   }

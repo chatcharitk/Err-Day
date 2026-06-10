@@ -6,8 +6,9 @@ import { createPortal } from "react-dom";
 import {
   UserPlus, Pencil, Search, ChevronDown, X, Save, Phone, Mail, Calendar,
   User as UserIcon, CreditCard, Clock, MapPin, Plus, Zap, Trash2,
-  Receipt, Info,
+  Receipt, Info, Link2,
 } from "lucide-react";
+import LineLinkButton from "@/components/LineLinkButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1379,6 +1380,13 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
                     </span>
                   )}
                 </InfoRow>
+
+                {/* LINE account link */}
+                {!editMode && (
+                  <InfoRow icon={<Link2 size={14} />} label="LINE">
+                    <LineLinkButton customerId={customer.id} linked={!!customer.lineUserId} />
+                  </InfoRow>
+                )}
 
                 {/* Gender */}
                 <InfoRow icon={<UserIcon size={14} />} label="เพศ">

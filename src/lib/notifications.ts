@@ -578,6 +578,37 @@ export async function sendMembershipActivated(
   return { kind, targetId, status: "FAILED", reason: r.error };
 }
 
+/**
+ * Push the customer's current membership card to their LINE. Used right after an
+ * account-link so a member who was registered offline (no LINE) gets their
+ * details. Direct push — no activation dedupe — since it's triggered by an
+ * explicit one-off action. No-op if they have no active membership or no LINE.
+ */
+export async function sendMembershipDetails(customerId: string): Promise<SendResult> {
+  const kind: Kind = "MEMBERSHIP_ACTIVATED";
+  const m = await prisma.membership.findUnique({
+    where:   { customerId },
+    include: { customer: true, tier: true },
+  });
+  if (!m)                                 return { kind, targetId: customerId, status: "SKIPPED", reason: "no_membership" };
+  if (m.pendingActivation)                return { kind, targetId: customerId, status: "SKIPPED", reason: "pending" };
+  if (!m.customer.lineUserId)             return { kind, targetId: customerId, status: "SKIPPED", reason: "no_line_link" };
+
+  const flex = buildEntitlementActivatedFlex({
+    greetName:   m.customer.nickname || m.customer.name,
+    productName: m.label || m.tier?.nameTh || "สมาชิกรายเดือน",
+    startedAt:   m.activatedAt,
+    expiresAt:   m.expiresAt,
+    usageText:   m.usagesAllowed > 0
+      ? `${m.usagesAllowed} ครั้ง`
+      : "ราคาสมาชิกทุกบริการ (ไม่จำกัดครั้ง)",
+    heroUrl:     promoHeroUrl("membership"),
+  });
+
+  const r = await pushLine(m.customer.lineUserId, [flex]);
+  return { kind, targetId: customerId, status: r.ok ? "SENT" : "FAILED", reason: r.error };
+}
+
 // ── Membership expiry warning (1 day) ────────────────────────────────────────
 
 export async function sendMembershipExpiryWarning1d(membershipId: string): Promise<SendResult> {
