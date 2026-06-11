@@ -30,6 +30,58 @@ interface ActivateOpts {
  * Callers should already have validated the trigger (e.g. POS sale containing
  * the membership SKU).
  */
+/**
+ * Resolve a set of booking ids to their branch id. Membership cycles and
+ * customer packages store the POS `bookingId` that activated them, and that
+ * booking carries the selling branch — so this is how we learn "where it was
+ * bought" without a dedicated column. Returns Map<bookingId, branchId>.
+ */
+export async function getBranchByBookingIds(
+  bookingIds: (string | null | undefined)[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(bookingIds.filter((x): x is string => !!x))];
+  if (ids.length === 0) return new Map();
+  const bookings = await prisma.booking.findMany({
+    where:  { id: { in: ids } },
+    select: { id: true, branchId: true },
+  });
+  return new Map(bookings.map((b) => [b.id, b.branchId]));
+}
+
+/**
+ * Derive the branch each customer most recently bought/renewed their membership
+ * at — from the latest MembershipCycle that has a linked POS booking. Manual
+ * admin entries (no booking) are omitted, so their branch reads as "unknown".
+ * Batched (2 queries total) to avoid N+1 in lists / the dashboard.
+ */
+export async function getMembershipBranchByCustomer(
+  customerIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (customerIds.length === 0) return out;
+
+  const cycles = await prisma.membershipCycle.findMany({
+    where:   { customerId: { in: customerIds }, bookingId: { not: null } },
+    orderBy: { startedAt: "desc" },
+    select:  { customerId: true, bookingId: true },
+  });
+
+  // Keep only the most recent cycle (with a booking) per customer.
+  const latestBooking = new Map<string, string>();
+  for (const c of cycles) {
+    if (c.bookingId && !latestBooking.has(c.customerId)) {
+      latestBooking.set(c.customerId, c.bookingId);
+    }
+  }
+
+  const branchByBooking = await getBranchByBookingIds([...latestBooking.values()]);
+  for (const [customerId, bookingId] of latestBooking) {
+    const branchId = branchByBooking.get(bookingId);
+    if (branchId) out.set(customerId, branchId);
+  }
+  return out;
+}
+
 export async function activateOrRenewMembership(opts: ActivateOpts) {
   const {
     customerId,

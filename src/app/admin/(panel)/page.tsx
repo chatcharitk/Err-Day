@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getMembershipBranchByCustomer } from "@/lib/membership";
+import { branchCode } from "@/lib/branch-display";
 import DashboardView, { DashboardData } from "./DashboardView";
 
 export const revalidate = 30;
@@ -114,7 +116,7 @@ export default async function AdminDashboard({
     // two columns natively for `usagesUsed < usagesAllowed`).
     prisma.membership.findMany({
       where:  { pendingActivation: false },
-      select: { expiresAt: true, usagesUsed: true, usagesAllowed: true },
+      select: { customerId: true, expiresAt: true, usagesUsed: true, usagesAllowed: true },
     }),
 
     // New memberships this month (by joinedAt)
@@ -140,11 +142,24 @@ export default async function AdminDashboard({
 
   // Active members: not pending, not expired, not used-up.
   const nowDate = new Date();
-  const activeMembers = activeMembersList.filter(m => {
+  const activeMemberRows = activeMembersList.filter(m => {
     const notExpired = m.expiresAt == null || m.expiresAt >= nowDate;
     const notUsedUp  = m.usagesAllowed === 0 || m.usagesUsed < m.usagesAllowed;
     return notExpired && notUsedUp;
-  }).length;
+  });
+  const activeMembers = activeMemberRows.length;
+
+  // Breakdown of active members by the branch where they bought/renewed
+  // (derived from the membership's latest POS booking). Manual entries have no
+  // booking → counted as "unknown".
+  const memberBranch = await getMembershipBranchByCustomer(activeMemberRows.map(m => m.customerId));
+  const membersByBranch = { s1: 0, s2: 0, unknown: 0 };
+  for (const m of activeMemberRows) {
+    const code = branchCode(memberBranch.get(m.customerId));
+    if      (code === "S1") membersByBranch.s1++;
+    else if (code === "S2") membersByBranch.s2++;
+    else                    membersByBranch.unknown++;
+  }
 
   // Service breakdown (full month)
   const serviceMap = new Map<string, { name: string; total: number; count: number }>();
@@ -215,7 +230,7 @@ export default async function AdminDashboard({
     todayRevenue, todayCount,
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue, lastMonthCount,
-    activeMembers, newMembersThisMonth,
+    activeMembers, newMembersThisMonth, membersByBranch,
     serviceBreakdown, topCustomers, staffRevenue, weeklyRevenue,
     hourlyUsage,
     avgTicket,

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { findCustomerPackagesForAdmin } from "@/lib/packages";
+import { getBranchByBookingIds } from "@/lib/membership";
+import { branchCode } from "@/lib/branch-display";
 import CustomerDetail from "./CustomerDetail";
 
 export const revalidate = 30;
@@ -49,6 +51,7 @@ export default async function MobileCustomerDetailPage({
           paidAmount:    true,
           paymentMethod: true,
           bookingsUsed:  true,
+          bookingId:     true,
           notes:         true,
         },
       },
@@ -59,6 +62,15 @@ export default async function MobileCustomerDetailPage({
   if (!customer) notFound();
 
   const packages = await findCustomerPackagesForAdmin(id);
+
+  // Derive the branch (S1/S2) each cycle / package was bought at, from the POS
+  // booking that activated it. Manual entries (no booking) resolve to null.
+  const branchByBooking = await getBranchByBookingIds([
+    ...customer.membershipCycles.map(cy => cy.bookingId),
+    ...packages.map(p => p.bookingId),
+  ]);
+  const codeForBooking = (bookingId: string | null) =>
+    branchCode(bookingId ? branchByBooking.get(bookingId) : null);
 
   // Recent bookings (last 5)
   const recentBookings = await prisma.booking.findMany({
@@ -105,6 +117,7 @@ export default async function MobileCustomerDetailPage({
           paidAmount:    cy.paidAmount,
           paymentMethod: cy.paymentMethod,
           bookingsUsed:  cy.bookingsUsed,
+          branchCode:    codeForBooking(cy.bookingId),
           notes:         cy.notes,
         })),
         packages: packages.map(p => ({
@@ -117,6 +130,7 @@ export default async function MobileCustomerDetailPage({
           usageLimit:        p.usageLimit,
           usagesLeft:        p.usagesLeft,
           pendingActivation: p.pendingActivation,
+          branchCode:        codeForBooking(p.bookingId),
         })),
         recentBookings: recentBookings.map(b => ({
           id:         b.id,

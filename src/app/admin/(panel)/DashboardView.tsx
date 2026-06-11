@@ -32,6 +32,8 @@ export interface DashboardData {
   lastMonthCount: number;
   activeMembers: number;
   newMembersThisMonth: number;
+  /** Active members split by the branch they bought/renewed at (S1/S2/unknown). */
+  membersByBranch: { s1: number; s2: number; unknown: number };
   serviceBreakdown: { name: string; total: number; count: number }[];
   topCustomers: { id: string; name: string; total: number; count: number }[]; // sorted by count
   staffRevenue: { name: string; total: number; count: number }[];
@@ -269,7 +271,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
     todayRevenue, todayCount,
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue,
-    activeMembers, newMembersThisMonth,
+    activeMembers, newMembersThisMonth, membersByBranch,
     serviceBreakdown, topCustomers, staffRevenue, weeklyRevenue,
     hourlyUsage,
     avgTicket,
@@ -350,6 +352,15 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           <p className="text-xs" style={{ color: "#166534" }}>
             {newMembersThisMonth > 0 ? `+${newMembersThisMonth} ใหม่เดือนนี้` : "ไม่มีสมาชิกใหม่เดือนนี้"}
           </p>
+          <div className="flex items-center gap-1.5 mt-2 text-[11px]" style={{ color: MUTED }}>
+            <span className="px-1.5 py-0.5 rounded font-medium" style={{ background: "#F0E4D8", color: PRIMARY }}>
+              S1 {membersByBranch.s1}
+            </span>
+            <span className="px-1.5 py-0.5 rounded font-medium" style={{ background: "#F0E4D8", color: PRIMARY }}>
+              S2 {membersByBranch.s2}
+            </span>
+            {membersByBranch.unknown > 0 && <span>· ไม่ระบุ {membersByBranch.unknown}</span>}
+          </div>
         </div>
       </div>
 

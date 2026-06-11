@@ -50,6 +50,8 @@ interface Package {
   usageLimit:        number;
   usagesLeft:        number | null;
   pendingActivation: boolean;
+  /** Branch it was bought at: "S1" | "S2" | null (unknown / manual entry). */
+  branchCode:        string | null;
 }
 
 type Status = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
@@ -73,6 +75,8 @@ interface MembershipCycle {
   paidAmount:    number;
   paymentMethod: string | null;
   bookingsUsed:  number;
+  /** Branch it was bought at: "S1" | "S2" | null (unknown / manual entry). */
+  branchCode:    string | null;
   notes:         string | null;
 }
 
@@ -631,6 +635,15 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                   <div className="flex items-center gap-2 mb-1">
                     <Receipt size={13} style={{ color: isOpen ? "#16a34a" : MUTED }} />
                     <p className="text-sm font-semibold flex-1" style={{ color: TEXT }}>สมาชิก 30 วัน</p>
+                    {cy.branchCode && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                        style={{ background: "#F0E4D8", color: PRIMARY }}
+                        title="สาขาที่ซื้อ"
+                      >
+                        {cy.branchCode}
+                      </span>
+                    )}
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
                       style={
@@ -732,6 +745,15 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                       {p.nameTh}
                       {p.pendingActivation && " — รอเปิดใช้งาน"}
                     </p>
+                    {p.branchCode && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                        style={{ background: "#F0E4D8", color: PRIMARY }}
+                        title="สาขาที่ซื้อ"
+                      >
+                        {p.branchCode}
+                      </span>
+                    )}
                     <button onClick={() => setEditingPkgId(p.id)} className="p-1" style={{ color: MUTED }}>
                       <Pencil size={12} />
                     </button>

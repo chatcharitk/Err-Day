@@ -188,6 +188,8 @@ export async function findActivePackages(customerId: string): Promise<ActivePack
 export interface AdminPackage extends ActivePackage {
   pendingActivation: boolean;
   paidAmount: number;
+  /** POS booking that activated this package (null for manual entries). */
+  bookingId: string | null;
 }
 
 /**
@@ -226,6 +228,7 @@ export async function findCustomerPackagesForAdmin(customerId: string): Promise<
       usagesLeft,
       pendingActivation: r.pendingActivation,
       paidAmount:        r.paidAmount,
+      bookingId:         r.bookingId,
     });
   }
   return out;
