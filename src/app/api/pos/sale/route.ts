@@ -63,12 +63,15 @@ export async function POST(request: Request) {
       .map(i => i.branchServiceId)
       .filter((x): x is string => !!x);
 
+    // branchServiceId → serviceId, resolved once and reused below for the
+    // sale-only-cart detection (avoids a second identical query).
+    const bsMap = new Map<string, string>();
     if (branchServiceIds.length > 0) {
       const bsRows = await prisma.branchService.findMany({
         where:  { id: { in: branchServiceIds } },
         select: { id: true, serviceId: true },
       });
-      const bsMap = new Map(bsRows.map(r => [r.id, r.serviceId]));
+      for (const r of bsRows) bsMap.set(r.id, r.serviceId);
       for (const it of items) {
         if (!it.branchServiceId) continue;
         const svcId = bsMap.get(it.branchServiceId);
@@ -161,30 +164,18 @@ export async function POST(request: Request) {
     // filter these out so the mobile/desktop calendar doesn't get cluttered.
     const SALE_ONLY_SKUS = new Set([MEMBERSHIP_SKU, "svc-buffet", "svc-pkg5"]);
     const hasMembershipOrPackage = !!membershipItem || packageItems.length > 0;
-    const allItemsAreSaleOnly = hasMembershipOrPackage
-      && items.every(it => {
-        if (!it.branchServiceId) return false;
-        // Find the serviceId behind this branchServiceId
-        // (already resolved earlier; checking via the maps used above)
-        return false;
-      });
-    // Recompute by walking items more carefully:
+    // Count cart lines that are NOT membership/package SKUs, reusing the bsMap
+    // resolved above (no second branchService query).
     let nonSaleOnlyCount = 0;
     if (branchServiceIds.length > 0) {
-      const bsRows2 = await prisma.branchService.findMany({
-        where:  { id: { in: branchServiceIds } },
-        select: { id: true, serviceId: true },
-      });
-      const bsMap2 = new Map(bsRows2.map(r => [r.id, r.serviceId]));
       for (const it of items) {
-        const svcId = it.branchServiceId ? bsMap2.get(it.branchServiceId) : null;
+        const svcId = it.branchServiceId ? bsMap.get(it.branchServiceId) : null;
         if (!svcId || !SALE_ONLY_SKUS.has(svcId)) nonSaleOnlyCount++;
       }
     } else {
       nonSaleOnlyCount = items.length;
     }
     const saleOnly = hasMembershipOrPackage && nonSaleOnlyCount === 0;
-    void allItemsAreSaleOnly;
 
     // Pick serviceId: use the membership/package SKU for sale-only carts,
     // otherwise use walkin.

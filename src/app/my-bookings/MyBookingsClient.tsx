@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, X, Edit3, Trash2, Check, AlertCircle, LogOut } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Calendar } from "@/components/ui/calendar";
@@ -399,8 +400,15 @@ function MembershipCard({ m }: { m: MembershipStatus }) {
     <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${isActive ? "#BBF7D0" : "#FECACA"}`, background: "white" }}>
       {/* Promo artwork */}
       <div style={{ position: "relative" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={MEMBERSHIP_IMG} alt="err.day membership" className="w-full block" style={{ opacity: isActive ? 1 : 0.5 }} />
+        <Image
+          src={MEMBERSHIP_IMG}
+          alt="err.day membership"
+          width={1024}
+          height={768}
+          sizes="(max-width: 768px) 100vw, 480px"
+          className="w-full h-auto block"
+          style={{ opacity: isActive ? 1 : 0.5 }}
+        />
         <span
           className="absolute top-2.5 right-2.5 text-xs px-2 py-0.5 rounded-full font-semibold"
           style={isActive ? { background: "#D1FAE5", color: "#065F46" } : { background: "#FEE2E2", color: "#991B1B" }}
@@ -460,8 +468,14 @@ function PackageCard({ pkg }: { pkg: ActivePackage }) {
   return (
     <div className="rounded-2xl overflow-hidden" style={{ border: "1.5px solid #BFDBFE", background: "white" }}>
       <div style={{ position: "relative" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={img} alt={pkg.nameTh} className="w-full block" />
+        <Image
+          src={img}
+          alt={pkg.nameTh}
+          width={1024}
+          height={768}
+          sizes="(max-width: 768px) 100vw, 480px"
+          className="w-full h-auto block"
+        />
         <span className="absolute top-2.5 right-2.5 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "#DBEAFE", color: "#1E40AF" }}>ใช้งานได้</span>
       </div>
       <div className="px-4 py-3 flex items-center gap-3" style={{ background: "#EFF6FF" }}>

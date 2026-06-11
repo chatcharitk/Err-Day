@@ -34,6 +34,8 @@ interface Props {
   branches: Branch[];
   allStaff: StaffItem[];
   allServices: ServiceItem[];
+  /** Number of trailing months the server loaded, or null when showing all. */
+  windowMonths: number | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -503,7 +505,7 @@ const PRESET_LABELS: Record<DatePreset, string> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function SalesHistory({ sales: initial, branches, allStaff, allServices }: Props) {
+export default function SalesHistory({ sales: initial, branches, allStaff, allServices, windowMonths }: Props) {
   const router = useRouter();
 
   const [sales,      setSales]      = useState<SaleRecord[]>(initial);
@@ -584,6 +586,23 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
         <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ประวัติการขาย</h1>
         <p className="text-xs mt-1" style={{ color: MUTED }}>
           💡 คลิกที่แถวเพื่อแก้ไขรายการ หรือใช้ปุ่ม &ldquo;แก้ไข&rdquo; / &ldquo;ลบ&rdquo; ด้านขวา
+        </p>
+        <p className="text-xs mt-1" style={{ color: MUTED }}>
+          {windowMonths != null ? (
+            <>
+              📅 แสดงข้อมูล {windowMonths} เดือนล่าสุด ·{" "}
+              <Link href="?range=all" prefetch={false} className="underline" style={{ color: PRIMARY }}>
+                ดูทั้งหมด
+              </Link>
+            </>
+          ) : (
+            <>
+              📅 แสดงข้อมูลทั้งหมด ·{" "}
+              <Link href="?" prefetch={false} className="underline" style={{ color: PRIMARY }}>
+                แสดง 12 เดือนล่าสุด
+              </Link>
+            </>
+          )}
         </p>
       </div>
 
