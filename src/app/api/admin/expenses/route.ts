@@ -4,10 +4,14 @@
  * POST /api/admin/expenses
  *   Create a new expense.
  */
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { searchParams } = new URL(request.url);
   const branchId = searchParams.get("branchId");      // "all" | "shared" | "<id>" | null
   const category = searchParams.get("category");
@@ -46,6 +50,9 @@ export async function GET(request: Request) {
 
 
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const body = await request.json();
   const {
     branchId, category, vendor, date, totalAmount, vatAmount,

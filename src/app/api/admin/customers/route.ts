@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/admin/customers?q=search&limit=N — search customers by name, nickname, or phone
 export async function GET(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { searchParams } = new URL(request.url);
   const q     = searchParams.get("q")?.trim() ?? "";
   const limit = Math.min(50, parseInt(searchParams.get("limit") ?? "10", 10) || 10);
@@ -59,6 +63,9 @@ export async function GET(request: Request) {
 
 // POST /api/admin/customers — register a new customer
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { name, nickname, phone, email, gender, pictureUrl } = await request.json();
 

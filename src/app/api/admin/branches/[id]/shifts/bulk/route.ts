@@ -16,6 +16,7 @@
  *   (defensive — admin UI never sends mismatched IDs, but a malicious client
  *   could)
  */
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -30,6 +31,9 @@ const RE_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const RE_TIME = /^\d{2}:\d{2}$/;
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id: branchId } = await params;
   const body = await request.json().catch(() => ({}));
   const create: CreateInput[] = Array.isArray(body.create) ? body.create : [];

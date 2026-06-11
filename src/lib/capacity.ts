@@ -20,8 +20,13 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { BUFFET_SKU, FIVE_PACK_SKU } from "@/lib/packages";
 import { MEMBERSHIP_SKU } from "@/lib/membership";
+
+/** A Prisma client or an interactive-transaction client — so capacity reads can
+ *  run inside the same transaction (and advisory lock) as the booking insert. */
+type Db = Prisma.TransactionClient;
 
 /**
  * Bookings whose serviceId is a sale-only SKU represent a POS *transaction*
@@ -148,6 +153,7 @@ export async function loadDaySnapshot(
   branchId: string,
   date: string,
   excludeBookingId?: string,
+  db: Db = prisma,
 ): Promise<DaySnapshot> {
   const { start, end } = dayBounds(date);
 
@@ -157,9 +163,9 @@ export async function loadDaySnapshot(
   const dow = new Date(yy, mm - 1, dd).getDay();
 
   const [branchRow, activeStaff, overrideRows, blockedRows] = await Promise.all([
-    prisma.branch.findUnique({ where: { id: branchId }, select: { onlineCap: true } }),
-    prisma.staff.findMany({ where: { branchId, isActive: true }, select: { id: true } }),
-    prisma.capacityOverride.findMany({
+    db.branch.findUnique({ where: { id: branchId }, select: { onlineCap: true } }),
+    db.staff.findMany({ where: { branchId, isActive: true }, select: { id: true } }),
+    db.capacityOverride.findMany({
       where: {
         branchId,
         OR: [
@@ -186,11 +192,11 @@ export async function loadDaySnapshot(
   const [shifts, bookings] = await Promise.all([
     activeStaffIds.length === 0
       ? Promise.resolve([])
-      : prisma.staffShift.findMany({
+      : db.staffShift.findMany({
           where: { staffId: { in: activeStaffIds }, date: { gte: start, lte: end } },
           select: { staffId: true, startTime: true, endTime: true },
         }),
-    prisma.booking.findMany({
+    db.booking.findMany({
       where: {
         branchId,
         date: { gte: start, lte: end },
@@ -298,8 +304,10 @@ export async function checkCapacity(args: {
   staffId?: string | null;
   excludeBookingId?: string;
   online?: boolean;
+  /** Run the capacity reads on this client (e.g. inside a booking transaction). */
+  db?: Db;
 }): Promise<CapacityResult> {
-  const snapshot = await loadDaySnapshot(args.branchId, args.date, args.excludeBookingId);
+  const snapshot = await loadDaySnapshot(args.branchId, args.date, args.excludeBookingId, args.db ?? prisma);
   return evaluateCapacity(snapshot, args.startTime, args.endTime, args.staffId ?? null, args.online ?? false);
 }
 

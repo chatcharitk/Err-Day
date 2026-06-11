@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const expense = await prisma.expense.findUnique({
     where:  { id },
@@ -22,6 +26,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const body = await request.json();
   const {
@@ -78,6 +85,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   try {
     await prisma.expense.delete({ where: { id } });

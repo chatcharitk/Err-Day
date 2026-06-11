@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { PACKAGE_SPECS } from "@/lib/packages";
 
@@ -7,6 +8,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; pkgId: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { pkgId } = await params;
     const { startedAt, expiresAt, pendingActivation, usagesUsed, paidAmount, notes, activate } =
@@ -68,6 +72,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; pkgId: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { pkgId } = await params;
     await prisma.customerPackage.update({

@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidateReferenceData } from "@/lib/revalidate";
 
 // GET /api/admin/services — all services (incl. inactive) with branch pricing
 export async function GET() {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const services = await prisma.service.findMany({
     orderBy: [{ category: "asc" }, { nameTh: "asc" }],
     include: {
@@ -18,6 +22,9 @@ export async function GET() {
 
 // POST /api/admin/services — create a new service + optional per-branch pricing
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const body = await request.json();
     const {

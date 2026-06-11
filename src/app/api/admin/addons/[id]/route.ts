@@ -4,6 +4,7 @@
  * DELETE /api/admin/addons/[id]   — soft delete (sets isActive=false).
  *   Hard delete is avoided so historical BookingAddon rows keep their FK valid.
  */
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { revalidateReferenceData } from "@/lib/revalidate";
@@ -12,6 +13,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const body = await request.json();
   const { name, nameTh, price, isActive } = body;
@@ -39,6 +43,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   try {
     // Soft-delete to preserve BookingAddon history.

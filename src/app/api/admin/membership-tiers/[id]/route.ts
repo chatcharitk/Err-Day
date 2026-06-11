@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 // PATCH /api/admin/membership-tiers/[id]  — update tier
@@ -6,6 +7,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     const { name, nameTh, minPoints, discountPercent, color, validityDays, maxUsages, isActive } =
@@ -36,6 +40,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     await prisma.membershipTier.update({ where: { id }, data: { isActive: false } });

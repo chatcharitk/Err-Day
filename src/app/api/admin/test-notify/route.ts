@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { pushText } from "@/lib/line-messaging";
 
 const STAFF_LINE_IDS = [
@@ -22,6 +23,9 @@ async function fetchProfile(userId: string) {
 
 // GET /api/admin/test-notify — push test message AND check profile validity
 export async function GET() {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const results = await Promise.all(
     STAFF_LINE_IDS.map(async (uid) => {
       const [profile, push] = await Promise.all([

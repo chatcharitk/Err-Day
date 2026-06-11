@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { findCustomerPackagesForAdmin } from "@/lib/packages";
 
@@ -7,6 +8,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     const c = await prisma.customer.findUnique({
@@ -83,6 +87,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
 
@@ -116,6 +123,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     const { name, nickname, phone, email, gender, dateOfBirth, pictureUrl, pdpaSource, notes, photoUrls } = await request.json();

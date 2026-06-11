@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ALL_SLOTS, evaluateCapacity, loadDaySnapshot, addMinutes } from "@/lib/capacity";
 
@@ -15,6 +16,9 @@ import { ALL_SLOTS, evaluateCapacity, loadDaySnapshot, addMinutes } from "@/lib/
  *   }
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id: branchId } = await params;
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date");

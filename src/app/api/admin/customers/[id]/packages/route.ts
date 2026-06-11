@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { PACKAGE_SPECS } from "@/lib/packages";
 
@@ -7,6 +8,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id: customerId } = await params;
     const { sku, startedAt, expiresAt, paidAmount, pendingActivation, notes } =

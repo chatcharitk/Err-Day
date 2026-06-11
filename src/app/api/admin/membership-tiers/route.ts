@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 // GET  /api/admin/membership-tiers  — list all tiers
 export async function GET() {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const tiers = await prisma.membershipTier.findMany({
     orderBy: { minPoints: "asc" },
   });
@@ -11,6 +15,9 @@ export async function GET() {
 
 // POST /api/admin/membership-tiers  — create a tier
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { name, nameTh, minPoints, discountPercent, color, validityDays, maxUsages } =
       await request.json();

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 import { sendBookingConfirmed, sendBookingTimeChanged, sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const booking = await prisma.booking.findUnique({
     where: { id },
@@ -13,6 +17,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -89,6 +96,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     await prisma.booking.delete({ where: { id } });

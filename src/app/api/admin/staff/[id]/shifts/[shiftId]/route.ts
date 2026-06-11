@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { timeToMins } from "@/lib/capacity";
 
@@ -10,6 +11,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; shiftId: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id, shiftId } = await params;
     const body = await request.json();
@@ -50,6 +54,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; shiftId: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id, shiftId } = await params;
     const existing = await prisma.staffShift.findUnique({ where: { id: shiftId } });

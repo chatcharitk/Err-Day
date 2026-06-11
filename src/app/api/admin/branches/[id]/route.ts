@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidateReferenceData } from "@/lib/revalidate";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const branch = await prisma.branch.findUnique({ where: { id } });
   if (!branch) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -10,6 +14,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     const body = await request.json();

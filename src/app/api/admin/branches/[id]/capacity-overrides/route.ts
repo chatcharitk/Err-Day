@@ -8,6 +8,7 @@
  *        body: { date?: "YYYY-MM-DD", dayOfWeek?: 0-6, startTime, endTime, capacity, note? }
  *        Exactly one of `date` / `dayOfWeek` must be provided.
  */
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -18,6 +19,9 @@ function parseTime(t: unknown): string | null {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const rows = await prisma.capacityOverride.findMany({
     where:   { branchId: id },
@@ -37,6 +41,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const body = await request.json();
   const { date, dayOfWeek, startTime, endTime, capacity, note } = body;

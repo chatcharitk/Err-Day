@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { activateOrRenewMembership, MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
 import { sendMembershipActivated } from "@/lib/notifications";
@@ -14,6 +15,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id: customerId } = await params;
 
   const existing = await prisma.membership.findUnique({ where: { customerId } });

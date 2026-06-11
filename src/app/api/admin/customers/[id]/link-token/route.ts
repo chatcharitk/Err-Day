@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/admin-auth";
+import { getCurrentAdmin, requireAdmin } from "@/lib/admin-auth";
 import { signLinkToken } from "@/lib/customer-link";
 
 // POST /api/admin/customers/[id]/link-token
@@ -10,6 +10,9 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const admin = await getCurrentAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

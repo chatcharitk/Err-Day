@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 import { MEMBERSHIP_SKU, activateOrRenewMembership } from "@/lib/membership";
 import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
 import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
@@ -13,6 +14,9 @@ interface SaleItem {
 }
 
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const body = await request.json();
     const { branchId, customerName, customerPhone, items, notes, fromBookingId } = body as {

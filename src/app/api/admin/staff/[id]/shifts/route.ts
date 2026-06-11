@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { timeToMins } from "@/lib/capacity";
 
@@ -7,6 +8,9 @@ import { timeToMins } from "@/lib/capacity";
  * List a staff member's shifts within an optional date range.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
@@ -41,6 +45,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
  * Creates a shift for a staff member.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id } = await params;
     const body = await request.json();

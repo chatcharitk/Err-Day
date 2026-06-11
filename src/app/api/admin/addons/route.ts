@@ -3,11 +3,15 @@
  * POST /api/admin/addons          — create
  *   body: { name, nameTh, price (baht), isActive? }
  */
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { revalidateReferenceData } from "@/lib/revalidate";
 
 export async function GET() {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const addons = await prisma.serviceAddon.findMany({
     orderBy: [{ isActive: "desc" }, { nameTh: "asc" }],
   });
@@ -16,6 +20,9 @@ export async function GET() {
 
 
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const body = await request.json();
   const { name, nameTh, price, isActive } = body;
 

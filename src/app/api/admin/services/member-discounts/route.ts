@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidateReferenceData } from "@/lib/revalidate";
 
 // GET — return all active services with memberDiscountPercent + branch prices
 export async function GET() {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const services = await prisma.service.findMany({
     where: { isActive: true },
     orderBy: [{ category: "asc" }, { nameTh: "asc" }],
@@ -26,6 +30,9 @@ export async function GET() {
 // PATCH — batch-update memberDiscountPercent for multiple services
 // body: [{ id: string, memberDiscountPercent: number }]
 export async function PATCH(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const updates: { id: string; memberDiscountPercent: number }[] = await request.json();
     if (!Array.isArray(updates)) {

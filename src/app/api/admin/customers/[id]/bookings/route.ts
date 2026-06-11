@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/admin/customers/[id]/bookings?upcoming=true&limit=N
@@ -8,6 +9,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const upcoming = searchParams.get("upcoming") === "true";

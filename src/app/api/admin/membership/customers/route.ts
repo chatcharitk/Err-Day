@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { PACKAGE_SPECS } from "@/lib/packages";
 import { startOfTodayUTC } from "@/lib/utils";
@@ -11,6 +12,9 @@ import { startOfTodayUTC } from "@/lib/utils";
  *    - history  : recent MembershipCycle rows (last 100)
  */
 export async function GET() {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const now = new Date();
   const today = startOfTodayUTC();
 

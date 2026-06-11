@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/admin/customers/[id]/membership  — register or renew membership
@@ -14,6 +15,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id: customerId } = await params;
     const { activatedAt: rawActivatedAt, expiresAt: rawExpiresAt, usagesAllowed, label, pendingActivation } =
@@ -117,6 +121,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id: customerId } = await params;
     const { activatedAt, expiresAt, usagesAllowed, usagesUsed, points, label, pendingActivation } =
@@ -147,6 +154,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { id: customerId } = await params;
 

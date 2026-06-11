@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 /** GET /api/admin/staff?branchId=... — list active staff for a branch */
 export async function GET(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { searchParams } = new URL(request.url);
   const branchId = searchParams.get("branchId");
   const staff = await prisma.staff.findMany({
@@ -14,6 +18,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   try {
     const { name, phone, branchId, commissionRate } = await request.json();
     if (!name?.trim() || !branchId) {

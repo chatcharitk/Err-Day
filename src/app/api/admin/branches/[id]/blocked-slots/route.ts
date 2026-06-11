@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 /** GET /api/admin/branches/[id]/blocked-slots?date=YYYY-MM-DD */
@@ -6,6 +7,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id: branchId } = await params;
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date");
@@ -24,6 +28,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const { id: branchId } = await params;
   const body = await request.json();
   const { date, startTime, endTime, staffId, reason } = body;

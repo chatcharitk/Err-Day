@@ -7,6 +7,7 @@
  * hour the # of staff on shift, # of overlapping bookings, the effective
  * online cap, available online slots, and a status flag.
  */
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { loadDaySnapshot, timeToMins, shiftCovers, resolveCap } from "@/lib/capacity";
 
@@ -24,6 +25,9 @@ interface HourRow {
 }
 
 export async function GET(request: Request) {
+  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (_gate instanceof Response) return _gate;
+
   const url = new URL(request.url);
   const branchId = url.searchParams.get("branchId");
   const date     = url.searchParams.get("date");
