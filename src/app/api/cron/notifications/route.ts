@@ -77,12 +77,15 @@ export async function GET(request: Request) {
 
   const now = new Date();
 
-  // ── 1) Booking reminders (4h before) ─────────────────────────────────────
-  // Window: bookings starting between now+3.5h and now+4.5h.
-  // We fetch a slightly wider date range and filter precisely in JS to avoid
-  // duplicating the date+startTime combine logic in SQL.
-  const windowStart = new Date(now.getTime() + 3.5 * 60 * 60 * 1000);
-  const windowEnd   = new Date(now.getTime() + 4.5 * 60 * 60 * 1000);
+  // ── 1) Booking reminders (~4h before) ────────────────────────────────────
+  // Window: bookings starting between now+3h and now+5h. Widened from the
+  // original ±0.5h band because the cron is scheduled every 15 min but actually
+  // fires only every ~2–3h (GitHub Actions / Vercel Hobby both drop ticks). A 2h
+  // window means a sparse tick still catches each booking; NotificationLog's
+  // unique (kind,targetId) guarantees it's sent exactly once. The customer copy
+  // ("ในอีกประมาณ 4 ชั่วโมง") stays apt for anything 3–5h out.
+  const windowStart = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  const windowEnd   = new Date(now.getTime() + 5 * 60 * 60 * 1000);
 
   // Bookings store `date` as UTC noon of the local calendar day, so for any
   // window crossing midnight we must include both today and tomorrow.
@@ -139,14 +142,17 @@ export async function GET(request: Request) {
     results.push(await sendPackageExpiryWarning1d(p.id));
   }
 
-  // ── 4) Branch daily summary — fires in the 22:00–23:59 Bangkok window ──
-  // Lists TOMORROW's bookings to each branch's LINE group. The window is two
-  // hours (not a single hour) so it survives imprecise/missed cron ticks; the
-  // NotificationLog row keyed by the target (tomorrow) date means only the
-  // FIRST qualifying tick of the evening actually sends — the rest no-op.
+  // ── 4) Branch daily summary — fires in the 20:00–23:59 Bangkok window ──
+  // Lists TOMORROW's bookings to each branch's LINE group. The window was
+  // widened from 2h (22:00–23:59) to 4h (20:00–23:59) because the cron actually
+  // fires only every ~2–3h on this stack (GitHub Actions + Vercel Hobby both
+  // drop ticks) — a 4h window all but guarantees at least one qualifying tick.
+  // The NotificationLog row keyed by the target (tomorrow) date means only the
+  // FIRST qualifying tick of the evening actually sends — the rest no-op, so the
+  // wider window never double-sends.
   const summaryResults: { branchId: string; status: string; count?: number; reason?: string }[] = [];
   const bkkHour = new Date(now.getTime() + 7 * 60 * 60 * 1000).getUTCHours();
-  if (bkkHour >= 22) {
+  if (bkkHour >= 20) {
     const bkk = new Date(now.getTime() + 7 * 60 * 60 * 1000);
     const tomorrow = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate() + 1));
     const dstr = tomorrow.toISOString().slice(0, 10);
