@@ -149,7 +149,23 @@ export async function DELETE(
 ) {
   try {
     const { id: customerId } = await params;
-    await prisma.membership.delete({ where: { customerId } });
+
+    const membership = await prisma.membership.findUnique({
+      where:  { customerId },
+      select: { id: true },
+    });
+    // Already gone — treat as success so the UI stays idempotent.
+    if (!membership) return NextResponse.json({ ok: true, alreadyGone: true });
+
+    // MembershipCycle rows reference Membership without onDelete: Cascade, so a
+    // bare membership.delete() fails with a foreign-key violation for any
+    // customer who has renewal/purchase history. Remove the cycles first, then
+    // the membership, atomically.
+    await prisma.$transaction([
+      prisma.membershipCycle.deleteMany({ where: { membershipId: membership.id } }),
+      prisma.membership.delete({ where: { id: membership.id } }),
+    ]);
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);
