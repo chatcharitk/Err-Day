@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity } from "@/lib/capacity";
-import { sendBookingCancelled } from "@/lib/notifications";
+import { sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
 
 /**
  * Verifies that the booking belongs to the customer with the given LINE user ID.
@@ -94,6 +94,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       },
       include: { branch: true, service: true, staff: true, customer: true },
     });
+
+    // Refresh the branch group's today-list when the customer moved the slot
+    // (time, date, or branch). No-op for non-today or already-past slots.
+    const movedTime   = newStartTime !== booking.startTime;
+    const movedDate   = newDate !== booking.date.toISOString().slice(0, 10);
+    const movedBranch = newBranchId !== booking.branchId;
+    if (movedTime || movedDate || movedBranch) {
+      sendGroupBookingNotice(id, "changed")
+        .catch(e => console.error("[notify] group time changed failed", e));
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

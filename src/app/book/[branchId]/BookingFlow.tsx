@@ -134,9 +134,7 @@ const UI = {
     terms: "การจองถือว่าคุณยอมรับนโยบายการยกเลิกของเรา",
     back: "ย้อนกลับ", next: "ถัดไป", review: "ตรวจสอบการจอง",
     memberPrice: "ราคาสมาชิก",
-    nigaoTitle: "จองล่วงหน้าเท่านั้น — Advance booking required",
-    nigaoLine2: "ให้บริการ 11:00–16:00 น. เฉพาะโทนธรรมชาติ ไม่รวมฟอก/ไฮไลท์ สูตรไม่มีแอมโมเนีย 100%",
-    nigaoLine3: "สมาชิกลด 10% · ผมหนาพิเศษอาจมีค่าบริการเพิ่มเติม",
+    nigaoTitle: "ราคาบริการทำสีผมอาจมีการเปลี่ยนแปลง โดยช่างจะประเมินจากความยาวและสภาพเส้นผมจริงที่หน้าร้านก่อนให้บริการ",
     errorConflict: "เวลาที่เลือกถูกจองแล้ว กรุณาเลือกเวลาอื่น",
     errorGeneral: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
   },
@@ -176,9 +174,7 @@ const UI = {
     terms: "By booking you agree to our cancellation policy",
     back: "Back", next: "Next", review: "Review Booking",
     memberPrice: "Member price",
-    nigaoTitle: "Advance booking required",
-    nigaoLine2: "Available 11:00–16:00 only. Natural tones only — no bleach/highlights. 100% ammonia-free.",
-    nigaoLine3: "Members save 10% · Extra charge may apply for thick/long hair",
+    nigaoTitle: "Hair color pricing may change — your stylist will assess your actual hair length and condition in-store before service.",
     errorConflict: "That time slot is already taken. Please choose another.",
     errorGeneral: "Something went wrong. Please try again.",
   },
@@ -545,9 +541,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                         <div className="flex items-start gap-2 p-3 rounded-lg mb-3 text-sm" style={{ backgroundColor: "#FFF0E8", borderLeft: "3px solid #8B1D24" }}>
                           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#8B1D24" }} />
                           <div style={{ color: "#5C4A42" }}>
-                            <p className="font-medium">{u.nigaoTitle}</p>
-                            <p className="text-xs mt-0.5">{u.nigaoLine2}</p>
-                            <p className="text-xs mt-0.5 opacity-70">{u.nigaoLine3}</p>
+                            <p className="text-xs">{u.nigaoTitle}</p>
                           </div>
                         </div>
                       )}

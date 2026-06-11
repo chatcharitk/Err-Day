@@ -292,11 +292,11 @@ function fmtGroupBookingLine(b: GroupBooking): string {
  */
 export async function sendGroupBookingNotice(
   bookingId: string,
-  action: "created" | "cancelled",
+  action: "created" | "cancelled" | "changed",
 ): Promise<void> {
   const b = await prisma.booking.findUnique({
     where:  { id: bookingId },
-    select: { branchId: true, date: true },
+    select: { branchId: true, date: true, startTime: true },
   });
   if (!b) return;
   const groupId = branchGroupId(b.branchId);
@@ -315,6 +315,11 @@ export async function sendGroupBookingNotice(
   const dayEnd   = new Date(Date.UTC(Y, M, D, 23, 59, 59));
   const nowHHmm  = `${pad2(bkkNow.getUTCHours())}:${pad2(bkkNow.getUTCMinutes())}`;
 
+  // This booking's own slot is already in the past → nothing actionable for the
+  // group (e.g. a back-filled walk-in, or a cancel/time-change on a slot that has
+  // already happened). Skip the notification entirely.
+  if (b.startTime < nowHHmm) return;
+
   const bookings = await prisma.booking.findMany({
     where:  { branchId: b.branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] } },
     select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
@@ -322,7 +327,9 @@ export async function sendGroupBookingNotice(
   });
   const list = bookings.filter(x => x.startTime >= nowHHmm);   // upcoming only
 
-  const header = action === "created" ? "🆕 จองใหม่" : "❌ ยกเลิกการจอง";
+  const header = action === "created"   ? "🆕 จองใหม่"
+               : action === "changed"   ? "🔄 เปลี่ยนเวลา"
+               :                          "❌ ยกเลิกการจอง";
   const lines  = list.length ? list.map(fmtGroupBookingLine).join("\n") : "— ไม่มีคิวที่เหลือวันนี้ —";
   const text   = `${header}\n${fmtGroupDate(b.date)}\n\n${lines}`;
 

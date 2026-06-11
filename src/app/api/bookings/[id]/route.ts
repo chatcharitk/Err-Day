@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendBookingConfirmed, sendBookingTimeChanged, sendBookingCancelled } from "@/lib/notifications";
+import { sendBookingConfirmed, sendBookingTimeChanged, sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -71,10 +71,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       sendBookingCancelled(booking.id).catch(e => console.error("[notify] booking cancelled failed", e));
     }
 
-    // Notify customer when start time changes (admin reschedule).
+    // Notify customer + refresh the branch group's today-list when start time
+    // changes (admin reschedule). The group notice is a no-op for non-today or
+    // already-past slots.
     if (prev && startTime !== undefined && startTime !== prev.startTime) {
       sendBookingTimeChanged(booking.id, prev.startTime, prev.endTime)
         .catch(e => console.error("[notify] time changed failed", e));
+      sendGroupBookingNotice(booking.id, "changed")
+        .catch(e => console.error("[notify] group time changed failed", e));
     }
 
     return NextResponse.json(booking);
