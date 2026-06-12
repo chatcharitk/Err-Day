@@ -19,9 +19,12 @@
  * environments still work. Production should set the secret.
  */
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { replyLine } from "@/lib/line-messaging";
+import { branchIdForGroup } from "@/lib/line-groups";
+import { captureSlipFromLine } from "@/lib/slips";
 import { findCardByKeyword } from "@/lib/flex/tarot-cards";
 import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
 
@@ -29,7 +32,7 @@ interface LineEvent {
   type:        string;
   replyToken?: string;
   source?:     { type: string; userId?: string; groupId?: string; roomId?: string };
-  message?:    { type: string; text?: string };
+  message?:    { type: string; text?: string; id?: string };
 }
 
 
@@ -63,7 +66,38 @@ async function processEvent(event: LineEvent): Promise<void> {
     captureProfile(userId).catch(e => console.error("[webhook] capture failed", e));
   }
 
-  // 2. Narrow reply rule: ONLY tarot keywords. Everything else is silent.
+  // 2. Payment-slip capture: an IMAGE posted in a branch staff group.
+  //    Heavy work (download → Blob → OCR) runs via after() so LINE gets its
+  //    200 immediately; the reply token stays valid long enough (~30s) for
+  //    the ack. Images anywhere else (1:1 chats, unknown groups) stay
+  //    untouched — the silent-webhook policy applies to customers only.
+  if (event.type === "message" && event.message?.type === "image" && event.message.id) {
+    const slipGroupId = event.source?.groupId;
+    const branchId    = slipGroupId ? branchIdForGroup(slipGroupId) : undefined;
+    if (slipGroupId && branchId) {
+      const messageId  = event.message.id;
+      const replyToken = event.replyToken;
+      after(async () => {
+        try {
+          const r = await captureSlipFromLine({ messageId, groupId: slipGroupId, branchId });
+          if (r.status !== "captured" || !replyToken) return; // duplicates/failures stay silent
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+          const baht   = r.amount != null ? `฿${(r.amount / 100).toLocaleString()}` : null;
+          const text   = r.matchedBooking
+            ? `✅ รับสลิป ${baht} — ตรงกับคิว ${r.matchedBooking.startTime} คุณ${r.matchedBooking.customerName}\nยืนยันเช็คเอาท์: ${appUrl}/admin/slips`
+            : baht
+              ? `✅ รับสลิป ${baht} — ยังไม่พบคิวที่ยอดตรงวันนี้\nเลือกคิวเอง: ${appUrl}/admin/slips`
+              : `⚠️ รับสลิปแล้ว แต่อ่านยอดไม่สำเร็จ\nตรวจสอบ: ${appUrl}/admin/slips`;
+          await replyLine(replyToken, [{ type: "text", text }]);
+        } catch (e) {
+          console.error("[webhook] slip capture failed:", e);
+        }
+      });
+      return;
+    }
+  }
+
+  // 3. Narrow reply rule: ONLY tarot keywords. Everything else is silent.
   if (event.type !== "message")               return;
   if (event.message?.type !== "text")         return;
   if (!event.replyToken)                      return;

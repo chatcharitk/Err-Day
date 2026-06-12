@@ -21,3 +21,12 @@ export function branchGroupId(branchId: string): string | undefined {
 export function branchesWithGroups(): string[] {
   return ["branch-sukhumvit", "branch-bangna"].filter(id => !!branchGroupId(id));
 }
+
+/**
+ * Reverse lookup: which branch does a LINE group belong to?
+ * Used by the webhook to attribute payment slips posted in a branch group.
+ * Returns undefined for unknown groups (e.g. other chats the OA is in).
+ */
+export function branchIdForGroup(groupId: string): string | undefined {
+  return branchesWithGroups().find(id => branchGroupId(id) === groupId);
+}

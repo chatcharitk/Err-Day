@@ -108,3 +108,32 @@ export async function replyLine(
     return { ok: false, error: msg };
   }
 }
+
+/**
+ * Download the binary content of an inbound message (image/video/audio/file)
+ * by its message id. Note the separate api-data.line.me host — the regular
+ * api.line.me does not serve content. Returns null when the token is missing
+ * or LINE rejects the request (content expires after a retention period).
+ */
+export async function getLineMessageContent(
+  messageId: string,
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const token = getToken();
+  if (!token || !messageId) return null;
+
+  try {
+    const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      console.error(`[line] content download failed: ${res.status} for message ${messageId}`);
+      return null;
+    }
+    const contentType = res.headers.get("content-type") ?? "application/octet-stream";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { buffer, contentType };
+  } catch (e) {
+    console.error("[line] content download error:", e);
+    return null;
+  }
+}

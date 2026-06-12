@@ -394,6 +394,39 @@ model ExpenseItem {
   @@index([expenseId])
 }
 
+/// *
+///  * Payment slips captured from the branch LINE groups.
+///  * Staff post bank-transfer slips into the branch group chat; the webhook
+///  * downloads the image to Vercel Blob, OCRs the amount/time with Claude
+///  * vision, suggests a matching booking (same branch + day + exact amount),
+///  * and the admin confirms checkout from /admin/slips with one tap.
+///  * bookingId is a plain string (no FK) so deleting a booking never strands
+///  * or cascades into slip history.
+model PaymentSlip {
+  id            String    @id @default(cuid())
+  branchId      String
+  /// LINE message id of the image — unique so webhook redeliveries dedupe.
+  lineMessageId String    @unique
+  groupId       String
+  imageUrl      String
+  /// OCR results — null until parsed or when unreadable. amount is satang.
+  amount        Int?
+  transferAt    String?
+  bankName      String?
+  senderName    String?
+  ocrStatus     String    @default("PENDING") // PENDING | OK | FAILED
+  /// Suggested (auto-match) or admin-chosen booking id.
+  bookingId     String?
+  status        String    @default("PENDING") // PENDING | CONFIRMED | DISMISSED
+  confirmedBy   String?
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([branchId, status])
+}
+
 model ChatMessage {
   id         String   @id
   lineUserId String
