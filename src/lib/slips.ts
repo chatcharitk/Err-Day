@@ -32,38 +32,91 @@ export interface CaptureResult {
   matchedBooking?: { id: string; startTime: string; customerName: string } | null;
 }
 
-/** Bangkok "today" as the UTC-noon Date range used by Booking.date. */
-function bangkokTodayRange(): { start: Date; end: Date } {
+/** Bangkok "today" as "YYYY-MM-DD". */
+function bangkokTodayStr(): string {
   const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const y = bkk.getUTCFullYear(), m = bkk.getUTCMonth(), d = bkk.getUTCDate();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${bkk.getUTCFullYear()}-${p(bkk.getUTCMonth() + 1)}-${p(bkk.getUTCDate())}`;
+}
+
+/** UTC Date range covering one "YYYY-MM-DD" Bangkok day as stored on Booking.date. */
+function dayRange(dateStr: string): { start: Date; end: Date } {
+  const [y, m, d] = dateStr.split("-").map(Number);
   return {
-    start: new Date(Date.UTC(y, m, d, 0, 0, 0)),
-    end:   new Date(Date.UTC(y, m, d, 23, 59, 59, 999)),
+    start: new Date(Date.UTC(y, m - 1, d, 0, 0, 0)),
+    end:   new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999)),
   };
 }
 
 /**
- * Find the booking a slip most likely pays for. Returns the booking only when
- * the match is unique — two same-priced open bookings means the admin decides.
+ * Sender-name tokens for fuzzy comparison against customer names. Strips Thai
+ * and English title prefixes; keeps tokens of 3+ chars (drops abbreviated
+ * surnames like the "อ" in "น.ส. อรุณวรางค์ อ").
+ */
+function senderTokens(raw: string): string[] {
+  return raw
+    .replace(/น\.ส\.|นางสาว|นาง|นาย|ด\.ญ\.|ด\.ช\.|คุณ|mr\.?|mrs\.?|ms\.?/gi, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(t => t.length >= 3);
+}
+
+interface BookingCandidate {
+  id:        string;
+  startTime: string;
+  customer:  { name: string; nickname: string | null };
+}
+
+/**
+ * Find the booking a slip most likely pays for.
+ *
+ * Signals, in order:
+ *   1. branch + slip DATE (from OCR; falls back to Bangkok today) + exact amount,
+ *      over bookings that don't have a receipt yet (incl. COMPLETED ones that
+ *      were checked out without a slip attached)
+ *   2. when several bookings share the amount — common for the ฿100 member
+ *      price — narrow by the slip's SENDER NAME vs customer name/nickname
+ *
+ * Returns a booking only when the final match is unique; ambiguity is always
+ * left for the admin to resolve in the review queue.
  */
 export async function suggestBookingForSlip(
   branchId: string,
   amountSatang: number,
+  opts?: { dateStr?: string | null; senderName?: string | null },
 ): Promise<{ id: string; startTime: string; customerName: string } | null> {
-  const { start, end } = bangkokTodayRange();
-  const candidates = await prisma.booking.findMany({
+  const { start, end } = dayRange(opts?.dateStr || bangkokTodayStr());
+  const candidates: BookingCandidate[] = await prisma.booking.findMany({
     where: {
       branchId,
       date:       { gte: start, lte: end },
-      status:     { in: ["PENDING", "CONFIRMED"] },
+      status:     { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
       totalPrice: amountSatang,
       receiptUrl: null,
     },
     select: { id: true, startTime: true, customer: { select: { name: true, nickname: true } } },
-    take: 2,
+    take: 25,
   });
-  if (candidates.length !== 1) return null;
-  const b = candidates[0];
+
+  let pool = candidates;
+  const tokens = opts?.senderName ? senderTokens(opts.senderName) : [];
+  if (pool.length > 0 && tokens.length > 0) {
+    const byName = pool.filter(b => {
+      const hay = `${b.customer.name} ${b.customer.nickname ?? ""}`.toLowerCase();
+      return tokens.some(t => hay.includes(t));
+    });
+    // Name agreement narrows the pool. Name CONTRADICTION vetoes the match
+    // entirely — a readable Thai sender name that matches none of the
+    // candidates means "probably a different customer" (e.g. the slip belongs
+    // to a booking that was already receipted), and a wrong preselection is
+    // worse than none because admins tend to rubber-stamp suggestions.
+    // The cost: Thai-script sender vs Latin-script customer record falls back
+    // to manual pick — same as before this pipeline existed.
+    pool = byName;
+  }
+
+  if (pool.length !== 1) return null;
+  const b = pool[0];
   return { id: b.id, startTime: b.startTime, customerName: b.customer.nickname || b.customer.name };
 }
 
@@ -109,6 +162,7 @@ export async function captureSlipFromLine(args: {
 
   // 3. OCR (best-effort — an unreadable slip still lands in the review queue).
   let amount: number | null = null;
+  let slipDate: string | null = null;
   let transferAt: string | null = null;
   let bankName: string | null = null;
   let senderName: string | null = null;
@@ -119,7 +173,10 @@ export async function captureSlipFromLine(args: {
       : "image/jpeg";
     const parsed = await parseSlipImage(content.buffer.toString("base64"), mediaType);
     amount     = parsed.amount != null ? Math.round(parsed.amount * 100) : null; // baht → satang
-    transferAt = parsed.time;
+    slipDate   = parsed.date;
+    // transferAt is a display hint — "YYYY-MM-DD HH:mm" when the date is known
+    // (slips are often reviewed the next day), bare "HH:mm" otherwise.
+    transferAt = [parsed.date, parsed.time].filter(Boolean).join(" ") || null;
     bankName   = parsed.bank;
     senderName = parsed.senderName;
     ocrStatus  = "OK";
@@ -127,8 +184,11 @@ export async function captureSlipFromLine(args: {
     console.error("[slips] OCR failed:", e);
   }
 
-  // 4. Suggest a booking when the amount matched exactly one open booking today.
-  const matched = amount != null ? await suggestBookingForSlip(branchId, amount) : null;
+  // 4. Suggest a booking: branch + slip date + amount, disambiguated by the
+  //    sender's name when several bookings share the amount.
+  const matched = amount != null
+    ? await suggestBookingForSlip(branchId, amount, { dateStr: slipDate, senderName })
+    : null;
 
   const slip = await prisma.paymentSlip.update({
     where: { lineMessageId: messageId },

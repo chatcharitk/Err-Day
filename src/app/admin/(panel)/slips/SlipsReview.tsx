@@ -31,6 +31,8 @@ interface OpenBooking {
   hasReceipt:   boolean;
   customerName: string;
   serviceName:  string;
+  /** null = today; otherwise a short label like "12 มิ.ย." (yesterday's bookings). */
+  dateLabel:    string | null;
 }
 
 interface Props {
@@ -152,10 +154,10 @@ export default function SlipsReview({ branches, slips: initial, openBookings }: 
                     className="w-full text-sm rounded-lg px-3 py-2 bg-white"
                     style={{ border: `1.5px solid ${picked ? "#86EFAC" : BORDER}`, color: TEXT }}
                   >
-                    <option value="">— เลือกคิววันนี้ —</option>
+                    <option value="">— เลือกคิว (เมื่อวาน/วันนี้) —</option>
                     {candidates.map(b => (
                       <option key={b.id} value={b.id}>
-                        {b.startTime} · {b.customerName} · {b.serviceName} · {baht(b.totalPrice)}
+                        {b.dateLabel ? `${b.dateLabel} ` : ""}{b.startTime} · {b.customerName} · {b.serviceName} · {baht(b.totalPrice)}
                         {b.hasReceipt ? " (มีสลิปแล้ว)" : ""}
                       </option>
                     ))}

@@ -5,18 +5,23 @@ import SlipsReview from "./SlipsReview";
 // Live review queue — always render fresh (the admin layout is dynamic anyway).
 export const dynamic = "force-dynamic";
 
-/** Bangkok "today" as the UTC-noon range used by Booking.date. */
-function bangkokTodayRange(): { start: Date; end: Date } {
+/** Bangkok yesterday→today as the UTC range used by Booking.date. */
+function pickerRange(): { start: Date; end: Date; todayStr: string } {
   const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
   const y = bkk.getUTCFullYear(), m = bkk.getUTCMonth(), d = bkk.getUTCDate();
+  const p = (n: number) => String(n).padStart(2, "0");
   return {
-    start: new Date(Date.UTC(y, m, d, 0, 0, 0)),
-    end:   new Date(Date.UTC(y, m, d, 23, 59, 59, 999)),
+    start:    new Date(Date.UTC(y, m, d - 1, 0, 0, 0)),
+    end:      new Date(Date.UTC(y, m, d, 23, 59, 59, 999)),
+    todayStr: `${y}-${p(m + 1)}-${p(d)}`,
   };
 }
 
 export default async function SlipsPage() {
-  const { start, end } = bangkokTodayRange();
+  // Slips are typically posted in the evening and reviewed either the same
+  // night or the next day — so the manual picker covers yesterday + today,
+  // including COMPLETED bookings that don't have a receipt attached yet.
+  const { start, end, todayStr } = pickerRange();
 
   const [slips, openBookings, branches] = await Promise.all([
     prisma.paymentSlip.findMany({
@@ -24,18 +29,17 @@ export default async function SlipsPage() {
       orderBy: { createdAt: "desc" },
       take:    100,
     }),
-    // Today's open bookings — candidates for the manual "pick a booking" menu.
     prisma.booking.findMany({
       where: {
         date:   { gte: start, lte: end },
-        status: { in: ["PENDING", "CONFIRMED"] },
+        status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
       },
       select: {
-        id: true, branchId: true, startTime: true, totalPrice: true, receiptUrl: true,
+        id: true, branchId: true, date: true, startTime: true, totalPrice: true, receiptUrl: true,
         customer: { select: { name: true, nickname: true } },
         service:  { select: { nameTh: true } },
       },
-      orderBy: { startTime: "asc" },
+      orderBy: [{ date: "desc" }, { startTime: "asc" }],
     }),
     getCachedBranches(),
   ]);
@@ -65,6 +69,10 @@ export default async function SlipsPage() {
         hasReceipt:   !!b.receiptUrl,
         customerName: b.customer.nickname || b.customer.name,
         serviceName:  b.service.nameTh,
+        // null = today; otherwise a short Thai date label, e.g. "12 มิ.ย."
+        dateLabel: b.date.toISOString().slice(0, 10) === todayStr
+          ? null
+          : b.date.toLocaleDateString("th-TH", { day: "numeric", month: "short", timeZone: "UTC" }),
       }))}
     />
   );
