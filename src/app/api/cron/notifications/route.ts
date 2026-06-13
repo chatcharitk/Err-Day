@@ -29,8 +29,7 @@ import {
   sendBranchDailySummary,
   sendStaffShiftSummary,
 } from "@/lib/notifications";
-import { branchesWithGroups, branchGroupId } from "@/lib/line-groups";
-import { pushLine } from "@/lib/line-messaging";
+import { branchesWithGroups } from "@/lib/line-groups";
 
 export const dynamic = "force-dynamic";
 
@@ -179,31 +178,6 @@ export async function GET(request: Request) {
       summaryResults.push({ branchId: "shifts", status: sh.status, count: sh.count });
     } catch (e) {
       if ((e as { code?: string }).code !== "P2002") throw e; // P2002 = already sent today
-    }
-
-    // Pending payment slips → nudge each branch group once per evening, so the
-    // 20:30 checkout round starts from the review queue instead of scrolling
-    // the chat. Same synthetic-targetId dedupe pattern as the summaries above.
-    for (const branchId of branchesWithGroups()) {
-      const pendingSlips = await prisma.paymentSlip.count({ where: { branchId, status: "PENDING" } });
-      if (pendingSlips === 0) continue;
-      try {
-        await prisma.notificationLog.create({
-          data: { kind: "BOOKING_REMINDER_4H", targetId: `slipnudge:${branchId}:${dstr}`, status: "SENT" },
-        });
-      } catch (e) {
-        if ((e as { code?: string }).code === "P2002") continue; // already nudged tonight
-        throw e;
-      }
-      const appUrl  = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-      const groupId = branchGroupId(branchId);
-      if (groupId) {
-        const r = await pushLine(groupId, [{
-          type: "text",
-          text: `💳 มีสลิปรอยืนยัน ${pendingSlips} รายการ\nตรวจสอบและเช็คเอาท์: ${appUrl}/admin/slips`,
-        }]);
-        summaryResults.push({ branchId: `slips:${branchId}`, status: r.ok ? "SENT" : "FAILED", count: pendingSlips });
-      }
     }
   }
 

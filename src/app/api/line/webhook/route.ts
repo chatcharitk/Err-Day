@@ -67,28 +67,19 @@ async function processEvent(event: LineEvent): Promise<void> {
   }
 
   // 2. Payment-slip capture: an IMAGE posted in a branch staff group.
-  //    Heavy work (download → Blob → OCR) runs via after() so LINE gets its
-  //    200 immediately; the reply token stays valid long enough (~30s) for
-  //    the ack. Images anywhere else (1:1 chats, unknown groups) stay
-  //    untouched — the silent-webhook policy applies to customers only.
+  //    Download → Blob → OCR → booking match all run via after() so LINE gets
+  //    its 200 immediately. This is SILENT by design — no reply in the group;
+  //    staff don't need to see what's processed behind the scenes. Results
+  //    surface only in /admin/slips for the admin to confirm. Images elsewhere
+  //    (1:1 chats, unknown groups) are left untouched.
   if (event.type === "message" && event.message?.type === "image" && event.message.id) {
     const slipGroupId = event.source?.groupId;
     const branchId    = slipGroupId ? branchIdForGroup(slipGroupId) : undefined;
     if (slipGroupId && branchId) {
-      const messageId  = event.message.id;
-      const replyToken = event.replyToken;
+      const messageId = event.message.id;
       after(async () => {
         try {
-          const r = await captureSlipFromLine({ messageId, groupId: slipGroupId, branchId });
-          if (r.status !== "captured" || !replyToken) return; // duplicates/failures stay silent
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-          const baht   = r.amount != null ? `฿${(r.amount / 100).toLocaleString()}` : null;
-          const text   = r.matchedBooking
-            ? `✅ รับสลิป ${baht} — ตรงกับคิว ${r.matchedBooking.startTime} คุณ${r.matchedBooking.customerName}\nยืนยันเช็คเอาท์: ${appUrl}/admin/slips`
-            : baht
-              ? `✅ รับสลิป ${baht} — ยังไม่พบคิวที่ยอดตรงวันนี้\nเลือกคิวเอง: ${appUrl}/admin/slips`
-              : `⚠️ รับสลิปแล้ว แต่อ่านยอดไม่สำเร็จ\nตรวจสอบ: ${appUrl}/admin/slips`;
-          await replyLine(replyToken, [{ type: "text", text }]);
+          await captureSlipFromLine({ messageId, groupId: slipGroupId, branchId });
         } catch (e) {
           console.error("[webhook] slip capture failed:", e);
         }
