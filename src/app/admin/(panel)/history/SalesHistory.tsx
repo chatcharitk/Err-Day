@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Pencil, Trash2, X, Save, Search, ChevronDown, ExternalLink, Calendar } from "lucide-react";
+import { Pencil, Trash2, X, Save, Search, ChevronDown, ExternalLink, Calendar, Download } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,13 @@ const ALL_STATUSES = ["PENDING","CONFIRMED","COMPLETED","CANCELLED","NO_SHOW"];
 
 function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
+}
+
+/** Quote a CSV cell (RFC-4180). Numbers stay unquoted so spreadsheets treat
+ *  them as numeric; strings are quoted with embedded quotes doubled. */
+function csvCell(v: string | number): string {
+  if (typeof v === "number") return String(v);
+  return `"${String(v ?? "").replace(/"/g, '""')}"`;
 }
 
 /** Convert UTC ISO → "YYYY-MM-DDTHH:mm" in Bangkok time (for datetime-local input) */
@@ -550,6 +557,37 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
     });
   }, [sales, branchId, statusFilter, preset, search, customFrom, customTo]);
 
+  /** Export the currently-filtered rows to a CSV (opens in Excel / Sheets).
+   *  UTF-8 BOM so Excel renders Thai; amounts as plain numbers (in baht). */
+  function handleExport() {
+    if (filtered.length === 0) return;
+    const headers = ["วันที่", "เวลา", "สาขา", "ลูกค้า", "เบอร์โทร", "บริการ", "ช่าง", "สถานะ", "ยอด (บาท)", "ชำระเมื่อ", "หมายเหตุ", "รหัส"];
+    const rows = filtered.map(s => [
+      effectiveDateOf(s),
+      `${s.startTime}-${s.endTime}`,
+      s.branch.name,
+      s.customer.name,
+      s.customer.phone,
+      s.service.nameTh || s.service.name,
+      s.staff?.name ?? "-",
+      STATUS_LABEL[s.status] ?? s.status,
+      s.totalPrice / 100,
+      s.completedAt ? utcToBkkInput(s.completedAt).replace("T", " ") : "",
+      (s.notes ?? "").replace(/\s+/g, " ").trim(),
+      s.id,
+    ]);
+    const csv = "﻿" + [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `errday-sales-${toLocalStr(new Date())}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function handleSaved(updated: SaleRecord) {
     setSales(prev => prev.map(s => s.id === updated.id ? updated : s));
     router.refresh();
@@ -581,7 +619,8 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
   return (
     <div className="px-6 py-8 max-w-7xl">
       {/* header */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
         <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Sales History</p>
         <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ประวัติการขาย</h1>
         <p className="text-xs mt-1" style={{ color: MUTED }}>
@@ -604,6 +643,16 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
             </>
           )}
         </p>
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={filtered.length === 0}
+          className="flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl text-white disabled:opacity-40"
+          style={{ background: PRIMARY }}
+          title="ส่งออกรายการที่กรองไว้เป็นไฟล์ Excel/CSV"
+        >
+          <Download size={15} /> ส่งออก Excel ({filtered.length})
+        </button>
       </div>
 
       {/* summary */}
