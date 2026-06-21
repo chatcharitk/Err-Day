@@ -76,6 +76,10 @@ model Service {
   memberPrice            Int?
   nameTh                 String          @default("")
   memberDiscountPercent  Int             @default(0)
+  /// Fixed commission (ค่ามือ) in satang the performing stylist earns each time
+  /// this service is completed — independent of what the customer paid (member
+  /// discount / package redemption don't reduce it). 0 = no commission.
+  commissionSatang       Int             @default(0)
   bookings               Booking[]
   branches               BranchService[]
 }
@@ -103,11 +107,53 @@ model Staff {
   phone          String?
   passcodeHash   String?
   lastLoginAt    DateTime?
+  /// ── Payroll config ──────────────────────────────────────────────────────
+  /// How base pay is defined. MONTHLY_SALARY → baseSatang is a monthly salary;
+  /// DAILY_WAGE → baseSatang is paid per day worked.
+  payType        StaffPayType   @default(MONTHLY_SALARY)
+  /// Base pay in satang (monthly salary OR daily wage, per payType). 0 = unset.
+  baseSatang     Int            @default(0)
+  /// How the base is disbursed (reporting/rollup only; doesn't affect daily OT/commission).
+  payCadence     PayCadence     @default(MONTHLY)
+  /// Optional manual OT hourly-rate override in satang. null → derive from base
+  /// (MONTHLY: baseSatang/240 i.e. /(30*8); DAILY: baseSatang/8).
+  otRateSatang   Int?
   blockedSlots   BlockedSlot[]
   bookings       Booking[]
   bookingStaff   BookingStaff[]
   branch         Branch         @relation(fields: [branchId], references: [id])
   shifts         StaffShift[]
+  dailyPayouts   StaffDailyPayout[]
+}
+
+/// One row per staff per day — the daily cash-out the owner pays (commission +
+/// OT). Commission is computed live from that day's completed bookings; this row
+/// stores the admin-entered OT hours, a `worked` flag (for daily-wage base
+/// accrual), and a snapshot + paid status once settled.
+model StaffDailyPayout {
+  id               String       @id @default(cuid())
+  staffId          String
+  branchId         String
+  /// UTC-noon of the Bangkok calendar day (same convention as Booking.date).
+  date             DateTime
+  /// Admin-entered overtime hours for the day (e.g. 1.5).
+  otHours          Float        @default(0)
+  /// Whether the staff worked this day — drives daily-wage base accrual.
+  worked           Boolean      @default(true)
+  status           PayoutStatus @default(PENDING)
+  /// Snapshots taken when marked PAID (satang). Null while pending → compute live.
+  commissionSatang Int?
+  otSatang         Int?
+  paidAt           DateTime?
+  paidBy           String?
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  staff            Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+  @@index([branchId, date])
+  @@index([status, date])
 }
 
 model StaffShift {
@@ -465,4 +511,19 @@ enum NotificationStatus {
   SENT
   FAILED
   SKIPPED
+}
+
+enum StaffPayType {
+  MONTHLY_SALARY
+  DAILY_WAGE
+}
+
+enum PayCadence {
+  MONTHLY
+  WEEKLY
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
 }

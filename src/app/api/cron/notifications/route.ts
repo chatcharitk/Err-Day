@@ -28,6 +28,7 @@ import {
   sendPackageExpiryWarning1d,
   sendBranchDailySummary,
   sendStaffShiftSummary,
+  sendOwnerPayrollSummary,
 } from "@/lib/notifications";
 import { branchesWithGroups } from "@/lib/line-groups";
 
@@ -178,6 +179,18 @@ export async function GET(request: Request) {
       summaryResults.push({ branchId: "shifts", status: sh.status, count: sh.count });
     } catch (e) {
       if ((e as { code?: string }).code !== "P2002") throw e; // P2002 = already sent today
+    }
+
+    // Owner payroll summary — today's commission + OT to pay, DM'd to owners.
+    // Uses TODAY (the day that just finished) rather than tomorrow.
+    try {
+      await prisma.notificationLog.create({
+        data: { kind: "BOOKING_REMINDER_4H", targetId: `payroll:${bkk.toISOString().slice(0, 10)}`, status: "SENT" },
+      });
+      const pr = await sendOwnerPayrollSummary();
+      summaryResults.push({ branchId: "payroll", status: pr.status });
+    } catch (e) {
+      if ((e as { code?: string }).code !== "P2002") throw e; // already sent today
     }
   }
 

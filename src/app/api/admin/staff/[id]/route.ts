@@ -12,7 +12,15 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, phone, branchId, commissionRate, isActive } = body;
+    const { name, phone, branchId, commissionRate, isActive,
+            payType, baseSatang, payCadence, otRateSatang } = body;
+
+    if (payType !== undefined && payType !== "MONTHLY_SALARY" && payType !== "DAILY_WAGE") {
+      return NextResponse.json({ error: "invalid payType" }, { status: 400 });
+    }
+    if (payCadence !== undefined && payCadence !== "MONTHLY" && payCadence !== "WEEKLY") {
+      return NextResponse.json({ error: "invalid payCadence" }, { status: 400 });
+    }
 
     const staff = await prisma.staff.update({
       where: { id },
@@ -22,6 +30,13 @@ export async function PATCH(
         ...(branchId !== undefined ? { branchId } : {}),
         ...(commissionRate !== undefined ? { commissionRate: Number(commissionRate) } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
+        // ── Payroll config ──
+        ...(payType !== undefined ? { payType } : {}),
+        ...(baseSatang !== undefined ? { baseSatang: Math.max(0, Math.round(Number(baseSatang))) } : {}),
+        ...(payCadence !== undefined ? { payCadence } : {}),
+        ...(otRateSatang !== undefined
+          ? { otRateSatang: otRateSatang === null || otRateSatang === "" ? null : Math.max(0, Math.round(Number(otRateSatang))) }
+          : {}),
       },
       include: { branch: true },
     });

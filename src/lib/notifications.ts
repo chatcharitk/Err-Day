@@ -754,3 +754,48 @@ ${usagesNote}🔄 ต่ออายุได้ที่หน้าร้า�
   await recordLog({ kind, targetId: packageId, status: "FAILED", recipient: p.customer.lineUserId, error: r.error });
   return { kind, targetId: packageId, status: "FAILED", reason: r.error };
 }
+
+// ── Owner daily payroll summary (commission + OT to pay today) ───────────────
+
+/**
+ * DM the owners (STAFF_LINE_IDS) today's per-staff cash-out: service commission
+ * earned + OT, per branch. Owner-only; never posted to staff groups. Called from
+ * the nightly cron (deduped there). Money is satang → display in baht.
+ */
+export async function sendOwnerPayrollSummary(): Promise<{ status: string; total: number }> {
+  const { computeBranchDailyPayout, bangkokTodayStr } = await import("@/lib/payroll");
+  const today = bangkokTodayStr();
+  const baht = (s: number) => `฿${(s / 100).toLocaleString("th-TH", { maximumFractionDigits: 2 })}`;
+
+  const branches = await prisma.branch.findMany({
+    where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true },
+  });
+
+  const sections: string[] = [];
+  let grand = 0;
+  for (const b of branches) {
+    const rows = (await computeBranchDailyPayout(b.id, today)).filter(r => r.totalSatang > 0);
+    if (rows.length === 0) continue;
+    const branchTotal = rows.reduce((s, r) => s + r.totalSatang, 0);
+    grand += branchTotal;
+    const lines = rows.map(r => {
+      const parts = [`ค่ามือ ${baht(r.commissionSatang)}`];
+      if (r.otSatang > 0) parts.push(`OT ${baht(r.otSatang)} (${r.otHours} ชม.)`);
+      return `• ${r.name}: ${baht(r.totalSatang)}  (${parts.join(" + ")})`;
+    });
+    sections.push(`📍 ${b.name.replace(/^err\.day\s*/i, "")} — ${baht(branchTotal)}\n${lines.join("\n")}`);
+  }
+
+  const body = sections.length === 0 ? "— วันนี้ยังไม่มีค่ามือ/OT —" : sections.join("\n\n");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  const text = `💰 สรุปค่าตอบแทนวันนี้ (ยอด ณ เวลาส่ง)\nวันที่ ${today}\nรวมทั้งหมด ${baht(grand)}\n\n${body}\n\nยอดล่าสุด/กดจ่าย: ${appUrl}/admin/payroll`;
+
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const r = await pushText(uid, text);
+      if (!r.ok) console.error("[notify] payroll summary failed", uid, r.error);
+      else        console.log("[notify] payroll summary sent", uid);
+    })
+  );
+  return { status: "SENT", total: grand };
+}
