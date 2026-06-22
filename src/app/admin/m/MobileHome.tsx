@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -450,6 +450,15 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               >
                 <Wallet size={16} style={{ color: MUTED }} />
                 รายจ่าย
+              </Link>
+              <Link
+                href="/admin/m/payroll"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <Banknote size={16} style={{ color: MUTED }} />
+                ค่าตอบแทนพนักงาน
               </Link>
               <Link
                 href="/admin/m/pos"

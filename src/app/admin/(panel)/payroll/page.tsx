@@ -24,7 +24,7 @@ export default async function PayrollPage({
     : (branches[0]?.id ?? "");
   const activeDate = date || bangkokTodayStr();
 
-  const [rows, staffConfig, services] = await Promise.all([
+  const [rows, staffConfig, services, addons] = await Promise.all([
     activeBranchId ? computeBranchDailyPayout(activeBranchId, activeDate) : Promise.resolve([]),
     prisma.staff.findMany({
       where: { isActive: true },
@@ -35,6 +35,11 @@ export default async function PayrollPage({
       where: { isActive: true },
       orderBy: [{ category: "asc" }, { nameTh: "asc" }],
       select: { id: true, nameTh: true, name: true, category: true, commissionSatang: true },
+    }),
+    prisma.serviceAddon.findMany({
+      where: { isActive: true },
+      orderBy: { price: "asc" },
+      select: { id: true, nameTh: true, name: true, commissionSatang: true },
     }),
   ]);
 
@@ -53,6 +58,7 @@ export default async function PayrollPage({
       services={services.map(s => ({
         id: s.id, nameTh: s.nameTh || s.name, category: s.category, commissionSatang: s.commissionSatang,
       }))}
+      addons={addons.map(a => ({ id: a.id, nameTh: a.nameTh || a.name, commissionSatang: a.commissionSatang }))}
     />
   );
 }

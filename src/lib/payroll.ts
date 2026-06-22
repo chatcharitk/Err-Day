@@ -104,7 +104,7 @@ export async function computeBranchDailyPayout(
       orderBy: { name: "asc" },
     }),
     // Completed bookings this branch/day, attributed to a primary stylist, with
-    // their service's fixed commission.
+    // their service's + add-ons' fixed commission.
     prisma.booking.findMany({
       where: {
         branchId,
@@ -112,7 +112,11 @@ export async function computeBranchDailyPayout(
         staffId: { not: null },
         date: { gte: start, lte: end },
       },
-      select: { staffId: true, service: { select: { commissionSatang: true } } },
+      select: {
+        staffId: true,
+        service: { select: { commissionSatang: true } },
+        addons:  { select: { addon: { select: { commissionSatang: true } } } },
+      },
     }),
     prisma.staffDailyPayout.findMany({
       where: { branchId, date: { gte: start, lte: end } },
@@ -122,9 +126,10 @@ export async function computeBranchDailyPayout(
   const commByStaff = new Map<string, { sum: number; count: number }>();
   for (const b of bookings) {
     if (!b.staffId) continue;
-    const c = b.service?.commissionSatang ?? 0;
+    const serviceComm = b.service?.commissionSatang ?? 0;
+    const addonComm = b.addons.reduce((s, a) => s + (a.addon?.commissionSatang ?? 0), 0);
     const cur = commByStaff.get(b.staffId) ?? { sum: 0, count: 0 };
-    cur.sum += c;
+    cur.sum += serviceComm + addonComm;
     cur.count += 1;
     commByStaff.set(b.staffId, cur);
   }

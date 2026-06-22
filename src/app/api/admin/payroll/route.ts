@@ -81,9 +81,15 @@ export async function PATCH(request: Request) {
       const { start, end } = bangkokDayRange(date);
       const bookings = await prisma.booking.findMany({
         where: { branchId, staffId, status: "COMPLETED", date: { gte: start, lte: end } },
-        select: { service: { select: { commissionSatang: true } } },
+        select: {
+          service: { select: { commissionSatang: true } },
+          addons:  { select: { addon: { select: { commissionSatang: true } } } },
+        },
       });
-      const commissionSatang = bookings.reduce((s, b) => s + (b.service?.commissionSatang ?? 0), 0);
+      const commissionSatang = bookings.reduce(
+        (s, b) => s + (b.service?.commissionSatang ?? 0) + b.addons.reduce((t, a) => t + (a.addon?.commissionSatang ?? 0), 0),
+        0,
+      );
       const existing = await prisma.staffDailyPayout.findUnique({ where: { staffId_date: { staffId, date: noon } } });
       const effectiveOtHours = otHours ?? existing?.otHours ?? 0;
       const otSatang = otPaySatang(staff, effectiveOtHours);

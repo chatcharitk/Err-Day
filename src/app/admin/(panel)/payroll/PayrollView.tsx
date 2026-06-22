@@ -22,6 +22,7 @@ interface Row {
 }
 interface StaffCfg { id: string; name: string; branchId: string; payType: PayType; baseSatang: number; payCadence: Cadence; otRateSatang: number | null }
 interface ServiceCfg { id: string; nameTh: string; category: string; commissionSatang: number }
+interface AddonCfg { id: string; nameTh: string; commissionSatang: number }
 
 interface Props {
   branches: Branch[];
@@ -31,18 +32,21 @@ interface Props {
   rows: Row[];
   staffConfig: StaffCfg[];
   services: ServiceCfg[];
+  addons: AddonCfg[];
+  /** Route the daily branch/date navigation targets. Desktop or /admin/m/payroll. */
+  basePath?: string;
 }
 
 const baht = (satang: number) =>
   `฿${(satang / 100).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 const branchShort = (b: Branch) => b.name.replace(/^err\.day\s*/i, "");
 
-export default function PayrollView({ branches, activeBranchId, activeDate, todayStr, rows, staffConfig, services }: Props) {
+export default function PayrollView({ branches, activeBranchId, activeDate, todayStr, rows, staffConfig, services, addons, basePath = "/admin/payroll" }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<"daily" | "settings">("daily");
 
   const go = (branchId: string, date: string) =>
-    router.push(`/admin/payroll?branchId=${branchId}&date=${date}`);
+    router.push(`${basePath}?branchId=${branchId}&date=${date}`);
 
   return (
     <div className="px-6 py-8 max-w-5xl">
@@ -66,7 +70,7 @@ export default function PayrollView({ branches, activeBranchId, activeDate, toda
 
       {tab === "daily"
         ? <DailyTab key={`${activeBranchId}:${activeDate}`} branches={branches} activeBranchId={activeBranchId} activeDate={activeDate} todayStr={todayStr} rows={rows} onNav={go} />
-        : <SettingsTab branches={branches} staffConfig={staffConfig} services={services} />}
+        : <SettingsTab branches={branches} staffConfig={staffConfig} services={services} addons={addons} />}
     </div>
   );
 }
@@ -201,7 +205,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
 }
 
 // ─── Settings tab: staff base pay + per-service commission ─────────────────────
-function SettingsTab({ branches, staffConfig, services }: { branches: Branch[]; staffConfig: StaffCfg[]; services: ServiceCfg[] }) {
+function SettingsTab({ branches, staffConfig, services, addons }: { branches: Branch[]; staffConfig: StaffCfg[]; services: ServiceCfg[]; addons: AddonCfg[] }) {
   return (
     <div className="space-y-8">
       <section>
@@ -233,6 +237,16 @@ function SettingsTab({ branches, staffConfig, services }: { branches: Branch[]; 
         <div className="space-y-2">
           {services.map(s => <ServiceCommissionRow key={s.id} service={s} />)}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>ค่ามือต่อบริการเสริม (add-on)</h2>
+        <p className="text-[11px] mb-3" style={{ color: MUTED }}>
+          จำนวนเงิน (บาท) ที่ช่างได้เพิ่ม เมื่อบริการเสริมนี้อยู่ในงานที่เสร็จ
+        </p>
+        {addons.length === 0
+          ? <p className="text-xs" style={{ color: MUTED }}>— ยังไม่มีบริการเสริม —</p>
+          : <div className="space-y-2">{addons.map(a => <AddonCommissionRow key={a.id} addon={a} />)}</div>}
       </section>
     </div>
   );
@@ -317,6 +331,41 @@ function ServiceCommissionRow({ service }: { service: ServiceCfg }) {
         <p className="text-sm font-medium truncate" style={{ color: TEXT }}>{service.nameTh}</p>
         <p className="text-[10px]" style={{ color: MUTED }}>{service.category}</p>
       </div>
+      <span className="text-xs" style={{ color: MUTED }}>฿</span>
+      <input type="number" min="0" value={val} onChange={e => setVal(e.target.value)}
+        onBlur={() => { if (dirty) save(); }}
+        className="w-20 px-2 py-1.5 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
+      <button onClick={save} disabled={!dirty || saving}
+        className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-30"
+        style={{ border: `1px solid ${BORDER}`, color: saved ? "#166534" : PRIMARY }}>
+        {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : "บันทึก"}
+      </button>
+    </div>
+  );
+}
+
+function AddonCommissionRow({ addon }: { addon: AddonCfg }) {
+  const router = useRouter();
+  const [val, setVal] = useState(String(addon.commissionSatang / 100));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const satang = Math.round((parseFloat(val) || 0) * 100);
+  const dirty = satang !== addon.commissionSatang;
+
+  async function save() {
+    setSaving(true); setSaved(false);
+    try {
+      const res = await fetch(`/api/admin/addons/${addon.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commissionBaht: parseFloat(val) || 0 }),
+      });
+      if (res.ok) { setSaved(true); router.refresh(); setTimeout(() => setSaved(false), 1500); }
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-2.5 flex items-center gap-2" style={{ border: `1px solid ${BORDER}` }}>
+      <p className="text-sm font-medium truncate flex-1 min-w-0" style={{ color: TEXT }}>{addon.nameTh}</p>
       <span className="text-xs" style={{ color: MUTED }}>฿</span>
       <input type="number" min="0" value={val} onChange={e => setVal(e.target.value)}
         onBlur={() => { if (dirty) save(); }}
