@@ -129,6 +129,7 @@ export async function POST(request: Request) {
           paidAmount:    p.price,
           paymentMethod: "POS",
           bookingId:     booking.id,
+          countFirstUse: true, // 5-pack: count the first visit on purchase
         });
         if (cp?.id) {
           sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e));
@@ -221,6 +222,7 @@ export async function POST(request: Request) {
         paidAmount:    p.price,
         paymentMethod: "POS",
         bookingId:     booking.id,
+        countFirstUse: true, // 5-pack: count the first visit on purchase
       });
       if (cp?.id) {
         sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e));

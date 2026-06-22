@@ -89,10 +89,23 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   const [showMenu, setShowMenu] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const [isNavigating, startNavigate] = useTransition();
+  const [confirmingAll, setConfirmingAll] = useState(false);
 
   const handleRefresh = () => {
     // Server component re-fetches; useTransition gives us a pending flag
     startRefresh(() => router.refresh());
+  };
+
+  const confirmAllPending = async () => {
+    if (confirmingAll) return;
+    setConfirmingAll(true);
+    try {
+      const res = await fetch("/api/admin/bookings/confirm-day", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: activeBranchId, date: selectedDate }),
+      });
+      if (res.ok) router.refresh();
+    } finally { setConfirmingAll(false); }
   };
 
   const buildDateUrl = (dateStr: string) => `?branchId=${activeBranchId}&date=${dateStr}`;
@@ -277,6 +290,25 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
           {cancelledCount > 0 && ` · ยกเลิก ${cancelledCount}`}
         </p>
       </section>
+
+      {/* ── Confirm-all-pending (one tap to confirm the whole day) ── */}
+      {(() => {
+        const pendingCount = bookings.filter((b) => b.status === "PENDING").length;
+        if (pendingCount === 0) return null;
+        return (
+          <section className="px-4 pb-1">
+            <button
+              onClick={confirmAllPending}
+              disabled={confirmingAll}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: "#ECFDF5", color: "#166534", border: "1px solid #86EFAC" }}
+            >
+              {confirmingAll ? <RefreshCw size={15} className="animate-spin" /> : <Check size={15} />}
+              ยืนยันคิวทั้งหมด ({pendingCount})
+            </button>
+          </section>
+        );
+      })()}
 
       {/* ── Bookings list ── */}
       <section className="px-4 pb-6">

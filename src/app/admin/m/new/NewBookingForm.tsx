@@ -85,6 +85,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
 
   // Customer
   const [isWalkin,    setIsWalkin]    = useState(false);
+  const [checkoutNow, setCheckoutNow] = useState(false); // create already-completed (record a past visit)
   const [searchQuery, setSearchQuery] = useState("");   // what's typed in the search box
   const [phone,    setPhone]    = useState("");         // actual phone for booking submission
   const [name,     setName]     = useState("");
@@ -219,6 +220,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           extraStaffIds: extraStaffIds.length > 0 ? extraStaffIds : undefined,
           isWalkin:      isWalkin && !(name.trim() && phone.trim()),
           skipConflictCheck: true,
+          ...(checkoutNow ? { status: "COMPLETED" } : {}),
         }),
       });
       const data = await res.json();
@@ -640,6 +642,18 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
             <AlertCircle size={12} /> {err}
           </div>
         )}
+        {/* Create + checkout in one go — for recording a visit that already happened. */}
+        <button
+          type="button"
+          onClick={() => setCheckoutNow(v => !v)}
+          className="w-full mb-2 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+          style={checkoutNow
+            ? { background: "#ECFDF5", color: "#166534", border: "1px solid #86EFAC" }
+            : { background: "white", color: MUTED, border: `1px solid ${BORDER}` }}
+        >
+          {checkoutNow ? <Check size={14} /> : null}
+          เช็คเอาท์เลย (บันทึกเป็นเสร็จสิ้น)
+        </button>
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
@@ -647,7 +661,9 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           style={{ background: PRIMARY }}
         >
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-          {submitting ? "กำลังบันทึก..." : `บันทึกการจอง${service ? ` · ${formatPrice(finalPrice)}` : ""}`}
+          {submitting ? "กำลังบันทึก..." : checkoutNow
+            ? `บันทึก + เช็คเอาท์${service ? ` · ${formatPrice(finalPrice)}` : ""}`
+            : `บันทึกการจอง${service ? ` · ${formatPrice(finalPrice)}` : ""}`}
         </button>
       </div>
     </main>

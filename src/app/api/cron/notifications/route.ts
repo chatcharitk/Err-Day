@@ -24,7 +24,6 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import {
   sendBookingReminder4h,
-  sendMembershipExpiryWarning1d,
   sendPackageExpiryWarning1d,
   sendBranchDailySummary,
   sendStaffShiftSummary,
@@ -108,19 +107,15 @@ export async function GET(request: Request) {
     return dt >= windowStart && dt <= windowEnd;
   });
 
-  // ── 2) Memberships expiring in ~1 day ────────────────────────────────────
+  // ── Membership expiry warning: REMOVED ───────────────────────────────────
+  // Customers found it spammy (repeated daily warnings), so the 1-day
+  // membership-expiry notification was removed entirely per owner request.
+  // Renewal is handled at the counter; no automated nag.
+
+  // ── 2) Packages expiring in ~1 day ───────────────────────────────────────
   const expiryWindowStart = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 0.5d
   const expiryWindowEnd   = new Date(now.getTime() + 36 * 60 * 60 * 1000); // 1.5d
 
-  const dueMemberships = await prisma.membership.findMany({
-    where: {
-      expiresAt: { gte: expiryWindowStart, lte: expiryWindowEnd },
-      customer:  { lineUserId: { not: null } },
-    },
-    select: { id: true },
-  });
-
-  // ── 3) Packages expiring in ~1 day ───────────────────────────────────────
   const duePackages = await prisma.customerPackage.findMany({
     where: {
       expiresAt: { gte: expiryWindowStart, lte: expiryWindowEnd },
@@ -135,9 +130,6 @@ export async function GET(request: Request) {
 
   for (const b of dueBookings) {
     results.push(await sendBookingReminder4h(b.id));
-  }
-  for (const m of dueMemberships) {
-    results.push(await sendMembershipExpiryWarning1d(m.id));
   }
   for (const p of duePackages) {
     results.push(await sendPackageExpiryWarning1d(p.id));
@@ -196,7 +188,6 @@ export async function GET(request: Request) {
 
   const stats = {
     bookings:    dueBookings.length,
-    memberships: dueMemberships.length,
     packages:    duePackages.length,
     sent:    results.filter((r) => r.status === "SENT" && r.reason !== "already").length,
     skipped: results.filter((r) => r.status === "SKIPPED").length,

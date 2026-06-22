@@ -62,6 +62,13 @@ interface ActivateOpts {
   paymentMethod?: "POS" | "Manual";
   bookingId?:    string | null;
   notes?:        string;
+  /**
+   * Count the first visit immediately on activation. For capped packages
+   * (5-pack), customers almost always use one right when they buy it, so POS
+   * sets this true → the package starts at usagesUsed=1 instead of 0. No effect
+   * on unlimited (buffet) packages.
+   */
+  countFirstUse?: boolean;
 }
 
 /**
@@ -80,7 +87,11 @@ export async function activatePackage(opts: ActivateOpts) {
     paymentMethod = "POS",
     bookingId     = null,
     notes,
+    countFirstUse = false,
   } = opts;
+
+  // Only meaningful for capped packages (5-pack). Buffet (usageLimit 0) ignores it.
+  const initialUsed = countFirstUse && spec.usageLimit > 0 ? 1 : 0;
 
   const now       = new Date();
   // 30-day package activated today → expires day 30 (inclusive). So count today
@@ -102,7 +113,7 @@ export async function activatePackage(opts: ActivateOpts) {
         data: {
           startedAt:         now,
           expiresAt,
-          usagesUsed:        0,
+          usagesUsed:        initialUsed,
           usageLimit:        spec.usageLimit,
           paidAmount,
           paymentMethod,
@@ -126,7 +137,7 @@ export async function activatePackage(opts: ActivateOpts) {
         packageSku,
         startedAt:  now,
         expiresAt,
-        usagesUsed: 0,
+        usagesUsed: initialUsed,
         usageLimit: spec.usageLimit,
         paidAmount,
         paymentMethod,

@@ -50,20 +50,29 @@ async function recordLog(args: {
   error?:    string | null;
 }): Promise<boolean> {
   try {
-    await prisma.notificationLog.create({
-      data: {
+    // Upsert (not create): a prior SKIPPED (no LINE link yet) or FAILED
+    // (transient) row must be promoted to SENT on success — otherwise the
+    // create would hit the unique (kind,targetId) constraint, the row would
+    // stay non-SENT, and alreadySent() would keep returning false → the
+    // notification re-sends on every cron tick forever.
+    await prisma.notificationLog.upsert({
+      where:  { kind_targetId: { kind: args.kind, targetId: args.targetId } },
+      create: {
         kind:      args.kind,
         targetId:  args.targetId,
         status:    args.status,
         recipient: args.recipient ?? null,
         error:     args.error ?? null,
       },
+      update: {
+        status:    args.status,
+        recipient: args.recipient ?? null,
+        error:     args.error ?? null,
+        sentAt:    new Date(),
+      },
     });
     return true;
   } catch (e) {
-    // P2002 = unique constraint violation → already logged, no-op
-    const code = (e as { code?: string }).code;
-    if (code === "P2002") return false;
     console.error("[notifications] failed to record log", e);
     return false;
   }

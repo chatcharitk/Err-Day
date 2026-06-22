@@ -32,6 +32,7 @@ export default function AddBookingModal({
   const [error,            setError]            = useState("");
   const [isMember,         setIsMember]         = useState(false);
   const [memberLoading,    setMemberLoading]    = useState(false);
+  const [checkoutNow,      setCheckoutNow]      = useState(false); // create already-completed
 
   function toggleExtraStaff(id: string) {
     setExtraStaffIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -136,6 +137,7 @@ export default function AddBookingModal({
         addonIds:          selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
         isWalkin,
         skipConflictCheck: true,
+        ...(checkoutNow ? { status: "COMPLETED" } : {}),
       }),
     });
     setSaving(false);
@@ -332,12 +334,20 @@ export default function AddBookingModal({
                 className="w-full border border-[#E8D8CC] rounded-xl px-3 py-2.5 text-sm outline-none text-[#3B2A24]" />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
+            {/* Create + checkout in one go — for recording a visit that already happened. */}
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "#3B2A24" }}>
+              <input type="checkbox" checked={checkoutNow} onChange={e => setCheckoutNow(e.target.checked)}
+                className="w-4 h-4" style={{ accentColor: "#8B1D24" }} />
+              เช็คเอาท์เลย — บันทึกเป็น &quot;เสร็จสิ้น&quot; (สำหรับบันทึกย้อนหลัง)
+            </label>
             <button type="submit"
               disabled={saving || memberLoading || !serviceId || !time || (!isWalkin && !customer.name)}
               className="w-full py-3 rounded-xl bg-[#8B1D24] text-white font-semibold text-sm disabled:opacity-50">
               {saving ? "กำลังบันทึก..."
                 : memberLoading ? "กำลังตรวจสอบสมาชิก..."
-                : `✓ บันทึกการจอง${selectedSvc ? ` · ${formatPrice(finalPrice)}` : ""}`}
+                : checkoutNow
+                  ? `✓ บันทึก + เช็คเอาท์${selectedSvc ? ` · ${formatPrice(finalPrice)}` : ""}`
+                  : `✓ บันทึกการจอง${selectedSvc ? ` · ${formatPrice(finalPrice)}` : ""}`}
             </button>
           </div>
         </form>
