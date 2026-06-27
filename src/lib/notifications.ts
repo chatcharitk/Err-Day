@@ -18,6 +18,7 @@ import { pushText, pushLine } from "@/lib/line-messaging";
 import { buildBookingFlex } from "@/lib/flex/booking";
 import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
 import { branchGroupId } from "@/lib/line-groups";
+import { SALE_ONLY_SKUS } from "@/lib/capacity";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -330,7 +331,7 @@ export async function sendGroupBookingNotice(
   if (b.startTime < nowHHmm) return;
 
   const bookings = await prisma.booking.findMany({
-    where:  { branchId: b.branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] } },
+    where:  { branchId: b.branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] }, serviceId: { notIn: SALE_ONLY_SKUS } },
     select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
     orderBy: { startTime: "asc" },
   });
@@ -366,7 +367,7 @@ export async function sendBranchDailySummary(branchId: string): Promise<SummaryR
   const tomorrowNoon = new Date(Date.UTC(y, mo, d, 12, 0, 0));
 
   const bookings = await prisma.booking.findMany({
-    where:  { branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] } },
+    where:  { branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] }, serviceId: { notIn: SALE_ONLY_SKUS } },
     select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
     orderBy: { startTime: "asc" },
   });

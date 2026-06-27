@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkCapacity } from "@/lib/capacity";
+import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendBookingCreated, sendStaffBookingAlert, sendGroupBookingNotice } from "@/lib/notifications";
 
 export async function POST(request: Request) {
@@ -21,6 +21,18 @@ export async function POST(request: Request) {
     }
     if (!isWalkin && (!name || !phone)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Sale-only SKUs (membership / package purchases) are POS transactions, not
+    // appointments. Creating one as a PENDING/CONFIRMED booking produces a
+    // "phantom" appointment that clutters schedules. Only POS may create them
+    // (always COMPLETED). Reject any other attempt here.
+    const reqStatus = body.status ?? "PENDING";
+    if (SALE_ONLY_SKUS.includes(serviceId) && reqStatus !== "COMPLETED") {
+      return NextResponse.json(
+        { error: "แพ็กเกจ/สมาชิกต้องขายผ่าน POS เท่านั้น (ไม่สามารถจองเป็นคิวได้)" },
+        { status: 400 },
+      );
     }
 
     // Walk-in: use whatever was provided; fall back to placeholder if blank
@@ -85,11 +97,11 @@ export async function POST(request: Request) {
           endTime,
           totalPrice,
           notes: notes || null,
-          status: body.status ?? "PENDING",
+          status: reqStatus,
           // "Create + checkout in one go": when the caller creates the booking
           // already COMPLETED, stamp completedAt with the booking's own day so
           // back-dated records land on the right day in sales history / payroll.
-          ...(body.status === "COMPLETED" ? { completedAt: new Date(date + "T12:00:00") } : {}),
+          ...(reqStatus === "COMPLETED" ? { completedAt: new Date(date + "T12:00:00") } : {}),
           ...(addonCreates.length > 0 ? { addons: { create: addonCreates } } : {}),
           ...(Array.isArray(extraStaffIds) && extraStaffIds.length > 0
             ? { extraStaff: { create: extraStaffIds.map((sid: string) => ({ staffId: sid })) } }

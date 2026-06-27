@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendBookingConfirmed, sendBookingTimeChanged, sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +29,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       completedAt, receiptUrl,
       extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
+
+    // Don't let an appointment be turned into a sale-only SKU (membership /
+    // package) unless it's also being completed — that would create a phantom
+    // appointment. Sale-only sales belong to POS (always COMPLETED).
+    if (serviceId !== undefined && SALE_ONLY_SKUS.includes(serviceId) && status !== "COMPLETED") {
+      return NextResponse.json(
+        { error: "ไม่สามารถเปลี่ยนคิวเป็นแพ็กเกจ/สมาชิกได้ (ขายผ่าน POS เท่านั้น)" },
+        { status: 400 },
+      );
+    }
 
     // Capture previous fields we need to compare after the update
     const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined;

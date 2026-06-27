@@ -34,7 +34,7 @@ type Db = Prisma.TransactionClient;
  * stylist. They shouldn't consume a chair / staff slot — exclude them from
  * the capacity snapshot.
  */
-const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU];
+export const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU];
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 

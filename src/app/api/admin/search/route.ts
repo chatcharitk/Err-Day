@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { SALE_ONLY_SKUS } from "@/lib/capacity";
 
 /**
  * GET /api/admin/search?q=...&limit=8
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
         customerId: { in: customers.map((c) => c.id) },
         date:       { gte: dayStart },
         status:     { notIn: ["CANCELLED", "COMPLETED", "NO_SHOW"] },
+        serviceId:  { notIn: SALE_ONLY_SKUS }, // hide membership/package purchases from the appointment preview
       },
       select: {
         id: true, customerId: true, date: true, startTime: true, endTime: true,

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { SALE_ONLY_SKUS } from "@/lib/capacity";
 
 /**
  * GET /api/customer/bookings?lineUserId=xxx
- * Returns the bookings belonging to the customer matching that LINE user ID.
+ * Returns the customer's appointment bookings (sale-only membership/package
+ * PURCHASES are excluded — they're transactions, not appointments).
  * Sorted upcoming-first, then past.
  */
 export async function GET(request: Request) {
@@ -24,7 +26,7 @@ export async function GET(request: Request) {
   }
 
   const bookings = await prisma.booking.findMany({
-    where: { customerId: customer.id },
+    where: { customerId: customer.id, serviceId: { notIn: SALE_ONLY_SKUS } },
     include: {
       branch:  { select: { id: true, name: true, address: true, phone: true } },
       service: { select: { id: true, name: true, nameTh: true, category: true } },
