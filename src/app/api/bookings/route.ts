@@ -23,11 +23,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Default status: admin/POS bookings (skipConflictCheck) are auto-CONFIRMED
+    // — the admin made them, no separate confirm step needed. Customer online
+    // bookings stay PENDING for the shop to review. An explicit body.status
+    // (e.g. COMPLETED from "checkout now") always wins.
+    const reqStatus = body.status ?? (skipConflictCheck ? "CONFIRMED" : "PENDING");
+
     // Sale-only SKUs (membership / package purchases) are POS transactions, not
     // appointments. Creating one as a PENDING/CONFIRMED booking produces a
     // "phantom" appointment that clutters schedules. Only POS may create them
     // (always COMPLETED). Reject any other attempt here.
-    const reqStatus = body.status ?? "PENDING";
     if (SALE_ONLY_SKUS.includes(serviceId) && reqStatus !== "COMPLETED") {
       return NextResponse.json(
         { error: "แพ็กเกจ/สมาชิกต้องขายผ่าน POS เท่านั้น (ไม่สามารถจองเป็นคิวได้)" },
