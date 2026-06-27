@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Keep-warm pinger
+#
+# Hits /api/warmup every ~5 minutes so the Vercel function (and its Neon
+# connection) stays hot, sparing real visitors the ~1.5–3s cold start.
+#
+# NOTE: GitHub Actions scheduled runs are best-effort and often delayed/dropped,
+# so this alone won't guarantee 5-minute warmth. For reliable warmth, also point
+# a free uptime monitor (UptimeRobot / cron-job.org) at the same URL. This repo
+# is public, so these Action minutes are free.
+#
+# Secret (already set, shared with the notifications cron):
+#   PRODUCTION_URL — e.g. "https://book.err-daysalon.com" (no trailing /)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Warm-up — keep functions warm
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 minutes (UTC; best-effort)
+  workflow_dispatch:
+
+concurrency:
+  group: warmup
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /api/warmup
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          BASE="${PRODUCTION_URL:-https://book.err-daysalon.com}"
+          BODY="$(curl --silent --show-error --max-time 25 "${BASE}/api/warmup?src=gha&cb=${RANDOM}")"
+          echo "warmup → ${BODY}"
