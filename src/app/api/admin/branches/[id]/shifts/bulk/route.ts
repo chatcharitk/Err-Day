@@ -92,6 +92,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         );
         if (!clash) deduped.push(c);
       }
+
+      // Replace any EXISTING shift that overlaps a create (same staff/day) so a
+      // create can never stack a second overlapping row — the server guarantee
+      // that mirrors the single-shift POST. (Covers stale-client / older-build
+      // cases where the client didn't send the existing shift in `delete`.)
+      const createStaff = [...new Set(deduped.map(c => c.staffId))];
+      const sortedDates = deduped.map(c => c.date).sort();
+      if (createStaff.length > 0) {
+        const spanStart = new Date(sortedDates[0] + "T00:00:00Z");
+        const spanEnd   = new Date(sortedDates[sortedDates.length - 1] + "T23:59:59Z");
+        const existing = await tx.staffShift.findMany({
+          where:  { staffId: { in: createStaff }, date: { gte: spanStart, lte: spanEnd } },
+          select: { id: true, staffId: true, date: true, startTime: true, endTime: true },
+        });
+        const overlapIds = existing.filter(e => {
+          const eDay = e.date.toISOString().slice(0, 10);
+          return deduped.some(c =>
+            c.staffId === e.staffId && c.date === eDay &&
+            timeToMins(e.startTime) < timeToMins(c.endTime) && timeToMins(e.endTime) > timeToMins(c.startTime),
+          );
+        }).map(e => e.id);
+        if (overlapIds.length > 0) {
+          await tx.staffShift.deleteMany({ where: { id: { in: overlapIds } } });
+        }
+      }
+
       const r = await tx.staffShift.createMany({
         data: deduped.map(c => ({
           staffId:   c.staffId,
