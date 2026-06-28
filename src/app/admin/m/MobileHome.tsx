@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -456,6 +456,15 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </button>
             </div>
             <div className="p-2">
+              <Link
+                href="/admin/m/live"
+                prefetch
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <Activity size={16} style={{ color: MUTED }} />
+                หน้าร้านสด — ลูกค้าต่อช่าง
+              </Link>
               <Link
                 href="/admin/m/dashboard"
                 prefetch

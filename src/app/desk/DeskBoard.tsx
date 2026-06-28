@@ -16,13 +16,8 @@ const GREEN   = "#166534";
 const GREENBG = "#F0FDF4";
 
 interface StaffItem { id: string; name: string }
-interface ServiceItem { id: string; nameTh: string; price: number; duration: number; category: string }
 interface BoardState { branchId: string; todayYmd: string; staff: StaffItem[]; bookings: DeskBooking[] }
 interface LoadRow { id: string; name: string; taken: number; inService: number; done: number }
-
-function fmtBaht(satang: number): string {
-  return `฿${(satang / 100).toLocaleString("th-TH")}`;
-}
 
 // Client-side mirror of desk.ts computeLoad — keeps the load strip live with
 // optimistic updates without pulling the server lib into the bundle.
@@ -43,11 +38,10 @@ function computeLoad(staff: StaffItem[], bookings: DeskBooking[]): LoadRow[] {
 }
 
 export default function DeskBoard({
-  branchName, initial, services,
+  branchName, initial,
 }: {
   branchName: string;
   initial: BoardState;
-  services: ServiceItem[];
 }) {
   const router = useRouter();
   const [board, setBoard]   = useState<BoardState>(initial);
@@ -256,7 +250,7 @@ export default function DeskBoard({
       )}
 
       {walkinOpen && (
-        <WalkinModal services={services} staff={board.staff}
+        <WalkinModal staff={board.staff}
           onClose={() => setWalkinOpen(false)}
           onDone={() => { setWalkinOpen(false); refresh(); }}
           onError={setError} />
@@ -388,27 +382,22 @@ function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: 
 
 // ── Walk-in modal ────────────────────────────────────────────────────────────────
 
-function WalkinModal({ services, staff, onClose, onDone, onError }: {
-  services: ServiceItem[]; staff: StaffItem[];
+// Walk-in is always wash & blow (สระไดร์) — no service picker. Tap the serving
+// staff to start immediately, or "ยังไม่ระบุช่าง" to drop it into the waiting
+// list for someone to pick up.
+function WalkinModal({ staff, onClose, onDone, onError }: {
+  staff: StaffItem[];
   onClose: () => void; onDone: () => void; onError: (msg: string) => void;
 }) {
-  const [serviceId, setServiceId] = useState("");
-  const [staffId, setStaffId]     = useState("");
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const grouped = useMemo(() => {
-    const out: Record<string, ServiceItem[]> = {};
-    for (const s of services) (out[s.category] ??= []).push(s);
-    return Object.entries(out);
-  }, [services]);
-
-  async function submit() {
-    if (!serviceId) { onError("กรุณาเลือกบริการ"); return; }
+  async function create(staffId: string) {
+    if (saving) return;
     setSaving(true);
     try {
       const res = await fetch("/api/kiosk/walkin", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, staffId: staffId || undefined }),
+        body: JSON.stringify(staffId ? { staffId } : {}),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -426,64 +415,35 @@ function WalkinModal({ services, staff, onClose, onDone, onError }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col">
         <div className="px-5 py-4 flex items-center justify-between flex-shrink-0" style={{ background: PRIMARY }}>
-          <h2 className="text-white font-bold text-lg flex items-center gap-2"><UserPlus size={20} /> ลูกค้าวอร์คอิน (Walk-in)</h2>
+          <h2 className="text-white font-bold text-lg flex items-center gap-2"><UserPlus size={20} /> ลูกค้าวอร์คอิน · สระไดร์</h2>
           <button onClick={onClose} className="text-white/80 p-1"><X size={24} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          <div>
-            <p className="text-sm font-bold mb-2" style={{ color: TEXT }}>1. เลือกบริการ</p>
-            <div className="space-y-3">
-              {grouped.map(([cat, items]) => (
-                <div key={cat}>
-                  <p className="text-xs font-semibold mb-1.5" style={{ color: PRIMARY }}>{cat}</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {items.map(s => {
-                      const sel = s.id === serviceId;
-                      return (
-                        <button key={s.id} onClick={() => setServiceId(s.id)}
-                          className="rounded-xl p-3 text-left active:scale-[0.98] transition-transform"
-                          style={{ background: sel ? "#FFF8F4" : "white", border: `1.5px solid ${sel ? PRIMARY : BORDER}` }}>
-                          <p className="text-sm font-semibold leading-tight" style={{ color: TEXT }}>{s.nameTh}</p>
-                          <p className="text-[11px] mt-1" style={{ color: MUTED }}>{s.duration} นาที</p>
-                          <p className="text-sm font-bold mt-0.5" style={{ color: PRIMARY }}>{fmtBaht(s.price)}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+        <div className="flex-1 overflow-y-auto p-5">
+          <p className="text-base font-bold mb-1" style={{ color: TEXT }}>ใครเป็นช่าง?</p>
+          <p className="text-xs mb-4" style={{ color: MUTED }}>แตะชื่อช่างเพื่อเริ่มบริการ หรือเลือก “ยังไม่ระบุช่าง”</p>
+          {saving ? (
+            <div className="flex items-center justify-center py-12" style={{ color: MUTED }}>
+              <Loader2 size={24} className="animate-spin" />
             </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-bold mb-2" style={{ color: TEXT }}>2. เลือกช่าง <span className="font-normal text-xs" style={{ color: MUTED }}>(ไม่บังคับ — เลือกทีหลังได้)</span></p>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => setStaffId("")}
-                className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                style={{ background: staffId === "" ? PRIMARY : "white", color: staffId === "" ? "white" : TEXT, border: `1.5px solid ${staffId === "" ? PRIMARY : BORDER}` }}>
-                ยังไม่ระบุ
-              </button>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {staff.map(s => (
-                <button key={s.id} onClick={() => setStaffId(s.id)}
-                  className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                  style={{ background: staffId === s.id ? PRIMARY : "white", color: staffId === s.id ? "white" : TEXT, border: `1.5px solid ${staffId === s.id ? PRIMARY : BORDER}` }}>
+                <button key={s.id} onClick={() => create(s.id)}
+                  className="py-5 rounded-2xl text-lg font-bold active:scale-95 transition-transform"
+                  style={{ background: PRIMARY, color: "white" }}>
                   {s.name}
                 </button>
               ))}
+              <button onClick={() => create("")}
+                className="py-5 rounded-2xl text-base font-semibold active:scale-95 transition-transform"
+                style={{ background: "white", color: TEXT, border: `1.5px solid ${BORDER}` }}>
+                ยังไม่ระบุช่าง
+              </button>
             </div>
-          </div>
-        </div>
-
-        <div className="p-4 flex-shrink-0" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <button onClick={submit} disabled={saving || !serviceId}
-            className="w-full py-3.5 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] transition-transform"
-            style={{ background: PRIMARY }}>
-            {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-            {staffId ? "บันทึก + เริ่มบริการ" : "บันทึกลูกค้าวอร์คอิน"}
-          </button>
+          )}
         </div>
       </div>
     </div>

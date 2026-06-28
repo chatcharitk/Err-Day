@@ -13,11 +13,13 @@ const BORDER  = "#E8D8CC";
 export interface LiveBoard extends DeskBoardData { branchName: string }
 
 export default function LiveView({
-  branches, activeBranchId, initialBoards,
+  branches, activeBranchId, initialBoards, basePath = "/admin/live",
 }: {
   branches: { id: string; name: string }[];
   activeBranchId: string;
   initialBoards: LiveBoard[];
+  /** Route prefix for branch-switch links — "/admin/live" (desktop) or "/admin/m/live" (mobile). */
+  basePath?: string;
 }) {
   const router = useRouter();
   const [boards, setBoards]   = useState<LiveBoard[]>(initialBoards);
@@ -56,7 +58,7 @@ export default function LiveView({
   function selectBranch(id: string) {
     const params = new URLSearchParams();
     if (id !== "all") params.set("branchId", id);
-    router.push(`/admin/live${params.toString() ? `?${params}` : ""}`);
+    router.push(`${basePath}${params.toString() ? `?${params}` : ""}`);
   }
 
   const options = [{ id: "all", label: "ทุกสาขา" }, ...branches.map(b => ({ id: b.id, label: b.name.replace(/^err\.day\s*/i, "") }))];

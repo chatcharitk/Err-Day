@@ -4,6 +4,10 @@ import { getKioskBranch } from "@/lib/kiosk-auth";
 import { addMinutes, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokNowHm, bangkokTodayYmd, bookingDateForYmd } from "@/lib/desk";
 
+// Walk-ins are always "wash & blow" (สระไดร์) — staff don't pick a service at
+// the counter. A serviceId in the body still overrides this if ever needed.
+const WALKIN_DEFAULT_SERVICE = "svc-walkin";
+
 /**
  * Walk-in: a customer arrives without a booking. Creates an appointment at the
  * current time for the chosen service, optionally already checked-in to the
@@ -15,10 +19,9 @@ export async function POST(request: Request) {
   const branch = await getKioskBranch();
   if (!branch) return NextResponse.json({ error: "Kiosk not armed" }, { status: 401 });
 
-  const { serviceId, staffId } = await request.json().catch(() => ({}));
-  if (typeof serviceId !== "string") {
-    return NextResponse.json({ error: "serviceId is required" }, { status: 400 });
-  }
+  const body = await request.json().catch(() => ({}));
+  const staffId = body.staffId;
+  const serviceId = typeof body.serviceId === "string" && body.serviceId ? body.serviceId : WALKIN_DEFAULT_SERVICE;
   if (SALE_ONLY_SKUS.includes(serviceId)) {
     return NextResponse.json({ error: "แพ็กเกจ/สมาชิกต้องขายผ่าน POS" }, { status: 400 });
   }
