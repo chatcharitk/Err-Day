@@ -330,6 +330,10 @@ model Booking {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   completedAt       DateTime?
+  /// Set when staff tap their name on the front-desk board (/desk) as the
+  /// customer arrives. null = not arrived yet. Distinguishes "checked-in / in
+  /// service" from a plain CONFIRMED booking without touching BookingStatus.
+  checkedInAt       DateTime?
   receiptUploadedAt DateTime?
   receiptUrl        String?
   branch            Branch         @relation(fields: [branchId], references: [id])

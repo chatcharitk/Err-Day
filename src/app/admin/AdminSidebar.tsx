@@ -24,11 +24,13 @@ import {
   Sparkles,
   Banknote,
   Wallet,
+  Activity,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const MENU = [
   { href: "/admin",            labelTh: "ภาพรวม",        label: "Dashboard",    icon: LayoutDashboard, exact: true,             ownerOnly: false },
+  { href: "/admin/live",       labelTh: "หน้าร้านสด",     label: "Live",         icon: Activity,                                  ownerOnly: false },
   { href: "/admin/pos",        labelTh: "POS",            label: "POS",          icon: ShoppingCart,                              ownerOnly: false },
   { href: "/admin/calendar",   labelTh: "ปฏิทิน",        label: "Calendar",     icon: Calendar,                                   ownerOnly: false },
   { href: "/admin/customers",  labelTh: "ลูกค้า",         label: "Customers",    icon: Users,                                     ownerOnly: false },

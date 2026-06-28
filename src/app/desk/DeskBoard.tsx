@@ -1,0 +1,491 @@
+"use client";
+
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+  UserPlus, RefreshCw, Settings, Check, Clock, Undo2, X, Loader2, CircleAlert,
+} from "lucide-react";
+import type { DeskBooking } from "@/lib/desk";
+
+const PRIMARY = "#8B1D24";
+const TEXT    = "#3B2A24";
+const MUTED   = "#A08070";
+const BORDER  = "#E8D8CC";
+const BG      = "#FDF8F3";
+const GREEN   = "#166534";
+const GREENBG = "#F0FDF4";
+
+interface StaffItem { id: string; name: string }
+interface ServiceItem { id: string; nameTh: string; price: number; duration: number; category: string }
+interface BoardState { branchId: string; todayYmd: string; staff: StaffItem[]; bookings: DeskBooking[] }
+interface LoadRow { id: string; name: string; taken: number; inService: number; done: number }
+
+function fmtBaht(satang: number): string {
+  return `฿${(satang / 100).toLocaleString("th-TH")}`;
+}
+
+// Client-side mirror of desk.ts computeLoad — keeps the load strip live with
+// optimistic updates without pulling the server lib into the bundle.
+function computeLoad(staff: StaffItem[], bookings: DeskBooking[]): LoadRow[] {
+  const map = new Map<string, LoadRow>(
+    staff.map(s => [s.id, { id: s.id, name: s.name, taken: 0, inService: 0, done: 0 }]),
+  );
+  for (const b of bookings) {
+    if (!b.staffId) continue;
+    const arrived = b.checkedInAt != null || b.deskStatus === "DONE";
+    if (!arrived) continue;
+    const row = map.get(b.staffId);
+    if (!row) continue;
+    row.taken += 1;
+    if (b.deskStatus === "DONE") row.done += 1; else row.inService += 1;
+  }
+  return Array.from(map.values());
+}
+
+export default function DeskBoard({
+  branchName, initial, services,
+}: {
+  branchName: string;
+  initial: BoardState;
+  services: ServiceItem[];
+}) {
+  const router = useRouter();
+  const [board, setBoard]   = useState<BoardState>(initial);
+  const [now, setNow]       = useState(() => Date.now());
+  const [walkinOpen, setWalkinOpen] = useState(false);
+  const [busy, setBusy]     = useState<Set<string>>(new Set());
+  const [error, setError]   = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // While an action is in flight, polling must not overwrite optimistic state.
+  const pendingRef = useRef(0);
+
+  const refresh = useCallback(async () => {
+    if (pendingRef.current > 0) return;
+    try {
+      setSyncing(true);
+      const res = await fetch("/api/kiosk/bookings", { cache: "no-store" });
+      if (res.status === 401) { router.replace("/desk/setup"); return; }
+      if (!res.ok) return;
+      const data = await res.json();
+      if (pendingRef.current > 0) return; // an action started mid-fetch
+      setBoard({ branchId: data.branchId, todayYmd: data.todayYmd, staff: data.staff, bookings: data.bookings });
+    } catch { /* keep last good state */ }
+    finally { setSyncing(false); }
+  }, [router]);
+
+  // Poll the board every 15s so the two devices + admin stay in sync.
+  useEffect(() => {
+    const id = setInterval(refresh, 15_000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  // 1s tick for the live clock + "in service for N min" labels.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Auto-dismiss the error toast.
+  useEffect(() => {
+    if (!error) return;
+    const id = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(id);
+  }, [error]);
+
+  function patchBooking(id: string, patch: Partial<DeskBooking>) {
+    setBoard(b => ({ ...b, bookings: b.bookings.map(x => x.id === id ? { ...x, ...patch } : x) }));
+  }
+
+  // Run a mutation: optimistic patch → POST → reconcile via refresh.
+  async function act(id: string, optimistic: Partial<DeskBooking>, url: string, body: object, errMsg: string) {
+    pendingRef.current += 1;
+    setBusy(s => new Set(s).add(id));
+    patchBooking(id, optimistic);
+    try {
+      const res = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? errMsg);
+      }
+    } catch {
+      setError(errMsg);
+    } finally {
+      pendingRef.current -= 1;
+      setBusy(s => { const n = new Set(s); n.delete(id); return n; });
+      refresh();
+    }
+  }
+
+  function checkin(b: DeskBooking, staff: StaffItem) {
+    act(b.id,
+      { staffId: staff.id, staffName: staff.name, checkedInAt: new Date().toISOString(),
+        deskStatus: "IN_SERVICE", status: b.status === "PENDING" ? "CONFIRMED" : b.status },
+      "/api/kiosk/checkin", { bookingId: b.id, staffId: staff.id }, "เช็คอินไม่สำเร็จ");
+  }
+  function finish(b: DeskBooking) {
+    act(b.id, { deskStatus: "DONE", status: "COMPLETED" },
+      "/api/kiosk/finish", { bookingId: b.id }, "บันทึกเสร็จสิ้นไม่สำเร็จ");
+  }
+  function undo(b: DeskBooking) {
+    const optimistic: Partial<DeskBooking> = b.deskStatus === "DONE"
+      ? { deskStatus: "IN_SERVICE", status: "CONFIRMED" }
+      : { deskStatus: "WAITING", checkedInAt: null };
+    act(b.id, optimistic, "/api/kiosk/undo", { bookingId: b.id }, "ย้อนกลับไม่สำเร็จ");
+  }
+
+  const waiting   = board.bookings.filter(b => b.deskStatus === "WAITING");
+  const inService = board.bookings.filter(b => b.deskStatus === "IN_SERVICE");
+  const done      = board.bookings.filter(b => b.deskStatus === "DONE");
+  const load      = useMemo(() => computeLoad(board.staff, board.bookings), [board.staff, board.bookings]);
+
+  const clockDate = new Date(now);
+  const timeStr = clockDate.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = clockDate.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long" });
+
+  return (
+    <main className="min-h-screen pb-16" style={{ background: BG }}>
+      {/* Header */}
+      <header className="sticky top-0 z-30 px-4 py-3" style={{ background: PRIMARY }}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-white text-xl font-bold leading-tight truncate">{branchName}</h1>
+            <p className="text-white/70 text-xs mt-0.5">{dateStr}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="text-right mr-1 hidden sm:block">
+              <p className="text-white text-2xl font-bold leading-none tabular-nums">{timeStr}</p>
+            </div>
+            <button onClick={() => setWalkinOpen(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl text-base font-bold active:scale-[0.98] transition-transform"
+              style={{ background: "white", color: PRIMARY }}>
+              <UserPlus size={20} /> เดินเข้า
+            </button>
+            <button onClick={refresh} title="รีเฟรช"
+              className="p-3 rounded-2xl text-white/90 active:scale-95 transition-transform"
+              style={{ border: "1px solid rgba(255,255,255,0.3)" }}>
+              <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
+            </button>
+            <a href="/desk/setup" title="ตั้งค่าอุปกรณ์"
+              className="p-3 rounded-2xl text-white/80 active:scale-95 transition-transform"
+              style={{ border: "1px solid rgba(255,255,255,0.3)" }}>
+              <Settings size={18} />
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 pt-4 space-y-5">
+        {/* Live staff-load strip */}
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: MUTED }}>
+            จำนวนลูกค้าวันนี้ (ต่อช่าง)
+          </h2>
+          {load.length === 0 ? (
+            <p className="text-sm px-1" style={{ color: MUTED }}>ยังไม่มีพนักงานในสาขานี้</p>
+          ) : (
+            <div className="flex gap-2.5 overflow-x-auto pb-1">
+              {[...load].sort((a, b) => b.taken - a.taken).map(s => (
+                <div key={s.id} className="flex-shrink-0 rounded-2xl bg-white px-4 py-3 text-center min-w-[104px]"
+                  style={{ border: `1.5px solid ${s.inService > 0 ? PRIMARY : BORDER}` }}>
+                  <p className="text-sm font-semibold truncate max-w-[120px]" style={{ color: TEXT }}>{s.name}</p>
+                  <p className="text-3xl font-extrabold leading-tight mt-0.5" style={{ color: s.taken > 0 ? PRIMARY : MUTED }}>
+                    {s.taken}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
+                    กำลังทำ {s.inService} · เสร็จ {s.done}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Waiting — primary action area */}
+        <section>
+          <SectionHeader title="รอเช็คอิน" count={waiting.length} color="#9A3412" />
+          {waiting.length === 0 ? (
+            <EmptyHint text="ไม่มีลูกค้าที่รอเช็คอิน" />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {waiting.map(b => (
+                <WaitingCard key={b.id} b={b} staff={board.staff} busy={busy.has(b.id)} onCheckin={checkin} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* In service + Done */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <section>
+            <SectionHeader title="กำลังบริการ" count={inService.length} color={PRIMARY} />
+            {inService.length === 0 ? (
+              <EmptyHint text="ยังไม่มีลูกค้าที่กำลังบริการ" />
+            ) : (
+              <div className="space-y-3">
+                {inService.map(b => (
+                  <InServiceCard key={b.id} b={b} now={now} busy={busy.has(b.id)} onFinish={finish} onUndo={undo} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <SectionHeader title="เสร็จสิ้นวันนี้" count={done.length} color={GREEN} />
+            {done.length === 0 ? (
+              <EmptyHint text="ยังไม่มีรายการที่เสร็จสิ้น" />
+            ) : (
+              <div className="space-y-2">
+                {done.map(b => (
+                  <DoneCard key={b.id} b={b} busy={busy.has(b.id)} onUndo={undo} />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* Error toast */}
+      {error && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium shadow-lg"
+          style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA" }}>
+          <CircleAlert size={16} /> {error}
+        </div>
+      )}
+
+      {walkinOpen && (
+        <WalkinModal services={services} staff={board.staff}
+          onClose={() => setWalkinOpen(false)}
+          onDone={() => { setWalkinOpen(false); refresh(); }}
+          onError={setError} />
+      )}
+    </main>
+  );
+}
+
+// ── Section helpers ────────────────────────────────────────────────────────────
+
+function SectionHeader({ title, count, color }: { title: string; count: number; color: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-2 px-1">
+      <h2 className="text-base font-bold" style={{ color: TEXT }}>{title}</h2>
+      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: color, color: "white" }}>
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function EmptyHint({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl bg-white px-4 py-6 text-center text-sm" style={{ color: MUTED, border: `1px solid ${BORDER}` }}>
+      {text}
+    </div>
+  );
+}
+
+function CustomerLine({ b }: { b: DeskBooking }) {
+  return (
+    <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
+      {b.customerName}
+      {b.customerNickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customerNickname})</span>}
+      {b.isWalkin && (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
+          style={{ background: "#FEF3C7", color: "#92400E" }}>เดินเข้า</span>
+      )}
+    </p>
+  );
+}
+
+// ── Cards ───────────────────────────────────────────────────────────────────────
+
+function WaitingCard({ b, staff, busy, onCheckin }: {
+  b: DeskBooking; staff: StaffItem[]; busy: boolean; onCheckin: (b: DeskBooking, s: StaffItem) => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-3.5" style={{ border: `1.5px solid ${BORDER}`, opacity: busy ? 0.6 : 1 }}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <CustomerLine b={b} />
+          <p className="text-sm mt-0.5" style={{ color: MUTED }}>{b.serviceName}</p>
+        </div>
+        <span className="text-sm font-bold tabular-nums flex-shrink-0 px-2 py-1 rounded-lg"
+          style={{ background: "#FFF8F4", color: PRIMARY }}>{b.startTime}</span>
+      </div>
+      {b.notes && <p className="text-xs mb-2 px-2 py-1 rounded-lg" style={{ background: "#FFFBEB", color: "#92400E" }}>📝 {b.notes}</p>}
+      <p className="text-[11px] font-semibold mb-1.5" style={{ color: MUTED }}>แตะชื่อช่างเมื่อลูกค้ามาถึง</p>
+      <div className="flex flex-wrap gap-2">
+        {staff.length === 0 && <span className="text-xs" style={{ color: MUTED }}>ยังไม่มีพนักงาน</span>}
+        {staff.map(s => (
+          <button key={s.id} disabled={busy} onClick={() => onCheckin(b, s)}
+            className="px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-transform disabled:opacity-50"
+            style={{ background: PRIMARY, color: "white" }}>
+            {s.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InServiceCard({ b, now, busy, onFinish, onUndo }: {
+  b: DeskBooking; now: number; busy: boolean; onFinish: (b: DeskBooking) => void; onUndo: (b: DeskBooking) => void;
+}) {
+  const mins = b.checkedInAt ? Math.max(0, Math.floor((now - Date.parse(b.checkedInAt)) / 60000)) : 0;
+  return (
+    <div className="rounded-2xl bg-white p-3.5" style={{ border: `2px solid ${PRIMARY}`, opacity: busy ? 0.6 : 1 }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <CustomerLine b={b} />
+          <p className="text-sm mt-0.5" style={{ color: MUTED }}>{b.serviceName} · {b.startTime}</p>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="text-sm font-bold px-2.5 py-1 rounded-lg" style={{ background: PRIMARY, color: "white" }}>
+              ช่าง {b.staffName ?? "—"}
+            </span>
+            <span className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
+              <Clock size={12} /> {mins} นาที
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-3">
+        <button disabled={busy} onClick={() => onFinish(b)}
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-base font-bold active:scale-[0.98] transition-transform disabled:opacity-50"
+          style={{ background: GREEN, color: "white" }}>
+          {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} เสร็จแล้ว
+        </button>
+        <button disabled={busy} onClick={() => onUndo(b)} title="ยกเลิกเช็คอิน"
+          className="flex items-center gap-1 px-3 py-3 rounded-xl text-xs font-semibold active:scale-95 transition-transform disabled:opacity-50"
+          style={{ border: `1px solid ${BORDER}`, color: MUTED }}>
+          <Undo2 size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: (b: DeskBooking) => void }) {
+  return (
+    <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-3" style={{ background: GREENBG, border: "1px solid #BBF7D0", opacity: busy ? 0.6 : 1 }}>
+      <Check size={18} style={{ color: GREEN }} className="flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>
+          {b.customerName}
+          {b.isWalkin && <span className="text-[10px] ml-1.5" style={{ color: MUTED }}>(เดินเข้า)</span>}
+        </p>
+        <p className="text-xs truncate" style={{ color: MUTED }}>{b.serviceName} · ช่าง {b.staffName ?? "—"}</p>
+      </div>
+      <button disabled={busy} onClick={() => onUndo(b)} title="ย้อนกลับ"
+        className="text-xs flex items-center gap-1 px-2 py-1.5 rounded-lg active:scale-95 transition-transform disabled:opacity-50"
+        style={{ color: MUTED }}>
+        <Undo2 size={14} /> ย้อนกลับ
+      </button>
+    </div>
+  );
+}
+
+// ── Walk-in modal ────────────────────────────────────────────────────────────────
+
+function WalkinModal({ services, staff, onClose, onDone, onError }: {
+  services: ServiceItem[]; staff: StaffItem[];
+  onClose: () => void; onDone: () => void; onError: (msg: string) => void;
+}) {
+  const [serviceId, setServiceId] = useState("");
+  const [staffId, setStaffId]     = useState("");
+  const [saving, setSaving]       = useState(false);
+
+  const grouped = useMemo(() => {
+    const out: Record<string, ServiceItem[]> = {};
+    for (const s of services) (out[s.category] ??= []).push(s);
+    return Object.entries(out);
+  }, [services]);
+
+  async function submit() {
+    if (!serviceId) { onError("กรุณาเลือกบริการ"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/kiosk/walkin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceId, staffId: staffId || undefined }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        onError(d.error ?? "บันทึกไม่สำเร็จ");
+        setSaving(false);
+        return;
+      }
+      onDone();
+    } catch {
+      onError("เกิดข้อผิดพลาด");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="px-5 py-4 flex items-center justify-between flex-shrink-0" style={{ background: PRIMARY }}>
+          <h2 className="text-white font-bold text-lg flex items-center gap-2"><UserPlus size={20} /> ลูกค้าเดินเข้า (Walk-in)</h2>
+          <button onClick={onClose} className="text-white/80 p-1"><X size={24} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div>
+            <p className="text-sm font-bold mb-2" style={{ color: TEXT }}>1. เลือกบริการ</p>
+            <div className="space-y-3">
+              {grouped.map(([cat, items]) => (
+                <div key={cat}>
+                  <p className="text-xs font-semibold mb-1.5" style={{ color: PRIMARY }}>{cat}</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {items.map(s => {
+                      const sel = s.id === serviceId;
+                      return (
+                        <button key={s.id} onClick={() => setServiceId(s.id)}
+                          className="rounded-xl p-3 text-left active:scale-[0.98] transition-transform"
+                          style={{ background: sel ? "#FFF8F4" : "white", border: `1.5px solid ${sel ? PRIMARY : BORDER}` }}>
+                          <p className="text-sm font-semibold leading-tight" style={{ color: TEXT }}>{s.nameTh}</p>
+                          <p className="text-[11px] mt-1" style={{ color: MUTED }}>{s.duration} นาที</p>
+                          <p className="text-sm font-bold mt-0.5" style={{ color: PRIMARY }}>{fmtBaht(s.price)}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-bold mb-2" style={{ color: TEXT }}>2. เลือกช่าง <span className="font-normal text-xs" style={{ color: MUTED }}>(ไม่บังคับ — เลือกทีหลังได้)</span></p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setStaffId("")}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                style={{ background: staffId === "" ? PRIMARY : "white", color: staffId === "" ? "white" : TEXT, border: `1.5px solid ${staffId === "" ? PRIMARY : BORDER}` }}>
+                ยังไม่ระบุ
+              </button>
+              {staff.map(s => (
+                <button key={s.id} onClick={() => setStaffId(s.id)}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  style={{ background: staffId === s.id ? PRIMARY : "white", color: staffId === s.id ? "white" : TEXT, border: `1.5px solid ${staffId === s.id ? PRIMARY : BORDER}` }}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 flex-shrink-0" style={{ borderTop: `1px solid ${BORDER}` }}>
+          <button onClick={submit} disabled={saving || !serviceId}
+            className="w-full py-3.5 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] transition-transform"
+            style={{ background: PRIMARY }}>
+            {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            {staffId ? "บันทึก + เริ่มบริการ" : "บันทึกลูกค้าเดินเข้า"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
