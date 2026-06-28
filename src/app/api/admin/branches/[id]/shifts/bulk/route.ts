@@ -19,6 +19,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { timeToMins } from "@/lib/capacity";
 
 interface CreateInput {
   staffId:   string;
@@ -80,8 +81,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     let created = 0;
     if (create.length > 0) {
+      // Drop overlapping entries for the same staff/day (keep the first) so a bad
+      // template can't insert two overlapping shifts for one person — which would
+      // make them cover extra slots and inflate capacity.
+      const deduped: CreateInput[] = [];
+      for (const c of create) {
+        const clash = deduped.some(k =>
+          k.staffId === c.staffId && k.date === c.date &&
+          timeToMins(k.startTime) < timeToMins(c.endTime) && timeToMins(k.endTime) > timeToMins(c.startTime),
+        );
+        if (!clash) deduped.push(c);
+      }
       const r = await tx.staffShift.createMany({
-        data: create.map(c => ({
+        data: deduped.map(c => ({
           staffId:   c.staffId,
           // Store at noon UTC of the local calendar day — matches what the
           // shifts API / capacity library reads.

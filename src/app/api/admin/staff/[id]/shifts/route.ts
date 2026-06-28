@@ -63,13 +63,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const staff = await prisma.staff.findUnique({ where: { id } });
     if (!staff) return NextResponse.json({ error: "Staff not found" }, { status: 404 });
 
-    const shift = await prisma.staffShift.create({
-      data: {
-        staffId:   id,
-        date:      new Date(date + "T12:00:00"), // noon local — same convention as bookings
-        startTime,
-        endTime,
-      },
+    // Replace any existing shift that OVERLAPS the new window on this day. The
+    // (staffId,date,startTime) unique key only blocks an exact-start duplicate,
+    // so editing a shift used to STACK a second overlapping row (e.g. 10:00–21:00
+    // + 12:00–21:00), making the staff cover extra time slots and inflating
+    // capacity. Non-overlapping split shifts (with a real gap) are preserved.
+    const [yy, mm, dd] = date.split("-").map(Number);
+    const dayStart = new Date(Date.UTC(yy, mm - 1, dd, 0, 0, 0));
+    const dayEnd   = new Date(Date.UTC(yy, mm - 1, dd, 23, 59, 59, 999));
+
+    const shift = await prisma.$transaction(async (tx) => {
+      const sameDay = await tx.staffShift.findMany({
+        where:  { staffId: id, date: { gte: dayStart, lte: dayEnd } },
+        select: { id: true, startTime: true, endTime: true },
+      });
+      const overlapIds = sameDay
+        .filter(s => timeToMins(s.startTime) < timeToMins(endTime) && timeToMins(s.endTime) > timeToMins(startTime))
+        .map(s => s.id);
+      if (overlapIds.length > 0) {
+        await tx.staffShift.deleteMany({ where: { id: { in: overlapIds } } });
+      }
+      return tx.staffShift.create({
+        data: {
+          staffId:   id,
+          date:      new Date(date + "T12:00:00"), // noon local — same convention as bookings
+          startTime,
+          endTime,
+        },
+      });
     });
     return NextResponse.json(shift, { status: 201 });
   } catch (error) {
