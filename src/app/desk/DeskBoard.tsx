@@ -161,7 +161,7 @@ export default function DeskBoard({
             <button onClick={() => setWalkinOpen(true)}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl text-base font-bold active:scale-[0.98] transition-transform"
               style={{ background: "white", color: PRIMARY }}>
-              <UserPlus size={20} /> เดินเข้า
+              <UserPlus size={20} /> วอร์คอิน
             </button>
             <button onClick={refresh} title="รีเฟรช"
               className="p-3 rounded-2xl text-white/90 active:scale-95 transition-transform"
@@ -293,7 +293,7 @@ function CustomerLine({ b }: { b: DeskBooking }) {
       {b.customerNickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customerNickname})</span>}
       {b.isWalkin && (
         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
-          style={{ background: "#FEF3C7", color: "#92400E" }}>เดินเข้า</span>
+          style={{ background: "#FEF3C7", color: "#92400E" }}>วอร์คอิน</span>
       )}
     </p>
   );
@@ -373,7 +373,7 @@ function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>
           {b.customerName}
-          {b.isWalkin && <span className="text-[10px] ml-1.5" style={{ color: MUTED }}>(เดินเข้า)</span>}
+          {b.isWalkin && <span className="text-[10px] ml-1.5" style={{ color: MUTED }}>(วอร์คอิน)</span>}
         </p>
         <p className="text-xs truncate" style={{ color: MUTED }}>{b.serviceName} · ช่าง {b.staffName ?? "—"}</p>
       </div>
@@ -428,7 +428,7 @@ function WalkinModal({ services, staff, onClose, onDone, onError }: {
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col">
         <div className="px-5 py-4 flex items-center justify-between flex-shrink-0" style={{ background: PRIMARY }}>
-          <h2 className="text-white font-bold text-lg flex items-center gap-2"><UserPlus size={20} /> ลูกค้าเดินเข้า (Walk-in)</h2>
+          <h2 className="text-white font-bold text-lg flex items-center gap-2"><UserPlus size={20} /> ลูกค้าวอร์คอิน (Walk-in)</h2>
           <button onClick={onClose} className="text-white/80 p-1"><X size={24} /></button>
         </div>
 
@@ -482,7 +482,7 @@ function WalkinModal({ services, staff, onClose, onDone, onError }: {
             className="w-full py-3.5 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99] transition-transform"
             style={{ background: PRIMARY }}>
             {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-            {staffId ? "บันทึก + เริ่มบริการ" : "บันทึกลูกค้าเดินเข้า"}
+            {staffId ? "บันทึก + เริ่มบริการ" : "บันทึกลูกค้าวอร์คอิน"}
           </button>
         </div>
       </div>

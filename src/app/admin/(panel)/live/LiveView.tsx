@@ -106,7 +106,20 @@ export default function LiveView({
 function BranchPanel({ board, showName }: { board: LiveBoard; showName: boolean }) {
   const inService = board.bookings.filter(b => b.deskStatus === "IN_SERVICE");
   const waiting   = board.bookings.filter(b => b.deskStatus === "WAITING");
-  const totalTaken = board.load.reduce((s, l) => s + l.taken, 0);
+
+  // Customers who arrived / were served today but have NO assigned stylist —
+  // they aren't in any staff card, so surface them on their own.
+  const arrivedNoStaff = board.bookings.filter(
+    b => !b.staffId && (b.checkedInAt != null || b.deskStatus === "DONE"),
+  );
+  const unassigned = {
+    taken:     arrivedNoStaff.length,
+    inService: arrivedNoStaff.filter(b => b.deskStatus !== "DONE").length,
+    done:      arrivedNoStaff.filter(b => b.deskStatus === "DONE").length,
+  };
+
+  const assignedTaken = board.load.reduce((s, l) => s + l.taken, 0);
+  const totalTaken = assignedTaken + unassigned.taken;
   const sortedLoad = [...board.load].sort((a, b) => b.taken - a.taken || b.inService - a.inService);
   const fewest = sortedLoad.length ? Math.min(...sortedLoad.map(l => l.taken)) : 0;
 
@@ -123,14 +136,15 @@ function BranchPanel({ board, showName }: { board: LiveBoard; showName: boolean 
         <SummaryChip label="รอเช็คอิน" value={waiting.length} />
       </div>
 
-      {/* Per-staff load cards */}
-      {sortedLoad.length === 0 ? (
+      {/* Per-staff load cards (+ a card for customers with no assigned stylist) */}
+      {sortedLoad.length === 0 && unassigned.taken === 0 ? (
         <p className="text-sm" style={{ color: MUTED }}>ยังไม่มีพนักงานในสาขานี้</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {sortedLoad.map(s => (
-            <StaffCard key={s.staffId} s={s} lightest={s.taken === fewest && totalTaken > 0} />
+            <StaffCard key={s.staffId} s={s} lightest={s.taken === fewest && assignedTaken > 0} />
           ))}
+          {unassigned.taken > 0 && <UnassignedCard u={unassigned} />}
         </div>
       )}
 
@@ -170,6 +184,23 @@ function StaffCard({ s, lightest }: { s: StaffLoad; lightest: boolean }) {
       <p className="text-4xl font-extrabold leading-tight mt-1" style={{ color: s.taken > 0 ? PRIMARY : MUTED }}>{s.taken}</p>
       <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
         <Users size={11} /> กำลังทำ {s.inService} · เสร็จ {s.done}
+      </p>
+    </div>
+  );
+}
+
+function UnassignedCard({ u }: { u: { taken: number; inService: number; done: number } }) {
+  return (
+    <div className="rounded-2xl p-4" style={{ border: "1.5px dashed #C2410C", background: "#FFF7ED" }}>
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-sm font-semibold truncate" style={{ color: "#9A3412" }}>ไม่ระบุช่าง</p>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: "#FFEDD5", color: "#9A3412" }}>
+          ต้องจัดช่าง
+        </span>
+      </div>
+      <p className="text-4xl font-extrabold leading-tight mt-1" style={{ color: "#C2410C" }}>{u.taken}</p>
+      <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
+        <Users size={11} /> กำลังทำ {u.inService} · เสร็จ {u.done}
       </p>
     </div>
   );

@@ -23,7 +23,9 @@ export function getCachedBranchServices(branchId: string) {
   return unstable_cache(
     async () => {
       const rows = await prisma.branchService.findMany({
-        where:   { branchId, isActive: true },
+        // Require the parent Service to be active too — a deactivated service
+        // whose BranchService row was left active must not leak into pickers.
+        where:   { branchId, isActive: true, service: { isActive: true } },
         orderBy: { service: { category: "asc" } },
         select: {
           serviceId: true,

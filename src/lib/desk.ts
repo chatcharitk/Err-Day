@@ -160,7 +160,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       staffId:          b.staffId,
       staffName:        b.staff?.name ?? null,
       checkedInAt:      b.checkedInAt ? b.checkedInAt.toISOString() : null,
-      customerName:     walkin ? "ลูกค้า Walk-in" : b.customer.name,
+      customerName:     walkin ? "ลูกค้าวอร์คอิน" : b.customer.name,
       customerNickname: walkin ? null : b.customer.nickname,
       customerPhone:    walkin ? null : b.customer.phone,
       isWalkin:         walkin,
