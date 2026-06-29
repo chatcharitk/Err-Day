@@ -68,15 +68,25 @@ export default function DeskBoard({
     finally { setSyncing(false); }
   }, [router]);
 
-  // Poll the board every 15s so the two devices + admin stay in sync.
+  // Poll the board every 20s so the two devices + admin stay in sync — but only
+  // while the screen is awake. A sleeping / backgrounded device stops polling
+  // (no DB load) and refreshes immediately when it wakes.
   useEffect(() => {
-    const id = setInterval(refresh, 15_000);
-    return () => clearInterval(id);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 20_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") { setNow(Date.now()); refresh(); }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, [refresh]);
 
-  // 1s tick for the live clock + "in service for N min" labels.
+  // The clock + "in service for N min" labels are minute-precision, so a 30s
+  // tick is plenty — avoids re-rendering the whole board every second (needless
+  // work that was noticeable on older in-store hardware).
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1_000);
+    const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
 

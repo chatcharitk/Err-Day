@@ -49,10 +49,15 @@ export default function LiveView({
     finally { setSyncing(false); }
   }, [activeBranchId]);
 
-  // Poll every 15s to mirror the in-store devices.
+  // Poll every 20s to mirror the in-store devices — paused while the tab is
+  // hidden, and refreshed immediately when it becomes visible again.
   useEffect(() => {
-    const id = setInterval(refresh, 15_000);
-    return () => clearInterval(id);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 20_000);
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, [refresh]);
 
   function selectBranch(id: string) {
