@@ -114,7 +114,7 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
     && (m.expiresAt == null || m.expiresAt > now)
     && (m.usagesAllowed === 0 || m.usagesUsed < m.usagesAllowed);
 
-  // Owner alert → in-app notification + Web Push (no longer a LINE DM).
+  // Owner alert → in-app notification + Web Push.
   await notifyAdmins({
     type:  "BOOKING_NEW",
     title: `จองใหม่ · ${branchShort}`,
@@ -125,6 +125,22 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
     href:     `/admin/m/${b.id}`,
     branchId: b.branchId,
   });
+
+  // Also DM the owners on LINE — kept as a reliable channel alongside in-app.
+  const lineText =
+`จองใหม่ - ${branchShort}
+
+👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
+📅 ${dateStr}
+⏰ ${b.startTime}–${b.endTime}
+💆 ${b.service.nameTh}
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}${isMember ? "\n🎟️ สมาชิก ✅" : ""}`;
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const r = await pushText(uid, lineText);
+      if (!r.ok) console.error("[notify] staff alert (LINE) failed", uid, r.error);
+    })
+  );
 }
 
 // ── Booking time-change notification (customer) ───────────────────────────────
@@ -229,7 +245,7 @@ export async function sendBookingCancelled(
     else        console.log("[notify] booking cancelled (customer) sent",    bookingId);
   }
 
-  // Owner alert → in-app notification + Web Push (no longer a LINE DM).
+  // Owner alert → in-app notification + Web Push.
   const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
   const who = opts?.byCustomer ? "ลูกค้ายกเลิกเอง" : "ยกเลิกโดยร้าน";
   await notifyAdmins({
@@ -241,6 +257,23 @@ export async function sendBookingCancelled(
     href:     `/admin/m/${b.id}`,
     branchId: b.branchId,
   });
+
+  // Also DM the owners on LINE — kept as a reliable channel alongside in-app.
+  const staffText =
+`❌ ยกเลิกการจอง - ${branchShort}
+(${who})
+
+👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
+📅 ${dateStr}
+⏰ ${b.startTime}–${b.endTime}
+💆 ${b.service.nameTh}
+👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
+  await Promise.all(
+    STAFF_LINE_IDS.map(async uid => {
+      const r = await pushText(uid, staffText);
+      if (!r.ok) console.error("[notify] booking cancelled (LINE) failed", uid, r.error);
+    })
+  );
 
   // Post to the branch's LINE group too (no-op if group not configured).
   await sendGroupBookingNotice(bookingId, "cancelled").catch(e => console.error("[notify] group cancel failed", e));
