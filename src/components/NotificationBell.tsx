@@ -78,16 +78,45 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
     } catch { /* keep last good */ }
   }, []);
 
+  // Ensure THIS device's current push subscription is registered on the server.
+  // iOS can rotate the subscription, so we re-sync whenever the app opens with
+  // permission granted — self-heals stale / missing / pruned subscriptions.
+  const ensureSubscribed = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!VAPID) return false;
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return false;
+      if (Notification.permission !== "granted") return false;
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID) as BufferSource,
+        });
+      }
+      const res = await fetch("/api/admin/push/subscribe", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub),
+      });
+      return res.ok;
+    } catch (e) {
+      console.error("[push] ensureSubscribed failed", e);
+      return false;
+    }
+  }, []);
+
   async function sendTest() {
     if (testing) return;
     setTesting(true); setTestMsg(null);
     try {
+      await ensureSubscribed(); // re-register this device first (self-heal)
       const res = await fetch("/api/admin/push/test", { method: "POST" });
       const d = await res.json().catch(() => ({}));
       setTestMsg(
-        d.configured === false ? "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า"
-        : d.sent > 0           ? "ส่งแล้ว — เช็คหน้าจอ"
-        :                        "ยังไม่มีอุปกรณ์ที่เปิดไว้",
+        !res.ok                  ? "ลองอีกครั้ง"
+        : d.configured === false ? "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า"
+        : d.sent > 0             ? "ส่งแล้ว — เช็คหน้าจอ"
+        :                          "ยังเปิดไม่ได้ — ลองปิด/เปิดแอปใหม่",
       );
     } catch {
       setTestMsg("ส่งไม่สำเร็จ");
@@ -106,33 +135,28 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
     return () => { clearTimeout(kick); clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, [refresh]);
 
-  // Register the service worker once (side-effect only — no setState here; the
-  // push permission state is seeded by the useState initializer above).
+  // Register the service worker, and if notifications are already granted, re-sync
+  // this device's subscription to the server (no setState here).
   useEffect(() => {
-    if ("serviceWorker" in navigator && "PushManager" in window) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      ensureSubscribed();
     }
-  }, []);
+  }, [ensureSubscribed]);
 
   async function enablePush() {
     if (busy) return;
     if (!VAPID) { alert("ยังไม่ได้ตั้งค่าคีย์การแจ้งเตือน (VAPID) บนเซิร์ฟเวอร์"); return; }
     setBusy(true);
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPush(perm);
-      if (perm !== "granted") return;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID) as BufferSource,
-      });
-      await fetch("/api/admin/push/subscribe", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub),
-      });
+      if (perm === "granted") { await ensureSubscribed(); refresh(); }
     } catch (e) {
-      console.error("[push] subscribe failed", e);
+      console.error("[push] enable failed", e);
     } finally {
       setBusy(false);
     }
