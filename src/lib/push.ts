@@ -29,6 +29,12 @@ export interface PushPayload {
 
 export interface PushSub { id: string; endpoint: string; p256dh: string; auth: string }
 
+/** True when server-side VAPID keys are present, i.e. the server can actually
+ *  send pushes. Surfaced in the admin UI so a missing-env misconfig is visible. */
+export function isPushConfigured(): boolean {
+  return !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+}
+
 /**
  * Send a web push to each subscription. Dead subscriptions (HTTP 404/410) are
  * pruned. No-op (with a warning) when VAPID isn't configured.

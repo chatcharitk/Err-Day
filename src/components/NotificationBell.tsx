@@ -49,6 +49,9 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
     return Notification.permission;
   });
   const [busy, setBusy]       = useState(false);
+  const [pushReady, setPushReady] = useState<boolean | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
 
   // Device capabilities — drives the right guidance (esp. iOS, where Web Push
   // only works after the app is installed to the Home Screen).
@@ -71,8 +74,27 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
       const data = await res.json();
       setItems(data.items);
       setUnread(data.unread);
+      setPushReady(typeof data.pushReady === "boolean" ? data.pushReady : null);
     } catch { /* keep last good */ }
   }, []);
+
+  async function sendTest() {
+    if (testing) return;
+    setTesting(true); setTestMsg(null);
+    try {
+      const res = await fetch("/api/admin/push/test", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      setTestMsg(
+        d.configured === false ? "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า"
+        : d.sent > 0           ? "ส่งแล้ว — เช็คหน้าจอ"
+        :                        "ยังไม่มีอุปกรณ์ที่เปิดไว้",
+      );
+    } catch {
+      setTestMsg("ส่งไม่สำเร็จ");
+    } finally {
+      setTesting(false);
+    }
+  }
 
   // Initial load + poll every 20s while visible; pause when hidden. The first
   // fetch is kicked via setTimeout so it isn't a synchronous setState-in-effect.
@@ -170,10 +192,24 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
 
             {/* Push setup state → the right guidance for this device. */}
             {push === "granted" ? (
-              <div className="px-4 py-2 text-[11px] flex items-center gap-1.5"
-                style={{ color: "#166534", background: "#F0FDF4", borderBottom: `1px solid ${BORDER}` }}>
-                <BellRing size={13} /> การแจ้งเตือนแบบเด้งเปิดอยู่บนเครื่องนี้แล้ว
-              </div>
+              pushReady === false ? (
+                <div className="px-4 py-2.5 text-[11px]" style={{ color: "#991B1B", background: "#FEF2F2", borderBottom: `1px solid ${BORDER}` }}>
+                  ⚠️ เปิดบนเครื่องนี้แล้ว แต่ <b>เซิร์ฟเวอร์ยังส่งไม่ได้</b> — ต้องตั้งค่า VAPID_PUBLIC_KEY และ VAPID_PRIVATE_KEY บน Vercel แล้ว Redeploy
+                </div>
+              ) : (
+                <div className="px-4 py-2 flex items-center justify-between gap-2"
+                  style={{ background: "#F0FDF4", borderBottom: `1px solid ${BORDER}` }}>
+                  <span className="text-[11px] flex items-center gap-1.5 min-w-0" style={{ color: "#166534" }}>
+                    <BellRing size={13} className="flex-shrink-0" />
+                    <span className="truncate">เปิดอยู่บนเครื่องนี้{testMsg ? ` · ${testMsg}` : ""}</span>
+                  </span>
+                  <button onClick={sendTest} disabled={testing}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-shrink-0 disabled:opacity-60"
+                    style={{ background: "white", color: PRIMARY, border: `1px solid ${BORDER}` }}>
+                    {testing ? "..." : "ส่งทดสอบ"}
+                  </button>
+                </div>
+              )
             ) : push === "denied" ? (
               <p className="px-4 py-2 text-[11px]" style={{ color: "#991B1B", background: "#FEF2F2" }}>
                 การแจ้งเตือนถูกปิดไว้ — เปิดที่ ตั้งค่า → การแจ้งเตือน → err·day

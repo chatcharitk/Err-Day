@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { isPushConfigured } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     unread,
+    pushReady: isPushConfigured(),
     items: items.map(i => ({
       ...i,
       readAt:    i.readAt ? i.readAt.toISOString() : null,
