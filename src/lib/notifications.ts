@@ -19,6 +19,7 @@ import { buildBookingFlex } from "@/lib/flex/booking";
 import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
 import { branchGroupId } from "@/lib/line-groups";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
+import { notifyAdmins } from "@/lib/notify-admin";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -102,39 +103,28 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
   });
   if (!b) return;
 
-  // Strip "err.day " prefix from branch name for a cleaner alert header
+  // Strip "err.day " prefix for a cleaner alert header.
   const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
-  const dateStr = b.date.toLocaleDateString("th-TH", {
-    weekday: "long", day: "numeric", month: "short", year: "numeric",
-  });
+  const dateStr = b.date.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
 
-  const m           = b.customer.membership;
-  const now         = new Date();
-  const isMember    = m != null
+  const m        = b.customer.membership;
+  const now      = new Date();
+  const isMember = m != null
     && !m.pendingActivation
     && (m.expiresAt == null || m.expiresAt > now)
     && (m.usagesAllowed === 0 || m.usagesUsed < m.usagesAllowed);
-  const memberLine  = isMember
-    ? `🎟️ สมาชิก: ✅ ใช้งานได้ (หมดอายุ ${m!.expiresAt ? formatDateTh(m!.expiresAt) : "ตลอดชีพ"})`
-    : `🎟️ สมาชิก: ❌ ไม่ใช่สมาชิก`;
 
-  const text =
-`จองใหม่ - ${branchShort}
-
-👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
-📅 ${dateStr}
-⏰ ${b.startTime}–${b.endTime}
-💆 ${b.service.nameTh}
-👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}
-${memberLine}`;
-
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const r = await pushText(uid, text);
-      if (!r.ok) console.error("[notify] staff alert failed", uid, r.error);
-      else console.log("[notify] staff alert sent", uid);
-    })
-  );
+  // Owner alert → in-app notification + Web Push (no longer a LINE DM).
+  await notifyAdmins({
+    type:  "BOOKING_NEW",
+    title: `จองใหม่ · ${branchShort}`,
+    body:
+      `${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}\n` +
+      `${dateStr} ${b.startTime}–${b.endTime} · ${b.service.nameTh} · ${b.staff?.name ?? "ไม่ระบุช่าง"}` +
+      (isMember ? " · 🎟️สมาชิก" : ""),
+    href:     `/admin/m/${b.id}`,
+    branchId: b.branchId,
+  });
 }
 
 // ── Booking time-change notification (customer) ───────────────────────────────
@@ -239,26 +229,18 @@ export async function sendBookingCancelled(
     else        console.log("[notify] booking cancelled (customer) sent",    bookingId);
   }
 
-  // Staff alert
+  // Owner alert → in-app notification + Web Push (no longer a LINE DM).
   const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
   const who = opts?.byCustomer ? "ลูกค้ายกเลิกเอง" : "ยกเลิกโดยร้าน";
-  const staffText =
-`❌ ยกเลิกการจอง - ${branchShort}
-(${who})
-
-👤 ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}
-📅 ${dateStr}
-⏰ ${b.startTime}–${b.endTime}
-💆 ${b.service.nameTh}
-👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
-
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const rs = await pushText(uid, staffText);
-      if (!rs.ok) console.error("[notify] booking cancelled (staff) failed", uid, rs.error);
-      else        console.log("[notify] booking cancelled (staff) sent",    uid);
-    })
-  );
+  await notifyAdmins({
+    type:  "BOOKING_CANCELLED",
+    title: `ยกเลิกการจอง · ${branchShort}`,
+    body:
+      `(${who}) ${b.customer.name}${b.customer.nickname ? ` (${b.customer.nickname})` : ""} · ${b.customer.phone}\n` +
+      `${dateStr} ${b.startTime}–${b.endTime} · ${b.service.nameTh} · ${b.staff?.name ?? "ไม่ระบุช่าง"}`,
+    href:     `/admin/m/${b.id}`,
+    branchId: b.branchId,
+  });
 
   // Post to the branch's LINE group too (no-op if group not configured).
   await sendGroupBookingNotice(bookingId, "cancelled").catch(e => console.error("[notify] group cancel failed", e));
@@ -414,15 +396,12 @@ export async function sendStaffShiftSummary(): Promise<{ status: string; count: 
     ? "— ยังไม่มีตารางงานสำหรับวันพรุ่งนี้ —"
     : [...byBranch.entries()].map(([bn, lines]) => `📍 ${bn}\n${lines.join("\n")}`).join("\n\n");
 
-  const text = `👥 ตารางงานพรุ่งนี้\n${fmtGroupDate(tomorrowNoon)}\n\n${body}`;
-
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const r = await pushText(uid, text);
-      if (!r.ok) console.error("[notify] shift summary failed", uid, r.error);
-      else        console.log("[notify] shift summary sent", uid);
-    })
-  );
+  await notifyAdmins({
+    type:  "SUMMARY",
+    title: "👥 ตารางงานพรุ่งนี้",
+    body:  `${fmtGroupDate(tomorrowNoon)}\n\n${body}`,
+    href:  "/admin/m/shifts",
+  });
   return { status: "SENT", count: shifts.length };
 }
 
@@ -797,15 +776,12 @@ export async function sendOwnerPayrollSummary(): Promise<{ status: string; total
   }
 
   const body = sections.length === 0 ? "— วันนี้ยังไม่มีค่ามือ/OT —" : sections.join("\n\n");
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const text = `💰 สรุปค่าตอบแทนวันนี้ (ยอด ณ เวลาส่ง)\nวันที่ ${today}\nรวมทั้งหมด ${baht(grand)}\n\n${body}\n\nยอดล่าสุด/กดจ่าย: ${appUrl}/admin/payroll`;
 
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const r = await pushText(uid, text);
-      if (!r.ok) console.error("[notify] payroll summary failed", uid, r.error);
-      else        console.log("[notify] payroll summary sent", uid);
-    })
-  );
+  await notifyAdmins({
+    type:  "PAYROLL",
+    title: `💰 ค่าตอบแทนวันนี้ · รวม ${baht(grand)}`,
+    body:  `วันที่ ${today}\n\n${body}`,
+    href:  "/admin/m/payroll",
+  });
   return { status: "SENT", total: grand };
 }

@@ -8,6 +8,7 @@ import {
   Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import NotificationBell from "@/components/NotificationBell";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -179,6 +180,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
             <span className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>Admin</span>
           </div>
           <div className="flex items-center gap-1">
+            <NotificationBell variant="light" />
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}

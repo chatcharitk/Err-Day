@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Prompt, Cormorant_Garamond } from "next/font/google";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { LiffProvider } from "@/components/LiffProvider";
@@ -22,6 +22,14 @@ const cormorant = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: "err.day — นัดหมายออนไลน์",
   description: "จองคิวนัดหมายที่ err.day salon ได้ง่ายๆ ออนไลน์",
+  // PWA: installable to the Home Screen (required for iOS Web Push).
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "err.day", statusBarStyle: "default" },
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#8B1D24",
 };
 
 export default function RootLayout({

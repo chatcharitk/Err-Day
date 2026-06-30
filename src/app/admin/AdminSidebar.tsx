@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
+import NotificationBell from "@/components/NotificationBell";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -72,7 +73,10 @@ export default function AdminSidebar({ role = "ADMIN", name }: AdminSidebarProps
     >
       {/* Branding */}
       <div className="px-5 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        <BrandLogo light size="lg" />
+        <div className="flex items-start justify-between">
+          <BrandLogo light size="lg" />
+          <NotificationBell variant="dark" />
+        </div>
         <p className="text-white/40 font-medium mt-1 text-xs tracking-widest uppercase">Admin Panel</p>
       </div>
 

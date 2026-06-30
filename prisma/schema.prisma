@@ -361,15 +361,54 @@ model BookingAddon {
 }
 
 model AdminUser {
-  id        String         @id @default(cuid())
-  username  String         @unique
-  password  String
-  name      String
-  role      AdminRole      @default(ADMIN)
-  isActive  Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  sessions  AdminSession[]
+  id            String              @id @default(cuid())
+  username      String              @unique
+  password      String
+  name          String
+  role          AdminRole           @default(ADMIN)
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  sessions      AdminSession[]
+  notifications AdminNotification[]
+  pushSubs      PushSubscription[]
+}
+
+/// In-app notification feed for the owner/admin dashboard — the web-app
+/// replacement for owner LINE DMs (new booking, cancellation, nightly summary,
+/// payroll). One row per (event × recipient admin); readAt = null means unread.
+model AdminNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  /// Deep link opened when the notification is tapped (e.g. /admin/m/<id>).
+  href      String?
+  branchId  String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+/// Web Push subscription for an admin device (installed PWA). One row per
+/// browser/device; endpoint is unique. Dead subscriptions (404/410 on send) are
+/// pruned by the push sender.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  user       AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model AdminSession {
