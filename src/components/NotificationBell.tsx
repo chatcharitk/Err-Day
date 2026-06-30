@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X, Check, BellRing, Loader2 } from "lucide-react";
 
@@ -49,6 +49,20 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
     return Notification.permission;
   });
   const [busy, setBusy]       = useState(false);
+
+  // Device capabilities — drives the right guidance (esp. iOS, where Web Push
+  // only works after the app is installed to the Home Screen).
+  const env = useMemo(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      return { supported: false, ios: false, standalone: false };
+    }
+    const nav = navigator as Navigator & { standalone?: boolean };
+    const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || nav.standalone === true;
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    return { supported, ios, standalone };
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -154,17 +168,37 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
               </div>
             </div>
 
-            {push !== "granted" && push !== "unsupported" && push !== "unknown" && push !== "denied" && (
+            {/* Push setup state → the right guidance for this device. */}
+            {push === "granted" ? (
+              <div className="px-4 py-2 text-[11px] flex items-center gap-1.5"
+                style={{ color: "#166534", background: "#F0FDF4", borderBottom: `1px solid ${BORDER}` }}>
+                <BellRing size={13} /> การแจ้งเตือนแบบเด้งเปิดอยู่บนเครื่องนี้แล้ว
+              </div>
+            ) : push === "denied" ? (
+              <p className="px-4 py-2 text-[11px]" style={{ color: "#991B1B", background: "#FEF2F2" }}>
+                การแจ้งเตือนถูกปิดไว้ — เปิดที่ ตั้งค่า → การแจ้งเตือน → err·day
+              </p>
+            ) : env.supported ? (
               <button onClick={enablePush} disabled={busy}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-left disabled:opacity-60"
                 style={{ background: "#FFF8F4", color: PRIMARY, borderBottom: `1px solid ${BORDER}` }}>
                 {busy ? <Loader2 size={15} className="animate-spin" /> : <BellRing size={15} />}
                 เปิดการแจ้งเตือนแบบเด้งบนเครื่องนี้
               </button>
-            )}
-            {push === "denied" && (
-              <p className="px-4 py-2 text-[11px]" style={{ color: "#991B1B", background: "#FEF2F2" }}>
-                การแจ้งเตือนถูกปิดไว้ — เปิดได้ในการตั้งค่าของเบราว์เซอร์/เครื่อง
+            ) : env.ios && !env.standalone ? (
+              <div className="px-4 py-3 text-xs" style={{ background: "#FFF8F4", borderBottom: `1px solid ${BORDER}` }}>
+                <p className="font-bold mb-1.5" style={{ color: PRIMARY }}>📲 ติดตั้งแอปก่อน เพื่อรับการแจ้งเตือนแบบเด้งบน iPhone</p>
+                <ol className="list-decimal pl-4 space-y-1" style={{ color: TEXT }}>
+                  <li>เปิดหน้านี้ใน <b>Safari</b></li>
+                  <li>กดปุ่ม <b>แชร์</b> (รูปสี่เหลี่ยมมีลูกศรขึ้น ด้านล่างจอ)</li>
+                  <li>เลื่อนลง เลือก <b>“เพิ่มไปยังหน้าจอโฮม”</b> (Add to Home Screen)</li>
+                  <li>เปิดแอป <b>err·day</b> จากหน้าจอโฮม แล้วกดกระดิ่งนี้ → <b>เปิดการแจ้งเตือน</b></li>
+                </ol>
+                <p className="mt-1.5 text-[10px]" style={{ color: MUTED }}>ต้องเป็น iPhone iOS 16.4 ขึ้นไป</p>
+              </div>
+            ) : (
+              <p className="px-4 py-2 text-[11px]" style={{ color: MUTED, background: "#FAFAFA" }}>
+                เบราว์เซอร์นี้ยังไม่รองรับการแจ้งเตือนแบบเด้ง — ใช้บนมือถือที่ติดตั้งแอป (iPhone iOS 16.4+ / Android)
               </p>
             )}
 
