@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Camera, Loader2, X, ImageIcon } from "lucide-react";
+import { resizeImageFile } from "@/lib/resize-image";
 
 interface Props {
   /** Logical kind of upload — used for the storage path. */
@@ -34,8 +35,9 @@ export default function ImageUpload({ kind, ref: refId, value, onChange, shape =
     if (!file) return;
     setBusy(true); setErr("");
     try {
+      const resized = await resizeImageFile(file);   // shrink to fit the 4.5MB upload limit
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", resized);
       const res = await fetch(`/api/upload?kind=${kind}&ref=${encodeURIComponent(refId)}`, {
         method: "POST",
         body:   fd,

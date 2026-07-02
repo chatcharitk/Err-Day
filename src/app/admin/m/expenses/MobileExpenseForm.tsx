@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Upload, FileEdit, Sparkles, Plus, Trash2, ImageIcon } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
+import { resizeImageFile } from "@/lib/resize-image";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -78,8 +79,9 @@ export default function MobileExpenseForm({ mode, branches, initial }: Props) {
   // ── Upload + OCR ─────────────────────────────────────────────────────────
   async function handleScanFile(file: File) {
     setScanning(true); setScanMsg(null); setError("");
+    const resized = await resizeImageFile(file);   // shrink to fit the 4.5MB upload limit
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", resized);
     try {
       const res = await fetch("/api/admin/expenses/scan", { method: "POST", body: form });
       const data = await res.json();

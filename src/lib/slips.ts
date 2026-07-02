@@ -15,7 +15,7 @@
  * out the wrong appointment on its own.
  */
 
-import { put } from "@vercel/blob";
+import { storeImage } from "@/lib/upload";
 import { prisma } from "@/lib/prisma";
 import { getLineMessageContent } from "@/lib/line-messaging";
 import { parseSlipImage } from "@/lib/slip-ocr";
@@ -152,13 +152,8 @@ export async function captureSlipFromLine(args: {
     return { status: "download_failed" };
   }
 
-  const ext  = content.contentType.includes("png") ? "png" : "jpg";
-  const blob = await put(`slips/${branchId}/${messageId}.${ext}`, content.buffer, {
-    access:          "public",
-    contentType:     content.contentType,
-    addRandomSuffix: false,
-    allowOverwrite:  true,
-  });
+  const ext = content.contentType.includes("png") ? "png" : "jpg";
+  const imageUrl = await storeImage(`slips/${branchId}/${messageId}.${ext}`, content.buffer, content.contentType);
 
   // 3. OCR (best-effort — an unreadable slip still lands in the review queue).
   let amount: number | null = null;
@@ -193,7 +188,7 @@ export async function captureSlipFromLine(args: {
   const slip = await prisma.paymentSlip.update({
     where: { lineMessageId: messageId },
     data: {
-      imageUrl:  blob.url,
+      imageUrl,
       amount,
       transferAt,
       bankName,

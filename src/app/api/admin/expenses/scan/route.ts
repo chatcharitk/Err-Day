@@ -12,7 +12,8 @@
  * and the receiptUrl from this response.
  */
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { randomUUID } from "node:crypto";
+import { storeImage } from "@/lib/upload";
 import { requireAdmin } from "@/lib/admin-auth";
 import { parseInvoiceImage } from "@/lib/expense-ocr";
 
@@ -33,17 +34,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `unsupported type: ${file.type}` }, { status: 400 });
   }
 
-  // ── 1. Upload to Vercel Blob ────────────────────────────────────────────
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-  const key = `expense/${Date.now()}.${ext}`;
-  const blob = await put(key, file, {
-    access:           "public",
-    contentType:      file.type,
-    addRandomSuffix:  true,
-  });
-
-  // ── 2. Convert to base64 for Claude vision ──────────────────────────────
+  // ── 1. Read bytes once (used for both the R2 upload and OCR) ─────────────
   const buffer = Buffer.from(await file.arrayBuffer());
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+  const key = `expense/${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
+  const receiptUrl = await storeImage(key, buffer, file.type);
+
+  // ── 2. Base64 for Claude vision ─────────────────────────────────────────
   const imageBase64 = buffer.toString("base64");
 
   // ── 3. Parse with Claude ────────────────────────────────────────────────
@@ -52,15 +49,15 @@ export async function POST(request: Request) {
       imageBase64,
       file.type as "image/jpeg" | "image/png" | "image/webp",
     );
-    return NextResponse.json({ receiptUrl: blob.url, parsed });
+    return NextResponse.json({ receiptUrl, parsed });
   } catch (e) {
     console.error("[expenses/scan] OCR failed", e);
     // Image is still uploaded — return the URL so admin can fill in manually.
     return NextResponse.json(
       {
-        receiptUrl: blob.url,
-        parsed:     null,
-        error:      e instanceof Error ? e.message : "OCR failed",
+        receiptUrl,
+        parsed: null,
+        error:  e instanceof Error ? e.message : "OCR failed",
       },
       { status: 200 },  // not a fatal error — admin can still proceed manually
     );

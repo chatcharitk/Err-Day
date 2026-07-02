@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { storeImage } from "@/lib/upload";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
@@ -31,13 +31,8 @@ export async function POST(request: Request) {
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const key = `${kind}/${ref}/${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
 
-  const blob = await put(key, file, {
-    access:           "public",
-    contentType:      file.type,
-    addRandomSuffix:  false,
-    allowOverwrite:   true,
-  });
-
-  return NextResponse.json({ url: blob.url });
+  const uploadedUrl = await storeImage(key, buffer, file.type);
+  return NextResponse.json({ url: uploadedUrl });
 }

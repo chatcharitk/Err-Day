@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, FileEdit, Sparkles, Trash2, Plus, ImageIcon } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
+import { resizeImageFile } from "@/lib/resize-image";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -78,8 +79,9 @@ export default function ExpenseForm({ mode, branches, initial }: Props) {
     setScanning(true);
     setScanMsg(null);
     setError("");
+    const resized = await resizeImageFile(file);   // shrink to fit the 4.5MB upload limit
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", resized);
     try {
       const res = await fetch("/api/admin/expenses/scan", { method: "POST", body: form });
       const data = await res.json();
