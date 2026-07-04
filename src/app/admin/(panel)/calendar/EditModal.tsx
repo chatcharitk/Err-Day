@@ -38,6 +38,7 @@ export default function EditModal({
   const [checkedOut,      setCheckedOut]      = useState(booking.status === "COMPLETED");
   const [currentStatus,   setCurrentStatus]   = useState(booking.status);
   const [statusError,     setStatusError]     = useState("");
+  const [paidAt,          setPaidAt]          = useState(booking.paidAt);
 
   function toggleExtraStaff(id: string) {
     setExtraStaffIds(prev =>
@@ -100,6 +101,27 @@ export default function EditModal({
       setCurrentStatus(prevStatus);
       setCheckedOut(prevCheckedOut);
       setStatusError("ไม่สามารถอัปเดตสถานะได้ — ลองอีกครั้ง");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Mark paid — admin action, separate from "finished" (desk เสร็จแล้ว ≠ paid). */
+  async function markPaid() {
+    const iso = new Date().toISOString();
+    setSaving(true);
+    setStatusError("");
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paidAt: iso }),
+      });
+      if (!res.ok) throw new Error("update failed");
+      setPaidAt(iso);
+      onSaved();
+    } catch {
+      setStatusError("ไม่สามารถบันทึกการชำระได้ — ลองอีกครั้ง");
     } finally {
       setSaving(false);
     }
@@ -189,8 +211,23 @@ export default function EditModal({
             </div>
           )}
           {checkedOut && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center text-green-700 font-medium text-sm">
-              ✓ ชำระเงินแล้ว — เสร็จสิ้น
+            <div>
+              {paidAt ? (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center text-green-700 font-medium text-sm">
+                  ✓ เสร็จสิ้น — ชำระเงินแล้ว
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <span className="text-amber-700 font-medium text-sm">เสร็จสิ้น — ยังไม่ชำระ</span>
+                  <button onClick={markPaid} disabled={saving}
+                    className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50">
+                    ✓ รับชำระแล้ว
+                  </button>
+                </div>
+              )}
+              {statusError && (
+                <p className="text-xs text-red-600 mt-2">{statusError}</p>
+              )}
             </div>
           )}
           {!checkedOut && (

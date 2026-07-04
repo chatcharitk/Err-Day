@@ -381,6 +381,13 @@ function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: 
         </p>
         <p className="text-xs truncate" style={{ color: MUTED }}>{b.serviceName} · ช่าง {b.staffName ?? "—"}</p>
       </div>
+      {/* Read-only payment badge — only admin flows can mark a booking paid. */}
+      {!b.paidAt && (
+        <span className="text-[11px] font-semibold px-2 py-1 rounded-lg flex-shrink-0"
+          style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }}>
+          ยังไม่ชำระ
+        </span>
+      )}
       <button disabled={busy} onClick={() => onUndo(b)} title="ย้อนกลับ"
         className="text-xs flex items-center gap-1 px-2 py-1.5 rounded-lg active:scale-95 transition-transform disabled:opacity-50"
         style={{ color: MUTED }}>

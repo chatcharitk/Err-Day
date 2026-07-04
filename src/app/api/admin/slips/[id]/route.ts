@@ -49,7 +49,7 @@ export async function PATCH(
 
     const booking = await prisma.booking.findUnique({
       where:  { id: bookingId },
-      select: { id: true, status: true, completedAt: true },
+      select: { id: true, status: true, completedAt: true, paidAt: true },
     });
     if (!booking) return NextResponse.json({ error: "ไม่พบคิวที่เลือก" }, { status: 404 });
     if (booking.status === "CANCELLED" || booking.status === "NO_SHOW") {
@@ -67,6 +67,8 @@ export async function PATCH(
           // Preserve an existing completion time if the booking was already
           // checked out and we're just attaching the receipt.
           completedAt: booking.completedAt ?? now,
+          // Confirming a transfer slip = payment received.
+          paidAt:      booking.paidAt ?? now,
         },
       }),
       prisma.paymentSlip.update({

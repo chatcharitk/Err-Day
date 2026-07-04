@@ -29,6 +29,8 @@ interface BookingItem {
   status: string;
   totalPrice: number;
   notes: string | null;
+  /** ISO — payment received. null on a COMPLETED booking = ยังไม่ชำระ. */
+  paidAt: string | null;
   serviceId: string;
   service: { name: string; nameTh: string; category: string };
   customer: { id: string; name: string; nickname: string | null; phone: string };

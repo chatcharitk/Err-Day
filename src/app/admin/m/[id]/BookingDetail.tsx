@@ -36,6 +36,7 @@ interface Booking {
   totalPrice:    number;
   notes:         string | null;
   receiptUrl:    string | null;
+  paidAt:        string | null; // ISO — null = ยังไม่ชำระ
   isMember:      boolean;
   addons: { id: string; addonId: string; name: string; price: number }[];
 }
@@ -57,6 +58,14 @@ function computeMemberPrice(svc: Service): number | null {
 }
 
 interface Staff { id: string; name: string; }
+
+/** "4 ก.ค. 14:36" — Bangkok time for the paid stamp. */
+function fmtPaidAt(iso: string): string {
+  return new Date(iso).toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok", day: "numeric", month: "short",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
 
 interface Addon { id: string; nameTh: string; price: number; }
 
@@ -153,6 +162,14 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Mark paid / un-paid. Admin-only by construction — the desk board has no
+   *  session that can reach this PATCH route. */
+  const setPaid = async (paid: boolean) => {
+    const iso = paid ? new Date().toISOString() : null;
+    const updated = await patch({ paidAt: iso });
+    if (updated) setB((x) => ({ ...x, paidAt: iso }));
   };
 
   const setStaff = async (staffId: string | null) => {
@@ -570,6 +587,32 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         </div>
       </section>
 
+      {/* ── Payment status — staff "เสร็จแล้ว" at the desk does NOT mean paid ── */}
+      <section className="px-4 mt-3">
+        {b.paidAt ? (
+          <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+            <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: "#166534" }}>
+              <Check size={15} /> ชำระแล้ว
+              <span className="font-normal text-xs" style={{ color: "#15803D" }}>{fmtPaidAt(b.paidAt)}</span>
+            </p>
+            <button onClick={() => setPaid(false)} disabled={busy}
+              className="text-xs px-2 py-1 rounded-lg disabled:opacity-50"
+              style={{ color: MUTED, border: `1px solid ${BORDER}` }}>
+              ยกเลิก
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
+            <p className="text-sm font-semibold" style={{ color: "#B45309" }}>ยังไม่ชำระ</p>
+            <button onClick={() => setPaid(true)} disabled={busy}
+              className="flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-xl text-white disabled:opacity-50"
+              style={{ background: "#166534" }}>
+              <Check size={15} /> รับชำระแล้ว
+            </button>
+          </div>
+        )}
+      </section>
+
       {/* ── Receipt ── */}
       <section className="px-4 mt-5">
         <ImageUpload
@@ -579,7 +622,8 @@ export default function BookingDetail({ booking: initial, branchServices, branch
           label="ใบเสร็จ / สลิปโอนเงิน"
           onChange={async (url) => {
             const updated = await patch({ receiptUrl: url });
-            if (updated) setB(x => ({ ...x, receiptUrl: url }));
+            // Attaching a receipt also stamps paidAt server-side — mirror it.
+            if (updated) setB(x => ({ ...x, receiptUrl: url, paidAt: updated.paidAt ?? x.paidAt }));
           }}
         />
       </section>

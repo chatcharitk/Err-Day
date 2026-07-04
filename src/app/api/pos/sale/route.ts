@@ -102,6 +102,9 @@ export async function POST(request: Request) {
           totalPrice,
           notes:      fullNotes || existing.notes,
           completedAt: now,
+          // POS checkout = money received. Keep an earlier payment time if a
+          // transfer slip was already confirmed for this booking.
+          paidAt:      existing.paidAt ?? now,
         },
         include: { branch: true, customer: true },
       });
@@ -199,6 +202,7 @@ export async function POST(request: Request) {
         notes:       fullNotes || null,
         status:      "COMPLETED",
         completedAt: now,
+        paidAt:      now, // walk-in POS sale is paid on the spot
       },
       include: { branch: true, customer: true },
     });

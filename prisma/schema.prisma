@@ -334,6 +334,10 @@ model Booking {
   /// customer arrives. null = not arrived yet. Distinguishes "checked-in / in
   /// service" from a plain CONFIRMED booking without touching BookingStatus.
   checkedInAt       DateTime?
+  /// Payment received. Set only by admin flows (POS checkout, slip confirm,
+  /// receipt upload, explicit mark-paid) — the desk board's "finished" flips
+  /// status to COMPLETED but never touches this: COMPLETED ≠ paid.
+  paidAt            DateTime?
   receiptUploadedAt DateTime?
   receiptUrl        String?
   branch            Branch         @relation(fields: [branchId], references: [id])

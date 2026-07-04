@@ -106,7 +106,10 @@ export async function POST(request: Request) {
           // "Create + checkout in one go": when the caller creates the booking
           // already COMPLETED, stamp completedAt with the booking's own day so
           // back-dated records land on the right day in sales history / payroll.
-          ...(reqStatus === "COMPLETED" ? { completedAt: new Date(date + "T12:00:00") } : {}),
+          // An admin recording an already-finished sale means it was paid too.
+          ...(reqStatus === "COMPLETED"
+            ? { completedAt: new Date(date + "T12:00:00"), paidAt: new Date(date + "T12:00:00") }
+            : {}),
           ...(addonCreates.length > 0 ? { addons: { create: addonCreates } } : {}),
           ...(Array.isArray(extraStaffIds) && extraStaffIds.length > 0
             ? { extraStaff: { create: extraStaffIds.map((sid: string) => ({ staffId: sid })) } }

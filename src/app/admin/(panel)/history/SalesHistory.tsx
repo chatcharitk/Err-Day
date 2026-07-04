@@ -22,7 +22,8 @@ interface SaleRecord {
   notes: string | null;
   branchId: string;
   serviceId: string;
-  completedAt: string | null; // ISO UTC — when payment was processed via POS
+  completedAt: string | null; // ISO UTC — when the service finished
+  paidAt:      string | null; // ISO UTC — when payment was received (null = ยังไม่ชำระ)
   branch:   { id: string; name: string };
   service:  { name: string; nameTh: string };
   staff:    { id: string; name: string } | null;
@@ -107,12 +108,15 @@ function bkkDateStr(iso: string): string {
  * Date used for filtering and grouping in Sales History.
  *
  * Sales History is an accounting view, so for COMPLETED bookings we use the
- * actual payment timestamp (`completedAt`) — that's when the cash arrived.
- * For everything else (pending / confirmed / cancelled / no-show), we fall
- * back to the appointment date.
+ * payment timestamp (`paidAt`) — that's when the cash arrived. Unpaid-but-
+ * finished bookings fall back to the completion time, and everything else
+ * (pending / confirmed / cancelled / no-show) to the appointment date.
  */
 function effectiveDateOf(s: SaleRecord): string {
-  if (s.status === "COMPLETED" && s.completedAt) return bkkDateStr(s.completedAt);
+  if (s.status === "COMPLETED") {
+    const t = s.paidAt ?? s.completedAt;
+    if (t) return bkkDateStr(t);
+  }
   return s.date.slice(0, 10);
 }
 
@@ -138,7 +142,7 @@ interface EditModalProps {
 function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalProps) {
   const [status,      setStatus]      = useState(sale.status);
   const [date,        setDate]        = useState(sale.date.slice(0, 10));
-  const [completedAt, setCompletedAt] = useState(sale.completedAt ? utcToBkkInput(sale.completedAt) : "");
+  const [paidAt,      setPaidAt]      = useState(sale.paidAt ? utcToBkkInput(sale.paidAt) : "");
   const [price,       setPrice]       = useState(String(sale.totalPrice / 100));
   const [staffId,     setStaffId]     = useState(sale.staff?.id ?? "");
   const [notes,       setNotes]       = useState(sale.notes ?? "");
@@ -154,13 +158,18 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
     setSaving(true);
     setError("");
     try {
+      // Only send paidAt when the admin actually edited the field — the modal
+      // state can be stale (page revalidates every 30s; POS / slip confirm can
+      // pay the booking while this tab is open), and an explicit paidAt in the
+      // PATCH body always wins, so an untouched field must stay omitted.
+      const initialPaidAt = sale.paidAt ? utcToBkkInput(sale.paidAt) : "";
       const res = await fetch(`/api/bookings/${sale.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status,
           date,
-          completedAt: completedAt ? bkkInputToUtc(completedAt) : null,
+          ...(paidAt !== initialPaidAt ? { paidAt: paidAt ? bkkInputToUtc(paidAt) : null } : {}),
           totalPrice: Math.round(Number(price) * 100),
           staffId: staffId || null,
           notes: notes || null,
@@ -176,6 +185,7 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
         status:      updated.status,
         date:        updated.date,
         completedAt: updated.completedAt,
+        paidAt:      updated.paidAt,
         totalPrice:  updated.totalPrice,
         staff:       updated.staff ? { id: updated.staff.id, name: updated.staff.name } : null,
         notes:       updated.notes,
@@ -297,12 +307,12 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
               </label>
               <input
                 type="datetime-local"
-                value={completedAt}
-                onChange={e => setCompletedAt(e.target.value)}
+                value={paidAt}
+                onChange={e => setPaidAt(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border"
-                style={{ borderColor: BORDER, color: completedAt ? TEXT : MUTED }}
+                style={{ borderColor: BORDER, color: paidAt ? TEXT : MUTED }}
               />
-              {!completedAt && (
+              {!paidAt && (
                 <p className="text-xs mt-1" style={{ color: MUTED }}>ว่างไว้ = ยังไม่ได้ชำระ</p>
               )}
             </div>
@@ -403,11 +413,14 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
 function SummaryBar({ sales }: { sales: SaleRecord[] }) {
   const completed  = sales.filter(s => s.status === "COMPLETED");
   const revenue    = completed.reduce((sum, s) => sum + s.totalPrice, 0);
+  const unpaid     = completed.filter(s => !s.paidAt);
+  const unpaidSum  = unpaid.reduce((sum, s) => sum + s.totalPrice, 0);
   const pending    = sales.filter(s => s.status === "PENDING" || s.status === "CONFIRMED").length;
   const cancelled  = sales.filter(s => s.status === "CANCELLED" || s.status === "NO_SHOW").length;
 
-  const cards = [
-    { label: "รายได้รวม (เสร็จสิ้น)", value: fmt(revenue), color: PRIMARY },
+  const cards: { label: string; value: string; color: string; sub?: string }[] = [
+    { label: "รายได้รวม (เสร็จสิ้น)", value: fmt(revenue), color: PRIMARY,
+      sub: unpaid.length > 0 ? `ยังไม่ชำระ ${fmt(unpaidSum)} · ${unpaid.length} รายการ` : undefined },
     { label: "รายการเสร็จสิ้น",       value: String(completed.length), color: "#1D4ED8" },
     { label: "รอดำเนินการ",           value: String(pending),          color: "#B45309" },
     { label: "ยกเลิก / ไม่มา",       value: String(cancelled),        color: "#991B1B" },
@@ -419,6 +432,7 @@ function SummaryBar({ sales }: { sales: SaleRecord[] }) {
         <div key={c.label} className="rounded-2xl p-4" style={{ background: "white", border: `1.5px solid ${BORDER}` }}>
           <p className="text-xs mb-1" style={{ color: MUTED }}>{c.label}</p>
           <p className="text-xl font-semibold" style={{ color: c.color }}>{c.value}</p>
+          {c.sub && <p className="text-[11px] mt-1 font-medium" style={{ color: "#B45309" }}>{c.sub}</p>}
         </div>
       ))}
     </div>
@@ -572,7 +586,7 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
       s.staff?.name ?? "-",
       STATUS_LABEL[s.status] ?? s.status,
       s.totalPrice / 100,
-      s.completedAt ? utcToBkkInput(s.completedAt).replace("T", " ") : "",
+      s.paidAt ? utcToBkkInput(s.paidAt).replace("T", " ") : "",
       (s.notes ?? "").replace(/\s+/g, " ").trim(),
       s.id,
     ]);
@@ -832,11 +846,15 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                               {sale.startTime}
                             </p>
                             <p className="text-[10px]" style={{ color: MUTED }}>{sale.endTime}</p>
-                            {sale.completedAt && (
+                            {sale.paidAt ? (
                               <p className="text-[10px] mt-0.5" style={{ color: "#16a34a" }}>
-                                💳 {fmtInvoiceTime(sale.completedAt)}
+                                💳 {fmtInvoiceTime(sale.paidAt)}
                               </p>
-                            )}
+                            ) : sale.status === "COMPLETED" ? (
+                              <p className="text-[10px] mt-0.5 font-semibold" style={{ color: "#B45309" }}>
+                                ยังไม่ชำระ
+                              </p>
+                            ) : null}
                           </td>
 
                           {/* Customer */}

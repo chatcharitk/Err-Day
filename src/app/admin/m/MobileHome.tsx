@@ -33,6 +33,8 @@ interface BookingRow {
   endTime:           string;
   status:            Status;
   totalPrice:        number;
+  /** Payment received (paidAt set). COMPLETED without this = ยังไม่ชำระ. */
+  isPaid:            boolean;
   /** Member-adjusted price for display in the overview list. Equals totalPrice for non-members. */
   displayPrice:      number;
   /** True when displayPrice < totalPrice (member rate is cheaper than saved). */
@@ -152,8 +154,13 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
 
   const visibleBookings = bookings.filter((b) => b.status !== "CANCELLED");
   const cancelledCount  = bookings.length - visibleBookings.length;
+  // "จ่ายแล้ว" = money actually received: COMPLETED alone no longer implies
+  // paid (desk เสร็จแล้ว ≠ ชำระ) — finished-but-unpaid gets its own line.
   const paidRevenue     = visibleBookings
-    .filter((b) => b.status === "COMPLETED")
+    .filter((b) => b.status === "COMPLETED" && b.isPaid)
+    .reduce((sum, b) => sum + b.displayPrice, 0);
+  const unpaidRevenue   = visibleBookings
+    .filter((b) => b.status === "COMPLETED" && !b.isPaid)
     .reduce((sum, b) => sum + b.displayPrice, 0);
   const pendingRevenue  = visibleBookings
     .filter((b) => b.status === "CONFIRMED" || b.status === "PENDING")
@@ -272,11 +279,16 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
       <section className="px-5 pt-5 pb-2">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-lg font-medium" style={{ color: TEXT }}>{headline}</h1>
-          {(paidRevenue > 0 || pendingRevenue > 0) && (
+          {(paidRevenue > 0 || unpaidRevenue > 0 || pendingRevenue > 0) && (
             <div className="text-right">
               {paidRevenue > 0 && (
                 <p className="text-sm font-semibold leading-tight" style={{ color: "#166534" }}>
                   จ่ายแล้ว ฿{(paidRevenue / 100).toLocaleString()}
+                </p>
+              )}
+              {unpaidRevenue > 0 && (
+                <p className="text-xs font-semibold leading-tight mt-0.5" style={{ color: "#B45309" }}>
+                  ยังไม่ชำระ ฿{(unpaidRevenue / 100).toLocaleString()}
                 </p>
               )}
               {pendingRevenue > 0 && (
@@ -394,10 +406,15 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                           )}
                           <span
                             className="text-xs font-semibold"
-                            style={{ color: b.status === "COMPLETED" ? "#166534" : MUTED }}
+                            style={{ color: b.status === "COMPLETED" && b.isPaid ? "#166534" : MUTED }}
                           >
                             ฿{(b.displayPrice / 100).toLocaleString()}
                           </span>
+                          {b.status === "COMPLETED" && !b.isPaid && (
+                            <span className="text-[10px] font-semibold block" style={{ color: "#B45309" }}>
+                              ยังไม่ชำระ
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>

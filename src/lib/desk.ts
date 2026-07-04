@@ -63,6 +63,9 @@ export interface DeskBooking {
   staffId:          string | null;
   staffName:        string | null;
   checkedInAt:      string | null; // ISO
+  /** ISO — payment received (admin-only flows set this). null on a DONE
+   *  booking = finished but not paid yet; the board shows a read-only badge. */
+  paidAt:           string | null;
   customerName:     string;
   customerNickname: string | null;
   customerPhone:    string | null; // null for anonymous walk-ins
@@ -141,7 +144,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       orderBy: [{ startTime: "asc" }, { createdAt: "asc" }],
       select: {
         id: true, startTime: true, endTime: true, status: true,
-        staffId: true, checkedInAt: true, notes: true,
+        staffId: true, checkedInAt: true, paidAt: true, notes: true,
         service:  { select: { name: true, nameTh: true } },
         customer: { select: { name: true, nickname: true, phone: true } },
         staff:    { select: { id: true, name: true } },
@@ -160,6 +163,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       staffId:          b.staffId,
       staffName:        b.staff?.name ?? null,
       checkedInAt:      b.checkedInAt ? b.checkedInAt.toISOString() : null,
+      paidAt:           b.paidAt ? b.paidAt.toISOString() : null,
       customerName:     walkin ? "ลูกค้าวอร์คอิน" : b.customer.name,
       customerNickname: walkin ? null : b.customer.nickname,
       customerPhone:    walkin ? null : b.customer.phone,

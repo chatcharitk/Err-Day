@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const body = await request.json();
     const {
       status, staffId, notes, startTime, endTime, totalPrice, serviceId, date,
-      completedAt, receiptUrl,
+      completedAt, receiptUrl, paidAt,
       extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
 
@@ -40,10 +40,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       );
     }
 
-    // Capture previous fields we need to compare after the update
-    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined;
+    // Capture previous fields we need to compare after the update (paidAt so a
+    // receipt upload preserves an earlier payment time instead of re-stamping).
+    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined || !!receiptUrl;
     const prev = needsPrev
-      ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true, customerId: true } })
+      ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true, customerId: true, paidAt: true } })
       : null;
 
     // Update extra staff if provided
@@ -74,7 +75,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(receiptUrl     !== undefined ? {
           receiptUrl: receiptUrl || null,
           receiptUploadedAt: receiptUrl ? new Date() : null,
+          // A receipt/slip attached by an admin is payment evidence — stamp
+          // paidAt (keeping an earlier payment time). Clearing the receipt
+          // leaves paidAt alone; un-pay explicitly via the paidAt field.
+          ...(receiptUrl ? { paidAt: prev?.paidAt ?? new Date() } : {}),
         } : {}),
+        // Explicit mark-paid / un-paid (admin-only route). Placed after the
+        // receipt spread so an explicit value always wins.
+        ...(paidAt         !== undefined ? { paidAt: paidAt ? new Date(paidAt) : null } : {}),
       },
       include: { branch: true, service: true, staff: true, customer: true },
     });
