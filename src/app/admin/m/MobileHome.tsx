@@ -35,6 +35,8 @@ interface BookingRow {
   totalPrice:        number;
   /** Payment received (paidAt set). COMPLETED without this = ยังไม่ชำระ. */
   isPaid:            boolean;
+  /** ISO — customer arrived / in the chair (set by the desk board check-in). */
+  checkedInAt:       string | null;
   /** Member-adjusted price for display in the overview list. Equals totalPrice for non-members. */
   displayPrice:      number;
   /** True when displayPrice < totalPrice (member rate is cheaper than saved). */
@@ -420,6 +422,14 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-semibold leading-tight truncate" style={{ color: TEXT }}>{b.customerName}</span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: meta.bg, color: meta.fg }}>{meta.label}</span>
+                          {/* Desk check-in: customer arrived and is in the chair */}
+                          {b.checkedInAt && b.status !== "COMPLETED" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 inline-flex items-center gap-0.5"
+                              style={{ background: "#FFF8F4", color: PRIMARY, border: `1px solid #F3D9CE` }}>
+                              <Clock size={8} />
+                              กำลังทำ {new Date(b.checkedInAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
                           {b.memberStatus === "active" && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 inline-flex items-center gap-0.5" style={{ background: "#F0FDF4", color: "#166534" }}>
                               <Sparkles size={8} />

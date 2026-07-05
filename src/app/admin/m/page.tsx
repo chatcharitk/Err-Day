@@ -55,10 +55,11 @@ export default async function MobileHomePage({
             id:         true,
             startTime:  true,
             endTime:    true,
-            status:     true,
-            totalPrice: true,
-            paidAt:     true,
-            serviceId:  true,
+            status:      true,
+            totalPrice:  true,
+            paidAt:      true,
+            checkedInAt: true,
+            serviceId:   true,
             service:    {
               select: {
                 nameTh:                true,
@@ -177,6 +178,7 @@ export default async function MobileHomePage({
       status:       b.status,
       totalPrice:   b.totalPrice,
       isPaid:       b.paidAt != null,
+      checkedInAt:  b.checkedInAt ? b.checkedInAt.toISOString() : null,
       displayPrice,
       hasMemberDiscount,
       serviceName:  b.service.nameTh,
