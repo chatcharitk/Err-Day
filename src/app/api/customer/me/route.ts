@@ -16,7 +16,9 @@ export async function GET(request: Request) {
 
   const customer = await prisma.customer.findUnique({
     where: { lineUserId },
-    select: { id: true, name: true, phone: true, email: true },
+    // nickname + dateOfBirth included so the booking form pre-fills them for
+    // returning customers (nickname was expected by the form but missing here).
+    select: { id: true, name: true, nickname: true, phone: true, email: true, dateOfBirth: true },
   });
 
   return NextResponse.json(customer ?? null);

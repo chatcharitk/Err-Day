@@ -55,7 +55,7 @@ export default function PrivacyPage() {
 
           <Section no={1} title="ข้อมูลที่เราเก็บ">
             <ul className="list-disc list-inside space-y-1">
-              <li>ชื่อ-นามสกุล, เพศ</li>
+              <li>ชื่อ-นามสกุล, เพศ, วันเกิด</li>
               <li>เบอร์โทรศัพท์, อีเมล</li>
               <li>Line User ID (กรณีเชื่อมต่อผ่าน LINE)</li>
               <li>ประวัติการจองและการใช้บริการ</li>

@@ -186,6 +186,7 @@ function AddCustomerModal({ onClose, onSaved }: {
   const [phone,    setPhone]    = useState("");
   const [email,    setEmail]    = useState("");
   const [gender,   setGender]   = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
 
@@ -199,11 +200,12 @@ function AddCustomerModal({ onClose, onSaved }: {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          name:     name.trim(),
-          nickname: nickname.trim() || null,
-          phone:    phone.trim(),
-          email:    email.trim() || null,
-          gender:   gender || null,
+          name:        name.trim(),
+          nickname:    nickname.trim() || null,
+          phone:       phone.trim(),
+          email:       email.trim() || null,
+          gender:      gender || null,
+          dateOfBirth: dateOfBirth || null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "เกิดข้อผิดพลาด");
@@ -270,6 +272,15 @@ function AddCustomerModal({ onClose, onSaved }: {
                 placeholder="example@email.com"
                 className="w-full px-3 py-2 text-sm rounded-xl border"
                 style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>วันเกิด (ไม่บังคับ)</label>
+              <input
+                value={dateOfBirth} type="date"
+                onChange={e => setDateOfBirth(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-xl border bg-white"
+                style={{ borderColor: BORDER, color: dateOfBirth ? TEXT : MUTED }}
               />
             </div>
             <div>

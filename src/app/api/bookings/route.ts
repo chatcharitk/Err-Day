@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       branchId, serviceId, staffId, date, startTime, endTime,
-      totalPrice, name, nickname, phone, email, notes, addonIds,
+      totalPrice, name, nickname, phone, email, dateOfBirth, notes, addonIds,
       lineUserId, linePictureUrl, lineDisplayName, // from Line LIFF
       skipConflictCheck,            // trusted flag for POS / admin use
       isWalkin,                     // admin flag — skip customer info, use placeholder
@@ -69,13 +69,16 @@ export async function POST(request: Request) {
         if (!result.ok) return { ok: false as const, result };
       }
 
-      // Upsert customer by phone, linking Line account + picture if provided
+      // Upsert customer by phone, linking Line account + picture if provided.
+      // dateOfBirth only writes when provided — a blank form field never wipes
+      // a stored birthday (same rule as the membership signup API).
       const customer = await tx.customer.upsert({
         where: { phone: finalPhone },
         update: {
           name: finalName,
           ...(nickname          ? { nickname }                      : {}),
           email: email || undefined,
+          ...(dateOfBirth       ? { dateOfBirth: new Date(dateOfBirth) } : {}),
           ...(lineUserId        ? { lineUserId }                    : {}),
           ...(linePictureUrl    ? { pictureUrl: linePictureUrl }    : {}),
           ...(lineDisplayName   ? { lineDisplayName }               : {}),
@@ -85,6 +88,7 @@ export async function POST(request: Request) {
           phone: finalPhone,
           ...(nickname          ? { nickname }                      : {}),
           email: email || undefined,
+          ...(dateOfBirth       ? { dateOfBirth: new Date(dateOfBirth) } : {}),
           ...(lineUserId        ? { lineUserId }                    : {}),
           ...(linePictureUrl    ? { pictureUrl: linePictureUrl }    : {}),
           ...(lineDisplayName   ? { lineDisplayName }               : {}),

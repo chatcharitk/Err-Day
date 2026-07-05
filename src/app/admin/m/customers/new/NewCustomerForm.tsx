@@ -16,6 +16,7 @@ export default function NewCustomerForm() {
   const [phone,       setPhone]       = useState("");
   const [email,       setEmail]       = useState("");
   const [gender,      setGender]      = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [pdpaConsent, setPdpa]        = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState("");
@@ -31,8 +32,8 @@ export default function NewCustomerForm() {
       // else fall back to admin/customers (basic create).
       const url = pdpaConsent ? "/api/membership/signup" : "/api/admin/customers";
       const body = pdpaConsent
-        ? { name, nickname: nickname || undefined, phone, email: email || undefined, gender: gender || undefined, pdpaConsent: true, source: "staff" }
-        : { name, nickname: nickname || undefined, phone, email: email || undefined, gender: gender || undefined };
+        ? { name, nickname: nickname || undefined, phone, email: email || undefined, gender: gender || undefined, dateOfBirth: dateOfBirth || undefined, pdpaConsent: true, source: "staff" }
+        : { name, nickname: nickname || undefined, phone, email: email || undefined, gender: gender || undefined, dateOfBirth: dateOfBirth || undefined };
 
       const res  = await fetch(url, {
         method:  "POST",
@@ -102,6 +103,15 @@ export default function NewCustomerForm() {
             placeholder="ไม่บังคับ"
             className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
             style={{ borderColor: BORDER, color: TEXT }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>วันเกิด</label>
+          <input
+            type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none bg-white"
+            style={{ borderColor: BORDER, color: dateOfBirth ? TEXT : MUTED }}
           />
         </div>
 

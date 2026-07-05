@@ -19,6 +19,7 @@ export default function SignupForm() {
   const [phone,   setPhone]   = useState("");
   const [email,   setEmail]   = useState("");
   const [gender,  setGender]  = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [pdpa,    setPdpa]    = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
@@ -41,6 +42,7 @@ export default function SignupForm() {
           phone:       phone.trim(),
           email:       email.trim() || undefined,
           gender:      gender || undefined,
+          dateOfBirth: dateOfBirth || undefined,
           pdpaConsent: pdpa,
           source:      "signup",
         }),
@@ -196,6 +198,20 @@ export default function SignupForm() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Date of birth */}
+          <div>
+            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>
+              วันเกิด (ไม่บังคับ)
+            </label>
+            <input
+              type="date"
+              value={dateOfBirth}
+              onChange={e => setDateOfBirth(e.target.value)}
+              className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none bg-white"
+              style={{ borderColor: BORDER, color: dateOfBirth ? TEXT : MUTED }}
+            />
           </div>
 
           {/* PDPA */}

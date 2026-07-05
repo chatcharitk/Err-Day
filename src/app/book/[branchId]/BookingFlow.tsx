@@ -199,8 +199,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const [selectedTime, setSelectedTime] = useState("");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string; nickname: string }>(
-    { name: "", phone: "", email: "", notes: "", nickname: "" }
+  const [form, setForm] = useState<{ name: string; phone: string; email: string; notes: string; nickname: string; dateOfBirth: string }>(
+    { name: "", phone: "", email: "", notes: "", nickname: "", dateOfBirth: "" }
   );
   const [lineName, setLineName] = useState("");
 
@@ -238,14 +238,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     if (!uid) return;
     fetch(`/api/customer/me?lineUserId=${encodeURIComponent(uid)}`)
       .then(r => r.json())
-      .then((customer: { name: string; nickname: string | null; phone: string; email: string | null } | null) => {
+      .then((customer: { name: string; nickname: string | null; phone: string; email: string | null; dateOfBirth: string | null } | null) => {
         if (!customer) return;
         setForm(f => ({
           ...f,
-          name:     f.name     || customer.name,
-          nickname: f.nickname || customer.nickname || "",
-          phone:    f.phone    || customer.phone,
-          email:    f.email    || customer.email || "",
+          name:        f.name     || customer.name,
+          nickname:    f.nickname || customer.nickname || "",
+          phone:       f.phone    || customer.phone,
+          email:       f.email    || customer.email || "",
+          dateOfBirth: f.dateOfBirth || (customer.dateOfBirth ? customer.dateOfBirth.slice(0, 10) : ""),
         }));
       })
       .catch(() => {});
@@ -354,6 +355,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
           nickname: form.nickname || null,
           phone: form.phone,
           email: form.email || null,
+          dateOfBirth: form.dateOfBirth || null,
           notes: form.notes || null,
           lineUserId:       liff.profile?.userId      || null,
           linePictureUrl:   liff.profile?.pictureUrl  || null,
@@ -775,6 +777,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               <div className="space-y-1.5">
                 <Label htmlFor="email" style={{ color: "#5C4A42" }}>{u.email} <span className="text-sm font-normal" style={{ color: "#A08070" }}>{u.optional}</span></Label>
                 <Input id="email" type="email" placeholder="you@email.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dateOfBirth" style={{ color: "#5C4A42" }}>
+                  {lang === "th" ? "วันเกิด" : "Birthday"}
+                  <span className="text-sm font-normal ml-1" style={{ color: "#A08070" }}>{u.optional}</span>
+                </Label>
+                <Input id="dateOfBirth" type="date" value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="notes" style={{ color: "#5C4A42" }}>{u.notes} <span className="text-sm font-normal" style={{ color: "#A08070" }}>{u.optional}</span></Label>

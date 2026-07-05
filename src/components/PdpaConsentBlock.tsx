@@ -66,7 +66,7 @@ export default function PdpaConsentBlock({ checked, onChange, context = "signup"
           className="ml-6 text-xs space-y-1.5 pt-1 border-t"
           style={{ borderColor: BORDER, color: TEXT }}
         >
-          <p><strong>ข้อมูลที่เราเก็บ:</strong> ชื่อ, เบอร์โทร, อีเมล, เพศ, ประวัติการใช้บริการ</p>
+          <p><strong>ข้อมูลที่เราเก็บ:</strong> ชื่อ, เบอร์โทร, อีเมล, เพศ, วันเกิด, ประวัติการใช้บริการ</p>
           <p><strong>วัตถุประสงค์:</strong> จัดการการจอง / สมาชิก / ส่งโปรโมชั่น / วิเคราะห์การให้บริการ</p>
           <p><strong>ระยะเวลา:</strong> เก็บไว้ 5 ปี หรือจนกว่าท่านจะขอให้ลบ</p>
           <p><strong>สิทธิของท่าน:</strong> ขอดู / แก้ไข / ลบข้อมูล หรือเพิกถอนความยินยอมได้ทุกเมื่อ</p>
