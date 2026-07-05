@@ -461,11 +461,12 @@ function StaffPickGrid({ staff, onPick }: { staff: StaffItem[]; onPick: (staffId
 // ── Member walk-in modal ─────────────────────────────────────────────────────────
 
 interface MemberLookup {
-  customer:    { id: string; name: string; nickname: string | null; phone: string };
-  isMember:    boolean;
-  memberUntil: string | null;
-  packages:    { sku: string; expiresAt: string; usagesLeft: number | null }[];
-  price:       number; // satang — member price when the membership is valid
+  customer:     { id: string; name: string; nickname: string | null; phone: string };
+  /** active = สมาชิก · expired = เคยเป็นสมาชิก (หมดอายุ/ใช้ครบ) · none = ทั่วไป */
+  memberStatus: "active" | "expired" | "none";
+  memberUntil:  string | null;
+  packages:     { sku: string; expiresAt: string; usagesLeft: number | null }[];
+  price:        number; // satang — member price when the membership is valid
 }
 
 const PKG_LABEL: Record<string, string> = { "svc-buffet": "บุฟเฟ่ต์", "svc-pkg5": "แพ็กเกจ 5 ครั้ง" };
@@ -593,10 +594,15 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                       </p>
                       <p className="text-xs" style={{ color: MUTED }}>{c.customer.phone}</p>
                     </div>
-                    {c.isMember ? (
+                    {c.memberStatus === "active" ? (
                       <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
                         style={{ background: GREENBG, color: GREEN }}>
                         <Sparkles size={11} /> สมาชิก
+                      </span>
+                    ) : c.memberStatus === "expired" ? (
+                      <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
+                        style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }}>
+                        หมดอายุ
                       </span>
                     ) : (
                       <span className="text-xs px-2 py-1 rounded-full flex-shrink-0"
@@ -612,20 +618,24 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
             <div>
               {/* Found customer + membership state */}
               <div className="rounded-2xl p-4 mb-4"
-                style={{ background: result.isMember ? GREENBG : "#FFFBEB", border: `1.5px solid ${result.isMember ? "#BBF7D0" : "#FDE68A"}` }}>
+                style={{ background: result.memberStatus === "active" ? GREENBG : "#FFFBEB", border: `1.5px solid ${result.memberStatus === "active" ? "#BBF7D0" : "#FDE68A"}` }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
                       {result.customer.name}
                       {result.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({result.customer.nickname})</span>}
                     </p>
-                    {result.isMember ? (
+                    {result.memberStatus === "active" ? (
                       <p className="flex items-center gap-1 text-sm font-semibold mt-1" style={{ color: GREEN }}>
                         <Sparkles size={14} /> สมาชิก{result.memberUntil ? ` · ถึง ${thShortDate(result.memberUntil)}` : ""}
                       </p>
+                    ) : result.memberStatus === "expired" ? (
+                      <p className="text-sm font-semibold mt-1" style={{ color: "#B45309" }}>
+                        สมาชิกหมดอายุ{result.memberUntil ? ` ${thShortDate(result.memberUntil)}` : ""} — คิดราคาปกติ
+                      </p>
                     ) : (
                       <p className="text-sm font-semibold mt-1" style={{ color: "#B45309" }}>
-                        ไม่ใช่สมาชิก / หมดอายุ — คิดราคาปกติ
+                        ไม่ใช่สมาชิก — คิดราคาปกติ
                       </p>
                     )}
                     {result.packages.map(p => (
@@ -635,7 +645,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                       </p>
                     ))}
                   </div>
-                  <span className="text-lg font-bold flex-shrink-0" style={{ color: result.isMember ? GREEN : TEXT }}>
+                  <span className="text-lg font-bold flex-shrink-0" style={{ color: result.memberStatus === "active" ? GREEN : TEXT }}>
                     ฿{(result.price / 100).toLocaleString()}
                   </span>
                 </div>

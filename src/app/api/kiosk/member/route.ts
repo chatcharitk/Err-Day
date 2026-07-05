@@ -71,13 +71,18 @@ export async function GET(request: Request) {
 
   const results = customers.map((c) => {
     const mem = c.membership;
-    const isMember = !!mem
-      && !mem.pendingActivation
-      && !(mem.expiresAt != null && mem.expiresAt < todayUTC)
-      && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
+    // Three states for the counter: active member / used to be a member
+    // (expired or used up) / never a member. A pending (not yet activated)
+    // signup counts as "none" — no member price until it's activated at POS.
+    let memberStatus: "active" | "expired" | "none" = "none";
+    if (mem && !mem.pendingActivation) {
+      const lapsed = (mem.expiresAt != null && mem.expiresAt < todayUTC)
+        || (mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
+      memberStatus = lapsed ? "expired" : "active";
+    }
 
     let price = bs.price;
-    if (isMember) {
+    if (memberStatus === "active") {
       let memberPrice = bs.price;
       if (bs.service.memberPrice != null) {
         memberPrice = bs.service.memberPrice;
@@ -88,10 +93,11 @@ export async function GET(request: Request) {
     }
 
     return {
-      customer:    { id: c.id, name: c.name, nickname: c.nickname, phone: c.phone },
-      isMember,
-      memberUntil: isMember ? (mem!.expiresAt?.toISOString() ?? null) : null,
-      packages:    c.packages.map(p => ({
+      customer:     { id: c.id, name: c.name, nickname: c.nickname, phone: c.phone },
+      memberStatus,
+      // Active: valid-through date. Expired: when it lapsed (for the card text).
+      memberUntil:  memberStatus !== "none" ? (mem!.expiresAt?.toISOString() ?? null) : null,
+      packages:     c.packages.map(p => ({
         sku:        p.packageSku,
         expiresAt:  p.expiresAt.toISOString(),
         usagesLeft: p.usageLimit > 0 ? Math.max(0, p.usageLimit - p.usagesUsed) : null,
