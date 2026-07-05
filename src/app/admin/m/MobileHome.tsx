@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
@@ -54,7 +54,17 @@ interface Props {
   activeBranchId: string;
   selectedDate:   string;  // "YYYY-MM-DD"
   bookings:       BookingRow[];
+  /** Admin-created ปิดรับจอง windows for the day (staffName null = whole branch). */
+  blockedSlots:   BlockedSlotRow[];
   todayDate:      string;
+}
+
+interface BlockedSlotRow {
+  id:        string;
+  startTime: string;
+  endTime:   string;
+  reason:    string | null;
+  staffName: string | null;
 }
 
 const STATUS_META: Record<Status, { label: string; bg: string; fg: string }> = {
@@ -87,12 +97,25 @@ function dateStripDays(selected: string, today: string): { date: string; isToday
 
 const DOW_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
-export default function MobileHome({ branches, activeBranchId, selectedDate, bookings, todayDate }: Props) {
+export default function MobileHome({ branches, activeBranchId, selectedDate, bookings, blockedSlots, todayDate }: Props) {
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const [isNavigating, startNavigate] = useTransition();
   const [confirmingAll, setConfirmingAll] = useState(false);
+  const [deletingBlock, setDeletingBlock] = useState<string | null>(null);
+
+  /** Remove a ปิดรับจอง window — reopens those slots for online booking. */
+  const deleteBlock = async (bl: BlockedSlotRow) => {
+    if (deletingBlock) return;
+    const who = bl.staffName ? `ช่าง${bl.staffName}` : "ทั้งร้าน";
+    if (!window.confirm(`ลบการปิดรับจอง ${bl.startTime}–${bl.endTime} (${who})?\nลูกค้าจะจองออนไลน์ช่วงนี้ได้อีกครั้ง`)) return;
+    setDeletingBlock(bl.id);
+    try {
+      const res = await fetch(`/api/admin/blocked-slots/${bl.id}`, { method: "DELETE" });
+      if (res.ok) router.refresh();
+    } finally { setDeletingBlock(null); }
+  };
 
   const handleRefresh = () => {
     // Server component re-fetches; useTransition gives us a pending flag
@@ -304,6 +327,37 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
           {cancelledCount > 0 && ` · ยกเลิก ${cancelledCount}`}
         </p>
       </section>
+
+      {/* ── Blocked ปิดรับจอง windows — created via the 🚫 button; shown here so
+            they're visible and removable (they close online booking) ── */}
+      {blockedSlots.length > 0 && (
+        <section className="px-4 pb-1 space-y-2">
+          {blockedSlots.map((bl) => (
+            <div key={bl.id} className="flex items-center gap-3 rounded-2xl px-4 py-3"
+              style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
+              <span className="text-base flex-shrink-0">🚫</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold" style={{ color: "#92400E" }}>
+                  ปิดรับจอง {bl.startTime}–{bl.endTime} · {bl.staffName ? `ช่าง${bl.staffName}` : "ทั้งร้าน"}
+                </p>
+                <p className="text-xs truncate" style={{ color: "#B45309" }}>
+                  {bl.reason || "ลูกค้าจองออนไลน์ช่วงนี้ไม่ได้"}
+                </p>
+              </div>
+              <button
+                onClick={() => deleteBlock(bl)}
+                disabled={deletingBlock === bl.id}
+                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-2 rounded-xl flex-shrink-0 disabled:opacity-50"
+                style={{ color: "#991B1B", background: "white", border: "1px solid #FECACA" }}
+              >
+                {deletingBlock === bl.id
+                  ? <RefreshCw size={13} className="animate-spin" />
+                  : <Trash2 size={13} />} ลบ
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* ── Confirm-all-pending (one tap to confirm the whole day) ── */}
       {(() => {

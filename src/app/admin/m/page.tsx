@@ -43,7 +43,7 @@ export default async function MobileHomePage({
   // they appear in sales history, but excluded from booking lists.
   const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5"];
 
-  const [bookings, branchServiceList] = activeBranchId
+  const [bookings, branchServiceList, blockedSlotRows] = activeBranchId
     ? await Promise.all([
         prisma.booking.findMany({
           where: {
@@ -110,8 +110,16 @@ export default async function MobileHomePage({
           where:  { branchId: activeBranchId, isActive: true },
           select: { serviceId: true, price: true },
         }),
+        // Blocked windows for the day — shown on the home list so an admin can
+        // see (and remove) what the 🚫 button created; invisible blocks were
+        // silently closing online booking.
+        prisma.blockedSlot.findMany({
+          where:   { branchId: activeBranchId, date: selectedDate },
+          select:  { id: true, startTime: true, endTime: true, reason: true, staff: { select: { name: true } } },
+          orderBy: { startTime: "asc" },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
 
   // Lookup map: serviceId → branch list price
   const branchPriceByService = new Map(
@@ -188,6 +196,13 @@ export default async function MobileHomePage({
       activeBranchId={activeBranchId}
       selectedDate={selectedDate}
       bookings={data}
+      blockedSlots={blockedSlotRows.map((b) => ({
+        id:        b.id,
+        startTime: b.startTime,
+        endTime:   b.endTime,
+        reason:    b.reason,
+        staffName: b.staff?.name ?? null,
+      }))}
       todayDate={today}
     />
   );
