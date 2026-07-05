@@ -37,6 +37,11 @@ export default function DeskBoard({
   // While an action is in flight, polling must not overwrite optimistic state.
   const pendingRef = useRef(0);
 
+  // Deployment marker from the first poll. The in-store iPads keep this page
+  // open all day, so without this they'd run stale JS forever after a deploy —
+  // when the server starts reporting a different rev, reload to pick it up.
+  const revRef = useRef<string | null>(null);
+
   const refresh = useCallback(async () => {
     if (pendingRef.current > 0) return;
     try {
@@ -46,6 +51,10 @@ export default function DeskBoard({
       if (!res.ok) return;
       const data = await res.json();
       if (pendingRef.current > 0) return; // an action started mid-fetch
+      if (typeof data.rev === "string" && data.rev !== "dev") {
+        if (revRef.current && revRef.current !== data.rev) { window.location.reload(); return; }
+        revRef.current = data.rev;
+      }
       setBoard({ branchId: data.branchId, todayYmd: data.todayYmd, staff: data.staff, bookings: data.bookings });
     } catch { /* keep last good state */ }
     finally { setSyncing(false); }
