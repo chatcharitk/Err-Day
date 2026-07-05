@@ -30,6 +30,7 @@ export default function SignupForm() {
 
     if (!name.trim())  { setError("กรุณาระบุชื่อ"); return; }
     if (!phone.trim()) { setError("กรุณาระบุเบอร์โทร"); return; }
+    if (!dateOfBirth)  { setError("กรุณาระบุวันเกิด"); return; }
     if (!pdpa)         { setError("กรุณายอมรับนโยบาย PDPA"); return; }
 
     setLoading(true);
@@ -203,7 +204,7 @@ export default function SignupForm() {
           {/* Date of birth */}
           <div>
             <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>
-              วันเกิด (ไม่บังคับ)
+              วันเกิด <span className="text-red-500">*</span>
             </label>
             <input
               type="date"

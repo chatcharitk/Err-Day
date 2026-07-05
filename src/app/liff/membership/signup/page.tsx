@@ -108,6 +108,7 @@ export default function LiffMembershipSignupPage() {
 
     if (!name.trim())  { setFormErr("กรุณาระบุชื่อ");      return; }
     if (!phone.trim()) { setFormErr("กรุณาระบุเบอร์โทร");  return; }
+    if (!dateOfBirth)  { setFormErr("กรุณาระบุวันเกิด");   return; }
     if (!pdpa)         { setFormErr("กรุณายอมรับนโยบาย PDPA"); return; }
 
     // Nickname is required — fall back to first word of name if left blank
@@ -344,7 +345,7 @@ export default function LiffMembershipSignupPage() {
 
           {/* Date of birth */}
           <div>
-            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>วันเกิด (ไม่บังคับ)</label>
+            <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>วันเกิด <span className="text-red-500">*</span></label>
             <input
               type="date"
               value={dateOfBirth}

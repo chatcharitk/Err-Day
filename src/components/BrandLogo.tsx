@@ -50,7 +50,9 @@ export default function BrandLogo({ light = false, size = "md", className = "" }
     );
   }
 
-  // On white/cream backgrounds use the actual logo image
+  // On white/cream backgrounds use the actual logo image.
+  // mix-blend-multiply hides the JPEG's baked-in white box: white × page
+  // color = page color, so only the dark logotype shows on cream pages.
   return (
     <Image
       src="/logo.jpg"
@@ -58,6 +60,7 @@ export default function BrandLogo({ light = false, size = "md", className = "" }
       height={h}
       width={h * 4.2}        // logo aspect ratio ≈ 4.2 : 1
       className={`object-contain select-none ${className}`}
+      style={{ mixBlendMode: "multiply" }}
       priority
     />
   );

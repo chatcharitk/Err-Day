@@ -317,7 +317,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const canProceed = () => {
     if (step === 0) return !!selectedService;
     if (step === 2) return !!selectedDate && !!selectedTime;
-    if (step === 3) return form.name.trim() !== "" && form.phone.trim() !== "";
+    if (step === 3) return form.name.trim() !== "" && form.phone.trim() !== "" && form.dateOfBirth !== "";
     return true;
   };
 
@@ -780,8 +780,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="dateOfBirth" style={{ color: "#5C4A42" }}>
-                  {lang === "th" ? "วันเกิด" : "Birthday"}
-                  <span className="text-sm font-normal ml-1" style={{ color: "#A08070" }}>{u.optional}</span>
+                  {lang === "th" ? "วันเกิด" : "Birthday"} <span className="text-red-500">*</span>
                 </Label>
                 <Input id="dateOfBirth" type="date" value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} />
               </div>

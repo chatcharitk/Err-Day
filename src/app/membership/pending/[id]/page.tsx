@@ -83,7 +83,7 @@ export default async function PendingPage({
             style={{ background: `linear-gradient(135deg, #166534, #14532d)` }}
           >
             <CheckCircle2 size={48} className="mx-auto mb-3" />
-            <h1 className="text-xl font-medium mb-1">คุณเป็นสมาชิกอยู่แล้ว</h1>
+            <h1 className="text-xl font-medium mb-1">การสมัครสมาชิกเสร็จสิ้นเรียบร้อยแล้ว</h1>
             <p className="text-sm opacity-90">{customer.name}</p>
             <Link
               href="/my-bookings"

@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           status: "already_member",
           customerId: existing.id,
-          message: "คุณเป็นสมาชิกอยู่แล้ว",
+          message: "การสมัครสมาชิกเสร็จสิ้นเรียบร้อยแล้ว",
         }, { status: 200 });
       }
     }
