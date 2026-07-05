@@ -461,7 +461,7 @@ function StaffPickGrid({ staff, onPick }: { staff: StaffItem[]; onPick: (staffId
 // ── Member walk-in modal ─────────────────────────────────────────────────────────
 
 interface MemberLookup {
-  customer:    { id: string; name: string; nickname: string | null };
+  customer:    { id: string; name: string; nickname: string | null; phone: string };
   isMember:    boolean;
   memberUntil: string | null;
   packages:    { sku: string; expiresAt: string; usagesLeft: number | null }[];
@@ -474,35 +474,45 @@ function thShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" });
 }
 
-/** Member walk-in: find the customer by phone first, then pick the serving
- *  staff. The booking lands on the real customer record (member price applied
- *  server-side; visit counts toward the membership). */
+/** Member walk-in: search the customer by name / nickname / phone, pick the
+ *  right person if several match, then pick the serving staff. The booking
+ *  lands on the real customer record (member price applied server-side; the
+ *  visit counts toward the membership). */
 function MemberWalkinModal({ staff, onClose, onDone, onError }: {
   staff: StaffItem[];
   onClose: () => void; onDone: () => void; onError: (msg: string) => void;
 }) {
-  const [phone, setPhone]       = useState("");
+  const [q, setQ]               = useState("");
   const [searching, setSearching] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<MemberLookup[] | null>(null);
   const [result, setResult]     = useState<MemberLookup | null>(null);
   const [saving, setSaving]     = useState(false);
 
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
-    const digits = phone.replace(/\D/g, "");
-    if (searching || digits.length < 9) { setLookupError("กรอกเบอร์โทรให้ครบ"); return; }
+    if (searching || q.trim().length < 2) { setLookupError("พิมพ์อย่างน้อย 2 ตัวอักษร"); return; }
     setSearching(true);
     setLookupError(null);
     try {
-      const res = await fetch(`/api/kiosk/member?phone=${encodeURIComponent(digits)}`);
+      const res = await fetch(`/api/kiosk/member?q=${encodeURIComponent(q.trim())}`);
       const d = await res.json();
       if (!res.ok) { setLookupError(d.error ?? "ไม่พบลูกค้า"); return; }
-      setResult(d);
+      const results: MemberLookup[] = d.results ?? [];
+      // Single match → straight to the confirmation card; else let staff pick.
+      if (results.length === 1) setResult(results[0]);
+      else setCandidates(results);
     } catch {
       setLookupError("เกิดข้อผิดพลาด — ลองอีกครั้ง");
     } finally {
       setSearching(false);
     }
+  }
+
+  function resetSearch() {
+    setResult(null);
+    setCandidates(null);
+    setLookupError(null);
   }
 
   async function create(staffId: string) {
@@ -536,17 +546,17 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {!result ? (
+          {!result && !candidates ? (
             <form onSubmit={search}>
-              <p className="text-base font-bold mb-1" style={{ color: TEXT }}>เบอร์โทรสมาชิก</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>กรอกเบอร์โทรของลูกค้าเพื่อค้นหาสมาชิก</p>
+              <p className="text-base font-bold mb-1" style={{ color: TEXT }}>ค้นหาสมาชิก</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>พิมพ์ชื่อ ชื่อเล่น หรือเบอร์โทรของลูกค้า</p>
               <div className="flex gap-2">
                 <input
-                  type="tel" inputMode="tel" autoFocus
-                  value={phone}
-                  onChange={e => { setPhone(e.target.value); setLookupError(null); }}
-                  placeholder="08x-xxx-xxxx"
-                  className="flex-1 min-w-0 rounded-2xl px-4 py-4 text-xl font-semibold tabular-nums outline-none"
+                  type="text" autoFocus
+                  value={q}
+                  onChange={e => { setQ(e.target.value); setLookupError(null); }}
+                  placeholder="เช่น แนน หรือ 089…"
+                  className="flex-1 min-w-0 rounded-2xl px-4 py-4 text-xl font-semibold outline-none"
                   style={{ border: `1.5px solid ${BORDER}`, color: TEXT, background: BG }}
                 />
                 <button type="submit" disabled={searching}
@@ -561,7 +571,44 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                 </p>
               )}
             </form>
-          ) : (
+          ) : !result && candidates ? (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-base font-bold" style={{ color: TEXT }}>เลือกลูกค้า ({candidates.length})</p>
+                <button onClick={resetSearch}
+                  className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform"
+                  style={{ color: MUTED, border: `1px solid ${BORDER}` }}>
+                  <ArrowLeft size={12} /> ค้นหาใหม่
+                </button>
+              </div>
+              <div className="space-y-2">
+                {candidates.map(c => (
+                  <button key={c.customer.id} onClick={() => setResult(c)}
+                    className="w-full text-left rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.99] transition-transform"
+                    style={{ background: "white", border: `1.5px solid ${BORDER}` }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-bold truncate" style={{ color: TEXT }}>
+                        {c.customer.name}
+                        {c.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({c.customer.nickname})</span>}
+                      </p>
+                      <p className="text-xs" style={{ color: MUTED }}>{c.customer.phone}</p>
+                    </div>
+                    {c.isMember ? (
+                      <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
+                        style={{ background: GREENBG, color: GREEN }}>
+                        <Sparkles size={11} /> สมาชิก
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded-full flex-shrink-0"
+                        style={{ background: "#F3F4F6", color: MUTED }}>
+                        ทั่วไป
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : result ? (
             <div>
               {/* Found customer + membership state */}
               <div className="rounded-2xl p-4 mb-4"
@@ -609,7 +656,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                 <StaffPickGrid staff={staff} onPick={create} />
               )}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
