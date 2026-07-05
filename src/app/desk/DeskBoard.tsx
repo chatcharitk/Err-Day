@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserPlus, RefreshCw, Settings, Check, Clock, Undo2, X, Loader2, CircleAlert,
+  Sparkles, Search, ArrowLeft,
 } from "lucide-react";
 import type { DeskBooking } from "@/lib/desk";
 
@@ -17,25 +18,6 @@ const GREENBG = "#F0FDF4";
 
 interface StaffItem { id: string; name: string }
 interface BoardState { branchId: string; todayYmd: string; staff: StaffItem[]; bookings: DeskBooking[] }
-interface LoadRow { id: string; name: string; taken: number; inService: number; done: number }
-
-// Client-side mirror of desk.ts computeLoad — keeps the load strip live with
-// optimistic updates without pulling the server lib into the bundle.
-function computeLoad(staff: StaffItem[], bookings: DeskBooking[]): LoadRow[] {
-  const map = new Map<string, LoadRow>(
-    staff.map(s => [s.id, { id: s.id, name: s.name, taken: 0, inService: 0, done: 0 }]),
-  );
-  for (const b of bookings) {
-    if (!b.staffId) continue;
-    const arrived = b.checkedInAt != null || b.deskStatus === "DONE";
-    if (!arrived) continue;
-    const row = map.get(b.staffId);
-    if (!row) continue;
-    row.taken += 1;
-    if (b.deskStatus === "DONE") row.done += 1; else row.inService += 1;
-  }
-  return Array.from(map.values());
-}
 
 export default function DeskBoard({
   branchName, initial,
@@ -47,6 +29,7 @@ export default function DeskBoard({
   const [board, setBoard]   = useState<BoardState>(initial);
   const [now, setNow]       = useState(() => Date.now());
   const [walkinOpen, setWalkinOpen] = useState(false);
+  const [memberOpen, setMemberOpen] = useState(false);
   const [busy, setBusy]     = useState<Set<string>>(new Set());
   const [error, setError]   = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -143,14 +126,13 @@ export default function DeskBoard({
   const waiting   = board.bookings.filter(b => b.deskStatus === "WAITING");
   const inService = board.bookings.filter(b => b.deskStatus === "IN_SERVICE");
   const done      = board.bookings.filter(b => b.deskStatus === "DONE");
-  const load      = useMemo(() => computeLoad(board.staff, board.bookings), [board.staff, board.bookings]);
 
   const clockDate = new Date(now);
   const timeStr = clockDate.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
   const dateStr = clockDate.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long" });
 
   return (
-    <main className="min-h-screen pb-16" style={{ background: BG }}>
+    <main className="min-h-screen pb-32" style={{ background: BG }}>
       {/* Header */}
       <header className="sticky top-0 z-30 px-4 py-3" style={{ background: PRIMARY }}>
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
@@ -162,11 +144,6 @@ export default function DeskBoard({
             <div className="text-right mr-1 hidden sm:block">
               <p className="text-white text-2xl font-bold leading-none tabular-nums">{timeStr}</p>
             </div>
-            <button onClick={() => setWalkinOpen(true)}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl text-base font-bold active:scale-[0.98] transition-transform"
-              style={{ background: "white", color: PRIMARY }}>
-              <UserPlus size={20} /> วอร์คอิน
-            </button>
             <button onClick={refresh} title="รีเฟรช"
               className="p-3 rounded-2xl text-white/90 active:scale-95 transition-transform"
               style={{ border: "1px solid rgba(255,255,255,0.3)" }}>
@@ -181,32 +158,9 @@ export default function DeskBoard({
         </div>
       </header>
 
+      {/* Per-staff customer counts removed from the shared board by owner
+          request (2026-07-04) — the admin Live view still has them. */}
       <div className="max-w-7xl mx-auto px-4 pt-4 space-y-5">
-        {/* Live staff-load strip */}
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: MUTED }}>
-            จำนวนลูกค้าวันนี้ (ต่อช่าง)
-          </h2>
-          {load.length === 0 ? (
-            <p className="text-sm px-1" style={{ color: MUTED }}>ยังไม่มีพนักงานในสาขานี้</p>
-          ) : (
-            <div className="flex gap-2.5 overflow-x-auto pb-1">
-              {[...load].sort((a, b) => b.taken - a.taken).map(s => (
-                <div key={s.id} className="flex-shrink-0 rounded-2xl bg-white px-4 py-3 text-center min-w-[104px]"
-                  style={{ border: `1.5px solid ${s.inService > 0 ? PRIMARY : BORDER}` }}>
-                  <p className="text-sm font-semibold truncate max-w-[120px]" style={{ color: TEXT }}>{s.name}</p>
-                  <p className="text-3xl font-extrabold leading-tight mt-0.5" style={{ color: s.taken > 0 ? PRIMARY : MUTED }}>
-                    {s.taken}
-                  </p>
-                  <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
-                    กำลังทำ {s.inService} · เสร็จ {s.done}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
         {/* Waiting — primary action area */}
         <section>
           <SectionHeader title="รอเช็คอิน" count={waiting.length} color="#9A3412" />
@@ -251,9 +205,32 @@ export default function DeskBoard({
         </div>
       </div>
 
-      {/* Error toast */}
+      {/* Fixed bottom action bar — the walk-in buttons live here so they're
+          always within reach on the standing iPad, no scrolling back up. */}
+      <div className="fixed bottom-0 inset-x-0 z-40 px-4 pt-3"
+        style={{
+          background: "rgba(253,248,243,0.96)",
+          borderTop: `1px solid ${BORDER}`,
+          backdropFilter: "blur(8px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+        }}>
+        <div className="max-w-7xl mx-auto flex gap-3">
+          <button onClick={() => setWalkinOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl text-lg font-bold active:scale-[0.98] transition-transform"
+            style={{ background: PRIMARY, color: "white" }}>
+            <UserPlus size={22} /> วอร์คอิน
+          </button>
+          <button onClick={() => setMemberOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl text-lg font-bold active:scale-[0.98] transition-transform"
+            style={{ background: GREEN, color: "white" }}>
+            <Sparkles size={20} /> วอร์คอิน สมาชิก
+          </button>
+        </div>
+      </div>
+
+      {/* Error toast — sits above the bottom action bar */}
       {error && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium shadow-lg"
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium shadow-lg"
           style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA" }}>
           <CircleAlert size={16} /> {error}
         </div>
@@ -263,6 +240,13 @@ export default function DeskBoard({
         <WalkinModal staff={board.staff}
           onClose={() => setWalkinOpen(false)}
           onDone={() => { setWalkinOpen(false); refresh(); }}
+          onError={setError} />
+      )}
+
+      {memberOpen && (
+        <MemberWalkinModal staff={board.staff}
+          onClose={() => setMemberOpen(false)}
+          onDone={() => { setMemberOpen(false); refresh(); }}
           onError={setError} />
       )}
     </main>
@@ -446,19 +430,184 @@ function WalkinModal({ staff, onClose, onDone, onError }: {
               <Loader2 size={24} className="animate-spin" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {staff.map(s => (
-                <button key={s.id} onClick={() => create(s.id)}
-                  className="py-5 rounded-2xl text-lg font-bold active:scale-95 transition-transform"
-                  style={{ background: PRIMARY, color: "white" }}>
-                  {s.name}
+            <StaffPickGrid staff={staff} onPick={create} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Shared "who's serving?" grid — staff buttons + ยังไม่ระบุช่าง. */
+function StaffPickGrid({ staff, onPick }: { staff: StaffItem[]; onPick: (staffId: string) => void }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      {staff.map(s => (
+        <button key={s.id} onClick={() => onPick(s.id)}
+          className="py-5 rounded-2xl text-lg font-bold active:scale-95 transition-transform"
+          style={{ background: PRIMARY, color: "white" }}>
+          {s.name}
+        </button>
+      ))}
+      <button onClick={() => onPick("")}
+        className="py-5 rounded-2xl text-base font-semibold active:scale-95 transition-transform"
+        style={{ background: "white", color: TEXT, border: `1.5px solid ${BORDER}` }}>
+        ยังไม่ระบุช่าง
+      </button>
+    </div>
+  );
+}
+
+// ── Member walk-in modal ─────────────────────────────────────────────────────────
+
+interface MemberLookup {
+  customer:    { id: string; name: string; nickname: string | null };
+  isMember:    boolean;
+  memberUntil: string | null;
+  packages:    { sku: string; expiresAt: string; usagesLeft: number | null }[];
+  price:       number; // satang — member price when the membership is valid
+}
+
+const PKG_LABEL: Record<string, string> = { "svc-buffet": "บุฟเฟ่ต์", "svc-pkg5": "แพ็กเกจ 5 ครั้ง" };
+
+function thShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" });
+}
+
+/** Member walk-in: find the customer by phone first, then pick the serving
+ *  staff. The booking lands on the real customer record (member price applied
+ *  server-side; visit counts toward the membership). */
+function MemberWalkinModal({ staff, onClose, onDone, onError }: {
+  staff: StaffItem[];
+  onClose: () => void; onDone: () => void; onError: (msg: string) => void;
+}) {
+  const [phone, setPhone]       = useState("");
+  const [searching, setSearching] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [result, setResult]     = useState<MemberLookup | null>(null);
+  const [saving, setSaving]     = useState(false);
+
+  async function search(e?: React.FormEvent) {
+    e?.preventDefault();
+    const digits = phone.replace(/\D/g, "");
+    if (searching || digits.length < 9) { setLookupError("กรอกเบอร์โทรให้ครบ"); return; }
+    setSearching(true);
+    setLookupError(null);
+    try {
+      const res = await fetch(`/api/kiosk/member?phone=${encodeURIComponent(digits)}`);
+      const d = await res.json();
+      if (!res.ok) { setLookupError(d.error ?? "ไม่พบลูกค้า"); return; }
+      setResult(d);
+    } catch {
+      setLookupError("เกิดข้อผิดพลาด — ลองอีกครั้ง");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function create(staffId: string) {
+    if (saving || !result) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/kiosk/walkin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: result.customer.id, ...(staffId ? { staffId } : {}) }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        onError(d.error ?? "บันทึกไม่สำเร็จ");
+        setSaving(false);
+        return;
+      }
+      onDone();
+    } catch {
+      onError("เกิดข้อผิดพลาด");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="px-5 py-4 flex items-center justify-between flex-shrink-0" style={{ background: GREEN }}>
+          <h2 className="text-white font-bold text-lg flex items-center gap-2"><Sparkles size={20} /> วอร์คอิน สมาชิก · สระไดร์</h2>
+          <button onClick={onClose} className="text-white/80 p-1"><X size={24} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {!result ? (
+            <form onSubmit={search}>
+              <p className="text-base font-bold mb-1" style={{ color: TEXT }}>เบอร์โทรสมาชิก</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>กรอกเบอร์โทรของลูกค้าเพื่อค้นหาสมาชิก</p>
+              <div className="flex gap-2">
+                <input
+                  type="tel" inputMode="tel" autoFocus
+                  value={phone}
+                  onChange={e => { setPhone(e.target.value); setLookupError(null); }}
+                  placeholder="08x-xxx-xxxx"
+                  className="flex-1 min-w-0 rounded-2xl px-4 py-4 text-xl font-semibold tabular-nums outline-none"
+                  style={{ border: `1.5px solid ${BORDER}`, color: TEXT, background: BG }}
+                />
+                <button type="submit" disabled={searching}
+                  className="flex items-center gap-2 px-5 rounded-2xl text-base font-bold active:scale-95 transition-transform disabled:opacity-50"
+                  style={{ background: GREEN, color: "white" }}>
+                  {searching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />} ค้นหา
                 </button>
-              ))}
-              <button onClick={() => create("")}
-                className="py-5 rounded-2xl text-base font-semibold active:scale-95 transition-transform"
-                style={{ background: "white", color: TEXT, border: `1.5px solid ${BORDER}` }}>
-                ยังไม่ระบุช่าง
-              </button>
+              </div>
+              {lookupError && (
+                <p className="flex items-center gap-1.5 text-sm font-medium mt-3" style={{ color: "#991B1B" }}>
+                  <CircleAlert size={15} /> {lookupError}
+                </p>
+              )}
+            </form>
+          ) : (
+            <div>
+              {/* Found customer + membership state */}
+              <div className="rounded-2xl p-4 mb-4"
+                style={{ background: result.isMember ? GREENBG : "#FFFBEB", border: `1.5px solid ${result.isMember ? "#BBF7D0" : "#FDE68A"}` }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
+                      {result.customer.name}
+                      {result.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({result.customer.nickname})</span>}
+                    </p>
+                    {result.isMember ? (
+                      <p className="flex items-center gap-1 text-sm font-semibold mt-1" style={{ color: GREEN }}>
+                        <Sparkles size={14} /> สมาชิก{result.memberUntil ? ` · ถึง ${thShortDate(result.memberUntil)}` : ""}
+                      </p>
+                    ) : (
+                      <p className="text-sm font-semibold mt-1" style={{ color: "#B45309" }}>
+                        ไม่ใช่สมาชิก / หมดอายุ — คิดราคาปกติ
+                      </p>
+                    )}
+                    {result.packages.map(p => (
+                      <p key={p.sku} className="text-xs mt-1" style={{ color: MUTED }}>
+                        🎟️ {PKG_LABEL[p.sku] ?? p.sku} · ถึง {thShortDate(p.expiresAt)}
+                        {p.usagesLeft != null ? ` · เหลือ ${p.usagesLeft} ครั้ง` : ""}
+                      </p>
+                    ))}
+                  </div>
+                  <span className="text-lg font-bold flex-shrink-0" style={{ color: result.isMember ? GREEN : TEXT }}>
+                    ฿{(result.price / 100).toLocaleString()}
+                  </span>
+                </div>
+                <button onClick={() => { setResult(null); setLookupError(null); }}
+                  className="flex items-center gap-1 text-xs font-semibold mt-2 px-2 py-1 rounded-lg active:scale-95 transition-transform"
+                  style={{ color: MUTED, border: `1px solid ${BORDER}`, background: "white" }}>
+                  <ArrowLeft size={12} /> ค้นหาใหม่
+                </button>
+              </div>
+
+              <p className="text-base font-bold mb-1" style={{ color: TEXT }}>ใครเป็นช่าง?</p>
+              <p className="text-xs mb-4" style={{ color: MUTED }}>แตะชื่อช่างเพื่อเริ่มบริการ หรือเลือก “ยังไม่ระบุช่าง”</p>
+              {saving ? (
+                <div className="flex items-center justify-center py-12" style={{ color: MUTED }}>
+                  <Loader2 size={24} className="animate-spin" />
+                </div>
+              ) : (
+                <StaffPickGrid staff={staff} onPick={create} />
+              )}
             </div>
           )}
         </div>
