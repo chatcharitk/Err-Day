@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserPlus, RefreshCw, Settings, Check, Clock, Undo2, X, Loader2, CircleAlert,
-  Sparkles, Search, ArrowLeft,
+  Sparkles, ArrowLeft,
 } from "lucide-react";
 import type { DeskBooking } from "@/lib/desk";
 
@@ -492,37 +492,23 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
   staff: StaffItem[];
   onClose: () => void; onDone: () => void; onError: (msg: string) => void;
 }) {
-  const [q, setQ]               = useState("");
-  const [searching, setSearching] = useState(false);
-  // null = fewer than 2 chars typed (no dropdown); [] = searched, nothing found.
-  const [options, setOptions]   = useState<MemberLookup[] | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [options, setOptions]   = useState<MemberLookup[]>([]);
   const [result, setResult]     = useState<MemberLookup | null>(null);
   const [saving, setSaving]     = useState(false);
-  // Monotonic request id — a slow earlier response must not clobber a newer one.
-  const reqRef = useRef(0);
 
-  // Live dropdown: debounce the keystrokes, then fetch suggestions. All state
-  // updates happen inside the timeout callback (async), so nothing runs
-  // synchronously in the effect body.
+  // No searching at the counter — load the whole member list (current members
+  // first, then lapsed) as soon as the modal opens and let staff tap the name.
+  // State updates only happen inside async callbacks.
   useEffect(() => {
-    const term = q.trim();
-    const my = ++reqRef.current;
-    const t = setTimeout(async () => {
-      if (term.length < 2) { setOptions(null); setSearching(false); return; }
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/kiosk/member?q=${encodeURIComponent(term)}`);
-        const d = await res.json().catch(() => ({}));
-        if (reqRef.current !== my) return; // stale response
-        setOptions(res.ok ? (d.results ?? []) : []);
-      } catch {
-        if (reqRef.current === my) setOptions([]);
-      } finally {
-        if (reqRef.current === my) setSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q]);
+    let alive = true;
+    fetch("/api/kiosk/member")
+      .then(res => res.json().then(d => ({ ok: res.ok, d })))
+      .then(({ ok, d }) => { if (alive) setOptions(ok ? (d.results ?? []) : []); })
+      .catch(() => { if (alive) setOptions([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   async function create(staffId: string) {
     if (saving || !result) return;
@@ -557,29 +543,18 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
         <div className="flex-1 overflow-y-auto p-5">
           {!result ? (
             <div>
-              <p className="text-base font-bold mb-1" style={{ color: TEXT }}>ค้นหาสมาชิก</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>พิมพ์ชื่อ ชื่อเล่น หรือเบอร์โทร — รายชื่อจะขึ้นให้เลือกทันที</p>
-              <div className="relative">
-                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
-                <input
-                  type="text" autoFocus
-                  value={q}
-                  onChange={e => setQ(e.target.value)}
-                  placeholder="เช่น แนน หรือ 089…"
-                  className="w-full rounded-2xl pl-12 pr-12 py-4 text-xl font-semibold outline-none"
-                  style={{ border: `1.5px solid ${BORDER}`, color: TEXT, background: BG }}
-                />
-                {searching && (
-                  <Loader2 size={20} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin" style={{ color: MUTED }} />
-                )}
-              </div>
+              <p className="text-base font-bold mb-1" style={{ color: TEXT }}>เลือกสมาชิก{options.length > 0 ? ` (${options.length})` : ""}</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>แตะชื่อสมาชิกที่มาใช้บริการ — สมาชิกปัจจุบันอยู่ด้านบน</p>
 
-              {/* Dropdown — fills as staff type (2+ chars) */}
-              {options !== null && (
-                <div className="mt-2 rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${BORDER}`, background: "white" }}>
+              {loading ? (
+                <div className="flex items-center justify-center py-12" style={{ color: MUTED }}>
+                  <Loader2 size={24} className="animate-spin" />
+                </div>
+              ) : (
+                <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${BORDER}`, background: "white" }}>
                   {options.length === 0 ? (
                     <p className="flex items-center gap-1.5 text-sm px-4 py-4" style={{ color: MUTED }}>
-                      <CircleAlert size={15} /> ไม่พบลูกค้า — ลองสะกดชื่อหรือเบอร์อีกครั้ง
+                      <CircleAlert size={15} /> ยังไม่มีสมาชิกในระบบ
                     </p>
                   ) : (
                     options.map((c, i) => (
@@ -653,7 +628,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                 <button onClick={() => setResult(null)}
                   className="flex items-center gap-1 text-xs font-semibold mt-2 px-2 py-1 rounded-lg active:scale-95 transition-transform"
                   style={{ color: MUTED, border: `1px solid ${BORDER}`, background: "white" }}>
-                  <ArrowLeft size={12} /> ค้นหาใหม่
+                  <ArrowLeft size={12} /> เลือกคนอื่น
                 </button>
               </div>
 

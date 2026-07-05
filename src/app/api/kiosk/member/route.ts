@@ -5,14 +5,16 @@ import { getKioskBranch } from "@/lib/kiosk-auth";
 const WALKIN_SERVICE = "svc-walkin";
 
 /**
- * Customer lookup for the desk's "วอร์คอิน สมาชิก" flow.
+ * Member list / lookup for the desk's "วอร์คอิน สมาชิก" flow.
  *
- * GET /api/kiosk/member?q=<name | nickname | phone>
- * Returns up to 6 matching customers, each with membership validity, active
- * packages (a hint for the counter), and the effective walk-in (สระไดร์)
- * price at this branch — member price when the membership is valid.
- * Synthetic walk-in/POS placeholder customers are excluded.
- * Branch-scoped via the kiosk cookie.
+ * GET /api/kiosk/member            → ALL activated members (the modal's
+ *                                    dropdown list; active first, then lapsed)
+ * GET /api/kiosk/member?q=<text>   → name/nickname/phone lookup (any customer)
+ *
+ * Every entry carries membership validity, active packages (a hint for the
+ * counter), and the effective walk-in (สระไดร์) price at this branch —
+ * member price when the membership is valid. Synthetic walk-in/POS
+ * placeholder customers are excluded. Branch-scoped via the kiosk cookie.
  */
 export async function GET(request: Request) {
   const branch = await getKioskBranch();
@@ -20,7 +22,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") ?? "").trim();
-  if (q.length < 2) {
+  const listMode = q.length === 0;
+  if (!listMode && q.length < 2) {
     return NextResponse.json({ error: "พิมพ์อย่างน้อย 2 ตัวอักษร" }, { status: 400 });
   }
 
@@ -31,11 +34,16 @@ export async function GET(request: Request) {
 
   const customers = await prisma.customer.findMany({
     where: {
-      OR: [
-        { name:     { contains: q, mode: "insensitive" } },
-        { nickname: { contains: q, mode: "insensitive" } },
-        { phone:    { contains: q.replace(/[\s-]/g, "") } },
-      ],
+      ...(listMode
+        // List mode: everyone who has an ACTIVATED membership (current or lapsed).
+        ? { membership: { is: { pendingActivation: false } } }
+        : {
+            OR: [
+              { name:     { contains: q, mode: "insensitive" } },
+              { nickname: { contains: q, mode: "insensitive" } },
+              { phone:    { contains: q.replace(/[\s-]/g, "") } },
+            ],
+          }),
       // Hide the synthetic placeholder customers created by desk walk-ins/POS.
       NOT: [
         { phone: { startsWith: "walkin-" } },
@@ -43,7 +51,7 @@ export async function GET(request: Request) {
       ],
     },
     orderBy: { name: "asc" },
-    take: 6,
+    take: listMode ? 500 : 6,
     select: {
       id: true, name: true, nickname: true, phone: true,
       membership: {
@@ -57,7 +65,7 @@ export async function GET(request: Request) {
       },
     },
   });
-  if (customers.length === 0) {
+  if (!listMode && customers.length === 0) {
     return NextResponse.json({ error: "ไม่พบลูกค้า — ลองสะกดชื่อหรือเบอร์อีกครั้ง" }, { status: 404 });
   }
 
@@ -105,6 +113,13 @@ export async function GET(request: Request) {
       price,
     };
   });
+
+  // Dropdown list reads best with current members on top, lapsed ones below
+  // (each group already name-sorted by the query).
+  if (listMode) {
+    const rank = { active: 0, expired: 1, none: 2 } as const;
+    results.sort((a, b) => rank[a.memberStatus] - rank[b.memberStatus]);
+  }
 
   return NextResponse.json({ results });
 }
