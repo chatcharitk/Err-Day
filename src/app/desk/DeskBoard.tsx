@@ -494,36 +494,35 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
 }) {
   const [q, setQ]               = useState("");
   const [searching, setSearching] = useState(false);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<MemberLookup[] | null>(null);
+  // null = fewer than 2 chars typed (no dropdown); [] = searched, nothing found.
+  const [options, setOptions]   = useState<MemberLookup[] | null>(null);
   const [result, setResult]     = useState<MemberLookup | null>(null);
   const [saving, setSaving]     = useState(false);
+  // Monotonic request id — a slow earlier response must not clobber a newer one.
+  const reqRef = useRef(0);
 
-  async function search(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (searching || q.trim().length < 2) { setLookupError("พิมพ์อย่างน้อย 2 ตัวอักษร"); return; }
-    setSearching(true);
-    setLookupError(null);
-    try {
-      const res = await fetch(`/api/kiosk/member?q=${encodeURIComponent(q.trim())}`);
-      const d = await res.json();
-      if (!res.ok) { setLookupError(d.error ?? "ไม่พบลูกค้า"); return; }
-      const results: MemberLookup[] = d.results ?? [];
-      // Single match → straight to the confirmation card; else let staff pick.
-      if (results.length === 1) setResult(results[0]);
-      else setCandidates(results);
-    } catch {
-      setLookupError("เกิดข้อผิดพลาด — ลองอีกครั้ง");
-    } finally {
-      setSearching(false);
-    }
-  }
-
-  function resetSearch() {
-    setResult(null);
-    setCandidates(null);
-    setLookupError(null);
-  }
+  // Live dropdown: debounce the keystrokes, then fetch suggestions. All state
+  // updates happen inside the timeout callback (async), so nothing runs
+  // synchronously in the effect body.
+  useEffect(() => {
+    const term = q.trim();
+    const my = ++reqRef.current;
+    const t = setTimeout(async () => {
+      if (term.length < 2) { setOptions(null); setSearching(false); return; }
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/kiosk/member?q=${encodeURIComponent(term)}`);
+        const d = await res.json().catch(() => ({}));
+        if (reqRef.current !== my) return; // stale response
+        setOptions(res.ok ? (d.results ?? []) : []);
+      } catch {
+        if (reqRef.current === my) setOptions([]);
+      } finally {
+        if (reqRef.current === my) setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   async function create(staffId: string) {
     if (saving || !result) return;
@@ -556,74 +555,67 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {!result && !candidates ? (
-            <form onSubmit={search}>
+          {!result ? (
+            <div>
               <p className="text-base font-bold mb-1" style={{ color: TEXT }}>ค้นหาสมาชิก</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>พิมพ์ชื่อ ชื่อเล่น หรือเบอร์โทรของลูกค้า</p>
-              <div className="flex gap-2">
+              <p className="text-xs mb-3" style={{ color: MUTED }}>พิมพ์ชื่อ ชื่อเล่น หรือเบอร์โทร — รายชื่อจะขึ้นให้เลือกทันที</p>
+              <div className="relative">
+                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: MUTED }} />
                 <input
                   type="text" autoFocus
                   value={q}
-                  onChange={e => { setQ(e.target.value); setLookupError(null); }}
+                  onChange={e => setQ(e.target.value)}
                   placeholder="เช่น แนน หรือ 089…"
-                  className="flex-1 min-w-0 rounded-2xl px-4 py-4 text-xl font-semibold outline-none"
+                  className="w-full rounded-2xl pl-12 pr-12 py-4 text-xl font-semibold outline-none"
                   style={{ border: `1.5px solid ${BORDER}`, color: TEXT, background: BG }}
                 />
-                <button type="submit" disabled={searching}
-                  className="flex items-center gap-2 px-5 rounded-2xl text-base font-bold active:scale-95 transition-transform disabled:opacity-50"
-                  style={{ background: GREEN, color: "white" }}>
-                  {searching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />} ค้นหา
-                </button>
+                {searching && (
+                  <Loader2 size={20} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin" style={{ color: MUTED }} />
+                )}
               </div>
-              {lookupError && (
-                <p className="flex items-center gap-1.5 text-sm font-medium mt-3" style={{ color: "#991B1B" }}>
-                  <CircleAlert size={15} /> {lookupError}
-                </p>
+
+              {/* Dropdown — fills as staff type (2+ chars) */}
+              {options !== null && (
+                <div className="mt-2 rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${BORDER}`, background: "white" }}>
+                  {options.length === 0 ? (
+                    <p className="flex items-center gap-1.5 text-sm px-4 py-4" style={{ color: MUTED }}>
+                      <CircleAlert size={15} /> ไม่พบลูกค้า — ลองสะกดชื่อหรือเบอร์อีกครั้ง
+                    </p>
+                  ) : (
+                    options.map((c, i) => (
+                      <button key={c.customer.id} onClick={() => setResult(c)}
+                        className="w-full text-left px-4 py-3 flex items-center gap-3 active:bg-black/5 transition-colors"
+                        style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-base font-bold truncate" style={{ color: TEXT }}>
+                            {c.customer.name}
+                            {c.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({c.customer.nickname})</span>}
+                          </p>
+                          <p className="text-xs" style={{ color: MUTED }}>{c.customer.phone}</p>
+                        </div>
+                        {c.memberStatus === "active" ? (
+                          <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
+                            style={{ background: GREENBG, color: GREEN }}>
+                            <Sparkles size={11} /> สมาชิก
+                          </span>
+                        ) : c.memberStatus === "expired" ? (
+                          <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
+                            style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }}>
+                            หมดอายุ
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded-full flex-shrink-0"
+                            style={{ background: "#F3F4F6", color: MUTED }}>
+                            ทั่วไป
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
-            </form>
-          ) : !result && candidates ? (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-base font-bold" style={{ color: TEXT }}>เลือกลูกค้า ({candidates.length})</p>
-                <button onClick={resetSearch}
-                  className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg active:scale-95 transition-transform"
-                  style={{ color: MUTED, border: `1px solid ${BORDER}` }}>
-                  <ArrowLeft size={12} /> ค้นหาใหม่
-                </button>
-              </div>
-              <div className="space-y-2">
-                {candidates.map(c => (
-                  <button key={c.customer.id} onClick={() => setResult(c)}
-                    className="w-full text-left rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.99] transition-transform"
-                    style={{ background: "white", border: `1.5px solid ${BORDER}` }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-base font-bold truncate" style={{ color: TEXT }}>
-                        {c.customer.name}
-                        {c.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({c.customer.nickname})</span>}
-                      </p>
-                      <p className="text-xs" style={{ color: MUTED }}>{c.customer.phone}</p>
-                    </div>
-                    {c.memberStatus === "active" ? (
-                      <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
-                        style={{ background: GREENBG, color: GREEN }}>
-                        <Sparkles size={11} /> สมาชิก
-                      </span>
-                    ) : c.memberStatus === "expired" ? (
-                      <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
-                        style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }}>
-                        หมดอายุ
-                      </span>
-                    ) : (
-                      <span className="text-xs px-2 py-1 rounded-full flex-shrink-0"
-                        style={{ background: "#F3F4F6", color: MUTED }}>
-                        ทั่วไป
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
             </div>
-          ) : result ? (
+          ) : (
             <div>
               {/* Found customer + membership state */}
               <div className="rounded-2xl p-4 mb-4"
@@ -658,7 +650,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                     ฿{(result.price / 100).toLocaleString()}
                   </span>
                 </div>
-                <button onClick={() => { setResult(null); setLookupError(null); }}
+                <button onClick={() => setResult(null)}
                   className="flex items-center gap-1 text-xs font-semibold mt-2 px-2 py-1 rounded-lg active:scale-95 transition-transform"
                   style={{ color: MUTED, border: `1px solid ${BORDER}`, background: "white" }}>
                   <ArrowLeft size={12} /> ค้นหาใหม่
@@ -675,7 +667,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                 <StaffPickGrid staff={staff} onPick={create} />
               )}
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
