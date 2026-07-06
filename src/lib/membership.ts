@@ -82,6 +82,91 @@ export async function getMembershipBranchByCustomer(
   return out;
 }
 
+/**
+ * "Pay now, activate later." The customer buys a membership at POS but wants
+ * the 30-day window to start on a LATER visit — so we record the payment but
+ * park the membership as `pendingActivation` (clock not running, expiresAt
+ * null). While pending the app treats them as NOT a member (no member pricing)
+ * exactly like a not-yet-paid LIFF signup — see [[errday-paid-split]].
+ *
+ * Records the prepayment as an OPEN MembershipCycle (paidAmount + POS bookingId)
+ * so it shows in purchase history; its startedAt/endedAt are placeholders that
+ * activateHeldMembership() rewrites to the real 30-day window on activation.
+ *
+ * Guard: never overwrite an already-ACTIVE membership to pending (that would
+ * silently strip a paying member's benefits). In that rare case we keep the
+ * active membership untouched and just log the extra payment cycle.
+ */
+export async function holdMembershipPrepaid(opts: ActivateOpts) {
+  const {
+    customerId,
+    paidAmount     = MEMBERSHIP_PRICE_SATANG,
+    paymentMethod = "POS",
+    bookingId     = null,
+    notes,
+  } = opts;
+
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.membership.findUnique({ where: { customerId } });
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const activeAlready = !!existing
+      && !existing.pendingActivation
+      && (existing.expiresAt == null || existing.expiresAt >= today)
+      && !(existing.usagesAllowed > 0 && existing.usagesUsed >= existing.usagesAllowed);
+
+    const membership = activeAlready
+      ? existing!  // leave an active membership as-is
+      : await tx.membership.upsert({
+          where:  { customerId },
+          update: { activatedAt: now, expiresAt: null, usagesUsed: 0, pendingActivation: true },
+          create: { customerId, activatedAt: now, expiresAt: null, usagesUsed: 0, pendingActivation: true },
+        });
+
+    const cycle = await tx.membershipCycle.create({
+      data: {
+        customerId,
+        membershipId: membership.id,
+        startedAt:    now,
+        endedAt:      now, // placeholder — rewritten to the real window on activation
+        paidAmount,
+        paymentMethod,
+        bookingId,
+        notes: notes ?? "รับเงินล่วงหน้า — รอเปิดใช้งาน",
+      },
+    });
+
+    return { membership, cycle, heldOverActive: activeAlready };
+  });
+}
+
+/**
+ * Activate a held (pre-paid, pending) membership — the return-visit step. Starts
+ * a fresh 30-day window from today and rewrites the open prepayment cycle's
+ * placeholder window to match, so purchase history reads correctly. Used by the
+ * "เปิดใช้งาน" button on the customer screen.
+ */
+export async function activateHeldMembership(customerId: string) {
+  const now       = new Date();
+  const expiresAt = new Date(now.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * 24 * 60 * 60 * 1000);
+
+  return prisma.$transaction(async (tx) => {
+    const membership = await tx.membership.update({
+      where: { customerId },
+      data:  { activatedAt: now, expiresAt, usagesUsed: 0, pendingActivation: false },
+    });
+    // Rewrite the held (still-open) cycle's placeholder window to the real
+    // 30 days. If there was no held cycle (e.g. a manual pending entry), this
+    // simply affects nothing.
+    await tx.membershipCycle.updateMany({
+      where: { membershipId: membership.id, closedAt: null },
+      data:  { startedAt: now, endedAt: expiresAt },
+    });
+    return membership;
+  });
+}
+
 export async function activateOrRenewMembership(opts: ActivateOpts) {
   const {
     customerId,

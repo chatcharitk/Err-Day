@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
-import { MEMBERSHIP_SKU, activateOrRenewMembership } from "@/lib/membership";
+import { MEMBERSHIP_SKU, activateOrRenewMembership, holdMembershipPrepaid } from "@/lib/membership";
 import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
 import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
 
@@ -19,13 +19,16 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { branchId, customerName, customerPhone, items, notes, fromBookingId } = body as {
+    const { branchId, customerName, customerPhone, items, notes, fromBookingId, holdMembership } = body as {
       branchId:       string;
       customerName:   string;
       customerPhone?: string;
       items:          SaleItem[];
       notes?:         string;
       fromBookingId?: string;
+      /** "Pay now, activate later": record the ฿990 but park the membership as
+       *  pending (30-day clock starts when staff activate on the return visit). */
+      holdMembership?: boolean;
     };
 
     if (!branchId || !customerName || !Array.isArray(items) || items.length === 0) {
@@ -109,18 +112,30 @@ export async function POST(request: Request) {
         include: { branch: true, customer: true },
       });
 
-      // If the cart contains a membership SKU, activate / renew
+      // If the cart contains a membership SKU: hold (pay-now-activate-later) or
+      // activate/renew immediately.
       if (membershipItem) {
-        const m = await activateOrRenewMembership({
-          customerId:    booking.customerId,
-          paidAmount:    membershipItem.price,
-          paymentMethod: "POS",
-          bookingId:     booking.id,
-        });
-        // Fire & forget LINE confirmation — never block the sale on LINE failure
-        if (m?.membership?.id) {
-          sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e));
-          sendStaffMembershipAlert(m.membership.id).catch((e) => console.error("[notify] staff membership alert failed", e));
+        if (holdMembership) {
+          // Payment recorded; membership parked pending. No "activated" LINE —
+          // it isn't active until staff open the customer and tap เปิดใช้งาน.
+          await holdMembershipPrepaid({
+            customerId:    booking.customerId,
+            paidAmount:    membershipItem.price,
+            paymentMethod: "POS",
+            bookingId:     booking.id,
+          });
+        } else {
+          const m = await activateOrRenewMembership({
+            customerId:    booking.customerId,
+            paidAmount:    membershipItem.price,
+            paymentMethod: "POS",
+            bookingId:     booking.id,
+          });
+          // Fire & forget LINE confirmation — never block the sale on LINE failure
+          if (m?.membership?.id) {
+            sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e));
+            sendStaffMembershipAlert(m.membership.id).catch((e) => console.error("[notify] staff membership alert failed", e));
+          }
         }
       }
 
@@ -208,14 +223,23 @@ export async function POST(request: Request) {
     });
 
     if (membershipItem) {
-      const m = await activateOrRenewMembership({
-        customerId:    customer.id,
-        paidAmount:    membershipItem.price,
-        paymentMethod: "POS",
-        bookingId:     booking.id,
-      });
-      if (m?.membership?.id) {
-        sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e));
+      if (holdMembership) {
+        await holdMembershipPrepaid({
+          customerId:    customer.id,
+          paidAmount:    membershipItem.price,
+          paymentMethod: "POS",
+          bookingId:     booking.id,
+        });
+      } else {
+        const m = await activateOrRenewMembership({
+          customerId:    customer.id,
+          paidAmount:    membershipItem.price,
+          paymentMethod: "POS",
+          bookingId:     booking.id,
+        });
+        if (m?.membership?.id) {
+          sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e));
+        }
       }
     }
 

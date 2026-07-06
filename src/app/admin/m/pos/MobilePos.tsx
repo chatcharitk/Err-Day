@@ -231,16 +231,6 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       .catch(() => { setMemberInfo(null); setActivePackages([]); });
   }, [customer.id, customer.phone]);
 
-  // Re-price cart when an existing member is selected / deselected
-  useEffect(() => {
-    const active = memberInfo?.isValid ?? false;
-    setCart(prev => prev.map(item => {
-      if (item.isCustom) return item;
-      if (item.redeemPackageId) return item;
-      return { ...item, price: active ? item.memberPrice : item.basePrice };
-    }));
-  }, [memberInfo]);
-
   // When packages load (after customer selection), retroactively apply package
   // redemption to any matching cart items that were added before packages loaded.
   // This handles the walk-in path where the staff adds a service then selects customer.
@@ -288,7 +278,22 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     () => membershipBsId != null && cart.some(i => i.id === membershipBsId),
     [cart, membershipBsId],
   );
-  const memberActive = (memberInfo?.isValid ?? false) || cartHasMembership;
+  // "Pay now, activate later": collect the ฿990 but park the membership as
+  // pending. While holding, the paying visit gets NO member pricing (the
+  // membership isn't active yet), so it must not count toward memberActive.
+  const [holdMembership, setHoldMembership] = useState(false);
+  const memberActive = (memberInfo?.isValid ?? false) || (cartHasMembership && !holdMembership);
+
+  // Re-price cart whenever member-active status changes — an existing member
+  // selected/deselected, a membership added to the cart, or the "hold" toggle
+  // flipped (holding removes the member price from the paying visit).
+  useEffect(() => {
+    setCart(prev => prev.map(item => {
+      if (item.isCustom) return item;
+      if (item.redeemPackageId) return item;
+      return { ...item, price: memberActive ? item.memberPrice : item.basePrice };
+    }));
+  }, [memberActive]);
 
   // Pick the most-eligible package for a service
   function pickPackageFor(bs: BS, currentCart: CartItem[]): ActivePackage | null {
@@ -452,6 +457,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           customerPhone: customer.phone.trim() || undefined,
           items,
           ...(fromBookingId ? { fromBookingId } : {}),
+          ...(cartHasMembership && holdMembership ? { holdMembership: true } : {}),
         }),
       });
       if (!res.ok) {
@@ -541,8 +547,9 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
             </p>
           </div>
         )}
-        {/* Banner when membership is being purchased in this bill (non-member) */}
-        {cartHasMembership && !(memberInfo?.isValid) && (
+        {/* Banner when membership is being purchased in this bill (non-member).
+            Suppressed while "hold" is on — member pricing doesn't apply then. */}
+        {cartHasMembership && !(memberInfo?.isValid) && !holdMembership && (
           <div
             className="mt-2 rounded-xl px-3 py-2 flex items-center gap-2"
             style={{ background: "#F0FDF4", border: "1px solid #86EFAC" }}
@@ -798,6 +805,33 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
                   <button onClick={() => setDiscountBaht(0)} className="text-xs" style={{ color: MUTED }}>ล้าง</button>
                 )}
               </div>
+              {/* Pay-now / activate-later toggle — only when a membership is in the cart */}
+              {cartHasMembership && (
+                <button
+                  type="button"
+                  onClick={() => setHoldMembership(v => !v)}
+                  className="w-full flex items-start gap-3 rounded-xl px-3 py-2.5 mb-3 text-left"
+                  style={{
+                    border: `1.5px solid ${holdMembership ? "#166534" : BORDER}`,
+                    background: holdMembership ? "#F0FDF4" : "white",
+                  }}
+                >
+                  <div
+                    className="w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center mt-0.5"
+                    style={{ background: holdMembership ? "#166534" : "white", border: `1.5px solid ${holdMembership ? "#166534" : BORDER}` }}
+                  >
+                    {holdMembership && <Check size={13} color="white" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold" style={{ color: holdMembership ? "#166534" : TEXT }}>
+                      รับเงินก่อน เปิดใช้งานภายหลัง
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                      เก็บเงินวันนี้ แต่ยังไม่เริ่มนับ 30 วัน — กดเปิดใช้งานที่หน้าลูกค้าตอนมาครั้งหน้า (ราคาสมาชิกจะยังไม่มีผลวันนี้)
+                    </p>
+                  </div>
+                </button>
+              )}
               {discountSatang > 0 && (
                 <div className="flex items-center justify-between mb-1 text-xs" style={{ color: MUTED }}>
                   <span>ก่อนส่วนลดทั้งบิล</span>

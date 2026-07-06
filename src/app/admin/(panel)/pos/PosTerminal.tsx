@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
@@ -142,6 +142,18 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const [discountBaht, setDiscountBaht] = useState(0);
   const [lastCustomerPhone, setLastCustomerPhone] = useState<string | null>(null);
   const [showMemberPrompt, setShowMemberPrompt] = useState(false);
+  // "Pay now, activate later" for a membership in the cart.
+  const [holdMembership, setHoldMembership] = useState(false);
+
+  const MEMBERSHIP_SKU = "svc-membership-30d";
+  const membershipBsId = useMemo(
+    () => branchServices.find(bs => bs.serviceId === MEMBERSHIP_SKU)?.id ?? null,
+    [branchServices],
+  );
+  const cartHasMembership = useMemo(
+    () => membershipBsId != null && cart.some(i => i.id.split("__")[0] === membershipBsId),
+    [cart, membershipBsId],
+  );
 
   const customerName  = customer.name;
   const customerPhone = customer.phone;
@@ -348,12 +360,14 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
             ...(discountSatang > 0 ? [{ name: "ส่วนลด", price: -discountSatang, branchServiceId: undefined, redeemPackageId: undefined }] : []),
           ],
           ...(fromBookingId ? { fromBookingId } : {}),
+          ...(cartHasMembership && holdMembership ? { holdMembership: true } : {}),
         }),
       });
       if (!res.ok) throw new Error();
       setLastCustomerPhone(customerPhone.trim() || null);
       setDone(true);
       setShowMemberPrompt(!!customerPhone.trim());
+      setHoldMembership(false);
       setTimeout(() => {
         setDone(false);
         setShowMemberPrompt(false);
@@ -704,6 +718,33 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 <span>ส่วนลดที่กรอก</span>
                 <span>-{formatPrice(discountSatang)}</span>
               </div>
+            )}
+            {/* Pay-now / activate-later toggle — only when a membership is in the cart */}
+            {cartHasMembership && (
+              <button
+                type="button"
+                onClick={() => setHoldMembership(v => !v)}
+                className="w-full flex items-start gap-3 rounded-xl px-3 py-2.5 mb-3 text-left"
+                style={{
+                  border: `1.5px solid ${holdMembership ? "#166534" : "#D6BCAE"}`,
+                  background: holdMembership ? "#F0FDF4" : "white",
+                }}
+              >
+                <div
+                  className="w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center mt-0.5"
+                  style={{ background: holdMembership ? "#166534" : "white", border: `1.5px solid ${holdMembership ? "#166534" : "#D6BCAE"}` }}
+                >
+                  {holdMembership && <Check size={13} color="white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: holdMembership ? "#166534" : "#3B2A24" }}>
+                    รับเงินก่อน เปิดใช้งานภายหลัง
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "#A08070" }}>
+                    เก็บเงินวันนี้ แต่ยังไม่เริ่มนับ 30 วัน — กดเปิดใช้งานที่หน้าลูกค้าตอนมาครั้งหน้า
+                  </p>
+                </div>
+              </button>
             )}
             <div className="flex justify-between items-center mb-4">
               <span className="font-medium" style={{ color: "#5C4A42" }}>ยอดรวมทั้งหมด</span>

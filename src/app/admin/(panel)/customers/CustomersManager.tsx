@@ -431,17 +431,12 @@ function MembershipSection({
     setSaving(true);
     setError("");
     try {
-      const today = new Date();
-      const expiry = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+      // `activate` starts a fresh 30-day window today and fixes the held
+      // prepayment cycle's window (see activateHeldMembership).
       const res = await fetch(`/api/admin/customers/${customer.id}/membership`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          activatedAt:       today.toISOString().slice(0, 10),
-          expiresAt:         expiry.toISOString().slice(0, 10),
-          pendingActivation: false,
-          usagesUsed:        0,
-        }),
+        body:    JSON.stringify({ activate: true }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "เปิดใช้งานไม่สำเร็จ");
       await refetch();

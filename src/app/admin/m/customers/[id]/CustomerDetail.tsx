@@ -187,7 +187,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
   // ── Membership management ───────────────────────────────────────────────────
   const refreshFromServer = () => router.refresh();
 
-  const saveMembership = async (data: { expiresAt?: string | null; usagesAllowed?: number; label?: string; pendingActivation?: boolean }) => {
+  const saveMembership = async (data: { expiresAt?: string | null; usagesAllowed?: number; label?: string; pendingActivation?: boolean; activate?: boolean }) => {
     setBusy(true); setBusyError("");
     try {
       const res = await fetch(`/api/admin/customers/${c.id}/membership`, {
@@ -574,12 +574,12 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
             <div className="flex gap-2 mt-2">
               {memberStatus === "pending" && (
                 <button
-                  onClick={() => saveMembership({ pendingActivation: false })}
+                  onClick={async () => { const ok = await saveMembership({ activate: true }); if (ok) router.refresh(); }}
                   disabled={busy}
                   className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
                   style={{ background: PRIMARY }}
                 >
-                  เปิดใช้งาน
+                  เปิดใช้งาน (เริ่ม 30 วันวันนี้)
                 </button>
               )}
               <button

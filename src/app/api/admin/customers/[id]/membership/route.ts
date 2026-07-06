@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { activateHeldMembership } from "@/lib/membership";
 
 // POST /api/admin/customers/[id]/membership  — register or renew membership
 //
@@ -126,8 +127,16 @@ export async function PATCH(
 
   try {
     const { id: customerId } = await params;
-    const { activatedAt, expiresAt, usagesAllowed, usagesUsed, points, label, pendingActivation } =
+    const { activatedAt, expiresAt, usagesAllowed, usagesUsed, points, label, pendingActivation, activate } =
       await request.json();
+
+    // Activate a held (pre-paid, pending) membership: starts a fresh 30-day
+    // window today and fixes the open prepayment cycle. Used by the customer
+    // screen's "เปิดใช้งาน" button so the return-visit clock starts correctly.
+    if (activate) {
+      const membership = await activateHeldMembership(customerId);
+      return NextResponse.json(membership);
+    }
 
     const membership = await prisma.membership.update({
       where: { customerId },
