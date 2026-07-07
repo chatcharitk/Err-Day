@@ -366,20 +366,26 @@ export async function sendGroupBookingNotice(
 interface SummaryResult { branchId: string; status: "SENT" | "FAILED" | "SKIPPED"; count?: number; reason?: string; }
 
 /**
- * Post tomorrow's booking list to a branch's LINE group (the 22:00 daily summary).
- * Tomorrow = the Bangkok calendar day after "now".
+ * Post a branch's booking list for today or tomorrow to its LINE group — the
+ * manual "push booking schedule to the group" button (and the 22:00 cron's
+ * tomorrow summary, via sendBranchDailySummary). `day` resolves against the
+ * Bangkok calendar day; the whole day's PENDING/CONFIRMED bookings are listed.
  */
-export async function sendBranchDailySummary(branchId: string): Promise<SummaryResult> {
+export async function sendBranchBookingSchedule(
+  branchId: string,
+  day: "today" | "tomorrow",
+): Promise<SummaryResult> {
   const groupId = branchGroupId(branchId);
   if (!groupId) return { branchId, status: "SKIPPED", reason: "no_group" };
 
   // Bookings store `date` as UTC-noon of the Bangkok calendar day. Compute the
-  // Bangkok "tomorrow" and match the whole UTC day around its noon.
-  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const y = bkk.getUTCFullYear(), mo = bkk.getUTCMonth(), d = bkk.getUTCDate() + 1;
-  const dayStart    = new Date(Date.UTC(y, mo, d, 0, 0, 0));
-  const dayEnd      = new Date(Date.UTC(y, mo, d, 23, 59, 59));
-  const tomorrowNoon = new Date(Date.UTC(y, mo, d, 12, 0, 0));
+  // target Bangkok day and match the whole UTC day around its noon.
+  const bkk    = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const offset = day === "tomorrow" ? 1 : 0;
+  const y = bkk.getUTCFullYear(), mo = bkk.getUTCMonth(), d = bkk.getUTCDate() + offset;
+  const dayStart = new Date(Date.UTC(y, mo, d, 0, 0, 0));
+  const dayEnd   = new Date(Date.UTC(y, mo, d, 23, 59, 59));
+  const dayNoon  = new Date(Date.UTC(y, mo, d, 12, 0, 0));
 
   const bookings = await prisma.booking.findMany({
     where:  { branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] }, serviceId: { notIn: SALE_ONLY_SKUS } },
@@ -387,13 +393,21 @@ export async function sendBranchDailySummary(branchId: string): Promise<SummaryR
     orderBy: { startTime: "asc" },
   });
 
+  const label = day === "tomorrow" ? "พรุ่งนี้" : "วันนี้";
   const lines = bookings.length
     ? bookings.map(fmtGroupBookingLine).join("\n")
-    : "— ยังไม่มีการจองสำหรับวันพรุ่งนี้ —";
-  const text = `📋 สรุปการจองพรุ่งนี้\n${fmtGroupDate(tomorrowNoon)}\n\n${lines}`;
+    : `— ยังไม่มีการจองสำหรับ${label} —`;
+  const text = `📋 สรุปการจอง${label}\n${fmtGroupDate(dayNoon)}\n\n${lines}`;
 
   const r = await pushLine(groupId, [{ type: "text", text }]);
   return { branchId, status: r.ok ? "SENT" : "FAILED", count: bookings.length, reason: r.error };
+}
+
+/**
+ * Post tomorrow's booking list to a branch's LINE group (the 22:00 daily summary).
+ */
+export async function sendBranchDailySummary(branchId: string): Promise<SummaryResult> {
+  return sendBranchBookingSchedule(branchId, "tomorrow");
 }
 
 /**

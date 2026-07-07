@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2,
+  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
@@ -106,6 +106,30 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   const [isNavigating, startNavigate] = useTransition();
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [deletingBlock, setDeletingBlock] = useState<string | null>(null);
+  const [showPushSheet, setShowPushSheet] = useState(false);
+  const [pushingDay,    setPushingDay]    = useState<"today" | "tomorrow" | null>(null);
+  const [pushToast,     setPushToast]     = useState("");
+
+  // Manually push this branch's booking schedule to its LINE group chat.
+  const pushBookings = async (day: "today" | "tomorrow") => {
+    if (pushingDay) return;
+    setPushingDay(day);
+    try {
+      const res  = await fetch("/api/admin/notify/bookings", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ branchId: activeBranchId, day }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setPushToast(`ส่งไม่สำเร็จ: ${data.error ?? res.status}`); return; }
+      setShowPushSheet(false);
+      setPushToast(data.count > 0 ? `ส่งตารางจองเข้ากลุ่มแล้ว (${data.count} คิว)` : "ส่งแล้ว — วันนั้นยังไม่มีการจอง");
+    } catch {
+      setPushToast("เกิดข้อผิดพลาด — ลองอีกครั้ง");
+    } finally {
+      setPushingDay(null);
+    }
+  };
 
   /** Remove a ปิดรับจอง window — reopens those slots for online booking. */
   const deleteBlock = async (bl: BlockedSlotRow) => {
@@ -154,6 +178,13 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-hide the push-result toast.
+  useEffect(() => {
+    if (!pushToast) return;
+    const t = setTimeout(() => setPushToast(""), 2600);
+    return () => clearTimeout(t);
+  }, [pushToast]);
 
   const switchBranch = (id: string) => {
     try { localStorage.setItem(LS_KEY, id); } catch {}
@@ -521,6 +552,52 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
         <Plus size={26} />
       </Link>
 
+      {/* ── Push-booking-schedule-to-group sheet ── */}
+      {showPushSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => { if (!pushingDay) setShowPushSheet(false); }}
+        >
+          <div className="w-full max-w-md bg-white rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <div>
+                <p className="font-medium" style={{ color: TEXT }}>ส่งตารางจองเข้ากลุ่ม LINE</p>
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>{activeBranch?.name ?? ""}</p>
+              </div>
+              <button onClick={() => { if (!pushingDay) setShowPushSheet(false); }} className="p-1" style={{ color: MUTED }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <p className="text-xs mb-1" style={{ color: MUTED }}>เลือกวันที่จะส่งให้ทีมในกลุ่ม</p>
+              {(["today", "tomorrow"] as const).map((day) => (
+                <button
+                  key={day}
+                  onClick={() => pushBookings(day)}
+                  disabled={pushingDay != null}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-3.5 rounded-xl text-sm font-semibold disabled:opacity-60"
+                  style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #86EFAC" }}
+                >
+                  <span className="flex items-center gap-2">
+                    <Send size={15} /> การจอง{day === "today" ? "วันนี้" : "พรุ่งนี้"}
+                  </span>
+                  {pushingDay === day && <Loader2 size={15} className="animate-spin" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Push-result toast */}
+      {pushToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-sm text-white z-[60]"
+          style={{ background: TEXT, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
+          {pushToast}
+        </div>
+      )}
+
       {/* ── Menu sheet ── */}
       {showMenu && (
         <div
@@ -539,6 +616,14 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </button>
             </div>
             <div className="p-2">
+              <button
+                onClick={() => { setShowMenu(false); setShowPushSheet(true); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold"
+                style={{ color: "#166534", background: "#F0FDF4" }}
+              >
+                <Send size={16} />
+                ส่งตารางจองเข้ากลุ่ม LINE
+              </button>
               <Link
                 href="/admin/m/live"
                 prefetch
