@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RefreshCw, TrendingUp } from "lucide-react";
+import type { Period } from "./page";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -32,21 +33,38 @@ interface SaleRow {
   staffName:    string | null;
 }
 
+const PERIOD_TABS: { key: Period; label: string }[] = [
+  { key: "today",      label: "วันนี้" },
+  { key: "week",       label: "สัปดาห์นี้" },
+  { key: "month",      label: "เดือนนี้" },
+  { key: "last_month", label: "เดือนที่แล้ว" },
+  { key: "year",       label: "ปีนี้" },
+];
+
 interface Props {
-  sales:      SaleRow[];
-  mtdRevenue: number;
-  mtdCount:   number;
-  todayStr:   string;
+  sales:        SaleRow[];
+  period:       Period;
+  periodLabel:  string;
+  totalRevenue: number;
+  totalCount:   number;
+  truncated:    boolean;
+  todayStr:     string;
 }
 
-export default function MobileSalesHistory({ sales, mtdRevenue, mtdCount, todayStr }: Props) {
+export default function MobileSalesHistory({ sales, period, periodLabel, totalRevenue, totalCount, truncated, todayStr }: Props) {
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     router.refresh();
     setTimeout(() => setIsRefreshing(false), 800);
+  };
+
+  const selectPeriod = (p: Period) => {
+    if (p === period) return;
+    startTransition(() => router.push(`/admin/m/history?period=${p}`));
   };
 
   const grouped = useMemo(() => {
@@ -57,9 +75,6 @@ export default function MobileSalesHistory({ sales, mtdRevenue, mtdCount, todayS
     }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [sales]);
-
-  const [yr, mo] = todayStr.split("-").map(Number);
-  const currentMonthLabel = `${THAI_MONTHS_SHORT[mo - 1]} ${yr + 543}`;
 
   return (
     <main className="pb-12" style={{ background: "#FDF7F2", minHeight: "100vh" }}>
@@ -79,27 +94,53 @@ export default function MobileSalesHistory({ sales, mtdRevenue, mtdCount, todayS
             <RefreshCw size={17} className={isRefreshing ? "animate-spin" : ""} />
           </button>
         </div>
+
+        {/* Period selector */}
+        <div className="px-2 pb-2.5 flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {PERIOD_TABS.map(({ key, label }) => {
+            const active = key === period;
+            return (
+              <button
+                key={key}
+                onClick={() => selectPeriod(key)}
+                className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all"
+                style={{
+                  background: active ? PRIMARY : "#FFF8F4",
+                  color:      active ? "white"  : TEXT,
+                  border:     `1px solid ${active ? PRIMARY : BORDER}`,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </header>
 
-      {/* MTD summary */}
+      {/* Period summary */}
       <section className="px-4 pt-4 pb-3">
-        <div className="rounded-2xl p-4" style={{ background: PRIMARY, color: "white" }}>
+        <div className="rounded-2xl p-4" style={{ background: PRIMARY, color: "white", opacity: isPending ? 0.6 : 1, transition: "opacity 150ms" }}>
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={15} style={{ opacity: 0.75 }} />
             <span className="text-xs font-semibold tracking-wide uppercase" style={{ opacity: 0.75 }}>
-              ยอดขายเดือน{currentMonthLabel}
+              ยอดขาย{periodLabel}
             </span>
           </div>
-          <p className="text-3xl font-bold tracking-tight">฿{(mtdRevenue / 100).toLocaleString()}</p>
-          <p className="text-sm mt-0.5" style={{ opacity: 0.7 }}>{mtdCount} รายการ</p>
+          <p className="text-3xl font-bold tracking-tight">฿{(totalRevenue / 100).toLocaleString()}</p>
+          <p className="text-sm mt-0.5" style={{ opacity: 0.7 }}>{totalCount.toLocaleString()} รายการ</p>
         </div>
       </section>
 
       {/* Table */}
       <section className="px-4 pb-4">
+        {truncated && (
+          <p className="text-[11px] mb-2 px-1" style={{ color: MUTED }}>
+            แสดง {sales.length.toLocaleString()} รายการล่าสุด จากทั้งหมด {totalCount.toLocaleString()} รายการ — ยอดรวมด้านบนนับครบทุกรายการ
+          </p>
+        )}
         {grouped.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-sm" style={{ color: MUTED }}>ไม่มีรายการขาย</p>
+            <p className="text-sm" style={{ color: MUTED }}>ไม่มีรายการขายในช่วง{periodLabel}</p>
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
