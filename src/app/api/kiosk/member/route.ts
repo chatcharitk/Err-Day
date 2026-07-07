@@ -114,11 +114,11 @@ export async function GET(request: Request) {
     };
   });
 
-  // Dropdown list reads best with current members on top, lapsed ones below
-  // (each group already name-sorted by the query).
+  // The walk-in dropdown lists CURRENT members only — expired/lapsed ones are
+  // dropped (already name-sorted by the query). The q= search path is untouched,
+  // so staff can still look up a lapsed member by name to renew.
   if (listMode) {
-    const rank = { active: 0, expired: 1, none: 2 } as const;
-    results.sort((a, b) => rank[a.memberStatus] - rank[b.memberStatus]);
+    return NextResponse.json({ results: results.filter(r => r.memberStatus === "active") });
   }
 
   return NextResponse.json({ results });

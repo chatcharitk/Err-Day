@@ -147,7 +147,7 @@ export default function LiffMembershipSignupPage() {
       setFormErr("เกิดข้อผิดพลาด กรุณาลองใหม่");
       setStep("form");
     }
-  }, [name, nickname, phone, email, gender, pdpa, profile, product, router]);
+  }, [name, nickname, phone, email, gender, dateOfBirth, pdpa, profile, product, router]);
 
   // ── Loading ──
   if (step === "loading") {

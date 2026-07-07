@@ -54,6 +54,8 @@ function isWalkinCustomer(name: string, phone: string): boolean {
 
 export type DeskStatus = "WAITING" | "IN_SERVICE" | "DONE";
 
+export type MemberStatus = "active" | "expired" | "none";
+
 export interface DeskBooking {
   id:               string;
   startTime:        string;
@@ -70,8 +72,22 @@ export interface DeskBooking {
   customerNickname: string | null;
   customerPhone:    string | null; // null for anonymous walk-ins
   isWalkin:         boolean;
+  /** Membership status of the booking's customer — shown on upcoming cards.
+   *  active = สมาชิก, expired = หมดอายุ, none = ทั่วไป / walk-in. */
+  memberStatus:     MemberStatus;
   serviceName:      string;
   notes:            string | null;
+}
+
+/** Membership status for a customer's membership row (inclusive expiry). */
+function memberStatusOf(
+  mem: { expiresAt: Date | null; pendingActivation: boolean; usagesUsed: number; usagesAllowed: number } | null,
+  todayUTC: Date,
+): MemberStatus {
+  if (!mem || mem.pendingActivation) return "none";
+  const lapsed = (mem.expiresAt != null && mem.expiresAt < todayUTC)
+    || (mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
+  return lapsed ? "expired" : "active";
 }
 
 export interface StaffLoad {
@@ -146,11 +162,18 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
         id: true, startTime: true, endTime: true, status: true,
         staffId: true, checkedInAt: true, paidAt: true, notes: true,
         service:  { select: { name: true, nameTh: true } },
-        customer: { select: { name: true, nickname: true, phone: true } },
+        customer: {
+          select: {
+            name: true, nickname: true, phone: true,
+            membership: { select: { expiresAt: true, pendingActivation: true, usagesUsed: true, usagesAllowed: true } },
+          },
+        },
         staff:    { select: { id: true, name: true } },
       },
     }),
   ]);
+
+  const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
 
   const bookings: DeskBooking[] = rows.map(b => {
     const walkin = isWalkinCustomer(b.customer.name, b.customer.phone);
@@ -168,6 +191,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       customerNickname: walkin ? null : b.customer.nickname,
       customerPhone:    walkin ? null : b.customer.phone,
       isWalkin:         walkin,
+      memberStatus:     walkin ? "none" : memberStatusOf(b.customer.membership, todayUTC),
       serviceName:      b.service.nameTh || b.service.name,
       notes:            b.notes,
     };

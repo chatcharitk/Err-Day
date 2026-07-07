@@ -167,16 +167,16 @@ export default function DeskBoard({
         </div>
       </header>
 
-      {/* Per-staff customer counts removed from the shared board by owner
-          request (2026-07-04) — the admin Live view still has them. */}
-      <div className="max-w-7xl mx-auto px-4 pt-4 space-y-5">
-        {/* Waiting — primary action area */}
+      {/* Two columns: LEFT = today's schedule (waiting to check in),
+          RIGHT = in-service (top) + finished (bottom). */}
+      <div className="max-w-7xl mx-auto px-4 pt-4 grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* LEFT — upcoming schedule */}
         <section>
-          <SectionHeader title="รอเช็คอิน" count={waiting.length} color="#9A3412" />
+          <SectionHeader title="คิววันนี้ · รอเช็คอิน" count={waiting.length} color="#9A3412" />
           {waiting.length === 0 ? (
             <EmptyHint text="ไม่มีลูกค้าที่รอเช็คอิน" />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="space-y-3">
               {waiting.map(b => (
                 <WaitingCard key={b.id} b={b} staff={board.staff} busy={busy.has(b.id)} onCheckin={checkin} />
               ))}
@@ -184,8 +184,8 @@ export default function DeskBoard({
           )}
         </section>
 
-        {/* In service + Done */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* RIGHT — in service, then finished */}
+        <div className="space-y-5">
           <section>
             <SectionHeader title="กำลังบริการ" count={inService.length} color={PRIMARY} />
             {inService.length === 0 ? (
@@ -291,6 +291,17 @@ function CustomerLine({ b }: { b: DeskBooking }) {
       {b.isWalkin && (
         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
           style={{ background: "#FEF3C7", color: "#92400E" }}>วอร์คอิน</span>
+      )}
+      {/* Membership status — helps staff spot members at check-in. */}
+      {b.memberStatus === "active" && (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle inline-flex items-center gap-0.5"
+          style={{ background: GREENBG, color: GREEN }}>
+          <Sparkles size={9} /> สมาชิก
+        </span>
+      )}
+      {b.memberStatus === "expired" && (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
+          style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }}>สมาชิกหมดอายุ</span>
       )}
     </p>
   );
