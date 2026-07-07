@@ -397,6 +397,42 @@ export async function sendBranchDailySummary(branchId: string): Promise<SummaryR
 }
 
 /**
+ * Post ONE branch's staff working schedule (shifts) for today or tomorrow to
+ * that branch's LINE group — the manual "push schedule to the group" button.
+ * `day` is resolved against the Bangkok calendar day.
+ */
+export async function sendBranchShiftSchedule(
+  branchId: string,
+  day: "today" | "tomorrow",
+): Promise<SummaryResult> {
+  const groupId = branchGroupId(branchId);
+  if (!groupId) return { branchId, status: "SKIPPED", reason: "no_group" };
+
+  const bkk    = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const offset = day === "tomorrow" ? 1 : 0;
+  const y = bkk.getUTCFullYear(), mo = bkk.getUTCMonth(), d = bkk.getUTCDate() + offset;
+  const dayStart = new Date(Date.UTC(y, mo, d, 0, 0, 0));
+  const dayEnd   = new Date(Date.UTC(y, mo, d, 23, 59, 59));
+  const dayNoon  = new Date(Date.UTC(y, mo, d, 12, 0, 0));
+
+  const shifts = await prisma.staffShift.findMany({
+    // Only active staff at this branch (removed staff soft-delete leaves shift rows).
+    where:  { date: { gte: dayStart, lte: dayEnd }, staff: { isActive: true, branchId } },
+    select: { startTime: true, endTime: true, staff: { select: { name: true } } },
+    orderBy: [{ startTime: "asc" }],
+  });
+
+  const lines = shifts.length
+    ? shifts.map(s => `${s.startTime}–${s.endTime} : ${s.staff.name}`).join("\n")
+    : "— ยังไม่มีตารางงาน —";
+  const label = day === "tomorrow" ? "พรุ่งนี้" : "วันนี้";
+  const text  = `👥 ตารางงาน${label}\n${fmtGroupDate(dayNoon)}\n\n${lines}`;
+
+  const r = await pushLine(groupId, [{ type: "text", text }]);
+  return { branchId, status: r.ok ? "SENT" : "FAILED", count: shifts.length, reason: r.error };
+}
+
+/**
  * DM the owners (STAFF_LINE_IDS = Looklipair + Chatcharit) tomorrow's staff
  * shift schedule, grouped by branch. Fired from the 22:00 cron.
  */

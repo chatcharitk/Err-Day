@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Loader2, X, Check,
-  Wand2, Copy, Eraser, MoreHorizontal,
+  Wand2, Copy, Eraser, MoreHorizontal, Send,
 } from "lucide-react";
 
 interface Branch { id: string; name: string }
@@ -91,6 +91,29 @@ export default function MobileShiftsManager({
   const [staffMenu,        setStaffMenu]        = useState<Staff | null>(null);
   const [actionBusy,       setActionBusy]       = useState(false);
   const [toast,            setToast]            = useState<string>("");
+  const [showPushSheet,    setShowPushSheet]    = useState(false);
+  const [pushingDay,       setPushingDay]       = useState<"today" | "tomorrow" | null>(null);
+
+  // Manually push this branch's working schedule to its LINE group chat.
+  const pushSchedule = async (day: "today" | "tomorrow") => {
+    if (pushingDay) return;
+    setPushingDay(day);
+    try {
+      const res  = await fetch("/api/admin/notify/shifts", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ branchId: activeBranchId, day }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setToast(`ส่งไม่สำเร็จ: ${data.error ?? res.status}`); return; }
+      setShowPushSheet(false);
+      setToast(data.count > 0 ? `ส่งตารางงานเข้ากลุ่มแล้ว (${data.count} คน)` : "ส่งแล้ว — วันนั้นยังไม่มีตารางงาน");
+    } catch {
+      setToast("เกิดข้อผิดพลาด — ลองอีกครั้ง");
+    } finally {
+      setPushingDay(null);
+    }
+  };
 
   // Fetch the week's shifts whenever week / branch changes
   const loadWeek = useCallback(async () => {
@@ -270,6 +293,14 @@ export default function MobileShiftsManager({
             <p className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>Shifts</p>
             <h1 className="text-sm font-medium" style={{ color: TEXT }}>ตารางงาน</h1>
           </div>
+          <button
+            onClick={() => setShowPushSheet(true)}
+            className="h-9 px-3 rounded-full flex items-center gap-1.5 text-xs font-semibold"
+            style={{ color: "white", background: "#06C755" }}
+            aria-label="ส่งตารางงานเข้ากลุ่ม LINE"
+          >
+            <Send size={13} /> ส่งเข้ากลุ่ม
+          </button>
           <button
             onClick={() => setShowTools(true)}
             className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -468,6 +499,46 @@ export default function MobileShiftsManager({
           onSave={(opts) => saveCell(editCell.staff.id, ymd(editCell.date), opts)}
           busy={actionBusy}
         />
+      )}
+
+      {/* ── Push-schedule-to-group sheet ────────────────────────────────── */}
+      {showPushSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => { if (!pushingDay) setShowPushSheet(false); }}
+        >
+          <div className="w-full max-w-md bg-white rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <div>
+                <p className="font-medium" style={{ color: TEXT }}>ส่งตารางงานเข้ากลุ่ม LINE</p>
+                <p className="text-xs mt-0.5" style={{ color: MUTED }}>
+                  {branches.find(b => b.id === activeBranchId)?.name ?? ""}
+                </p>
+              </div>
+              <button onClick={() => { if (!pushingDay) setShowPushSheet(false); }} className="p-1" style={{ color: MUTED }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <p className="text-xs mb-1" style={{ color: MUTED }}>เลือกวันที่จะส่งให้ทีมในกลุ่ม</p>
+              {(["today", "tomorrow"] as const).map(day => (
+                <button
+                  key={day}
+                  onClick={() => pushSchedule(day)}
+                  disabled={pushingDay != null}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-3.5 rounded-xl text-sm font-semibold disabled:opacity-60"
+                  style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #86EFAC" }}
+                >
+                  <span className="flex items-center gap-2">
+                    <Send size={15} /> ตารางงาน{day === "today" ? "วันนี้" : "พรุ่งนี้"}
+                  </span>
+                  {pushingDay === day && <Loader2 size={15} className="animate-spin" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Toast ───────────────────────────────────────────────────────── */}
