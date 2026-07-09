@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
+import { PACKAGE_SPECS } from "@/lib/packages";
 import MobileHome from "./MobileHome";
 
 export const revalidate = 30;
@@ -149,13 +150,26 @@ export default async function MobileHomePage({
       isPending: p.pendingActivation,
     }));
 
-    // For PENDING / CONFIRMED bookings of an active member, show what the
-    // booking *would* cost at today's member rate (as a hint) — without
-    // overwriting the saved totalPrice. Once a booking is COMPLETED the
-    // totalPrice is the audited charged amount and must be shown as-is.
+    // For PENDING / CONFIRMED bookings, show what the booking *would* cost at
+    // checkout (as a hint) — without overwriting the saved totalPrice. Once a
+    // booking is COMPLETED the totalPrice is the audited charged amount.
     let displayPrice = b.totalPrice;
     const isOpenBooking = b.status === "PENDING" || b.status === "CONFIRMED";
-    if (isOpenBooking && memberStatus === "active") {
+    const addonsTotal = b.addons.reduce((s, a) => s + a.price, 0);
+
+    // A service covered by an active package (5-pack / buffet) with uses left is
+    // redeemed for free at checkout, so show the service portion as ฿0 — only
+    // the add-ons (which the package doesn't cover) remain. Package beats the
+    // member rate. Mirrors the POS redemption in pickRedemption/packages.ts.
+    const coveredByPackage = isOpenBooking && b.customer.packages.some(p =>
+      !p.pendingActivation
+      && (PACKAGE_SPECS[p.packageSku]?.coversServiceIds.includes(b.serviceId) ?? false)
+      && (p.usageLimit === 0 || p.usageLimit - p.usagesUsed > 0)
+    );
+
+    if (coveredByPackage) {
+      displayPrice = addonsTotal;
+    } else if (isOpenBooking && memberStatus === "active") {
       const branchListPrice = branchPriceByService.get(b.serviceId);
       if (branchListPrice != null) {
         let memberServicePrice = branchListPrice;
@@ -164,9 +178,7 @@ export default async function MobileHomePage({
         } else if ((b.service.memberDiscountPercent ?? 0) > 0) {
           memberServicePrice = Math.round(branchListPrice * (1 - (b.service.memberDiscountPercent ?? 0) / 100));
         }
-        const addonsTotal = b.addons.reduce((s, a) => s + a.price, 0);
-        const memberAdjustedTotal = memberServicePrice + addonsTotal;
-        displayPrice = Math.min(b.totalPrice, memberAdjustedTotal);
+        displayPrice = Math.min(b.totalPrice, memberServicePrice + addonsTotal);
       }
     }
     const hasMemberDiscount = displayPrice < b.totalPrice;
