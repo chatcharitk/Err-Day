@@ -47,5 +47,9 @@ export async function uploadToR2(
     Body:        body,
     ContentType: contentType,
   }));
-  return `${(process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "")}/${key}`;
+  // `.trim()` first — a stray newline/space in the R2_PUBLIC_URL env value would
+  // otherwise get baked into the middle of every URL (…r2.dev\n/key). Then drop
+  // any trailing slash before appending the key.
+  const base = (process.env.R2_PUBLIC_URL ?? "").trim().replace(/\/+$/, "");
+  return `${base}/${key}`;
 }
