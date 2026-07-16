@@ -139,6 +139,30 @@ export function computeLoad(
 
 // ── Loaders ──────────────────────────────────────────────────────────────────
 
+/**
+ * Cheap change-detection fingerprint for one branch's board: one indexed
+ * aggregate over today's bookings instead of the full 2-query board load.
+ * Any booking create/update (check-in, finish, undo, paid, cancel — all touch
+ * Booking.updatedAt) changes the fingerprint; the Bangkok day is included so
+ * midnight rollover always invalidates. Staff-list edits are NOT covered —
+ * they're rare and picked up by the next real change or device wake.
+ */
+export async function deskBoardEtag(branchId: string): Promise<string> {
+  const ymd = bangkokTodayYmd();
+  const { gte, lt } = dayRange(ymd);
+  const agg = await prisma.booking.aggregate({
+    where: {
+      branchId,
+      date:      { gte, lt },
+      status:    { notIn: ["CANCELLED", "NO_SHOW"] },
+      serviceId: { notIn: SALE_ONLY_SKUS },
+    },
+    _count: true,
+    _max:   { updatedAt: true },
+  });
+  return `${ymd}:${agg._count}:${agg._max.updatedAt?.getTime() ?? 0}`;
+}
+
 /** Today's board for one branch: active staff, today's bookings, per-staff load. */
 export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
   const ymd = bangkokTodayYmd();

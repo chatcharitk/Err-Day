@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -40,6 +41,8 @@ export async function PATCH(
       },
       include: { branch: true },
     });
+    // Bust the cached per-branch staff lists so edits/branch moves show at once.
+    revalidateTag("staff", "max");
     return NextResponse.json(staff);
   } catch (error) {
     console.error(error);
@@ -58,6 +61,7 @@ export async function DELETE(
     const { id } = await params;
     // Soft delete
     await prisma.staff.update({ where: { id }, data: { isActive: false } });
+    revalidateTag("staff", "max");
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);

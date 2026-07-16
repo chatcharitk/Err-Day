@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -35,6 +36,9 @@ export async function POST(request: Request) {
       },
       include: { branch: true },
     });
+    // Bust the cached per-branch staff lists (calendar/booking pickers) so the
+    // new stylist appears immediately despite the long cache revalidate.
+    revalidateTag("staff", "max");
     return NextResponse.json(staff, { status: 201 });
   } catch (error) {
     console.error(error);

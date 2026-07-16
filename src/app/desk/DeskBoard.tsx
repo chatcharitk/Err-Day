@@ -42,11 +42,17 @@ export default function DeskBoard({
   // when the server starts reporting a different rev, reload to pick it up.
   const revRef = useRef<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  // Server-issued board fingerprint. Sent back on the next poll so the server
+  // can answer a tiny {unchanged:true} (one cheap query) instead of rebuilding
+  // the whole board — most polls on a quiet board take this path.
+  const etagRef = useRef<string | null>(null);
+
+  const refresh = useCallback(async (opts?: { force?: boolean }) => {
     if (pendingRef.current > 0) return;
     try {
       setSyncing(true);
-      const res = await fetch("/api/kiosk/bookings", { cache: "no-store" });
+      const etag = !opts?.force ? etagRef.current : null;
+      const res = await fetch(`/api/kiosk/bookings${etag ? `?etag=${encodeURIComponent(etag)}` : ""}`, { cache: "no-store" });
       if (res.status === 401) { router.replace("/desk/setup"); return; }
       if (!res.ok) return;
       const data = await res.json();
@@ -55,20 +61,25 @@ export default function DeskBoard({
         if (revRef.current && revRef.current !== data.rev) { window.location.reload(); return; }
         revRef.current = data.rev;
       }
+      if (typeof data.etag === "string") etagRef.current = data.etag;
+      if (data.unchanged) return; // board fingerprint matched — keep current state
       setBoard({ branchId: data.branchId, todayYmd: data.todayYmd, staff: data.staff, bookings: data.bookings });
     } catch { /* keep last good state */ }
     finally { setSyncing(false); }
   }, [router]);
 
-  // Poll the board every 20s so the two devices + admin stay in sync — but only
+  // Poll the board every 45s so the two devices + admin stay in sync — but only
   // while the screen is awake. A sleeping / backgrounded device stops polling
-  // (no DB load) and refreshes immediately when it wakes.
+  // (no DB load) and refreshes immediately when it wakes. Local actions refresh
+  // instantly (act() below), so the interval only bounds CROSS-device lag.
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
-    }, 20_000);
+    }, 45_000);
     const onVisible = () => {
-      if (document.visibilityState === "visible") { setNow(Date.now()); refresh(); }
+      // Waking from sleep: force a full board fetch (skip the etag probe) so a
+      // stale staff list also corrects itself on wake.
+      if (document.visibilityState === "visible") { setNow(Date.now()); refresh({ force: true }); }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
@@ -153,7 +164,7 @@ export default function DeskBoard({
             <div className="text-right mr-1 hidden sm:block">
               <p className="text-white text-2xl font-bold leading-none tabular-nums">{timeStr}</p>
             </div>
-            <button onClick={refresh} title="รีเฟรช"
+            <button onClick={() => refresh({ force: true })} title="รีเฟรช"
               className="p-3 rounded-2xl text-white/90 active:scale-95 transition-transform"
               style={{ border: "1px solid rgba(255,255,255,0.3)" }}>
               <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />

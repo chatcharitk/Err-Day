@@ -16,7 +16,7 @@ export const getCachedBranches = unstable_cache(
     });
   },
   ["active-branches-slim"],
-  { revalidate: 300, tags: ["branches"] },
+  { revalidate: 3600, tags: ["branches"] },
 );
 
 export function getCachedBranchServices(branchId: string) {
@@ -45,7 +45,7 @@ export function getCachedBranchServices(branchId: string) {
       }));
     },
     [`branch-services-${branchId}`],
-    { revalidate: 300, tags: ["services", `branch-services-${branchId}`] },
+    { revalidate: 3600, tags: ["services", `branch-services-${branchId}`] },
   )();
 }
 
@@ -59,7 +59,7 @@ export function getCachedBranchStaff(branchId: string) {
       });
     },
     [`branch-staff-${branchId}`],
-    { revalidate: 300, tags: ["staff", `branch-staff-${branchId}`] },
+    { revalidate: 3600, tags: ["staff", `branch-staff-${branchId}`] },
   )();
 }
 
@@ -72,5 +72,5 @@ export const getCachedAddons = unstable_cache(
     });
   },
   ["active-addons-slim"],
-  { revalidate: 300, tags: ["addons"] },
+  { revalidate: 3600, tags: ["addons"] },
 );

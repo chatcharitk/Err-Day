@@ -6,7 +6,7 @@ import BookingFlow from "./BookingFlow";
 // data, so cache the page (ISR) — it's served from the edge with no cold start
 // or DB round-trip on a cache hit. Live availability is fetched client-side
 // from /api/availability, so cached HTML never shows stale slots.
-export const revalidate = 60;
+export const revalidate = 3600;
 
 // A dynamic [branchId] segment with no generateStaticParams renders
 // dynamically on every request (even with `revalidate` set) — so list the

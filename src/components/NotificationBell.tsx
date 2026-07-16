@@ -129,7 +129,7 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
   // fetch is kicked via setTimeout so it isn't a synchronous setState-in-effect.
   useEffect(() => {
     const kick = setTimeout(refresh, 0);
-    const id = setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 20_000);
+    const id = setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 90_000);
     const onVis = () => { if (document.visibilityState === "visible") refresh(); };
     document.addEventListener("visibilitychange", onVis);
     return () => { clearTimeout(kick); clearInterval(id); document.removeEventListener("visibilitychange", onVis); };

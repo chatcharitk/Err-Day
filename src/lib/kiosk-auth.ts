@@ -86,6 +86,13 @@ export function mintKioskToken(branchId: string): string {
 
 export type KioskBranch = { id: string; name: string };
 
+// Per-Lambda cache of the branch-validation lookup. The kiosk devices poll
+// every ~45s all day, and the branchId is already HMAC-signed in the cookie —
+// re-verifying "branch still active" against the DB once a minute per Lambda
+// is plenty (a deactivated branch's device falls back to setup within the TTL).
+const kioskBranchCache = new Map<string, { value: KioskBranch | null; expires: number }>();
+const KIOSK_BRANCH_CACHE_MS = 60_000;
+
 /**
  * Reads + validates the kiosk cookie and returns the armed branch. Returns null
  * on missing/invalid/expired cookie OR if the branch has since been deactivated
@@ -96,10 +103,14 @@ export async function getKioskBranch(): Promise<KioskBranch | null> {
   const payload = verifyKiosk(jar.get(COOKIE_NAME)?.value);
   if (!payload) return null;
 
+  const cached = kioskBranchCache.get(payload.branchId);
+  if (cached && cached.expires > Date.now()) return cached.value;
+
   const branch = await prisma.branch.findUnique({
     where:  { id: payload.branchId },
     select: { id: true, name: true, isActive: true },
   });
-  if (!branch || !branch.isActive) return null;
-  return { id: branch.id, name: branch.name };
+  const value = branch && branch.isActive ? { id: branch.id, name: branch.name } : null;
+  kioskBranchCache.set(payload.branchId, { value, expires: Date.now() + KIOSK_BRANCH_CACHE_MS });
+  return value;
 }

@@ -54,7 +54,7 @@ export default function LiveView({
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
-    }, 20_000);
+    }, 45_000);
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
@@ -77,7 +77,7 @@ export default function LiveView({
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Real-time</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>หน้าร้านสด — ลูกค้าต่อช่างวันนี้</h1>
           <p className="text-xs mt-1 flex items-center gap-1.5" style={{ color: MUTED }}>
-            <RefreshCw size={11} className={syncing ? "animate-spin" : ""} /> อัปเดตล่าสุด {updatedStr} · รีเฟรชอัตโนมัติทุก 15 วินาที
+            <RefreshCw size={11} className={syncing ? "animate-spin" : ""} /> อัปเดตล่าสุด {updatedStr} · รีเฟรชอัตโนมัติทุก 45 วินาที
           </p>
         </div>
         <div className="flex items-center gap-2">

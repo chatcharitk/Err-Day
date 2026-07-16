@@ -76,7 +76,7 @@ export interface CurrentAdmin {
 // Tiny in-memory cache (per Lambda instance) — admin sessions don't change
 // often and a 30s TTL avoids hitting the DB on every page render.
 const adminCache = new Map<string, { value: CurrentAdmin | null; expires: number }>();
-const ADMIN_CACHE_MS = 30_000;
+const ADMIN_CACHE_MS = 120_000;
 
 export async function getCurrentAdmin(): Promise<CurrentAdmin | null> {
   const c = await cookies();
