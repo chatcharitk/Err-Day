@@ -20,6 +20,8 @@ import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroU
 import { branchGroupId } from "@/lib/line-groups";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import { notifyAdmins } from "@/lib/notify-admin";
+import { PACKAGE_SPECS } from "@/lib/packages";
+import { startOfTodayUTC } from "@/lib/utils";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -286,8 +288,52 @@ type GroupBooking = {
   totalPrice: number;
   notes: string | null;
   date: Date;
-  customer: { name: string; nickname: string | null };
+  serviceId: string;
+  addons: { price: number }[];
+  customer: {
+    name: string;
+    nickname: string | null;
+    packages: {
+      packageSku:        string;
+      usageLimit:        number;
+      usagesUsed:        number;
+      pendingActivation: boolean;
+    }[];
+  };
 };
+
+/**
+ * Prisma select shared by both group-list queries — everything
+ * `fmtGroupBookingLine` needs, including the package data used to show a
+ * covered visit as ฿0.
+ *
+ * Built per call, not hoisted to a const: the package `expiresAt` filter is
+ * relative to today, and a module-level constant would freeze it at whenever
+ * the server process started.
+ */
+const groupBookingSelect = () => ({
+  startTime:  true,
+  totalPrice: true,
+  notes:      true,
+  date:       true,
+  serviceId:  true,
+  addons:     { select: { price: true } },
+  customer:   {
+    select: {
+      name:     true,
+      nickname: true,
+      packages: {
+        where:  { closedAt: null, pendingActivation: false, expiresAt: { gte: startOfTodayUTC() } },
+        select: {
+          packageSku:        true,
+          usageLimit:        true,
+          usagesUsed:        true,
+          pendingActivation: true,
+        },
+      },
+    },
+  },
+});
 
 /** "วันที่ : พฤหัสบดี 7/6/2569" — date is stored as UTC-noon of the Bangkok day. */
 function fmtGroupDate(date: Date): string {
@@ -298,10 +344,28 @@ function fmtGroupDate(date: Date): string {
   return `วันที่ : ${weekday} ${d}/${m}/${y}`;
 }
 
-/** "14:00 : ชื่อลูกค้า - ฿500 - โน้ต" (note appended only when present). */
+/**
+ * "14:00 : ชื่อลูกค้า - ฿500 - โน้ต" (note appended only when present).
+ *
+ * A service covered by an active package (5-pack / buffet) with uses left is
+ * redeemed for free at checkout, so the service portion shows as ฿0 and only
+ * the add-ons remain — otherwise the group sees the sticker price for a visit
+ * nobody is going to pay for. Mirrors the admin home list (admin/m/page.tsx)
+ * and the POS redemption in packages.ts. Group lists only ever contain
+ * PENDING/CONFIRMED bookings, so there is no completed-booking case to guard.
+ */
 function fmtGroupBookingLine(b: GroupBooking): string {
-  const name  = b.customer.nickname || b.customer.name;
-  const price = `฿${(b.totalPrice / 100).toLocaleString()}`;
+  const name = b.customer.nickname || b.customer.name;
+
+  const coveredByPackage = b.customer.packages.some(p =>
+    !p.pendingActivation
+    && (PACKAGE_SPECS[p.packageSku]?.coversServiceIds.includes(b.serviceId) ?? false)
+    && (p.usageLimit === 0 || p.usageLimit - p.usagesUsed > 0)
+  );
+  const addonsTotal = b.addons.reduce((s, a) => s + a.price, 0);
+  const satang      = coveredByPackage ? addonsTotal : b.totalPrice;
+
+  const price = `฿${(satang / 100).toLocaleString()}`;
   const note  = b.notes?.trim();
   return `${b.startTime} : ${name} - ${price}${note ? ` - ${note}` : ""}`;
 }
@@ -347,7 +411,7 @@ export async function sendGroupBookingNotice(
 
   const bookings = await prisma.booking.findMany({
     where:  { branchId: b.branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] }, serviceId: { notIn: SALE_ONLY_SKUS } },
-    select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
+    select: groupBookingSelect(),
     orderBy: { startTime: "asc" },
   });
   const list = bookings.filter(x => x.startTime >= nowHHmm);   // upcoming only
@@ -389,7 +453,7 @@ export async function sendBranchBookingSchedule(
 
   const bookings = await prisma.booking.findMany({
     where:  { branchId, date: { gte: dayStart, lte: dayEnd }, status: { in: ["PENDING", "CONFIRMED"] }, serviceId: { notIn: SALE_ONLY_SKUS } },
-    select: { startTime: true, totalPrice: true, notes: true, date: true, customer: { select: { name: true, nickname: true } } },
+    select: groupBookingSelect(),
     orderBy: { startTime: "asc" },
   });
 
