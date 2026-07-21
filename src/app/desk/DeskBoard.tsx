@@ -19,6 +19,23 @@ const GREENBG = "#F0FDF4";
 interface StaffItem { id: string; name: string }
 interface BoardState { branchId: string; todayYmd: string; staff: StaffItem[]; bookings: DeskBooking[] }
 
+/**
+ * Branches run 08:00–21:00 (10:00 on Sunday). The in-store iPads are left
+ * powered on overnight, so without this gate they poll ~230 times between close
+ * and open for a board nobody is looking at.
+ *
+ * One hour of slack on each side covers early setup and late closing. The kiosk
+ * device's clock IS Bangkok time (it sits in the shop), so local hours are the
+ * right basis here — no UTC+7 shift, unlike the server-side date handling.
+ *
+ * Polling resuming late is harmless: the visibilitychange handler force-refreshes
+ * on wake, and any local action refreshes immediately.
+ */
+function withinOpeningHours(d: Date = new Date()): boolean {
+  const h = d.getHours();
+  return h >= 7 && h < 22;
+}
+
 export default function DeskBoard({
   branchName, initial,
 }: {
@@ -68,14 +85,21 @@ export default function DeskBoard({
     finally { setSyncing(false); }
   }, [router]);
 
-  // Poll the board every 45s so the two devices + admin stay in sync — but only
-  // while the screen is awake. A sleeping / backgrounded device stops polling
-  // (no DB load) and refreshes immediately when it wakes. Local actions refresh
-  // instantly (act() below), so the interval only bounds CROSS-device lag.
+  // Poll the board so the two devices + admin stay in sync — but only while the
+  // screen is awake. A sleeping / backgrounded device stops polling and refreshes
+  // immediately when it wakes. Local actions refresh instantly (act() below), so
+  // this interval only bounds CROSS-device lag, never the operator's own screen.
+  //
+  // 150s, not 45s: every poll is a serverless invocation, and on Fluid we pay the
+  // function's CPU boot even when the etag probe answers {unchanged:true} — the
+  // cheap probe saves DB work, not CPU. Two always-on iPads at 45s was ~1.9k
+  // invocations/day, the single largest CPU line in the account.
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, 45_000);
+      if (document.visibilityState !== "visible") return;
+      if (!withinOpeningHours()) return;
+      refresh();
+    }, 150_000);
     const onVisible = () => {
       // Waking from sleep: force a full board fetch (skip the etag probe) so a
       // stale staff list also corrects itself on wake.
