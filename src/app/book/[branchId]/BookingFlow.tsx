@@ -89,11 +89,23 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-const CATEGORY_ORDER = ["บริการทั่วไป", "Davines Spa", "ย้อมผม NIGAO"];
+/**
+ * Bookable categories, in customer-facing display order. This is an ALLOWLIST,
+ * not just a sort: line ~254 filters the service list to these, which is what
+ * keeps the sale-only SKUs (Membership, แพ็กเกจ — sold at the counter, not chair
+ * time) out of the booking flow.
+ *
+ * Consequence to remember: a new service group created in the admin UI shows up
+ * on the admin services page automatically (that page derives its headings from
+ * distinct Service.category) but stays INVISIBLE to customers until it is added
+ * here. Adding a group is therefore not yet a pure data change.
+ */
+const CATEGORY_ORDER = ["บริการทั่วไป", "Davines Spa", "Keratin Treatment", "ย้อมผม NIGAO"];
 
 const CAT_EN: Record<string, string> = {
   "บริการทั่วไป":  "General Services",
   "Davines Spa":   "Davines Spa",
+  "Keratin Treatment": "Keratin Treatment",
   "ย้อมผม NIGAO": "NIGAO Color",
 };
 
@@ -572,12 +584,24 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                         {svcDesc}
                                       </p>
                                     )}
-                                    {bs.service.memberPrice && (
-                                      <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#8B1D24" }}>
-                                        <Star className="w-3 h-3" />
-                                        {u.memberPrice} {formatPrice(bs.service.memberPrice)}
-                                      </p>
-                                    )}
+                                    {/*
+                                      Via computeMemberPrice, not service.memberPrice directly: a
+                                      service can express its member rate as a percentage instead of
+                                      a fixed price, and reading the raw field silently hid the badge
+                                      for those (the discount still applied at confirm — see the
+                                      computeMemberPrice call in the submit path — so it was
+                                      under-advertised rather than mischarged).
+                                    */}
+                                    {(() => {
+                                      const memberPrice = computeMemberPrice(bs.service, bs.price);
+                                      if (memberPrice == null || memberPrice >= bs.price) return null;
+                                      return (
+                                        <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#8B1D24" }}>
+                                          <Star className="w-3 h-3" />
+                                          {u.memberPrice} {formatPrice(memberPrice)}
+                                        </p>
+                                      );
+                                    })()}
                                   </div>
                                   <div className="flex-shrink-0 text-right">
                                     <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
