@@ -128,13 +128,14 @@ export default function NotificationBell({ variant = "light" }: { variant?: "lig
   // Initial load + poll while visible; pause when hidden. The first fetch is
   // kicked via setTimeout so it isn't a synchronous setState-in-effect.
   //
-  // 5 minutes, not 90s: web-push (see the subscribe effect below) is the real
-  // delivery path for anything time-sensitive, so this poll is the fallback that
-  // reconciles the badge — not the thing that has to be fast. The bell renders on
-  // every admin page, so a tight interval multiplied by every open tab.
+  // Web Push (see the subscribe effect below) is the real delivery path for
+  // anything time-sensitive. This 15-minute poll is only a fallback for a tab
+  // left open for a long time; opening the bell, navigating to another page, or
+  // returning to the app still refreshes immediately. The bell renders on every
+  // admin page, so a shorter interval multiplies serverless work across tabs.
   useEffect(() => {
     const kick = setTimeout(refresh, 0);
-    const id = setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 300_000);
+    const id = setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 900_000);
     const onVis = () => { if (document.visibilityState === "visible") refresh(); };
     document.addEventListener("visibilitychange", onVis);
     return () => { clearTimeout(kick); clearInterval(id); document.removeEventListener("visibilitychange", onVis); };

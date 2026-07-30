@@ -86,7 +86,7 @@ export default function AdminSidebar({ role = "ADMIN", name }: AdminSidebarProps
             <Link
               key={href}
               href={href}
-              prefetch
+              prefetch={false}
               className="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors"
               style={
                 isActive

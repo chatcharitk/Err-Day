@@ -32,6 +32,14 @@ interface LineEvent {
   message?:    { type: string; text?: string; id?: string };
 }
 
+// Profile names change rarely. LINE group traffic can contain many events from
+// the same staff/customer, so avoid repeating one external profile request +
+// one database upsert for every message. Fluid instances may serve concurrent
+// requests; the in-flight map also coalesces duplicates that arrive together.
+const PROFILE_CAPTURE_TTL_MS = 24 * 60 * 60 * 1000;
+const capturedProfiles = new Map<string, number>();
+const profileCapturesInFlight = new Map<string, Promise<void>>();
+
 
 export async function POST(request: Request) {
   // Read raw body once (needed for signature verification).
@@ -58,12 +66,17 @@ export async function POST(request: Request) {
 async function processEvent(event: LineEvent): Promise<void> {
   const userId = event.source?.userId;
 
-  // 1. Profile capture (invisible to customer, kept from original webhook).
-  if (userId) {
-    captureProfile(userId).catch(e => console.error("[webhook] capture failed", e));
-  }
+  // Profile capture and reply processing run in parallel, but both are awaited.
+  // Previously captureProfile was fire-and-forget, allowing work and errors to
+  // spill into a later, unrelated request on the same Fluid instance.
+  const profileTask = userId
+    ? captureProfileOnce(userId).catch(e => console.error("[webhook] capture failed", e))
+    : Promise.resolve();
+  await Promise.all([profileTask, processReply(event, userId)]);
+}
 
-  // 2. Narrow reply rule: ONLY tarot keywords. Everything else is silent.
+async function processReply(event: LineEvent, userId: string | undefined): Promise<void> {
+  // Narrow reply rule: ONLY tarot keywords. Everything else is silent.
   if (event.type !== "message")               return;
   if (event.message?.type !== "text")         return;
   if (!event.replyToken)                      return;
@@ -130,6 +143,36 @@ async function captureProfile(userId: string) {
     create: { kind: "BOOKING_REMINDER_4H", targetId: `line-cap-${userId}`, status: "SKIPPED", recipient: userId, error: displayName },
     update: { recipient: userId, error: displayName },
   });
+}
+
+async function captureProfileOnce(userId: string): Promise<void> {
+  const now = Date.now();
+  if ((capturedProfiles.get(userId) ?? 0) > now) return;
+
+  const existing = profileCapturesInFlight.get(userId);
+  if (existing) return existing;
+
+  const task = captureProfile(userId)
+    .then(() => {
+      capturedProfiles.set(userId, Date.now() + PROFILE_CAPTURE_TTL_MS);
+      // Keep a long-lived Fluid instance bounded even if many LINE users write.
+      if (capturedProfiles.size > 1_000) {
+        for (const [id, expires] of capturedProfiles) {
+          if (expires <= Date.now()) capturedProfiles.delete(id);
+        }
+        while (capturedProfiles.size > 1_000) {
+          const oldestId = capturedProfiles.keys().next().value as string | undefined;
+          if (!oldestId) break;
+          capturedProfiles.delete(oldestId);
+        }
+      }
+    })
+    .finally(() => {
+      profileCapturesInFlight.delete(userId);
+    });
+
+  profileCapturesInFlight.set(userId, task);
+  return task;
 }
 
 

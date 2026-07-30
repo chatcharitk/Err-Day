@@ -203,7 +203,7 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
               <ul className="space-y-2">
                 {g.rows.map(e => (
                   <li key={e.id}>
-                    <Link href={`/admin/m/expenses/${e.id}`} prefetch
+                    <Link href={`/admin/m/expenses/${e.id}`} prefetch={false}
                       className="block bg-white rounded-xl px-3 py-3 active:scale-[0.99] transition-transform"
                       style={{ border: `1px solid ${BORDER}` }}>
                       <div className="flex items-center justify-between gap-2">
@@ -241,7 +241,7 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
       </section>
 
       {/* FAB — add expense */}
-      <Link href="/admin/m/expenses/new" prefetch
+      <Link href="/admin/m/expenses/new" prefetch={false}
         aria-label="เพิ่มรายจ่าย"
         className="fixed bottom-6 z-30 rounded-full shadow-lg flex items-center justify-center text-white"
         style={{

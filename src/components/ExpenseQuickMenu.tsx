@@ -81,7 +81,7 @@ export default function ExpenseQuickMenu({ basePath, totals = {}, compact = fals
             <Link
               key={value}
               href={`${basePath}?category=${value}`}
-              prefetch
+              prefetch={false}
               className="rounded-xl p-3 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
               style={{ border: `1px solid ${BORDER}`, background: "white" }}
             >

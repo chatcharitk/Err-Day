@@ -309,7 +309,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 key={date}
                 href={buildDateUrl(date)}
                 replace
-                prefetch
+                prefetch={false}
                 onClick={(e) => { e.preventDefault(); switchDate(date); }}
                 className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-2 rounded-xl min-w-[52px]"
                 style={{
@@ -433,7 +433,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 <li key={b.id}>
                   <Link
                     href={`/admin/m/${b.id}`}
-                    prefetch
+                    prefetch={false}
                     className="block rounded-xl bg-white px-3 py-2.5 active:scale-[0.99]"
                     style={{ border: `1px solid ${BORDER}` }}
                   >
@@ -525,7 +525,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
       {/* Secondary: block schedule */}
       <Link
         href={`/admin/m/block?branchId=${activeBranchId}&date=${selectedDate}`}
-        prefetch
+        prefetch={false}
         aria-label="ปิดช่วงเวลา"
         className="fixed z-30 rounded-full shadow-md flex items-center justify-center text-white"
         style={{
@@ -540,7 +540,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
       {/* Primary: new booking */}
       <Link
         href={`/admin/m/new?branchId=${activeBranchId}&date=${selectedDate}`}
-        prefetch
+        prefetch={false}
         aria-label="เพิ่มการจอง"
         className="fixed bottom-6 z-30 rounded-full shadow-lg flex items-center justify-center text-white"
         style={{
@@ -626,7 +626,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </button>
               <Link
                 href="/admin/m/live"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -635,7 +635,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/dashboard"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -644,7 +644,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/history"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -653,7 +653,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/expenses"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -662,7 +662,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/payroll"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -671,7 +671,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/pos"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -680,7 +680,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/customers"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -689,7 +689,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/membership"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -698,7 +698,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/staff"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -707,7 +707,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/shifts"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
@@ -716,7 +716,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
               </Link>
               <Link
                 href="/admin/m/capacity"
-                prefetch
+                prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
                 style={{ color: TEXT }}
               >
