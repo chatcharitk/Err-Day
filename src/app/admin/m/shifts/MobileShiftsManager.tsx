@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Loader2, X, Check,
-  Wand2, Copy, Eraser, MoreHorizontal, Send,
+  Wand2, Copy, Eraser, MoreHorizontal, Send, Rows3, GanttChartSquare,
 } from "lucide-react";
+import GanttWeekView from "./GanttWeekView";
 
 interface Branch { id: string; name: string }
 interface Staff  { id: string; name: string }
@@ -93,6 +94,7 @@ export default function MobileShiftsManager({
   const [toast,            setToast]            = useState<string>("");
   const [showPushSheet,    setShowPushSheet]    = useState(false);
   const [pushingDay,       setPushingDay]       = useState<"today" | "tomorrow" | null>(null);
+  const [view,             setView]             = useState<"list" | "gantt">("list");
 
   // Manually push this branch's working schedule to its LINE group chat.
   const pushSchedule = async (day: "today" | "tomorrow") => {
@@ -281,6 +283,16 @@ export default function MobileShiftsManager({
     setEditCell(null);
   }
 
+  /**
+   * Gantt drag commit — same delete+create round-trip as saveCell(), just
+   * triggered by a drag gesture instead of the sheet's Save button. Staff and
+   * date never change here (the Gantt only drags along the time axis), only
+   * startTime/endTime.
+   */
+  async function saveDrag(shift: Shift, staffId: string, date: string, startTime: string, endTime: string) {
+    await bulkCall({ delete: [shift.id], create: [{ staffId, date, startTime, endTime }] }, "ปรับเวลาแล้ว");
+  }
+
   return (
     <main className="pb-24 min-h-screen" style={{ background: BG }}>
       {/* Top bar */}
@@ -340,15 +352,46 @@ export default function MobileShiftsManager({
             วันนี้
           </button>
         </div>
+
+        {/* List / Gantt view toggle */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-white" style={{ border: `1px solid ${BORDER}` }}>
+          {([
+            { key: "list" as const,  label: "รายชื่อ", icon: Rows3 },
+            { key: "gantt" as const, label: "แผนภูมิ", icon: GanttChartSquare },
+          ]).map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: view === key ? PRIMARY : "transparent", color: view === key ? "white" : MUTED }}
+            >
+              <Icon size={13} /> {label}
+            </button>
+          ))}
+        </div>
       </section>
 
-      {/* Staff weekly cards */}
-      <section className="px-4 pt-2 space-y-3">
-        {loading ? (
+      {loading ? (
+        <div className="px-4">
           <div className="rounded-xl bg-white p-6 text-center text-sm" style={{ color: MUTED, border: `1px solid ${BORDER}` }}>
             <Loader2 size={14} className="inline animate-spin mr-1" /> กำลังโหลด...
           </div>
-        ) : staff.length === 0 ? (
+        </div>
+      ) : view === "gantt" ? (
+        <GanttWeekView
+          weekDays={weekDays}
+          staff={staff}
+          shiftsByStaff={shiftsByStaff}
+          branchOpenTime={branchOpenTime}
+          branchCloseTime={branchCloseTime}
+          busy={actionBusy}
+          onTapCell={(s, d) => setEditCell({ staff: s, date: d })}
+          onDragSave={saveDrag}
+        />
+      ) : (
+      /* Staff weekly cards */
+      <section className="px-4 pt-2 space-y-3">
+        {staff.length === 0 ? (
           <div className="rounded-xl bg-white p-6 text-center text-sm" style={{ color: MUTED, border: `1px solid ${BORDER}` }}>
             ยังไม่มีช่างที่สาขานี้
           </div>
@@ -408,6 +451,7 @@ export default function MobileShiftsManager({
           })
         )}
       </section>
+      )}
 
       {/* ── Branch picker sheet ──────────────────────────────────────────── */}
       {showBranchPicker && (
