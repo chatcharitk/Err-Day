@@ -19,12 +19,9 @@
  * environments still work. Production should set the secret.
  */
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { replyLine } from "@/lib/line-messaging";
-import { branchIdForGroup } from "@/lib/line-groups";
-import { captureSlipFromLine } from "@/lib/slips";
 import { findCardByKeyword } from "@/lib/flex/tarot-cards";
 import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
 
@@ -66,29 +63,7 @@ async function processEvent(event: LineEvent): Promise<void> {
     captureProfile(userId).catch(e => console.error("[webhook] capture failed", e));
   }
 
-  // 2. Payment-slip capture: an IMAGE posted in a branch staff group.
-  //    Download → Blob → OCR → booking match all run via after() so LINE gets
-  //    its 200 immediately. This is SILENT by design — no reply in the group;
-  //    staff don't need to see what's processed behind the scenes. Results
-  //    surface only in /admin/slips for the admin to confirm. Images elsewhere
-  //    (1:1 chats, unknown groups) are left untouched.
-  if (event.type === "message" && event.message?.type === "image" && event.message.id) {
-    const slipGroupId = event.source?.groupId;
-    const branchId    = slipGroupId ? branchIdForGroup(slipGroupId) : undefined;
-    if (slipGroupId && branchId) {
-      const messageId = event.message.id;
-      after(async () => {
-        try {
-          await captureSlipFromLine({ messageId, groupId: slipGroupId, branchId });
-        } catch (e) {
-          console.error("[webhook] slip capture failed:", e);
-        }
-      });
-      return;
-    }
-  }
-
-  // 3. Narrow reply rule: ONLY tarot keywords. Everything else is silent.
+  // 2. Narrow reply rule: ONLY tarot keywords. Everything else is silent.
   if (event.type !== "message")               return;
   if (event.message?.type !== "text")         return;
   if (!event.replyToken)                      return;

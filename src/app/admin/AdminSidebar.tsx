@@ -23,7 +23,6 @@ import {
   Gauge,
   Receipt,
   Sparkles,
-  Banknote,
   Wallet,
   Activity,
 } from "lucide-react";
@@ -36,7 +35,6 @@ const MENU = [
   { href: "/admin/calendar",   labelTh: "ปฏิทิน",        label: "Calendar",     icon: Calendar,                                   ownerOnly: false },
   { href: "/admin/customers",  labelTh: "ลูกค้า",         label: "Customers",    icon: Users,                                     ownerOnly: false },
   { href: "/admin/history",    labelTh: "ประวัติการขาย",  label: "Sales History", icon: History,                                  ownerOnly: false },
-  { href: "/admin/slips",      labelTh: "สลิปโอนเงิน",     label: "Payment Slips", icon: Banknote,                                  ownerOnly: false },
   { href: "/admin/payroll",    labelTh: "ค่าตอบแทน",       label: "Payroll",       icon: Wallet,                                    ownerOnly: true  },
   { href: "/admin/expenses",   labelTh: "รายจ่าย",         label: "Expenses",     icon: Receipt,                                    ownerOnly: false },
   { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard,                                 ownerOnly: false },
