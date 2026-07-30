@@ -1,15 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import MobileExpensesList from "./MobileExpensesList";
 
-export const revalidate = 30;
+export const dynamic    = "force-dynamic";
 export const metadata   = { title: "รายจ่าย — err.day" };
 
-function ymd(d: Date) { return d.toISOString().slice(0, 10); }
+function bangkokToday(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
 
 function defaultRange(): { from: string; to: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from: ymd(start), to: ymd(now) };
+  const to = bangkokToday();
+  return { from: `${to.slice(0, 7)}-01`, to };
 }
 
 export default async function MobileExpensesPage({
@@ -34,7 +42,7 @@ export default async function MobileExpensesPage({
   else if (branchFilter !== "all") where.branchId = branchFilter;
   if (categoryFilter !== "all") where.category = categoryFilter;
 
-  const [expenses, branches, total] = await Promise.all([
+  const [expenses, branches, total, categoryTotals] = await Promise.all([
     prisma.expense.findMany({
       where,
       select: {
@@ -52,6 +60,11 @@ export default async function MobileExpensesPage({
       select:  { id: true, name: true },
     }),
     prisma.expense.aggregate({ where, _sum: { totalAmount: true }, _count: true }),
+    prisma.expense.groupBy({
+      by: ["category"],
+      where,
+      _sum: { totalAmount: true },
+    }),
   ]);
 
   return (
@@ -69,6 +82,9 @@ export default async function MobileExpensesPage({
       branches={branches}
       filters={{ branchId: branchFilter, category: categoryFilter, from, to }}
       summary={{ totalAmount: total._sum.totalAmount ?? 0, count: total._count }}
+      categoryTotals={Object.fromEntries(
+        categoryTotals.map(row => [row.category, row._sum.totalAmount ?? 0]),
+      )}
     />
   );
 }

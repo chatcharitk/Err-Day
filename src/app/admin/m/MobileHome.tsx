@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Phone, Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2,
+  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
@@ -658,7 +658,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 style={{ color: TEXT }}
               >
                 <Wallet size={16} style={{ color: MUTED }} />
-                รายจ่าย
+                บันทึกรายจ่าย
               </Link>
               <Link
                 href="/admin/m/payroll"
@@ -747,4 +747,3 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
     </main>
   );
 }
-

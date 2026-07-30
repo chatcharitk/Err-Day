@@ -3,7 +3,7 @@
  *
  * One-shot endpoint for the "Upload Invoice" flow:
  *   1. Receive the receipt image (multipart form-data, field "file")
- *   2. Upload it to Vercel Blob → get a public URL
+ *   2. Upload it to Cloudflare R2 → get a public URL
  *   3. Send to Claude vision for OCR → get structured invoice data
  *   4. Return { receiptUrl, parsed } so the admin form can pre-fill
  *

@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, FileEdit, Sparkles, Trash2, Plus, ImageIcon } from "lucide-react";
-import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
+import { EXPENSE_CATEGORY_GROUPS, PAYMENT_METHODS } from "@/lib/expenses";
 import { resizeImageFile } from "@/lib/resize-image";
 
 const PRIMARY = "#8B1D24";
@@ -50,9 +50,11 @@ export default function ExpenseForm({ mode, branches, initial }: Props) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [tab,           setTab]           = useState<"upload" | "manual">(mode === "edit" ? "manual" : "upload");
+  const [tab,           setTab]           = useState<"upload" | "manual">(
+    mode === "edit" || initial?.category ? "manual" : "upload",
+  );
   const [branchId,      setBranchId]      = useState(initial?.branchId ?? "");
-  const [category,      setCategory]      = useState(initial?.category ?? "supplies");
+  const [category,      setCategory]      = useState(initial?.category ?? "other");
   const [vendor,        setVendor]        = useState(initial?.vendor ?? "");
   const [date,          setDate]          = useState(initial?.date ?? todayYmd());
   const [totalBaht,     setTotalBaht]     = useState<number | "">(initial?.totalAmount != null ? satangToBaht(initial.totalAmount) : "");
@@ -273,7 +275,11 @@ export default function ExpenseForm({ mode, branches, initial }: Props) {
               <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>หมวด *</label>
               <select value={category} onChange={e => setCategory(e.target.value)} required
                 className="w-full border rounded-lg px-3 py-2 text-sm" style={{ borderColor: BORDER, color: TEXT }}>
-                {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                {EXPENSE_CATEGORY_GROUPS.map(group => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
           </div>
@@ -281,8 +287,8 @@ export default function ExpenseForm({ mode, branches, initial }: Props) {
           {/* Vendor + Date */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>ผู้ขาย / ร้านค้า</label>
-              <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="เช่น ร้านอุปกรณ์ทำผม ABC"
+              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>ผู้รับเงิน / ร้านค้า / พนักงาน</label>
+              <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="เช่น ชื่อร้าน ผู้ให้เช่า หรือชื่อพนักงาน"
                 className="w-full border rounded-lg px-3 py-2 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
             </div>
             <div>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Receipt, ImageIcon } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
+import ExpenseQuickMenu from "@/components/ExpenseQuickMenu";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -30,6 +31,7 @@ interface Props {
   branches: Branch[];
   filters:  { branchId: string; category: string; from: string; to: string };
   summary:  { totalAmount: number; count: number };
+  categoryTotals: Record<string, number>;
 }
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
@@ -43,7 +45,11 @@ function fmt(satang: number) {
   return `฿${(satang / 100).toLocaleString("th-TH")}`;
 }
 
-export default function ExpensesList({ expenses, branches, filters, summary }: Props) {
+function localYmd(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export default function ExpensesList({ expenses, branches, filters, summary, categoryTotals }: Props) {
   const router = useRouter();
 
   function updateFilter(key: string, value: string) {
@@ -56,13 +62,33 @@ export default function ExpensesList({ expenses, branches, filters, summary }: P
     router.push(`/admin/expenses?${params.toString()}`);
   }
 
+  function applyPreset(preset: "month" | "lastMonth" | "year") {
+    const now = new Date();
+    let from: Date;
+    let to = now;
+    if (preset === "lastMonth") {
+      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      to = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (preset === "year") {
+      from = new Date(now.getFullYear(), 0, 1);
+    } else {
+      from = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    const params = new URLSearchParams();
+    if (filters.branchId !== "all") params.set("branchId", filters.branchId);
+    if (filters.category !== "all") params.set("category", filters.category);
+    params.set("from", localYmd(from));
+    params.set("to", localYmd(to));
+    router.push(`/admin/expenses?${params.toString()}`);
+  }
+
   return (
     <div className="max-w-6xl px-8 py-8">
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Expense Tracking</p>
-          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>รายจ่าย</h1>
+          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>บันทึกและตรวจสอบรายจ่าย</h1>
         </div>
         <Link href="/admin/expenses/new"
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
@@ -70,6 +96,10 @@ export default function ExpensesList({ expenses, branches, filters, summary }: P
           <Plus size={16} />
           เพิ่มรายจ่าย
         </Link>
+      </div>
+
+      <div className="mb-6 rounded-2xl p-5" style={{ background: "#FDF8F3", border: `1.5px solid ${BORDER}` }}>
+        <ExpenseQuickMenu basePath="/admin/expenses/new" totals={categoryTotals} />
       </div>
 
       {/* ── Summary ───────────────────────────────────────────────────────── */}
@@ -113,6 +143,20 @@ export default function ExpensesList({ expenses, branches, filters, summary }: P
           <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>ถึง</label>
           <input type="date" value={filters.to} onChange={e => updateFilter("to", e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
+        </div>
+        <div className="flex items-center gap-1.5 pb-0.5">
+          <button type="button" onClick={() => applyPreset("month")}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ color: PRIMARY, background: "#FFF8F4" }}>
+            เดือนนี้
+          </button>
+          <button type="button" onClick={() => applyPreset("lastMonth")}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ color: TEXT, background: "#F7F3F0" }}>
+            เดือนก่อน
+          </button>
+          <button type="button" onClick={() => applyPreset("year")}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ color: TEXT, background: "#F7F3F0" }}>
+            ปีนี้
+          </button>
         </div>
       </div>
 

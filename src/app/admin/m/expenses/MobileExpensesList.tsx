@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Receipt, Filter, X, ImageIcon } from "lucide-react";
+import { ArrowLeft, Plus, Receipt, Filter, ImageIcon } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
+import ExpenseQuickMenu from "@/components/ExpenseQuickMenu";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -28,6 +29,7 @@ interface Props {
   branches: Branch[];
   filters:  { branchId: string; category: string; from: string; to: string };
   summary:  { totalAmount: number; count: number };
+  categoryTotals: Record<string, number>;
 }
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
@@ -38,6 +40,10 @@ const PAYMENT_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 function fmt(satang: number) { return `฿${(satang / 100).toLocaleString("th-TH")}`; }
+
+function localYmd(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 /** Group expenses by date string for the list display. */
 function groupByDate(rows: ExpenseRow[]): { date: string; rows: ExpenseRow[]; total: number }[] {
@@ -53,7 +59,7 @@ function groupByDate(rows: ExpenseRow[]): { date: string; rows: ExpenseRow[]; to
     .map(([date, g]) => ({ date, ...g }));
 }
 
-export default function MobileExpensesList({ expenses, branches, filters, summary }: Props) {
+export default function MobileExpensesList({ expenses, branches, filters, summary, categoryTotals }: Props) {
   const router = useRouter();
   const [showFilters, setShowFilters] = useState(false);
 
@@ -64,6 +70,26 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
     if (next.category && next.category !== "all") params.set("category", next.category);
     if (next.from) params.set("from", next.from);
     if (next.to)   params.set("to",   next.to);
+    router.push(`/admin/m/expenses?${params.toString()}`);
+  }
+
+  function applyPreset(preset: "month" | "lastMonth" | "year") {
+    const now = new Date();
+    let from: Date;
+    let to = now;
+    if (preset === "lastMonth") {
+      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      to = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (preset === "year") {
+      from = new Date(now.getFullYear(), 0, 1);
+    } else {
+      from = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    const params = new URLSearchParams();
+    if (filters.branchId !== "all") params.set("branchId", filters.branchId);
+    if (filters.category !== "all") params.set("category", filters.category);
+    params.set("from", localYmd(from));
+    params.set("to", localYmd(to));
     router.push(`/admin/m/expenses?${params.toString()}`);
   }
 
@@ -79,7 +105,7 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
           </Link>
           <div className="flex-1">
             <p className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>Expense Tracking</p>
-            <h1 className="text-base font-semibold leading-tight" style={{ color: TEXT }}>รายจ่าย</h1>
+            <h1 className="text-base font-semibold leading-tight" style={{ color: TEXT }}>บันทึกรายจ่าย</h1>
           </div>
           <button onClick={() => setShowFilters(v => !v)}
             className="w-9 h-9 flex items-center justify-center rounded-full"
@@ -120,6 +146,20 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
                   className="w-full border rounded-lg px-3 py-2 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
               </div>
             </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" onClick={() => applyPreset("month")}
+                className="py-2 rounded-lg text-xs font-semibold" style={{ color: PRIMARY, background: "#FFF8F4" }}>
+                เดือนนี้
+              </button>
+              <button type="button" onClick={() => applyPreset("lastMonth")}
+                className="py-2 rounded-lg text-xs font-semibold" style={{ color: TEXT, background: "#F7F3F0" }}>
+                เดือนก่อน
+              </button>
+              <button type="button" onClick={() => applyPreset("year")}
+                className="py-2 rounded-lg text-xs font-semibold" style={{ color: TEXT, background: "#F7F3F0" }}>
+                ปีนี้
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -136,6 +176,14 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
             <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>{summary.count}</p>
           </div>
         </div>
+      </section>
+
+      <section className="px-4 pt-3 pb-3">
+        <ExpenseQuickMenu
+          basePath="/admin/m/expenses/new"
+          totals={categoryTotals}
+          compact
+        />
       </section>
 
       {/* List */}
