@@ -34,6 +34,13 @@ export interface DashboardData {
   newMembersThisMonth: number;
   /** Active members split by the branch they bought/renewed at (S1/S2/unknown). */
   membersByBranch: { s1: number; s2: number; unknown: number };
+  /** Customers with exactly one completed visit and nothing since. All branches. */
+  oneTimeGone: number;
+  oneTimeGonePct: number;
+  /** Denominator for the above — customers with at least one completed visit. */
+  customersWithVisit: number;
+  /** Days of silence before a one-visit customer is counted as gone. */
+  churnQuietDays: number;
   serviceBreakdown: { name: string; total: number; count: number }[];
   topCustomers: { id: string; name: string; total: number; count: number }[]; // sorted by count
   staffRevenue: { name: string; total: number; count: number }[];
@@ -272,6 +279,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue,
     activeMembers, newMembersThisMonth, membersByBranch,
+    oneTimeGone, oneTimeGonePct, customersWithVisit, churnQuietDays,
     serviceBreakdown, topCustomers, staffRevenue, weeklyRevenue,
     hourlyUsage,
     avgTicket,
@@ -319,7 +327,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       </div>
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
         <KpiCard
           label="รายได้วันนี้"
           value={fmt(todayRevenue)}
@@ -361,6 +369,22 @@ export default function DashboardView({ data }: { data: DashboardData }) {
             </span>
             {membersByBranch.unknown > 0 && <span>· ไม่ระบุ {membersByBranch.unknown}</span>}
           </div>
+        </div>
+        <div className="rounded-2xl bg-white p-5" style={{ border: `1.5px solid ${BORDER}` }}>
+          <p className="text-xs mb-2" style={{ color: MUTED }}>
+            มาครั้งเดียวแล้วหาย
+            {!isAllBranches && <span className="ml-1 text-[10px]">(ทั่วระบบ)</span>}
+          </p>
+          <p className="text-2xl font-bold mb-1 leading-tight" style={{ color: "#B45309" }}>
+            {oneTimeGone}
+          </p>
+          <p className="text-xs" style={{ color: "#B45309" }}>
+            {oneTimeGonePct}%
+            <span style={{ color: MUTED }}> ของลูกค้า {customersWithVisit} คน</span>
+          </p>
+          <p className="text-[11px] mt-2" style={{ color: MUTED }}>
+            มา 1 ครั้ง แล้วเงียบเกิน {churnQuietDays} วัน
+          </p>
         </div>
       </div>
 

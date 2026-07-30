@@ -1,9 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { getMembershipBranchByCustomer } from "@/lib/membership";
 import { branchCode } from "@/lib/branch-display";
+import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import DashboardView, { DashboardData } from "./DashboardView";
 
 export const revalidate = 30;
+
+/**
+ * A customer counts as "came once then vanished" only after this many days of
+ * silence. Without a window, every first-timer who visited yesterday would be
+ * labelled churned — which inflates the number badly (669 vs 350 on current
+ * data, because ~319 are recent first-timers who may well come back).
+ */
+const CHURN_QUIET_DAYS = 60;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -79,6 +88,7 @@ export default async function AdminDashboard({
     lastMonthAgg,
     activeMembersList,
     newMembersThisMonth,
+    visitsPerCustomer,
   ] = await Promise.all([
     prisma.branch.findMany({
       where: { isActive: true }, orderBy: { name: "asc" },
@@ -123,6 +133,21 @@ export default async function AdminDashboard({
     prisma.membership.count({
       where: { joinedAt: { gte: thisMonthMTDB.start, lte: thisMonthMTDB.end } },
     }),
+
+    // Retention: one row per customer with their visit count + last visit date.
+    //
+    // Deliberately NOT branch-filtered. A customer's history spans branches (some
+    // use both), so counting per-branch would label "went to the other branch"
+    // as churned — the card is labelled ทั่วระบบ to match.
+    //
+    // groupBy keeps this to a single aggregate returning ~1 row per customer,
+    // rather than pulling every booking row into the dashboard on each load.
+    prisma.booking.groupBy({
+      by:     ["customerId"],
+      where:  { status: "COMPLETED", serviceId: { notIn: SALE_ONLY_SKUS } },
+      _count: { _all: true },
+      _max:   { date: true },
+    }),
   ]);
 
   // ── Derived metrics ─────────────────────────────────────────────────────────
@@ -139,6 +164,18 @@ export default async function AdminDashboard({
   const lastMonthRevenue = lastMonthAgg._sum.totalPrice ?? 0;
   const lastMonthCount   = lastMonthAgg._count;
   const avgTicket        = thisMonthCount > 0 ? Math.round(thisMonthRevenue / thisMonthCount) : 0;
+
+  // "มาครั้งเดียวแล้วหาย": exactly one completed visit, and silent since.
+  // `new Date()` rather than `Date.now()` — the latter trips react-hooks/purity,
+  // and this file already uses the plain-constructor form (see nowDate below).
+  const quietBefore       = new Date(new Date().getTime() - CHURN_QUIET_DAYS * 24 * 3600 * 1000);
+  const customersWithVisit = visitsPerCustomer.length;
+  const oneTimeGone = visitsPerCustomer.filter(
+    r => r._count._all === 1 && (r._max.date ?? new Date(0)) < quietBefore,
+  ).length;
+  const oneTimeGonePct = customersWithVisit > 0
+    ? Math.round((oneTimeGone / customersWithVisit) * 1000) / 10
+    : 0;
 
   // Active members: not pending, not expired, not used-up.
   const nowDate = new Date();
@@ -231,6 +268,7 @@ export default async function AdminDashboard({
     thisMonthRevenue, thisMonthCount,
     lastMonthRevenue, lastMonthCount,
     activeMembers, newMembersThisMonth, membersByBranch,
+    oneTimeGone, oneTimeGonePct, customersWithVisit, churnQuietDays: CHURN_QUIET_DAYS,
     serviceBreakdown, topCustomers, staffRevenue, weeklyRevenue,
     hourlyUsage,
     avgTicket,
