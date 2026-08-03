@@ -43,7 +43,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json() as {
       staffId?: string; date?: string;
-      otHours?: unknown; worked?: unknown; action?: string;
+      otHours?: unknown; tipSatang?: unknown; worked?: unknown; action?: string;
     };
     const staffId = body.staffId;
     const date = body.date || bangkokTodayStr();
@@ -71,9 +71,18 @@ export async function PATCH(request: Request) {
     }
     const worked = typeof body.worked === "boolean" ? body.worked : undefined;
 
+    // Validate / clamp tip amount (0–50,000 baht, finite number).
+    let tipSatang: number | undefined;
+    if (body.tipSatang !== undefined && body.tipSatang !== null && body.tipSatang !== "") {
+      const n = Number(body.tipSatang);
+      if (!Number.isFinite(n)) return NextResponse.json({ error: "invalid tipSatang" }, { status: 400 });
+      tipSatang = Math.min(5_000_000, Math.max(0, Math.round(n)));
+    }
+
     const noon = bangkokDayNoon(date);
     const baseData = {
       ...(otHours !== undefined ? { otHours } : {}),
+      ...(tipSatang !== undefined ? { tipSatang } : {}),
       ...(worked !== undefined ? { worked } : {}),
     };
 

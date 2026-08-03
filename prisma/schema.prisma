@@ -138,6 +138,8 @@ model StaffDailyPayout {
   date             DateTime
   /// Admin-entered overtime hours for the day (e.g. 1.5).
   otHours          Float        @default(0)
+  /// Admin-entered tip amount for the day (satang) — a flat entry, not hours × rate.
+  tipSatang        Int          @default(0)
   /// Whether the staff worked this day — drives daily-wage base accrual.
   worked           Boolean      @default(true)
   status           PayoutStatus @default(PENDING)
@@ -146,6 +148,8 @@ model StaffDailyPayout {
   otSatang         Int?
   paidAt           DateTime?
   paidBy           String?
+  /// Set once this day's payout has been recorded as an Expense (review/edit step in the UI).
+  expenseId        String?
   notes            String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt

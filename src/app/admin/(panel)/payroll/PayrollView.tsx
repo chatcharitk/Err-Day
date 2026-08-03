@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Banknote, Check, Loader2, Settings, CalendarDays, Wallet, CalendarRange, Receipt } from "lucide-react";
+import { Banknote, Check, Loader2, Settings, CalendarDays, Wallet, CalendarRange, Receipt, X } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -19,7 +19,9 @@ interface Row {
   payType: PayType; baseSatang: number; payCadence: Cadence;
   commissionSatang: number; completedCount: number;
   otHours: number; otRateSatang: number; otSatang: number;
+  tipSatang: number;
   totalSatang: number; worked: boolean; status: "PENDING" | "PAID"; paidAt: string | null;
+  expenseId: string | null;
 }
 interface StaffCfg { id: string; name: string; branchId: string; payType: PayType; baseSatang: number; payCadence: Cadence; otRateSatang: number | null }
 interface ServiceCfg { id: string; nameTh: string; category: string; commissionSatang: number }
@@ -84,6 +86,8 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [otEdits, setOtEdits] = useState<Record<string, string>>({});
+  const [tipEdits, setTipEdits] = useState<Record<string, string>>({});
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   async function patch(staffId: string, body: Record<string, unknown>) {
     setBusyId(staffId);
@@ -93,8 +97,9 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
         body: JSON.stringify({ staffId, date: activeDate, ...body }),
       });
       if (res.ok) {
-        // Drop the local OT edit so the input reflects the refreshed server value.
+        // Drop the local edits so the inputs reflect the refreshed server value.
         setOtEdits(p => { const n = { ...p }; delete n[staffId]; return n; });
+        setTipEdits(p => { const n = { ...p }; delete n[staffId]; return n; });
         router.refresh();
       }
     } finally { setBusyId(null); }
@@ -143,6 +148,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
       <div className="space-y-2">
         {rows.map(r => {
           const otVal = otEdits[r.staffId] ?? String(r.otHours);
+          const tipVal = tipEdits[r.staffId] ?? String(r.tipSatang / 100);
           const paid = r.status === "PAID";
           return (
             <div key={r.staffId} className="rounded-xl bg-white p-3" style={{ border: `1.5px solid ${paid ? "#86EFAC" : BORDER}` }}>
@@ -175,6 +181,26 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
                   <span className="text-xs w-16 text-right" style={{ color: MUTED }}>{baht(r.otSatang)}</span>
                 </div>
 
+                {/* tip input */}
+                <div className="flex items-center gap-1">
+                  <label className="text-[11px]" style={{ color: MUTED }}>ทิป ฿</label>
+                  <input
+                    type="number" step="1" min="0" inputMode="decimal"
+                    value={tipVal}
+                    disabled={paid || busyId === r.staffId}
+                    onChange={e => setTipEdits(p => ({ ...p, [r.staffId]: e.target.value }))}
+                    onBlur={() => {
+                      const raw = tipEdits[r.staffId];
+                      if (raw === undefined) return;            // not edited
+                      const baht2satang = Math.round(Math.max(0, parseFloat(raw)) * 100);
+                      if (!Number.isNaN(baht2satang) && baht2satang !== r.tipSatang) patch(r.staffId, { tipSatang: baht2satang });
+                      else setTipEdits(p => { const n = { ...p }; delete n[r.staffId]; return n; }); // revert bad/no-op input
+                    }}
+                    className="w-16 px-2 py-1 text-sm rounded-lg border text-right disabled:opacity-50"
+                    style={{ borderColor: BORDER, color: TEXT }}
+                  />
+                </div>
+
                 {/* total */}
                 <div className="text-right w-24">
                   <p className="text-[10px]" style={{ color: MUTED }}>รวม</p>
@@ -193,7 +219,30 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
                     {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Banknote size={12} />} จ่ายเงิน
                   </button>
                 )}
+
+                {/* record as expense */}
+                {r.expenseId ? (
+                  <Link href={`/admin/expenses/${r.expenseId}`}
+                    className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: "#DCFCE7", color: "#166534" }}>
+                    <Check size={12} /> บันทึกแล้ว
+                  </Link>
+                ) : (
+                  <button onClick={() => setReviewingId(r.staffId)} disabled={!paid}
+                    title={paid ? undefined : "ต้องกดจ่ายเงินก่อน"}
+                    className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-40"
+                    style={{ border: `1px solid ${BORDER}`, color: PRIMARY }}>
+                    <Receipt size={12} /> บันทึกเป็นรายจ่าย
+                  </button>
+                )}
               </div>
+
+              {reviewingId === r.staffId && (
+                <RecordExpenseReview
+                  row={r} date={activeDate}
+                  onClose={() => setReviewingId(null)}
+                  onRecorded={() => { setReviewingId(null); router.refresh(); }}
+                />
+              )}
             </div>
           );
         })}
@@ -202,6 +251,81 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
         ค่ามือ = ค่าคอมมิชชั่นต่อบริการของงานที่เสร็จ (COMPLETED) วันนั้น · OT = ชั่วโมงที่กรอก × เรตต่อชั่วโมง · เงินเดือน/ค่าแรงฐานจ่ายแยกตามรอบ (ดูแท็บตั้งค่า)
       </p>
     </>
+  );
+}
+
+// ─── Review-and-edit panel: confirm the OT/commission/tip breakdown before recording ──
+function RecordExpenseReview({ row, date, onClose, onRecorded }: {
+  row: Row; date: string; onClose: () => void; onRecorded: () => void;
+}) {
+  const [commissionBaht, setCommissionBaht] = useState(String(row.commissionSatang / 100));
+  const [otBaht, setOtBaht] = useState(String(row.otSatang / 100));
+  const [tipBaht, setTipBaht] = useState(String(row.tipSatang / 100));
+  const [category, setCategory] = useState<"commission_bonus" | "salary">("commission_bonus");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const total = (parseFloat(commissionBaht) || 0) + (parseFloat(otBaht) || 0) + (parseFloat(tipBaht) || 0);
+
+  async function confirm() {
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/payroll/daily-expense", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: row.staffId, date, category,
+          commissionSatang: Math.round((parseFloat(commissionBaht) || 0) * 100),
+          otSatang: Math.round((parseFloat(otBaht) || 0) * 100),
+          tipSatang: Math.round((parseFloat(tipBaht) || 0) * 100),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "บันทึกไม่สำเร็จ"); return; }
+      onRecorded();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="mt-3 pt-3 rounded-lg" style={{ borderTop: `1px dashed ${BORDER}` }}>
+      <p className="text-xs font-medium mb-2" style={{ color: TEXT }}>ตรวจสอบก่อนบันทึกเป็นรายจ่าย — {row.name}</p>
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <div>
+          <label className="text-[11px]" style={{ color: MUTED }}>ค่าคอมมิชชั่น ฿</label>
+          <input type="number" step="1" min="0" value={commissionBaht} onChange={e => setCommissionBaht(e.target.value)}
+            className="w-full px-2 py-1 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
+        </div>
+        <div>
+          <label className="text-[11px]" style={{ color: MUTED }}>OT ฿</label>
+          <input type="number" step="1" min="0" value={otBaht} onChange={e => setOtBaht(e.target.value)}
+            className="w-full px-2 py-1 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
+        </div>
+        <div>
+          <label className="text-[11px]" style={{ color: MUTED }}>ทิป ฿</label>
+          <input type="number" step="1" min="0" value={tipBaht} onChange={e => setTipBaht(e.target.value)}
+            className="w-full px-2 py-1 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <select value={category} onChange={e => setCategory(e.target.value as "commission_bonus" | "salary")}
+          className="text-xs px-2 py-1.5 rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }}>
+          <option value="commission_bonus">หมวด: ค่าคอม/OT/ทิป</option>
+          <option value="salary">หมวด: เงินเดือน/ค่าแรง</option>
+        </select>
+        <p className="text-xs" style={{ color: MUTED }}>รวม <span className="font-bold" style={{ color: PRIMARY }}>{baht(Math.round(total * 100))}</span></p>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="ml-auto flex gap-2">
+          <button onClick={onClose} disabled={saving}
+            className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ border: `1px solid ${BORDER}`, color: MUTED }}>
+            <X size={12} /> ยกเลิก
+          </button>
+          <button onClick={confirm} disabled={saving || total <= 0}
+            className="text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-40" style={{ background: PRIMARY }}>
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <Receipt size={12} />} ยืนยันบันทึก
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

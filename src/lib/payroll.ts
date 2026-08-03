@@ -78,12 +78,16 @@ export interface StaffPayoutRow {
   otRateSatang: number;
   /** OT pay this day (satang). */
   otSatang: number;
-  /** Daily cash-out = commission + OT (satang). */
+  /** Admin-entered tip amount for the day (satang) — flat entry, not computed. */
+  tipSatang: number;
+  /** Daily cash-out = commission + OT + tip (satang). */
   totalSatang: number;
   /** Did the staff work this day (drives daily-wage base accrual). */
   worked: boolean;
   status: StaffDailyPayout["status"];
   paidAt: string | null;
+  /** Set once this day's payout has been recorded as an Expense. */
+  expenseId: string | null;
 }
 
 /**
@@ -159,6 +163,7 @@ export async function computeBranchDailyPayout(
     // If already settled, trust the snapshot; else compute live.
     const commissionSatang = pr?.status === "PAID" && pr.commissionSatang != null ? pr.commissionSatang : comm.sum;
     const otSatang = pr?.status === "PAID" && pr.otSatang != null ? pr.otSatang : otPaySatang(s, otHours);
+    const tipSatang = pr?.tipSatang ?? 0;
     rows.push({
       staffId: id,
       name: s.name,
@@ -170,10 +175,12 @@ export async function computeBranchDailyPayout(
       otHours,
       otRateSatang: otRate,
       otSatang,
-      totalSatang: commissionSatang + otSatang,
+      tipSatang,
+      totalSatang: commissionSatang + otSatang + tipSatang,
       worked: pr?.worked ?? true,
       status: pr?.status ?? "PENDING",
       paidAt: pr?.paidAt ? pr.paidAt.toISOString() : null,
+      expenseId: pr?.expenseId ?? null,
     });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name, "th"));

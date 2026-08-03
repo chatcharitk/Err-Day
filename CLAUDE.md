@@ -142,12 +142,17 @@ POS lives at `/admin/(panel)/pos` → `/api/pos/sale`; selling an entitlement SK
   `findOrCreateVendorId` — typing any name on save reuses an exact case-insensitive match or creates a
   new Vendor, so the registry builds itself without a separate "add vendor" step;
   `VendorAutocomplete.tsx` is just a reuse-shortcut on top of that, not the source of truth).
-- **Payroll → Expense**: the payroll page's "สรุปรายเดือน" tab rolls up each staff's PAID commission+OT
-  for a month (`computeBranchMonthlyPayout` in `src/lib/payroll.ts`) and can record it as one
-  `commission_bonus` Expense per staff. Idempotent via a `[PAYROLL:staffId:YYYY-MM]` marker in
-  `Expense.notes` — re-clicking returns the existing expense instead of creating a duplicate. Base
-  salary/wage is deliberately NOT included (per this file's existing convention, base pay has no
-  reliable per-day "worked" signal here — it's disbursed on its own cadence outside the app).
+- **Payroll → Expense**: two ways to turn payout into a recorded Expense.
+  - Daily (`"จ่ายรายวัน"` tab): each row also has an admin-entered `tipSatang` (flat amount, not
+    hours×rate) alongside `otHours`. Once a day is marked PAID, "บันทึกเป็นรายจ่าย" opens a review
+    panel prefilling commission/OT/tip (editable, not just recomputed) before POSTing to
+    `/api/admin/payroll/daily-expense`. Idempotent via `StaffDailyPayout.expenseId` — sconde POST
+    a second POST for the same staff/day returns the existing expense.
+  - Monthly (`"สรุปรายเดือน"` tab): rolls up each staff's PAID commission+OT for a month
+    (`computeBranchMonthlyPayout` in `src/lib/payroll.ts`) and records it as one `commission_bonus`
+    Expense per staff. Idempotent via a `[PAYROLL:staffId:YYYY-MM]` marker in `Expense.notes`.
+  - Both deliberately exclude base salary/wage — per this file's existing convention, base pay has no
+    reliable per-day "worked" signal here — it's disbursed on its own cadence outside the app.
 - **Fuzzy customer search:** `Customer` has `pg_trgm` GIN indexes on name/nickname/phone — search uses
   trigram similarity (`/api/admin/search`, `CustomerSearch.tsx`). `Vendor.name` uses the same pattern.
 - **PDPA:** Thai data-consent capture (`src/lib/pdpa.ts`, `PdpaConsentBlock.tsx`); consent fields on `Customer`.
