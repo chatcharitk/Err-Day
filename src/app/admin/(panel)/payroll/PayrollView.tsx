@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Check, Loader2, Settings, CalendarDays, Wallet } from "lucide-react";
+import Link from "next/link";
+import { Banknote, Check, Loader2, Settings, CalendarDays, Wallet, CalendarRange, Receipt } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -43,7 +44,7 @@ const branchShort = (b: Branch) => b.name.replace(/^err\.day\s*/i, "");
 
 export default function PayrollView({ branches, activeBranchId, activeDate, todayStr, rows, staffConfig, services, addons, basePath = "/admin/payroll" }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"daily" | "settings">("daily");
+  const [tab, setTab] = useState<"daily" | "monthly" | "settings">("daily");
 
   const go = (branchId: string, date: string) =>
     router.push(`${basePath}?branchId=${branchId}&date=${date}`);
@@ -59,7 +60,7 @@ export default function PayrollView({ branches, activeBranchId, activeDate, toda
 
       {/* tabs */}
       <div className="flex gap-2 mb-6">
-        {([["daily", "จ่ายรายวัน", CalendarDays], ["settings", "ตั้งค่าฐานเงิน/ค่ามือ", Settings]] as const).map(([id, label, Icon]) => (
+        {([["daily", "จ่ายรายวัน", CalendarDays], ["monthly", "สรุปรายเดือน", CalendarRange], ["settings", "ตั้งค่าฐานเงิน/ค่ามือ", Settings]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className="text-sm px-4 py-1.5 rounded-full border inline-flex items-center gap-1.5"
             style={tab === id ? { background: PRIMARY, borderColor: PRIMARY, color: "white" } : { background: "white", borderColor: BORDER, color: "#6B5245" }}>
@@ -68,9 +69,9 @@ export default function PayrollView({ branches, activeBranchId, activeDate, toda
         ))}
       </div>
 
-      {tab === "daily"
-        ? <DailyTab key={`${activeBranchId}:${activeDate}`} branches={branches} activeBranchId={activeBranchId} activeDate={activeDate} todayStr={todayStr} rows={rows} onNav={go} />
-        : <SettingsTab branches={branches} staffConfig={staffConfig} services={services} addons={addons} />}
+      {tab === "daily" && <DailyTab key={`${activeBranchId}:${activeDate}`} branches={branches} activeBranchId={activeBranchId} activeDate={activeDate} todayStr={todayStr} rows={rows} onNav={go} />}
+      {tab === "monthly" && <MonthlyTab branches={branches} activeBranchId={activeBranchId} />}
+      {tab === "settings" && <SettingsTab branches={branches} staffConfig={staffConfig} services={services} addons={addons} />}
     </div>
   );
 }
@@ -200,6 +201,134 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
       <p className="text-[11px] mt-4" style={{ color: MUTED }}>
         ค่ามือ = ค่าคอมมิชชั่นต่อบริการของงานที่เสร็จ (COMPLETED) วันนั้น · OT = ชั่วโมงที่กรอก × เรตต่อชั่วโมง · เงินเดือน/ค่าแรงฐานจ่ายแยกตามรอบ (ดูแท็บตั้งค่า)
       </p>
+    </>
+  );
+}
+
+// ─── Monthly rollup tab: commission+OT already paid this month → record as an Expense ──
+interface MonthlyRow {
+  staffId: string; name: string; daysPaid: number;
+  commissionSatang: number; otSatang: number; totalSatang: number;
+  recordedExpenseId: string | null;
+}
+
+function thisMonthStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function MonthlyTab({ branches, activeBranchId }: { branches: Branch[]; activeBranchId: string }) {
+  const [branchId, setBranchId] = useState(activeBranchId || branches[0]?.id || "");
+  const [month, setMonth] = useState(thisMonthStr());
+  const [rows, setRows] = useState<MonthlyRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    if (!branchId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/payroll/monthly?branchId=${branchId}&month=${month}`);
+      const data = await res.json();
+      if (res.ok) setRows(data.rows ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId, month]);
+
+  // setTimeout, not a direct call — load() eventually setStates, and calling
+  // that synchronously in the effect body trips react-hooks/set-state-in-effect.
+  useEffect(() => { const t = setTimeout(load, 0); return () => clearTimeout(t); }, [load]);
+
+  async function record(staffId: string) {
+    setBusyId(staffId);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/payroll/monthly", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId, branchId, month }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "บันทึกไม่สำเร็จ"); return; }
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const grand = rows.reduce((s, r) => s + r.totalSatang, 0);
+
+  return (
+    <>
+      {/* branch + month controls */}
+      <div className="flex items-center gap-3 flex-wrap mb-4">
+        <div className="flex gap-2">
+          {branches.map(b => (
+            <button key={b.id} onClick={() => setBranchId(b.id)}
+              className="text-sm px-3 py-1.5 rounded-lg border"
+              style={branchId === b.id ? { background: "#F0E4D8", borderColor: PRIMARY, color: PRIMARY, fontWeight: 600 } : { background: "white", borderColor: BORDER, color: "#6B5245" }}>
+              {branchShort(b)}
+            </button>
+          ))}
+        </div>
+        <input type="month" value={month} max={thisMonthStr()}
+          onChange={e => setMonth(e.target.value)}
+          className="px-3 py-1.5 text-sm rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }} />
+      </div>
+
+      <p className="text-[11px] mb-4" style={{ color: MUTED }}>
+        สรุปเฉพาะค่าคอมมิชชั่น + OT ที่กด &ldquo;จ่ายเงิน&rdquo; แล้วในแท็บรายวัน (ไม่รวมเงินเดือน/ค่าแรงฐาน ซึ่งจ่ายแยกตามรอบของตัวเอง)
+        การบันทึกเป็นรายจ่ายทำได้ครั้งเดียวต่อคนต่อเดือน กดซ้ำจะไม่สร้างรายการซ้ำ
+      </p>
+
+      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center" style={{ border: `1.5px solid ${BORDER}` }}>
+          <Loader2 size={18} className="animate-spin mx-auto" style={{ color: MUTED }} />
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl bg-white p-10 text-center" style={{ border: `1.5px solid ${BORDER}` }}>
+          <p className="text-sm" style={{ color: MUTED }}>ยังไม่มีการจ่ายเงินที่ยืนยันแล้วในเดือนนี้</p>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-xl bg-white p-3 mb-3" style={{ border: `1.5px solid ${PRIMARY}` }}>
+            <p className="text-xs" style={{ color: MUTED }}>รวมทั้งหมด ({rows.length} คน)</p>
+            <p className="text-lg font-bold" style={{ color: PRIMARY }}>{baht(grand)}</p>
+          </div>
+          <div className="space-y-2">
+            {rows.map(r => (
+              <div key={r.staffId} className="rounded-xl bg-white p-3" style={{ border: `1.5px solid ${r.recordedExpenseId ? "#86EFAC" : BORDER}` }}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-32">
+                    <p className="font-semibold" style={{ color: TEXT }}>{r.name}</p>
+                    <p className="text-[11px]" style={{ color: MUTED }}>
+                      {r.daysPaid} วันที่จ่ายแล้ว · ค่ามือ {baht(r.commissionSatang)} · OT {baht(r.otSatang)}
+                    </p>
+                  </div>
+                  <div className="text-right w-28">
+                    <p className="text-[10px]" style={{ color: MUTED }}>รวม</p>
+                    <p className="font-bold" style={{ color: PRIMARY }}>{baht(r.totalSatang)}</p>
+                  </div>
+                  {r.recordedExpenseId ? (
+                    <Link href={`/admin/expenses/${r.recordedExpenseId}`}
+                      className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: "#DCFCE7", color: "#166534" }}>
+                      <Check size={12} /> บันทึกแล้ว
+                    </Link>
+                  ) : (
+                    <button onClick={() => record(r.staffId)} disabled={busyId === r.staffId}
+                      className="text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-50" style={{ background: PRIMARY }}>
+                      {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Receipt size={12} />} บันทึกเป็นรายจ่าย
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

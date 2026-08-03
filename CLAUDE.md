@@ -133,12 +133,23 @@ POS lives at `/admin/(panel)/pos` → `/api/pos/sale`; selling an entitlement SK
   staff/addons) in `unstable_cache` with tags + 5-min revalidate; admin edits invalidate by tag. There's
   also a 30s in-memory admin-session cache per Lambda.
 - **Image uploads:** Vercel Blob (`@vercel/blob`, `BLOB_READ_WRITE_TOKEN`) via `/api/upload` +
-  `ImageUpload.tsx`. Used for branch/service/staff/customer photos and expense receipts.
-- **Expense OCR:** `src/lib/expense-ocr.ts` sends receipt images to Claude vision (Anthropic SDK,
-  forced tool-use for structured output) for admin review — internal-only. Key: `ANTHROPIC_API_KEY_EXPENSE`
-  (falls back to `ANTHROPIC_API_KEY`); model via `ANTHROPIC_MODEL`.
+  `ImageUpload.tsx`. Used for branch/service/staff/customer photos and expense attachments
+  (`kind=receipt` also accepts `application/pdf`, unlike the image-only profile/customer-photo kinds).
+- **Expenses are manual entry only** — there is no OCR/AI step (removed; the Anthropic SDK is no
+  longer a dependency at all). `ExpenseForm.tsx` / `MobileExpenseForm.tsx` support multiple file
+  attachments (`ExpenseAttachment`, uploaded independently via `ExpenseAttachments.tsx` as soon as each
+  is picked) and a searchable vendor registry (`Vendor` model, `src/lib/vendors.ts`
+  `findOrCreateVendorId` — typing any name on save reuses an exact case-insensitive match or creates a
+  new Vendor, so the registry builds itself without a separate "add vendor" step;
+  `VendorAutocomplete.tsx` is just a reuse-shortcut on top of that, not the source of truth).
+- **Payroll → Expense**: the payroll page's "สรุปรายเดือน" tab rolls up each staff's PAID commission+OT
+  for a month (`computeBranchMonthlyPayout` in `src/lib/payroll.ts`) and can record it as one
+  `commission_bonus` Expense per staff. Idempotent via a `[PAYROLL:staffId:YYYY-MM]` marker in
+  `Expense.notes` — re-clicking returns the existing expense instead of creating a duplicate. Base
+  salary/wage is deliberately NOT included (per this file's existing convention, base pay has no
+  reliable per-day "worked" signal here — it's disbursed on its own cadence outside the app).
 - **Fuzzy customer search:** `Customer` has `pg_trgm` GIN indexes on name/nickname/phone — search uses
-  trigram similarity (`/api/admin/search`, `CustomerSearch.tsx`).
+  trigram similarity (`/api/admin/search`, `CustomerSearch.tsx`). `Vendor.name` uses the same pattern.
 - **PDPA:** Thai data-consent capture (`src/lib/pdpa.ts`, `PdpaConsentBlock.tsx`); consent fields on `Customer`.
 - **Branches** are currently `branch-sukhumvit` and `branch-bangna` (referenced by id in
   `line-groups.ts` and seed data).
@@ -147,6 +158,5 @@ POS lives at `/admin/(panel)/pos` → `/api/pos/sale`; selling an entitlement SK
 
 `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_LIFF_ID`, `NEXT_PUBLIC_APP_URL`, `LINE_CHANNEL_ACCESS_TOKEN`,
 `LINE_CHANNEL_SECRET` (webhook signature), `CRON_SECRET`, `STAFF_SESSION_SECRET`, `LINE_GROUP_SUKHUMVIT`,
-`LINE_GROUP_BANGNA`, `GOOGLE_REVIEW_URL_SUKHUMVIT`, `GOOGLE_REVIEW_URL_BANGNA`,
-`ANTHROPIC_API_KEY` / `ANTHROPIC_API_KEY_EXPENSE`, `ANTHROPIC_MODEL`, `BLOB_READ_WRITE_TOKEN`.
+`LINE_GROUP_BANGNA`, `GOOGLE_REVIEW_URL_SUKHUMVIT`, `GOOGLE_REVIEW_URL_BANGNA`, `BLOB_READ_WRITE_TOKEN`.
 See `.env.example` for the DB/LINE essentials.

@@ -179,3 +179,92 @@ export async function computeBranchDailyPayout(
   rows.sort((a, b) => a.name.localeCompare(b.name, "th"));
   return rows;
 }
+
+// ── Monthly rollup → Expense integration ────────────────────────────────────
+
+/** The idempotency marker stashed in Expense.notes so re-clicking never double-records a month. */
+export function payrollExpenseMarker(staffId: string, month: string): string {
+  return `[PAYROLL:${staffId}:${month}]`;
+}
+
+export interface MonthlyPayoutRow {
+  staffId: string;
+  name: string;
+  daysPaid: number;
+  commissionSatang: number;
+  otSatang: number;
+  totalSatang: number;
+  /** Set if this staff/month has already been recorded as an Expense. */
+  recordedExpenseId: string | null;
+}
+
+/** "YYYY-MM-01" / "YYYY-MM-<lastDay>" UTC bounds for a "YYYY-MM" month string. */
+export function bangkokMonthRange(month: string): { start: Date; end: Date; lastDay: number } {
+  const [y, m] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    start: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)),
+    end:   new Date(Date.UTC(y, m - 1, lastDay, 23, 59, 59, 999)),
+    lastDay,
+  };
+}
+
+/**
+ * Sum PAID StaffDailyPayout rows (commission + OT actually cashed out, per
+ * the snapshot taken when each day was marked paid) for one branch/month, per
+ * staff. This deliberately does NOT include base salary/wage — per this
+ * file's own convention, base pay is disbursed on its own cadence outside the
+ * daily cash-out this app tracks, so there is no reliable per-day "worked"
+ * signal to compute it from here.
+ */
+export async function computeBranchMonthlyPayout(branchId: string, month: string): Promise<MonthlyPayoutRow[]> {
+  const { start, end } = bangkokMonthRange(month);
+
+  const [payouts, staff, existingExpenses] = await Promise.all([
+    prisma.staffDailyPayout.findMany({
+      where: { branchId, status: "PAID", date: { gte: start, lte: end } },
+      select: { staffId: true, commissionSatang: true, otSatang: true },
+    }),
+    prisma.staff.findMany({
+      where: { branchId },
+      select: { id: true, name: true },
+    }),
+    // Idempotency check — has this staff/month already been recorded?
+    prisma.expense.findMany({
+      where: { branchId, category: "commission_bonus", notes: { contains: `:${month}]` } },
+      select: { id: true, notes: true },
+    }),
+  ]);
+
+  const staffById = new Map(staff.map(s => [s.id, s.name]));
+  const expenseByMarker = new Map<string, string>();
+  for (const e of existingExpenses) {
+    const m = e.notes?.match(/\[PAYROLL:([^:]+):([^\]]+)\]/);
+    if (m) expenseByMarker.set(`${m[1]}:${m[2]}`, e.id);
+  }
+
+  const byStaff = new Map<string, { days: number; commission: number; ot: number }>();
+  for (const p of payouts) {
+    const cur = byStaff.get(p.staffId) ?? { days: 0, commission: 0, ot: 0 };
+    cur.days += 1;
+    cur.commission += p.commissionSatang ?? 0;
+    cur.ot += p.otSatang ?? 0;
+    byStaff.set(p.staffId, cur);
+  }
+
+  const rows: MonthlyPayoutRow[] = [];
+  for (const [staffId, agg] of byStaff) {
+    const name = staffById.get(staffId) ?? staffId;
+    rows.push({
+      staffId,
+      name,
+      daysPaid: agg.days,
+      commissionSatang: agg.commission,
+      otSatang: agg.ot,
+      totalSatang: agg.commission + agg.ot,
+      recordedExpenseId: expenseByMarker.get(`${staffId}:${month}`) ?? null,
+    });
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name, "th"));
+  return rows;
+}
