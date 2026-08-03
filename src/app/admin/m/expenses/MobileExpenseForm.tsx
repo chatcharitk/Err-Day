@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, FileEdit, Sparkles, Plus, Trash2, ImageIcon } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { EXPENSE_CATEGORY_GROUPS, PAYMENT_METHODS } from "@/lib/expenses";
-import { resizeImageFile } from "@/lib/resize-image";
+import VendorAutocomplete from "@/components/VendorAutocomplete";
+import ExpenseAttachments, { type Attachment } from "@/components/ExpenseAttachments";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -29,9 +30,9 @@ interface InitialExpense {
   totalAmount?:   number;             // satang
   vatAmount?:     number | null;      // satang
   paymentMethod?: string | null;
-  receiptUrl?:    string | null;
   notes?:         string | null;
   items?:         { description: string; quantity: number; unitPrice: number; totalPrice: number }[];  // satang
+  attachments?:   { url: string; filename: string | null; fileType: string | null }[];
 }
 interface Props {
   mode:     "create" | "edit";
@@ -46,14 +47,12 @@ function todayYmd() {
 const bahtToSatang = (b: number) => Math.round(b * 100);
 const satangToBaht = (s: number) => s / 100;
 
+const INPUT = "w-full border rounded-lg px-3 py-2.5 text-sm";
+
 
 export default function MobileExpenseForm({ mode, branches, initial }: Props) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [tab,           setTab]           = useState<"upload" | "manual">(
-    mode === "edit" || initial?.category ? "manual" : "upload",
-  );
   const [branchId,      setBranchId]      = useState(initial?.branchId ?? "");
   const [category,      setCategory]      = useState(initial?.category ?? "other");
   const [vendor,        setVendor]        = useState(initial?.vendor ?? "");
@@ -61,7 +60,6 @@ export default function MobileExpenseForm({ mode, branches, initial }: Props) {
   const [totalBaht,     setTotalBaht]     = useState<number | "">(initial?.totalAmount != null ? satangToBaht(initial.totalAmount) : "");
   const [vatBaht,       setVatBaht]       = useState<number | "">(initial?.vatAmount != null ? satangToBaht(initial.vatAmount) : "");
   const [paymentMethod, setPaymentMethod] = useState(initial?.paymentMethod ?? "");
-  const [receiptUrl,    setReceiptUrl]    = useState<string | null>(initial?.receiptUrl ?? null);
   const [notes,         setNotes]         = useState(initial?.notes ?? "");
   const [items,         setItems]         = useState<LineItem[]>(
     (initial?.items ?? []).map(it => ({
@@ -71,53 +69,13 @@ export default function MobileExpenseForm({ mode, branches, initial }: Props) {
       totalPrice:  satangToBaht(it.totalPrice),
     })),
   );
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    (initial?.attachments ?? []).map(a => ({ url: a.url, filename: a.filename ?? "ไฟล์แนบ", fileType: a.fileType ?? "" })),
+  );
 
-  const [scanning, setScanning] = useState(false);
-  const [scanMsg,  setScanMsg]  = useState<string | null>(null);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error,    setError]    = useState("");
-
-  // ── Upload + OCR ─────────────────────────────────────────────────────────
-  async function handleScanFile(file: File) {
-    setScanning(true); setScanMsg(null); setError("");
-    const resized = await resizeImageFile(file);   // shrink to fit the 4.5MB upload limit
-    const form = new FormData();
-    form.append("file", resized);
-    try {
-      const res = await fetch("/api/admin/expenses/scan", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "upload failed");
-      if (data.receiptUrl) setReceiptUrl(data.receiptUrl);
-      if (data.parsed) {
-        const p = data.parsed;
-        if (p.vendor)              setVendor(p.vendor);
-        if (p.date)                setDate(p.date);
-        if (p.totalAmount != null) setTotalBaht(p.totalAmount);
-        if (p.vatAmount   != null) setVatBaht(p.vatAmount);
-        if (p.paymentMethod)       setPaymentMethod(p.paymentMethod);
-        if (p.category)            setCategory(p.category);
-        if (p.notes)               setNotes(p.notes);
-        if (Array.isArray(p.items) && p.items.length > 0) {
-          setItems(p.items.map((it: LineItem) => ({
-            description: it.description,
-            quantity:    it.quantity,
-            unitPrice:   it.unitPrice,
-            totalPrice:  it.totalPrice,
-          })));
-        }
-        setScanMsg("✓ AI อ่านข้อมูลแล้ว — ตรวจสอบและแก้ไขก่อนบันทึก");
-        setTab("manual");
-      } else {
-        setScanMsg("⚠️ AI อ่านไม่ออก — กรอกข้อมูลด้วยตัวเอง (รูปอัปโหลดแล้ว)");
-        setTab("manual");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "scan failed");
-    } finally {
-      setScanning(false);
-    }
-  }
 
   // ── Submit ───────────────────────────────────────────────────────────────
   async function submit(e: React.FormEvent) {
@@ -136,7 +94,6 @@ export default function MobileExpenseForm({ mode, branches, initial }: Props) {
       totalAmount:   bahtToSatang(totalBaht),
       vatAmount:     vatBaht !== "" ? bahtToSatang(vatBaht as number) : null,
       paymentMethod: paymentMethod || null,
-      receiptUrl,
       notes:         notes.trim() || null,
       status:        "CONFIRMED",
       items: items.length > 0 ? items.map(it => ({
@@ -144,7 +101,8 @@ export default function MobileExpenseForm({ mode, branches, initial }: Props) {
         quantity:    it.quantity,
         unitPrice:   bahtToSatang(it.unitPrice),
         totalPrice:  bahtToSatang(it.totalPrice),
-      })) : undefined,
+      })) : [],
+      attachments: attachments.map(a => ({ url: a.url, filename: a.filename, fileType: a.fileType })),
     };
     const url    = mode === "edit" && initial?.id ? `/api/admin/expenses/${initial.id}` : "/api/admin/expenses";
     const method = mode === "edit" ? "PATCH" : "POST";
@@ -205,225 +163,161 @@ export default function MobileExpenseForm({ mode, branches, initial }: Props) {
       </header>
 
       <div className="px-4 pt-4 pb-12 space-y-4">
-        {/* Tabs */}
-        {mode === "create" && (
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setTab("upload")}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-              style={{
-                background: tab === "upload" ? PRIMARY : "white",
-                color:      tab === "upload" ? "white" : TEXT,
-                border:     `1.5px solid ${tab === "upload" ? PRIMARY : BORDER}`,
-              }}>
-              <Upload size={14} /> AI อัปโหลด
-            </button>
-            <button onClick={() => setTab("manual")}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-              style={{
-                background: tab === "manual" ? PRIMARY : "white",
-                color:      tab === "manual" ? "white" : TEXT,
-                border:     `1.5px solid ${tab === "manual" ? PRIMARY : BORDER}`,
-              }}>
-              <FileEdit size={14} /> กรอกเอง
-            </button>
+        <form onSubmit={submit} className="bg-white rounded-2xl p-4 space-y-4" style={{ border: `1px solid ${BORDER}` }}>
+          {/* Branch */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>สาขา</label>
+            <select value={branchId} onChange={e => setBranchId(e.target.value)}
+              className={INPUT} style={{ borderColor: BORDER, color: TEXT }}>
+              <option value="">ส่วนกลาง / HQ</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
           </div>
-        )}
 
-        {/* Upload pane */}
-        {tab === "upload" && (
-          <div className="bg-white rounded-2xl p-6 text-center" style={{ border: `2px dashed ${BORDER}` }}>
-            <Sparkles size={28} className="mx-auto mb-3" style={{ color: PRIMARY }} />
-            <h2 className="text-base font-semibold mb-1" style={{ color: TEXT }}>อัปโหลดใบเสร็จ</h2>
-            <p className="text-xs mb-4" style={{ color: MUTED }}>
-              AI จะกรอกฟอร์มให้ คุณตรวจสอบและแก้ไขก่อนบันทึก
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleScanFile(f);
-                e.target.value = "";
-              }}
+          {/* Category */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>หมวด *</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} required
+              className={INPUT} style={{ borderColor: BORDER, color: TEXT }}>
+              {EXPENSE_CATEGORY_GROUPS.map(group => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          {/* Vendor */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>ผู้รับเงิน / ร้านค้า / พนักงาน</label>
+            <VendorAutocomplete
+              value={vendor}
+              onChange={setVendor}
+              onSelectCategory={setCategory}
+              placeholder="พิมพ์เพื่อค้นหาที่เคยบันทึกไว้"
+              borderColor={BORDER} textColor={TEXT} mutedColor={MUTED}
+              inputClassName={INPUT}
             />
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={scanning}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50"
-              style={{ background: PRIMARY }}>
-              <Upload size={16} />
-              {scanning ? "กำลังอ่าน..." : "ถ่ายรูป / เลือกใบเสร็จ"}
-            </button>
-            <p className="text-[10px] mt-3" style={{ color: MUTED }}>JPEG / PNG / WebP สูงสุด 8MB</p>
-            {scanMsg && <p className="text-xs mt-3 font-medium" style={{ color: PRIMARY }}>{scanMsg}</p>}
-            {error   && <p className="text-xs mt-3 text-red-600">{error}</p>}
           </div>
-        )}
 
-        {/* Manual form */}
-        {tab === "manual" && (
-          <form onSubmit={submit} className="bg-white rounded-2xl p-4 space-y-4" style={{ border: `1px solid ${BORDER}` }}>
-            {scanMsg && (
-              <p className="text-xs font-medium px-3 py-2 rounded-lg" style={{ background: "#FFF8F4", color: PRIMARY }}>
-                {scanMsg}
-              </p>
-            )}
+          {/* Date */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>วันที่ *</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} required
+              className={INPUT} style={{ borderColor: BORDER, color: TEXT }} />
+          </div>
 
-            {/* Branch */}
+          {/* Total + VAT */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>สาขา</label>
-              <select value={branchId} onChange={e => setBranchId(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2.5 text-sm" style={{ borderColor: BORDER, color: TEXT }}>
-                <option value="">ส่วนกลาง / HQ</option>
-                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>รวม (฿) *</label>
+              <input type="number" inputMode="decimal" step="0.01" min="0" required
+                value={totalBaht} onChange={e => setTotalBaht(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="0.00"
+                className={`${INPUT} font-semibold`} style={{ borderColor: BORDER, color: TEXT }} />
             </div>
-
-            {/* Category */}
             <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>หมวด *</label>
-              <select value={category} onChange={e => setCategory(e.target.value)} required
-                className="w-full border rounded-lg px-3 py-2.5 text-sm" style={{ borderColor: BORDER, color: TEXT }}>
-                {EXPENSE_CATEGORY_GROUPS.map(group => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>VAT (฿)</label>
+              <input type="number" inputMode="decimal" step="0.01" min="0"
+                value={vatBaht} onChange={e => setVatBaht(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="0.00"
+                className={INPUT} style={{ borderColor: BORDER, color: TEXT }} />
             </div>
+          </div>
 
-            {/* Vendor */}
-            <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>ผู้รับเงิน / ร้านค้า / พนักงาน</label>
-              <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="เช่น ชื่อร้าน ผู้ให้เช่า หรือชื่อพนักงาน"
-                className="w-full border rounded-lg px-3 py-2.5 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
+          {/* Payment method */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>วิธีจ่าย</label>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
+              className={INPUT} style={{ borderColor: BORDER, color: TEXT }}>
+              <option value="">ไม่ระบุ</option>
+              {PAYMENT_METHODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+
+          {/* Items */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>รายการ (ไม่บังคับ)</label>
+              <button type="button" onClick={addItem}
+                className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md" style={{ color: PRIMARY }}>
+                <Plus size={12} /> เพิ่ม
+              </button>
             </div>
-
-            {/* Date */}
-            <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>วันที่ *</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} required
-                className="w-full border rounded-lg px-3 py-2.5 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
-            </div>
-
-            {/* Total + VAT */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>รวม (฿) *</label>
-                <input type="number" inputMode="decimal" step="0.01" min="0" required
-                  value={totalBaht} onChange={e => setTotalBaht(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder="0.00"
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm font-semibold" style={{ borderColor: BORDER, color: TEXT }} />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>VAT (฿)</label>
-                <input type="number" inputMode="decimal" step="0.01" min="0"
-                  value={vatBaht} onChange={e => setVatBaht(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder="0.00"
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
-              </div>
-            </div>
-
-            {/* Payment method */}
-            <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>วิธีจ่าย</label>
-              <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2.5 text-sm" style={{ borderColor: BORDER, color: TEXT }}>
-                <option value="">ไม่ระบุ</option>
-                {PAYMENT_METHODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-
-            {/* Items */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>รายการ (ไม่บังคับ)</label>
-                <button type="button" onClick={addItem}
-                  className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md" style={{ color: PRIMARY }}>
-                  <Plus size={12} /> เพิ่ม
-                </button>
-              </div>
-              {items.length === 0 ? (
-                <p className="text-xs italic" style={{ color: MUTED }}>ไม่มีรายการย่อย</p>
-              ) : (
-                <div className="space-y-3">
-                  {items.map((it, idx) => (
-                    <div key={idx} className="bg-stone-50 rounded-lg p-2.5 space-y-2"
-                      style={{ border: `1px solid ${BORDER}` }}>
-                      <div className="flex items-center gap-2">
-                        <input value={it.description} onChange={e => updateItem(idx, "description", e.target.value)}
-                          placeholder="รายการ"
-                          className="flex-1 border rounded-md px-2 py-1.5 text-sm bg-white" style={{ borderColor: BORDER, color: TEXT }} />
-                        <button type="button" onClick={() => removeItem(idx)}
-                          className="p-1.5 rounded-md hover:bg-red-50" title="ลบ">
-                          <Trash2 size={14} className="text-red-500" />
-                        </button>
+            {items.length === 0 ? (
+              <p className="text-xs italic" style={{ color: MUTED }}>ไม่มีรายการย่อย</p>
+            ) : (
+              <div className="space-y-3">
+                {items.map((it, idx) => (
+                  <div key={idx} className="bg-stone-50 rounded-lg p-2.5 space-y-2"
+                    style={{ border: `1px solid ${BORDER}` }}>
+                    <div className="flex items-center gap-2">
+                      <input value={it.description} onChange={e => updateItem(idx, "description", e.target.value)}
+                        placeholder="รายการ"
+                        className="flex-1 border rounded-md px-2 py-1.5 text-sm bg-white" style={{ borderColor: BORDER, color: TEXT }} />
+                      <button type="button" onClick={() => removeItem(idx)}
+                        className="p-1.5 rounded-md hover:bg-red-50" title="ลบ">
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[9px] block mb-0.5" style={{ color: MUTED }}>จำนวน</label>
+                        <input type="number" inputMode="decimal" step="0.5" min="0" value={it.quantity}
+                          onChange={e => updateItem(idx, "quantity", Number(e.target.value))}
+                          className="w-full border rounded-md px-2 py-1.5 text-sm bg-white" style={{ borderColor: BORDER, color: TEXT }} />
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="text-[9px] block mb-0.5" style={{ color: MUTED }}>จำนวน</label>
-                          <input type="number" inputMode="decimal" step="0.5" min="0" value={it.quantity}
-                            onChange={e => updateItem(idx, "quantity", Number(e.target.value))}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm bg-white" style={{ borderColor: BORDER, color: TEXT }} />
-                        </div>
-                        <div>
-                          <label className="text-[9px] block mb-0.5" style={{ color: MUTED }}>ราคา/หน่วย</label>
-                          <input type="number" inputMode="decimal" step="0.01" min="0" value={it.unitPrice}
-                            onChange={e => updateItem(idx, "unitPrice", Number(e.target.value))}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm bg-white" style={{ borderColor: BORDER, color: TEXT }} />
-                        </div>
-                        <div>
-                          <label className="text-[9px] block mb-0.5" style={{ color: MUTED }}>รวม</label>
-                          <input type="number" inputMode="decimal" step="0.01" min="0" value={it.totalPrice}
-                            onChange={e => updateItem(idx, "totalPrice", Number(e.target.value))}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm bg-white font-semibold" style={{ borderColor: BORDER, color: TEXT }} />
-                        </div>
+                      <div>
+                        <label className="text-[9px] block mb-0.5" style={{ color: MUTED }}>ราคา/หน่วย</label>
+                        <input type="number" inputMode="decimal" step="0.01" min="0" value={it.unitPrice}
+                          onChange={e => updateItem(idx, "unitPrice", Number(e.target.value))}
+                          className="w-full border rounded-md px-2 py-1.5 text-sm bg-white" style={{ borderColor: BORDER, color: TEXT }} />
+                      </div>
+                      <div>
+                        <label className="text-[9px] block mb-0.5" style={{ color: MUTED }}>รวม</label>
+                        <input type="number" inputMode="decimal" step="0.01" min="0" value={it.totalPrice}
+                          onChange={e => updateItem(idx, "totalPrice", Number(e.target.value))}
+                          className="w-full border rounded-md px-2 py-1.5 text-sm bg-white font-semibold" style={{ borderColor: BORDER, color: TEXT }} />
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>หมายเหตุ</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-                placeholder="ข้อมูลเพิ่มเติม (ไม่บังคับ)"
-                className="w-full border rounded-lg px-3 py-2 text-sm resize-none" style={{ borderColor: BORDER, color: TEXT }} />
-            </div>
-
-            {/* Receipt preview */}
-            {receiptUrl && (
-              <div>
-                <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>รูปใบเสร็จ</label>
-                <a href={receiptUrl} target="_blank" rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border"
-                  style={{ borderColor: BORDER, color: PRIMARY }}>
-                  <ImageIcon size={14} /> ดูรูปใบเสร็จ
-                </a>
+                  </div>
+                ))}
               </div>
             )}
+          </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+          {/* Notes */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest block mb-1" style={{ color: MUTED }}>หมายเหตุ</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              placeholder="ข้อมูลเพิ่มเติม (ไม่บังคับ)"
+              className="w-full border rounded-lg px-3 py-2 text-sm resize-none" style={{ borderColor: BORDER, color: TEXT }} />
+          </div>
 
-            <div className="flex flex-col gap-2 pt-2">
-              <button type="submit" disabled={saving}
-                className="w-full py-3 rounded-xl text-white text-sm font-bold disabled:opacity-50"
-                style={{ background: PRIMARY }}>
-                {saving ? "กำลังบันทึก..." : (mode === "edit" ? "บันทึกการแก้ไข" : "บันทึกรายจ่าย")}
+          {/* Attachments */}
+          <ExpenseAttachments
+            attachments={attachments}
+            onChange={setAttachments}
+            borderColor={BORDER} textColor={TEXT} mutedColor={MUTED} primaryColor={PRIMARY}
+          />
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex flex-col gap-2 pt-2">
+            <button type="submit" disabled={saving}
+              className="w-full py-3 rounded-xl text-white text-sm font-bold disabled:opacity-50"
+              style={{ background: PRIMARY }}>
+              {saving ? "กำลังบันทึก..." : (mode === "edit" ? "บันทึกการแก้ไข" : "บันทึกรายจ่าย")}
+            </button>
+            {mode === "edit" && (
+              <button type="button" onClick={handleDelete} disabled={deleting}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold border disabled:opacity-50"
+                style={{ borderColor: "#FECACA", color: "#DC2626", background: "white" }}>
+                {deleting ? "กำลังลบ..." : "🗑️ ลบรายจ่ายนี้"}
               </button>
-              {mode === "edit" && (
-                <button type="button" onClick={handleDelete} disabled={deleting}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold border disabled:opacity-50"
-                  style={{ borderColor: "#FECACA", color: "#DC2626", background: "white" }}>
-                  {deleting ? "กำลังลบ..." : "🗑️ ลบรายจ่ายนี้"}
-                </button>
-              )}
-            </div>
-          </form>
-        )}
+            )}
+          </div>
+        </form>
       </div>
     </main>
   );

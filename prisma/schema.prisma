@@ -456,22 +456,68 @@ model Expense {
   id            String        @id @default(cuid())
   branchId      String?
   category      String
+  /// Legacy free-text vendor name. Kept for the one pre-existing expense (and
+  /// as a display fallback) — new writes set this AND vendorId together, so
+  /// list views never need the Vendor join just to show a name.
   vendor        String?
+  vendorId      String?
   date          DateTime
   totalAmount   Int
   vatAmount     Int?
   paymentMethod String?
+  /// Legacy single-receipt field, superseded by `attachments` (supports many
+  /// files). Kept only so any pre-existing row with a receipt still renders.
   receiptUrl    String?
   notes         String?
   status        String        @default("CONFIRMED")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  branch        Branch?       @relation(fields: [branchId], references: [id])
+  branch        Branch?              @relation(fields: [branchId], references: [id])
+  vendorRef     Vendor?              @relation(fields: [vendorId], references: [id])
   items         ExpenseItem[]
+  attachments   ExpenseAttachment[]
 
   @@index([branchId, date])
   @@index([category, date])
   @@index([date])
+  @@index([vendorId])
+}
+
+/// *
+///  * A reusable supplier/vendor/payee record, so recurring expenses (rent,
+///  * shampoo supplier, freelance stylist) can be searched and reused instead
+///  * of retyping a name each time. Expense.vendor (free text) is still set
+///  * alongside vendorId on every write, so list views never need this table
+///  * joined just to show a name — it exists purely for search/reuse and to
+///  * hold contact details.
+model Vendor {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String?
+  category  String?   // default expense category, speeds re-entry next time
+  notes     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expenses  Expense[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Vendor_name_trgm_idx", type: Gin)
+}
+
+/// *
+///  * One uploaded file (receipt photo, invoice PDF, etc.) attached to an
+///  * expense. An expense can have several — e.g. the receipt photo plus a
+///  * bank transfer slip.
+model ExpenseAttachment {
+  id        String   @id @default(cuid())
+  expenseId String
+  url       String
+  filename  String?
+  fileType  String?  // MIME type, so the UI can pick an image vs. file icon
+  createdAt DateTime @default(now())
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
 }
 
 /// *

@@ -7,6 +7,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findOrCreateVendorId } from "@/lib/vendors";
 
 export async function GET(request: Request) {
   const _gate = await requireAdmin().catch((e: unknown) => e as Response);
@@ -35,11 +36,11 @@ export async function GET(request: Request) {
   const expenses = await prisma.expense.findMany({
     where,
     select: {
-      id: true, branchId: true, category: true, vendor: true,
+      id: true, branchId: true, category: true, vendor: true, vendorId: true,
       date: true, totalAmount: true, vatAmount: true, paymentMethod: true,
       receiptUrl: true, notes: true, status: true, createdAt: true,
       branch: { select: { id: true, name: true } },
-      _count: { select: { items: true } },
+      _count: { select: { items: true, attachments: true } },
     },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     take: limit,
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const {
     branchId, category, vendor, date, totalAmount, vatAmount,
-    paymentMethod, receiptUrl, notes, status, items,
+    paymentMethod, receiptUrl, notes, status, items, attachments,
   } = body;
 
   if (!category || !date || typeof totalAmount !== "number") {
@@ -64,11 +65,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    const vendorId = await findOrCreateVendorId(vendor, category);
+
     const expense = await prisma.expense.create({
       data: {
         branchId:      branchId || null,
         category,
         vendor:        vendor || null,
+        vendorId,
         // Noon local to avoid UTC-midnight drift (same convention as Booking).
         date:          new Date(date + "T12:00:00"),
         totalAmount:   Math.round(totalAmount),
@@ -87,8 +91,17 @@ export async function POST(request: Request) {
             })),
           },
         } : {}),
+        ...(Array.isArray(attachments) && attachments.length > 0 ? {
+          attachments: {
+            create: attachments.map((a: { url: string; filename?: string; fileType?: string }) => ({
+              url:      String(a.url),
+              filename: a.filename ? String(a.filename) : null,
+              fileType: a.fileType ? String(a.fileType) : null,
+            })),
+          },
+        } : {}),
       },
-      include: { items: true, branch: { select: { id: true, name: true } } },
+      include: { items: true, attachments: true, branch: { select: { id: true, name: true } } },
     });
     return NextResponse.json({ expense }, { status: 201 });
   } catch (e) {

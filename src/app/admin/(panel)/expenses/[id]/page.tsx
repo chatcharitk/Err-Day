@@ -15,7 +15,10 @@ export default async function EditExpensePage({
   const [expense, branches] = await Promise.all([
     prisma.expense.findUnique({
       where:  { id },
-      include: { items: { orderBy: { id: "asc" } } },
+      include: {
+        items:       { orderBy: { id: "asc" } },
+        attachments: { orderBy: { createdAt: "asc" } },
+      },
     }),
     prisma.branch.findMany({
       where:   { isActive: true },
@@ -39,13 +42,15 @@ export default async function EditExpensePage({
         totalAmount:   expense.totalAmount,
         vatAmount:     expense.vatAmount,
         paymentMethod: expense.paymentMethod,
-        receiptUrl:    expense.receiptUrl,
         notes:         expense.notes,
         items: expense.items.map(it => ({
           description: it.description,
           quantity:    it.quantity,
           unitPrice:   it.unitPrice,
           totalPrice:  it.totalPrice,
+        })),
+        attachments: expense.attachments.map(a => ({
+          url: a.url, filename: a.filename, fileType: a.fileType,
         })),
       }}
     />

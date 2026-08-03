@@ -5,7 +5,11 @@ import { requireAdmin } from "@/lib/admin-auth";
 export const runtime = "nodejs";
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
-const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+const ALLOWED_IMAGE = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+// Expense attachments (receipts/invoices) also accept PDF — Thai tax invoices
+// are commonly issued as PDF, not a photo. Profile/customer-photo stay
+// image-only since those flows render the upload straight into an <img>.
+const ALLOWED_RECEIPT = [...ALLOWED_IMAGE, "application/pdf"];
 
 /**
  * POST /api/upload?kind=receipt|profile&ref=<id>
@@ -27,7 +31,8 @@ export async function POST(request: Request) {
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "no file" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "file too large (max 8MB)" }, { status: 400 });
-  if (!ALLOWED.includes(file.type)) return NextResponse.json({ error: "unsupported type" }, { status: 400 });
+  const allowed = kind === "receipt" ? ALLOWED_RECEIPT : ALLOWED_IMAGE;
+  if (!allowed.includes(file.type)) return NextResponse.json({ error: "unsupported type" }, { status: 400 });
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const key = `${kind}/${ref}/${Date.now()}.${ext}`;

@@ -49,8 +49,9 @@ export default async function ExpensesPage({
       select: {
         id: true, branchId: true, category: true, vendor: true,
         date: true, totalAmount: true, vatAmount: true, paymentMethod: true,
-        receiptUrl: true, status: true, notes: true,
+        status: true, notes: true,
         branch: { select: { id: true, name: true } },
+        _count: { select: { attachments: true } },
       },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 500,
@@ -84,7 +85,7 @@ export default async function ExpensesPage({
         totalAmount:   e.totalAmount,
         vatAmount:     e.vatAmount,
         paymentMethod: e.paymentMethod,
-        receiptUrl:    e.receiptUrl,
+        attachmentCount: e._count.attachments,
         notes:         e.notes,
         status:        e.status,
       }))}

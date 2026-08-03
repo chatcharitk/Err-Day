@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Receipt, Filter, ImageIcon } from "lucide-react";
+import { ArrowLeft, Plus, Receipt, Filter, Paperclip } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
 import ExpenseQuickMenu from "@/components/ExpenseQuickMenu";
 
@@ -21,7 +21,7 @@ interface ExpenseRow {
   date:          string;
   totalAmount:   number;
   paymentMethod: string | null;
-  hasReceipt:    boolean;
+  attachmentCount: number;
 }
 interface Branch { id: string; name: string }
 interface Props {
@@ -212,8 +212,10 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
                             <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>
                               {CATEGORY_LABEL[e.category] ?? e.category}
                             </p>
-                            {e.hasReceipt && (
-                              <ImageIcon size={11} style={{ color: PRIMARY }} />
+                            {e.attachmentCount > 0 && (
+                              <span className="inline-flex items-center gap-0.5" style={{ color: PRIMARY }}>
+                                <Paperclip size={11} /> {e.attachmentCount}
+                              </span>
                             )}
                           </div>
                           <p className="text-xs truncate" style={{ color: MUTED }}>

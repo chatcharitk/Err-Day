@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Receipt, ImageIcon } from "lucide-react";
+import { Plus, Receipt, Paperclip } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
 import ExpenseQuickMenu from "@/components/ExpenseQuickMenu";
 
@@ -21,7 +21,7 @@ interface ExpenseRow {
   totalAmount:   number;
   vatAmount:     number | null;
   paymentMethod: string | null;
-  receiptUrl:    string | null;
+  attachmentCount: number;
   notes:         string | null;
   status:        string;
 }
@@ -193,8 +193,12 @@ export default function ExpensesList({ expenses, branches, filters, summary, cat
                   <td className="px-4 py-3">{e.paymentMethod ? (PAYMENT_LABEL[e.paymentMethod] ?? e.paymentMethod) : <span style={{ color: MUTED }}>—</span>}</td>
                   <td className="px-4 py-3 text-right font-semibold">{fmt(e.totalAmount)}</td>
                   <td className="px-4 py-3 text-center">
-                    {e.receiptUrl
-                      ? <ImageIcon size={16} className="inline" style={{ color: PRIMARY }} />
+                    {e.attachmentCount > 0
+                      ? (
+                        <span className="inline-flex items-center gap-1" style={{ color: PRIMARY }}>
+                          <Paperclip size={14} /> {e.attachmentCount}
+                        </span>
+                      )
                       : <span style={{ color: MUTED }}>—</span>}
                   </td>
                 </tr>

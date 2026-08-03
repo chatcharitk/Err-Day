@@ -48,8 +48,9 @@ export default async function MobileExpensesPage({
       select: {
         id: true, branchId: true, category: true, vendor: true,
         date: true, totalAmount: true, paymentMethod: true,
-        receiptUrl: true, notes: true, status: true,
+        notes: true, status: true,
         branch: { select: { id: true, name: true } },
+        _count: { select: { attachments: true } },
       },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 200,
@@ -77,7 +78,7 @@ export default async function MobileExpensesPage({
         date:          e.date.toISOString().slice(0, 10),
         totalAmount:   e.totalAmount,
         paymentMethod: e.paymentMethod,
-        hasReceipt:    !!e.receiptUrl,
+        attachmentCount: e._count.attachments,
       }))}
       branches={branches}
       filters={{ branchId: branchFilter, category: categoryFilter, from, to }}
