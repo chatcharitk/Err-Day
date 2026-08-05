@@ -320,25 +320,38 @@ function EmptyHint({ text }: { text: string }) {
 
 function CustomerLine({ b }: { b: DeskBooking }) {
   return (
-    <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
-      {b.customerName}
-      {b.customerNickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customerNickname})</span>}
-      {b.isWalkin && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
-          style={{ background: "#FEF3C7", color: "#92400E" }}>วอร์คอิน</span>
-      )}
-      {/* Membership status — helps staff spot members at check-in. */}
-      {b.memberStatus === "active" && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle inline-flex items-center gap-0.5"
-          style={{ background: GREENBG, color: GREEN }}>
-          <Sparkles size={9} /> สมาชิก
-        </span>
-      )}
-      {b.memberStatus === "expired" && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
-          style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }}>สมาชิกหมดอายุ</span>
-      )}
-    </p>
+    <div>
+      <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
+        {b.customerName}
+        {b.customerNickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customerNickname})</span>}
+        {b.isWalkin && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
+            style={{ background: "#FEF3C7", color: "#92400E" }}>วอร์คอิน</span>
+        )}
+      </p>
+      {/* Membership status — large + always shown (both states) so staff never have to
+          infer "no badge = non-member"; that's what got missed before. */}
+      <p className="mt-1">
+        {b.memberStatus === "active" && (
+          <span className="text-sm font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1"
+            style={{ background: GREEN, color: "white" }}>
+            <Sparkles size={14} /> สมาชิก
+          </span>
+        )}
+        {b.memberStatus === "expired" && (
+          <span className="text-sm font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1"
+            style={{ background: "#FFFBEB", color: "#B45309", border: "1.5px solid #FDE68A" }}>
+            สมาชิกหมดอายุ
+          </span>
+        )}
+        {b.memberStatus === "none" && (
+          <span className="text-sm font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1"
+            style={{ background: "#F1F5F9", color: "#475569" }}>
+            ไม่ใช่สมาชิก
+          </span>
+        )}
+      </p>
+    </div>
   );
 }
 
