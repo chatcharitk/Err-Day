@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut, Sparkles } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -265,6 +265,9 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   }, [liff.profile]);
 
   const categories = CATEGORY_ORDER.filter((c) => branchServices.some((bs) => bs.service.category === c));
+  const promoService = branchServices.find((bs) => bs.serviceId === DAVINES_SPA_PROMOTION.serviceId);
+  const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+  const showPromotion = !!promoService && todayKey <= DAVINES_SPA_PROMOTION.endsOn;
 
   // Collapsible categories — all open by default
   const [openCats, setOpenCats] = useState<Set<string>>(() => new Set(CATEGORY_ORDER));
@@ -275,6 +278,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       return next;
     });
   }, []);
+  const choosePromotion = () => {
+    if (!promoService) return;
+    setSelectedService(promoService);
+    setOpenCats((prev) => new Set(prev).add(promoService.service.category));
+  };
   const isHairColor = selectedService?.service.advanceBookingRequired ?? false;
 
   // Build the slot list for the selected day.
@@ -528,6 +536,43 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             </h2>
             <p className="text-sm mb-6" style={{ color: "#A08070" }}>{u.chooseServiceHint}</p>
 
+            {showPromotion && promoService && (
+              <section
+                className="relative overflow-hidden rounded-2xl p-5 mb-7 text-white shadow-lg"
+                style={{ background: "linear-gradient(135deg, #70151C 0%, #B4232A 52%, #E15345 100%)" }}
+              >
+                <div className="absolute -right-8 -top-12 w-44 h-44 rounded-full opacity-20 border-[28px] border-white" />
+                <div className="relative">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide" style={{ backgroundColor: "rgba(255,255,255,0.18)" }}>
+                    <Sparkles className="w-3.5 h-3.5" /> 3 วันเท่านั้น · 7–9 สิงหาคม 2569
+                  </div>
+                  <p className="mt-3 text-xl font-semibold leading-tight">Premium Davines Spa<br />Full Course</p>
+                  <p className="mt-1 text-sm" style={{ color: "#FFE4DB" }}>สครับหนังศีรษะ · ทรีทเมนต์ · อบไอน้ำ · นวดผ่อนคลาย · ไดร์ Dyson</p>
+
+                  <div className="flex items-end gap-5 mt-5">
+                    <div>
+                      <p className="text-xs" style={{ color: "#FFE4DB" }}>ลูกค้าทั่วไป <span className="line-through opacity-75">฿890</span></p>
+                      <p className="text-4xl font-bold leading-none">฿788</p>
+                    </div>
+                    <div className="pb-0.5 border-l pl-5" style={{ borderColor: "rgba(255,255,255,0.35)" }}>
+                      <p className="text-xs" style={{ color: "#FFE4DB" }}>พิเศษสำหรับสมาชิก</p>
+                      <p className="text-2xl font-bold leading-none">฿688</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={choosePromotion}
+                    className="mt-5 w-full rounded-xl py-3 text-sm font-semibold transition-transform active:scale-[0.98]"
+                    style={{ backgroundColor: "white", color: "#8B1D24" }}
+                  >
+                    เลือกโปรโมชันนี้
+                  </button>
+                  <p className="mt-2 text-center text-[11px]" style={{ color: "#FFE4DB" }}>ใช้สิทธิ์ได้เฉพาะคิววันที่ 7, 8 และ 9 สิงหาคม · ไม่ร่วมกับส่วนลดอื่น</p>
+                </div>
+              </section>
+            )}
+
             {categories.map((cat) => {
               const isOpen = openCats.has(cat);
               const catLabel = lang === "th" ? cat : (CAT_EN[cat] ?? cat);
@@ -617,7 +662,14 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                     })()}
                                   </div>
                                   <div className="flex-shrink-0 text-right">
-                                    <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
+                                    {bs.serviceId === DAVINES_SPA_PROMOTION.serviceId && showPromotion ? (
+                                      <>
+                                        <p className="text-xs line-through" style={{ color: isSelected ? "rgba(255,255,255,0.65)" : "#A08070" }}>{formatPrice(bs.price)}</p>
+                                        <p className="font-semibold text-lg">฿788</p>
+                                      </>
+                                    ) : (
+                                      <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
+                                    )}
                                     <p className="text-xs flex items-center gap-1 justify-end mt-0.5" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#A08070" }}>
                                       <Clock className="w-3 h-3" /> {bs.duration} {u.minutes}
                                     </p>
