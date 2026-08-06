@@ -577,7 +577,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                       ? { backgroundColor: "#FFE08A", color: "#5A1519" }
                       : { backgroundColor: "white", color: "#8B1D24" }}
                   >
-                    {selectedService?.id === promoService.id ? "✓ เลือกโปรโมชันนี้แล้ว" : "เลือกโปรโมชันนี้"}
+                    {selectedService?.id === promoService.id ? "✓ เลือกโปรโมชั่นนี้แล้ว" : "เลือกโปรโมชั่นนี้"}
                   </button>
                   <p className="mt-2 text-center text-[11px]" style={{ color: "#FFE4DB" }}>ใช้สิทธิ์ได้เฉพาะคิววันที่ 7, 8 และ 9 สิงหาคม · ไม่ร่วมกับส่วนลดอื่น</p>
                 </div>
