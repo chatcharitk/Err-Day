@@ -264,10 +264,16 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       .catch(() => {});
   }, [liff.profile]);
 
-  const categories = CATEGORY_ORDER.filter((c) => branchServices.some((bs) => bs.service.category === c));
   const promoService = branchServices.find((bs) => bs.serviceId === DAVINES_SPA_PROMOTION.serviceId);
   const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
   const showPromotion = !!promoService && todayKey <= DAVINES_SPA_PROMOTION.endsOn;
+  // While the campaign is shown, its own campaign card is the single place to
+  // select this service. Keeping the catalogue row as well makes it look like
+  // two separate services and is confusing on a phone.
+  const visibleBranchServices = showPromotion
+    ? branchServices.filter((bs) => bs.serviceId !== DAVINES_SPA_PROMOTION.serviceId)
+    : branchServices;
+  const categories = CATEGORY_ORDER.filter((c) => visibleBranchServices.some((bs) => bs.service.category === c));
 
   // Collapsible categories — all open by default
   const [openCats, setOpenCats] = useState<Set<string>>(() => new Set(CATEGORY_ORDER));
@@ -538,8 +544,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
             {showPromotion && promoService && (
               <section
-                className="relative overflow-hidden rounded-2xl p-5 mb-7 text-white shadow-lg"
-                style={{ background: "linear-gradient(135deg, #70151C 0%, #B4232A 52%, #E15345 100%)" }}
+                className="relative overflow-hidden rounded-2xl p-5 mb-7 text-white shadow-lg border-2"
+                style={{
+                  background: "linear-gradient(135deg, #70151C 0%, #B4232A 52%, #E15345 100%)",
+                  borderColor: selectedService?.id === promoService.id ? "#FFD66B" : "transparent",
+                }}
               >
                 <div className="absolute -right-8 -top-12 w-44 h-44 rounded-full opacity-20 border-[28px] border-white" />
                 <div className="relative">
@@ -564,9 +573,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                     type="button"
                     onClick={choosePromotion}
                     className="mt-5 w-full rounded-xl py-3 text-sm font-semibold transition-transform active:scale-[0.98]"
-                    style={{ backgroundColor: "white", color: "#8B1D24" }}
+                    style={selectedService?.id === promoService.id
+                      ? { backgroundColor: "#FFE08A", color: "#5A1519" }
+                      : { backgroundColor: "white", color: "#8B1D24" }}
                   >
-                    เลือกโปรโมชันนี้
+                    {selectedService?.id === promoService.id ? "✓ เลือกโปรโมชันนี้แล้ว" : "เลือกโปรโมชันนี้"}
                   </button>
                   <p className="mt-2 text-center text-[11px]" style={{ color: "#FFE4DB" }}>ใช้สิทธิ์ได้เฉพาะคิววันที่ 7, 8 และ 9 สิงหาคม · ไม่ร่วมกับส่วนลดอื่น</p>
                 </div>
@@ -576,7 +587,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             {categories.map((cat) => {
               const isOpen = openCats.has(cat);
               const catLabel = lang === "th" ? cat : (CAT_EN[cat] ?? cat);
-              const hasSelectedInCat = branchServices
+              const hasSelectedInCat = visibleBranchServices
                 .filter(bs => bs.service.category === cat)
                 .some(bs => selectedService?.id === bs.id);
               return (
@@ -612,7 +623,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                       )}
 
                       <div className="grid gap-3 mb-4">
-                        {branchServices
+                        {visibleBranchServices
                           .filter((bs) => bs.service.category === cat)
                           .map((bs) => {
                             const isSelected = selectedService?.id === bs.id;
