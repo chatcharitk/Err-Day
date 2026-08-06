@@ -7,6 +7,7 @@ import {
   Sparkles, ChevronDown, AlertCircle,
 } from "lucide-react";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
+import { getPromotionServicePrice } from "@/lib/promotions";
 
 interface Branch { id: string; name: string; }
 
@@ -107,6 +108,15 @@ function applyDiscount(basePrice: number, pct: number): number {
 function getServiceMemberPrice(bs: BS): number {
   if (bs.service.memberPrice != null && bs.service.memberPrice > 0) return bs.service.memberPrice;
   return applyDiscount(bs.price, bs.service.memberDiscountPercent ?? 0);
+}
+
+function getServicePrices(bs: BS, isMember: boolean) {
+  const promo = getPromotionServicePrice(bs.serviceId, new Date(), isMember);
+  const basePromo = getPromotionServicePrice(bs.serviceId, new Date(), false);
+  return {
+    basePrice: basePromo ?? bs.price,
+    memberPrice: promo ?? getServiceMemberPrice(bs),
+  };
 }
 
 export default function MobilePos({ branches, activeBranchId, branchServices, addons, prefillBooking, initialActivePackages }: Props) {
@@ -310,7 +320,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   }
 
   const addService = (bs: BS) => {
-    const mPrice = getServiceMemberPrice(bs);
+    const prices = getServicePrices(bs, memberActive);
     const isMembershipItem = bs.serviceId === MEMBERSHIP_SKU;
     setCart(prev => {
       const pkg = pickPackageFor(bs, prev);
@@ -322,10 +332,10 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       const newItem: CartItem = {
         id:                rowId,
         name:              bs.service.nameTh,
-        basePrice:         bs.price,
-        price:             pkg ? 0 : (memberActive ? mPrice : bs.price),
+        basePrice:         prices.basePrice,
+        price:             pkg ? 0 : (memberActive ? prices.memberPrice : prices.basePrice),
         qty:               1,
-        memberPrice:       mPrice,
+        memberPrice:       prices.memberPrice,
         redeemPackageId:   pkg?.id,
         redeemPackageName: pkg?.nameTh,
       };

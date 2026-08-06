@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
+import { getPromotionServicePrice } from "@/lib/promotions";
 
 type BS = BranchService & { service: Service };
 
@@ -83,6 +84,15 @@ function getServiceMemberPrice(bs: BS): number {
   if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;
   const pct = svc.memberDiscountPercent ?? 0;
   return applyDiscount(bs.price, pct);
+}
+
+function getServicePrices(bs: BS, isMember: boolean) {
+  const promo = getPromotionServicePrice(bs.serviceId, new Date(), isMember);
+  const basePromo = getPromotionServicePrice(bs.serviceId, new Date(), false);
+  return {
+    basePrice: basePromo ?? bs.price,
+    memberPrice: promo ?? getServiceMemberPrice(bs),
+  };
 }
 
 // Categories rendered BEFORE add-ons (Membership shown first as a highlighted CTA)
@@ -254,7 +264,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
   // ── Cart operations ──
   const addService = (bs: BS) => {
-    const mPrice = getServiceMemberPrice(bs);
+    const prices = getServicePrices(bs, memberActive);
     setCart(prev => {
       const pkg = pickPackageFor(bs, prev);
       // Cart row id includes redemption marker so two redemptions are separate lines
@@ -267,10 +277,10 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
       return [...prev, {
         id: rowId,
         name: bs.service.nameTh,
-        basePrice: bs.price,
-        price: pkg ? 0 : (memberActive ? mPrice : bs.price),
+        basePrice: prices.basePrice,
+        price: pkg ? 0 : (memberActive ? prices.memberPrice : prices.basePrice),
         qty: 1,
-        memberPrice: mPrice,
+        memberPrice: prices.memberPrice,
         redeemPackageId:   pkg?.id,
         redeemPackageName: pkg?.nameTh,
       }];

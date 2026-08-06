@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendBookingCreated, sendStaffBookingAlert, sendGroupBookingNotice } from "@/lib/notifications";
+import { getPromotionServicePrice } from "@/lib/promotions";
 
 export async function POST(request: Request) {
   try {
@@ -95,6 +96,26 @@ export async function POST(request: Request) {
         },
       });
 
+      // The client displays the promotion, but price is also resolved here so
+      // a crafted request cannot receive it outside the advertised dates.
+      // Membership eligibility mirrors the booking page: active, not expired,
+      // not pending activation and not exhausted.
+      let finalTotalPrice = Number(totalPrice) || 0;
+      const membership = await tx.membership.findUnique({
+        where: { customerId: customer.id },
+        select: { expiresAt: true, usagesAllowed: true, usagesUsed: true, pendingActivation: true },
+      });
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const isActiveMember = !!membership
+        && !membership.pendingActivation
+        && (!membership.expiresAt || membership.expiresAt >= today)
+        && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
+      const promotionalServicePrice = getPromotionServicePrice(serviceId, date, isActiveMember);
+      if (promotionalServicePrice != null) {
+        finalTotalPrice = promotionalServicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
+      }
+
       const created = await tx.booking.create({
         data: {
           branchId,
@@ -104,7 +125,7 @@ export async function POST(request: Request) {
           date: new Date(date + "T12:00:00"), // noon local avoids UTC-midnight = prev-day-in-Thailand bug
           startTime,
           endTime,
-          totalPrice,
+          totalPrice: finalTotalPrice,
           notes: notes || null,
           status: reqStatus,
           // "Create + checkout in one go": when the caller creates the booking

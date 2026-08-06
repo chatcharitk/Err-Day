@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/components/LanguageProvider";
+import { DAVINES_SPA_PROMOTION, getPromotionServicePrice, isDavinesSpaPromotionDay } from "@/lib/promotions";
 import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
 
 type BranchServiceWithService = BranchService & { service: Service };
@@ -344,10 +345,17 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       // the stored totalPrice) reports the wrong amount. Checked at submit so it's
       // race-free regardless of when the phone was entered.
       const memberPrice = computeMemberPrice(selectedService.service, selectedService.price);
-      const servicePrice =
-        memberPrice != null && memberPrice < selectedService.price && (await fetchIsMember(form.phone))
+      const isMember = await fetchIsMember(form.phone);
+      const promotionalPrice = getPromotionServicePrice(
+        selectedService.serviceId,
+        selectedDate,
+        isMember,
+      );
+      const servicePrice = promotionalPrice ?? (
+        memberPrice != null && memberPrice < selectedService.price && isMember
           ? memberPrice
-          : selectedService.price;
+          : selectedService.price
+      );
       const totalPrice = servicePrice + addonsTotal;
 
       const res = await fetch("/api/bookings", {
@@ -582,6 +590,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                     {svcDesc && (
                                       <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#A08070" }}>
                                         {svcDesc}
+                                      </p>
+                                    )}
+                                    {bs.serviceId === DAVINES_SPA_PROMOTION.serviceId && (
+                                      <p className="text-xs mt-1 font-medium" style={{ color: isSelected ? "#fff4d8" : "#B42318" }}>
+                                        {DAVINES_SPA_PROMOTION.labelTh}: ฿788 · สมาชิก ฿688
                                       </p>
                                     )}
                                     {/*
@@ -828,6 +841,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                     <span className="text-sm font-medium text-right max-w-[60%]" style={{ color: "#3B2A24" }}>{value}</span>
                   </div>
                 ))}
+
+                {isDavinesSpaPromotionDay(selectedDate) && selectedService.serviceId === DAVINES_SPA_PROMOTION.serviceId && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm" style={{ color: "#A08070" }}>ราคาโปรโมชัน</span>
+                    <span className="text-sm font-medium text-right" style={{ color: "#8B1D24" }}>฿788 · สมาชิก ฿688</span>
+                  </div>
+                )}
 
                 {selectedAddonItems.length > 0 && (
                   <>
