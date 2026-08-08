@@ -3,6 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity } from "@/lib/capacity";
 import { sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
 
+const CANCELLATION_CUTOFF_MS = 30 * 60 * 1000;
+
+function bookingStartsAt(date: Date, startTime: string) {
+  const localDate = date.toISOString().slice(0, 10);
+  const localTime = startTime.length === 5 ? `${startTime}:00` : startTime;
+  return Date.parse(`${localDate}T${localTime}+07:00`);
+}
+
 /**
  * Verifies that the booking belongs to the customer with the given LINE user ID.
  * Returns the booking record on success, or a NextResponse error to short-circuit.
@@ -130,6 +138,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }
     if (auth.booking.status === "COMPLETED" || auth.booking.status === "NO_SHOW") {
       return NextResponse.json({ error: "Booking cannot be cancelled in its current state" }, { status: 400 });
+    }
+    const startsAt = bookingStartsAt(auth.booking.date, auth.booking.startTime);
+    if (!Number.isFinite(startsAt) || startsAt - Date.now() <= CANCELLATION_CUTOFF_MS) {
+      return NextResponse.json(
+        {
+          error: "cancellation_cutoff",
+          message: "ไม่สามารถยกเลิกออนไลน์ภายใน 30 นาทีก่อนเวลานัด กรุณาติดต่อแอดมิน",
+        },
+        { status: 409 },
+      );
     }
 
     await prisma.booking.update({

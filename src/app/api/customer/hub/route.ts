@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       bookings: {
         where: { serviceId: { notIn: SALE_ONLY_SKUS } },
         include: {
-          branch: { select: { name: true } },
+          branch: { select: { name: true, phone: true } },
           service: { select: { name: true, nameTh: true, category: true } },
         },
         orderBy: [{ date: "desc" }, { startTime: "asc" }],

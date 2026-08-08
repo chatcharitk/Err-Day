@@ -8,6 +8,8 @@ import { useLiff } from "@/hooks/useLiff";
 import { Calendar } from "@/components/ui/calendar";
 import { UserCheck, CreditCard as CardIcon, Package as PackageIcon } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import { LangSwitcher } from "@/components/LangSwitcher";
+import { useLang, type Lang } from "@/components/LanguageProvider";
 
 // Full slot range matching branch hours (Mon–Sat 08:00–20:30)
 // The availability API will still mark taken slots correctly for Sunday (10:00–20:30).
@@ -69,6 +71,9 @@ const STATUS_TH: Record<BookingStatus, string> = {
   COMPLETED: "เสร็จสิ้น",
   NO_SHOW:   "ไม่มาตามนัด",
 };
+const STATUS_EN: Record<BookingStatus, string> = {
+  PENDING: "Pending", CONFIRMED: "Confirmed", CANCELLED: "Cancelled", COMPLETED: "Completed", NO_SHOW: "No-show",
+};
 
 const STATUS_STYLE: Record<BookingStatus, { bg: string; fg: string }> = {
   PENDING:   { bg: "#FEF3C7", fg: "#92400E" },
@@ -86,10 +91,20 @@ function isMobileDevice() {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("th-TH", {
+function formatDate(iso: string, lang: Lang = "th"): string {
+  return new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
+}
+
+function bookingStartsAt(booking: Pick<Booking, "date" | "startTime">) {
+  const localDate = booking.date.slice(0, 10);
+  const localTime = booking.startTime.length === 5 ? `${booking.startTime}:00` : booking.startTime;
+  return Date.parse(`${localDate}T${localTime}+07:00`);
+}
+
+function cancellationRequiresAdmin(booking: Pick<Booking, "date" | "startTime">) {
+  return bookingStartsAt(booking) - Date.now() <= 30 * 60 * 1000;
 }
 
 
@@ -102,12 +117,14 @@ function isUpcoming(b: Booking): boolean {
 
 export default function MyBookingsClient() {
   const liff = useLiff();
+  const { lang } = useLang();
   const [bookings,    setBookings]    = useState<Booking[] | null>(null);
   const [entitlements, setEntitlements] = useState<EntitlementsPayload | "none" | null>(null);
   const [branches,    setBranches]    = useState<Branch[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [editing,     setEditing]     = useState<Booking | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Booking | null>(null);
+  const [contactAdmin, setContactAdmin] = useState<Booking | null>(null);
   const directEditHandled = useRef(false);
 
   const fetchBookings = useCallback(async (uid: string) => {
@@ -176,6 +193,12 @@ export default function MyBookingsClient() {
         `/api/customer/bookings/${confirmCancel.id}?lineUserId=${encodeURIComponent(liff.profile.userId)}`,
         { method: "DELETE" },
       );
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data.error === "cancellation_cutoff") {
+        setContactAdmin(confirmCancel);
+        setConfirmCancel(null);
+        return;
+      }
       if (!res.ok) throw new Error();
       setConfirmCancel(null);
       await fetchBookings(liff.profile.userId);
@@ -202,9 +225,9 @@ export default function MyBookingsClient() {
         <Header />
         <div className="max-w-md mx-auto px-6 py-16 text-center">
           <CalendarIcon className="w-12 h-12 mx-auto mb-4" style={{ color: "#D8B4A3" }} />
-          <h1 className="text-2xl font-medium mb-2" style={{ color: "#45352F" }}>การจองของฉัน</h1>
+          <h1 className="text-2xl font-medium mb-2" style={{ color: "#45352F" }}>{lang === "th" ? "การจองของฉัน" : "My bookings"}</h1>
           <p className="text-sm mb-8" style={{ color: "#977A6F" }}>
-            เข้าสู่ระบบด้วย LINE เพื่อดูและจัดการการจองของคุณ
+            {lang === "th" ? "เข้าสู่ระบบด้วย LINE เพื่อดูและจัดการการจองของคุณ" : "Sign in with LINE to view and manage your bookings."}
           </p>
           <button
             onClick={handleLineLogin}
@@ -214,7 +237,7 @@ export default function MyBookingsClient() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
               <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
             </svg>
-            เข้าสู่ระบบด้วย LINE
+            {lang === "th" ? "เข้าสู่ระบบด้วย LINE" : "Sign in with LINE"}
           </button>
         </div>
       </main>
@@ -250,9 +273,9 @@ export default function MyBookingsClient() {
               <img src={liff.profile.pictureUrl} alt="" className="w-12 h-12 rounded-full" />
             )}
             <div>
-              <p className="text-xs uppercase tracking-widest" style={{ color: "#977A6F" }}>การจองของฉัน</p>
+              <p className="text-xs uppercase tracking-widest" style={{ color: "#977A6F" }}>{lang === "th" ? "การจองของฉัน" : "MY BOOKINGS"}</p>
               <h1 className="text-lg font-medium" style={{ color: "#45352F" }}>
-                สวัสดี {liff.profile.displayName}
+                {lang === "th" ? "สวัสดี" : "Hello"} {liff.profile.displayName}
               </h1>
             </div>
           </div>
@@ -265,38 +288,39 @@ export default function MyBookingsClient() {
           <div className="text-center py-16">
             <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto mb-3"
               style={{ borderColor: "#EADDD4", borderTopColor: "#B52F3A" }} />
-            <p className="text-sm" style={{ color: "#977A6F" }}>กำลังโหลด...</p>
+            <p className="text-sm" style={{ color: "#977A6F" }}>{lang === "th" ? "กำลังโหลด..." : "Loading..."}</p>
           </div>
         ) : bookings.length === 0 ? (
           <div className="text-center py-16 rounded-2xl bg-white" style={{ border: "1.5px solid #EADDD4" }}>
             <CalendarIcon className="w-10 h-10 mx-auto mb-3" style={{ color: "#D8B4A3" }} />
-            <p className="text-sm mb-4" style={{ color: "#977A6F" }}>ยังไม่มีการจอง</p>
+            <p className="text-sm mb-4" style={{ color: "#977A6F" }}>{lang === "th" ? "ยังไม่มีการจอง" : "No bookings yet"}</p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 rounded-xl text-white text-sm font-medium"
               style={{ background: "#B52F3A" }}
             >
-              จองคิวเลย
+              {lang === "th" ? "จองคิวเลย" : "Book now"}
             </Link>
           </div>
         ) : (
           <>
-            <Section title="การจองที่กำลังจะมาถึง" subtitle="Upcoming" empty="ไม่มีการจองที่กำลังจะมาถึง">
+            <Section title={lang === "th" ? "การจองที่กำลังจะมาถึง" : "Upcoming appointments"} subtitle="Upcoming" empty={lang === "th" ? "ไม่มีการจองที่กำลังจะมาถึง" : "No upcoming appointments"}>
               {upcoming.map((b) => (
                 <BookingCard
                   key={b.id}
                   booking={b}
                   onEdit={() => setEditing(b)}
-                  onCancel={() => setConfirmCancel(b)}
+                  onCancel={() => cancellationRequiresAdmin(b) ? setContactAdmin(b) : setConfirmCancel(b)}
                   showActions
+                  lang={lang}
                 />
               ))}
             </Section>
 
             {past.length > 0 && (
-              <Section title="การจองที่ผ่านมา" subtitle="History" empty="">
+              <Section title={lang === "th" ? "การจองที่ผ่านมา" : "Past appointments"} subtitle="History" empty="">
                 {past.map((b) => (
-                  <BookingCard key={b.id} booking={b} showActions={false} />
+                  <BookingCard key={b.id} booking={b} showActions={false} lang={lang} />
                 ))}
               </Section>
             )}
@@ -310,6 +334,7 @@ export default function MyBookingsClient() {
           booking={editing}
           branches={branches}
           lineUserId={liff.profile.userId}
+          lang={lang}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -326,10 +351,10 @@ export default function MyBookingsClient() {
               <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "#FEE2E2" }}>
                 <AlertCircle className="w-5 h-5" style={{ color: "#991B1B" }} />
               </div>
-              <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>ยกเลิกการจอง?</h3>
+              <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>{lang === "th" ? "ยกเลิกการจอง?" : "Cancel this appointment?"}</h3>
             </div>
             <p className="text-sm mb-5" style={{ color: "#6F574D" }}>
-              คุณกำลังจะยกเลิกการจองที่ {confirmCancel.branch.name} วันที่ {formatDate(confirmCancel.date)} เวลา {confirmCancel.startTime} น.
+              {lang === "th" ? `คุณกำลังจะยกเลิกการจองที่ ${confirmCancel.branch.name} วันที่ ${formatDate(confirmCancel.date, lang)} เวลา ${confirmCancel.startTime} น.` : `You’re cancelling your appointment at ${confirmCancel.branch.name} on ${formatDate(confirmCancel.date, lang)} at ${confirmCancel.startTime}.`}
             </p>
             <div className="flex gap-2">
               <button
@@ -338,7 +363,7 @@ export default function MyBookingsClient() {
                 style={{ borderColor: "#D8B4A3", color: "#6F574D" }}
                 disabled={loading}
               >
-                เก็บไว้
+                {lang === "th" ? "เก็บไว้" : "Keep appointment"}
               </button>
               <button
                 onClick={handleCancel}
@@ -346,8 +371,24 @@ export default function MyBookingsClient() {
                 style={{ background: "#DC2626" }}
                 disabled={loading}
               >
-                {loading ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
+                {loading ? (lang === "th" ? "กำลังยกเลิก..." : "Cancelling...") : (lang === "th" ? "ยืนยันยกเลิก" : "Confirm cancellation")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contactAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setContactAdmin(null)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FFF0BD" }}>
+              <AlertCircle className="w-6 h-6" style={{ color: "#7A4B12" }} />
+            </div>
+            <h3 className="text-lg font-semibold mb-2" style={{ color: "#45352F" }}>{lang === "th" ? "กรุณาติดต่อแอดมิน" : "Please contact the salon"}</h3>
+            <p className="text-sm mb-5" style={{ color: "#6F574D" }}>{lang === "th" ? "ไม่สามารถยกเลิกออนไลน์ภายใน 30 นาทีก่อนเวลานัด กรุณาติดต่อร้านเพื่อขอความช่วยเหลือ" : "Online cancellation is unavailable within 30 minutes of your appointment. Please contact the salon for assistance."}</p>
+            <div className="flex flex-col gap-2">
+              {contactAdmin.branch.phone && <a href={`tel:${contactAdmin.branch.phone}`} className="w-full py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: "#B52F3A" }}>{lang === "th" ? "โทรหาร้าน" : "Call salon"} · {contactAdmin.branch.phone}</a>}
+              <button onClick={() => setContactAdmin(null)} className="w-full py-2.5 rounded-xl text-sm font-medium border-2" style={{ borderColor: "#D8B4A3", color: "#6F574D" }}>{lang === "th" ? "ปิด" : "Close"}</button>
             </div>
           </div>
         </div>
@@ -509,7 +550,7 @@ function Header({ rightSlot }: { rightSlot?: React.ReactNode }) {
         </Link>
         <BrandLogo light size="md" />
       </div>
-      {rightSlot}
+      <div className="flex items-center gap-2"><LangSwitcher />{rightSlot}</div>
     </nav>
   );
 }
@@ -540,21 +581,21 @@ function Section({
 
 // ── Booking card ──────────────────────────────────────────────────────────────
 function BookingCard({
-  booking, onEdit, onCancel, showActions,
-}: { booking: Booking; onEdit?: () => void; onCancel?: () => void; showActions: boolean }) {
+  booking, onEdit, onCancel, showActions, lang,
+}: { booking: Booking; onEdit?: () => void; onCancel?: () => void; showActions: boolean; lang: Lang }) {
   const style = STATUS_STYLE[booking.status];
   return (
     <div className="rounded-2xl bg-white p-5" style={{ border: "1.5px solid #EADDD4" }}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold mb-0.5" style={{ color: "#45352F" }}>
-            {booking.service.nameTh || booking.service.name}
+            {lang === "th" ? booking.service.nameTh || booking.service.name : booking.service.name}
           </h3>
           <p className="text-xs" style={{ color: "#977A6F" }}>{booking.service.category}</p>
         </div>
         <span className="text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap"
           style={{ background: style.bg, color: style.fg }}>
-          {STATUS_TH[booking.status]}
+          {lang === "th" ? STATUS_TH[booking.status] : STATUS_EN[booking.status]}
         </span>
       </div>
 
@@ -565,7 +606,7 @@ function BookingCard({
         </p>
         <p className="flex items-center gap-2">
           <CalendarIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D8B4A3" }} />
-          {formatDate(booking.date)}
+          {formatDate(booking.date, lang)}
         </p>
         <p className="flex items-center gap-2">
           <Clock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D8B4A3" }} />
@@ -581,7 +622,7 @@ function BookingCard({
             style={{ borderColor: "#B52F3A", color: "#B52F3A", background: "white" }}
           >
             <Edit3 className="w-3.5 h-3.5" />
-            เปลี่ยนแปลง
+            {lang === "th" ? "เปลี่ยนแปลง" : "Reschedule"}
           </button>
           <button
             onClick={onCancel}
@@ -589,7 +630,7 @@ function BookingCard({
             style={{ borderColor: "#FECACA", color: "#DC2626", background: "white" }}
           >
             <Trash2 className="w-3.5 h-3.5" />
-            ยกเลิก
+            {lang === "th" ? "ยกเลิก" : "Cancel"}
           </button>
         </div>
       )}
@@ -599,13 +640,14 @@ function BookingCard({
 
 // ── Reschedule modal ──────────────────────────────────────────────────────────
 function RescheduleModal({
-  booking, branches, lineUserId, onClose, onSaved,
+  booking, branches, lineUserId, onClose, onSaved, lang,
 }: {
   booking: Booking;
   branches: Branch[];
   lineUserId: string;
   onClose: () => void;
   onSaved: () => void;
+  lang: Lang;
 }) {
   const [branchId,   setBranchId]   = useState(booking.branchId);
   const [date,       setDate]       = useState<Date>(new Date(booking.date));
@@ -623,18 +665,18 @@ function RescheduleModal({
       try {
         const res = await fetch(`/api/services?branchId=${encodeURIComponent(branchId)}`);
         if (!res.ok) throw new Error();
-        const services: { serviceId: string; duration: number }[] = await res.json();
+        const services: { duration: number; service: { id: string } }[] = await res.json();
         if (cancelled) return;
-        const match = services.find((s) => s.serviceId === booking.serviceId);
+        const match = services.find((s) => s.service.id === booking.serviceId);
         setDuration(match ? match.duration : null);
-        if (!match) setError("สาขานี้ไม่มีบริการนี้");
+        if (!match) setError(lang === "th" ? "สาขานี้ไม่มีบริการนี้" : "This service is unavailable at this branch.");
         else setError("");
       } catch {
         if (!cancelled) setDuration(null);
       }
     })();
     return () => { cancelled = true; };
-  }, [branchId, booking.serviceId]);
+  }, [branchId, booking.serviceId, lang]);
 
   // Fetch taken slots for the selected date+branch+duration
   useEffect(() => {
@@ -661,17 +703,17 @@ function RescheduleModal({
         body: JSON.stringify({ lineUserId, branchId, date: localDate, startTime }),
       });
       if (res.status === 409) {
-        setError("เวลาที่เลือกถูกจองแล้ว กรุณาเลือกเวลาอื่น");
+        setError(lang === "th" ? "เวลาที่เลือกถูกจองแล้ว กรุณาเลือกเวลาอื่น" : "That time is no longer available. Please choose another.");
         return;
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        setError(data.error || (lang === "th" ? "เกิดข้อผิดพลาด กรุณาลองใหม่" : "Something went wrong. Please try again."));
         return;
       }
       onSaved();
     } catch {
-      setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
+      setError(lang === "th" ? "เกิดข้อผิดพลาด กรุณาลองใหม่" : "Something went wrong. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -689,7 +731,7 @@ function RescheduleModal({
       >
         <div className="sticky top-0 bg-white px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #F1E4DC" }}>
           <div>
-            <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>เปลี่ยนแปลงการจอง</h3>
+            <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>{lang === "th" ? "เปลี่ยนแปลงการจอง" : "Reschedule appointment"}</h3>
             <p className="text-xs" style={{ color: "#977A6F" }}>{booking.service.nameTh || booking.service.name}</p>
           </div>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100">
@@ -700,7 +742,7 @@ function RescheduleModal({
         <div className="px-6 py-5 space-y-5">
           {/* Branch */}
           <div>
-            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>สาขา</label>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "สาขา" : "Branch"}</label>
             <div className="space-y-2">
               {branches.map((b) => {
                 const selected = branchId === b.id;
@@ -729,7 +771,7 @@ function RescheduleModal({
 
           {/* Date */}
           <div>
-            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>วันที่</label>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "วันที่" : "Date"}</label>
             <div className="rounded-xl border" style={{ borderColor: "#EADDD4" }}>
               <Calendar
                 mode="single"
@@ -743,9 +785,9 @@ function RescheduleModal({
 
           {/* Time slots */}
           <div>
-            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>เวลา</label>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "เวลา" : "Time"}</label>
             {loadingSlots ? (
-              <p className="text-sm text-center py-4" style={{ color: "#977A6F" }}>กำลังโหลด...</p>
+              <p className="text-sm text-center py-4" style={{ color: "#977A6F" }}>{lang === "th" ? "กำลังโหลด..." : "Loading..."}</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {ALL_SLOTS.map((t) => {
@@ -788,7 +830,7 @@ function RescheduleModal({
             style={{ borderColor: "#D8B4A3", color: "#6F574D" }}
             disabled={saving}
           >
-            ยกเลิก
+            {lang === "th" ? "ปิด" : "Close"}
           </button>
           <button
             onClick={handleSave}
@@ -796,7 +838,7 @@ function RescheduleModal({
             className="flex-1 py-3 rounded-xl text-sm font-medium text-white disabled:opacity-50"
             style={{ background: "#B52F3A" }}
           >
-            {saving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
+            {saving ? (lang === "th" ? "กำลังบันทึก..." : "Saving...") : (lang === "th" ? "บันทึกการเปลี่ยนแปลง" : "Save changes")}
           </button>
         </div>
       </div>

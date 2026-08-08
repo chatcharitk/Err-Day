@@ -218,3 +218,25 @@
 .hub-loading { background:#fffaf7; color:#977A6F; }
 .hub-loading span { border-color:#eaddd4; border-top-color:#b52f3a; }
 @media (min-width:421px) { body { background:#f3ece7; } }
+
+.appointment-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+.appointment-actions a { margin-top:0; display:flex; align-items:center; justify-content:center; }
+.appointment-actions button { display:flex; align-items:center; justify-content:center; gap:5px; border:1.5px solid #e3b7a9; border-radius:11px; padding:10px 7px; background:#fffdfa; color:#9f2833; font-size:11px; }
+.appointment-actions button svg { width:14px; height:14px; }
+.hub-dialog-backdrop { position:fixed; z-index:60; inset:0; display:flex; align-items:flex-end; justify-content:center; padding:18px; background:#291b1890; }
+.hub-dialog { position:relative; width:min(354px,100%); padding:26px 20px 20px; border-radius:24px; background:#fffdfa; text-align:center; box-shadow:0 24px 70px #291b1840; animation:hub-rise .22s ease; }
+.hub-dialog-close { position:absolute; top:12px; right:12px; width:32px; height:32px; display:grid; place-items:center; border:0; border-radius:50%; background:#f7eee8; color:#70544a; }
+.hub-dialog-close svg { width:17px; }
+.hub-dialog-icon { width:48px; height:48px; margin:0 auto 13px; display:grid; place-items:center; border-radius:50%; }
+.hub-dialog-icon svg { width:23px; }
+.hub-dialog-icon.cancel { background:#fee2e2; color:#a9222e; }
+.hub-dialog-icon.contact { background:#fff0bd; color:#7a4b12; }
+.hub-dialog h2 { margin:0 28px 7px; color:#45352f; font-size:19px; }
+.hub-dialog>p { margin:0 auto 18px; max-width:290px; color:#70574d; font-size:12px; line-height:1.65; }
+.hub-dialog .hub-dialog-error { margin:-6px 0 12px; color:#a9222e; }
+.hub-dialog-actions { display:grid; gap:8px; }
+.hub-dialog-actions.split { grid-template-columns:1fr 1fr; }
+.hub-dialog-actions button,.hub-dialog-actions a { min-height:44px; display:flex; align-items:center; justify-content:center; border:1.5px solid #dfc8bb; border-radius:13px; background:#fffdfa; color:#604a41; font-size:12px; font-weight:600; }
+.hub-dialog-actions .dialog-danger { border-color:#b52f3a; background:#b52f3a; color:white; }
+.hub-dialog-actions .dialog-primary { border-color:#b52f3a; background:#b52f3a; color:white; }
+@media (min-width:421px) { .hub-dialog-backdrop { align-items:center; } }
