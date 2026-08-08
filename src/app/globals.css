@@ -190,3 +190,31 @@
 .hub-tabs button.booking-tab:not(.active) { color:var(--wine); }
 .hub-tabs button.booking-tab svg { width:27px; height:27px; padding:5px; border-radius:9px; background:var(--wine); color:#fff; }
 .hub-tabs button:disabled { cursor:not-allowed; opacity:.48; }
+
+/* Brighter customer palette: blush, raspberry and champagne. */
+.customer-hub {
+  --wine:#b7355a;
+  --ink:#49333b;
+  --muted:#987783;
+  --line:#efd9e1;
+  background:linear-gradient(180deg,#fff8fa 0%,#fffaf7 100%);
+  box-shadow:0 18px 70px #9f496314;
+}
+.hub-header { background:linear-gradient(135deg,#cf5575,#b7355a); }
+.welcome { background:linear-gradient(145deg,#c94d6e,#b7355a); }
+.welcome-wave { background:#b7355a; }
+.welcome p { color:#f6ccd7; }
+.member-card,.empty-card { background:linear-gradient(140deg,#c94d6e,#ad3157 58%,#922746); box-shadow:0 16px 34px -20px #8f2948; }
+.foil { background:linear-gradient(90deg,#cda857,#fff0bd,#d8b760); }
+.package-card { background:linear-gradient(140deg,#fff0ba,#f1cf72); color:#7c3150; box-shadow:0 15px 30px -22px #a96f43; }
+.booking-priority>button { background:linear-gradient(135deg,#d65d7c,#b7355a); box-shadow:0 14px 30px -17px #9e294e; }
+.booking-priority b { background:#fff0bd; color:#8f2948; }
+.appointment,.empty-appointment,.branch-list article,.history-list article,.birthday,.deck-box,.reading article { background:#fffdfd; box-shadow:0 8px 24px -22px #9f4963; }
+.tarot-teaser { background:#fff4f7; }
+.mini-card,.card-back { background:linear-gradient(150deg,#c94d6e,#922746); box-shadow:0 10px 20px -12px #8f2948; }
+.tarot-page { background:radial-gradient(circle at 0 0,#f6dbe488 0 70px,transparent 71px),linear-gradient(#fff4f7,#fff8fa 420px); }
+.reveal { background:linear-gradient(135deg,#c94d6e,#ad3157); }
+.hub-tabs { background:#fffdfd; border-top-color:#f3e2e8; }
+.hub-loading { background:#fff8fa; color:#987783; }
+.hub-loading span { border-color:#efd9e1; border-top-color:#b7355a; }
+@media (min-width:421px) { body { background:#f7edf1; } }

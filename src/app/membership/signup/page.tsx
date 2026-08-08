@@ -18,9 +18,9 @@ export default function MembershipSignupRedirect() {
       <div className="text-center">
         <div
           className="w-10 h-10 rounded-full border-4 border-t-transparent animate-spin mx-auto mb-3"
-          style={{ borderColor: "#E8D8CC", borderTopColor: "#8B1D24" }}
+          style={{ borderColor: "#EFD9E1", borderTopColor: "#B7355A" }}
         />
-        <p className="text-sm" style={{ color: "#A08070" }}>กำลังเปิด LINE...</p>
+        <p className="text-sm" style={{ color: "#987783" }}>กำลังเปิด LINE...</p>
       </div>
     </div>
   );

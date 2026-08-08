@@ -23,14 +23,14 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
   });
 
   return (
-    <main className="min-h-screen" style={{ backgroundColor: "#FDF8F3" }}>
+    <main className="min-h-screen" style={{ backgroundColor: "#FFF8FA" }}>
       <div className="max-w-lg mx-auto px-6 py-16 text-center">
         <div className="flex justify-center mb-4">
-          <CheckCircle className="w-16 h-16" style={{ color: "#8B1D24" }} />
+          <CheckCircle className="w-16 h-16" style={{ color: "#B7355A" }} />
         </div>
-        <h1 className="text-2xl font-medium mb-2" style={{ color: "#3B2A24" }}>จองคิวสำเร็จ!</h1>
-        <p className="mb-2" style={{ color: "#6B5245" }}>เราตั้งตารอต้อนรับคุณ</p>
-        <p className="text-sm mb-8" style={{ color: "#A08070" }}>Booking Confirmed — เราจะแจ้งเตือนคุณก่อนวันนัด</p>
+        <h1 className="text-2xl font-medium mb-2" style={{ color: "#49333B" }}>จองคิวสำเร็จ!</h1>
+        <p className="mb-2" style={{ color: "#70545F" }}>เราตั้งตารอต้อนรับคุณ</p>
+        <p className="text-sm mb-8" style={{ color: "#987783" }}>Booking Confirmed — เราจะแจ้งเตือนคุณก่อนวันนัด</p>
 
         {/* ── Branch map ── */}
         {(() => {
@@ -41,7 +41,7 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
             : `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed&hl=th&z=16`;
           const mapsLink = mapUrl ?? `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
           return (
-            <div className="rounded-2xl overflow-hidden mb-6" style={{ border: "1.5px solid #E8D8CC" }}>
+            <div className="rounded-2xl overflow-hidden mb-6" style={{ border: "1.5px solid #EFD9E1" }}>
               <iframe
                 title={`แผนที่ ${booking.branch.name}`}
                 width="100%"
@@ -51,15 +51,15 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
                 referrerPolicy="no-referrer-when-downgrade"
                 src={embedSrc}
               />
-              <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: "#FFF8F4" }}>
-                <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#8B1D24" }} />
-                <p className="text-xs flex-1 truncate" style={{ color: "#6B5245" }}>{address}</p>
+              <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: "#FFFAFB" }}>
+                <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#B7355A" }} />
+                <p className="text-xs flex-1 truncate" style={{ color: "#70545F" }}>{address}</p>
                 <a
                   href={mapsLink}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs font-medium flex-shrink-0"
-                  style={{ color: "#8B1D24" }}
+                  style={{ color: "#B7355A" }}
                 >
                   เปิดใน Google Maps →
                 </a>
@@ -68,45 +68,45 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
           );
         })()}
 
-        <div className="rounded-2xl bg-white text-left mb-6 overflow-hidden" style={{ border: "1.5px solid #E8D8CC" }}>
+        <div className="rounded-2xl bg-white text-left mb-6 overflow-hidden" style={{ border: "1.5px solid #EFD9E1" }}>
           {/* Card header strip */}
-          <div className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#8B1D24" }}>
+          <div className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#B7355A" }}>
             <span className="text-xs font-semibold uppercase tracking-widest text-white/70">หมายเลขการจอง</span>
             <span className="text-xs font-mono text-white">{booking.id.slice(-8).toUpperCase()}</span>
           </div>
           <div className="px-6 pt-5 pb-6 space-y-4">
             <span
               className="inline-block text-xs font-medium px-2.5 py-1 rounded-full"
-              style={{ backgroundColor: "#FFF0E8", color: "#8B1D24" }}
+              style={{ backgroundColor: "#FFF0F4", color: "#B7355A" }}
             >
               {booking.status === "PENDING" ? "รอยืนยัน" : booking.status}
             </span>
 
-            <hr style={{ borderColor: "#F0E4D8" }} />
+            <hr style={{ borderColor: "#F3E2E8" }} />
 
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#D6BCAE" }} />
+                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#DBA8B8" }} />
                 <div>
-                  <p className="font-medium text-sm" style={{ color: "#3B2A24" }}>{booking.branch.name}</p>
-                  <p className="text-xs" style={{ color: "#A08070" }}>{booking.branch.address}</p>
+                  <p className="font-medium text-sm" style={{ color: "#49333B" }}>{booking.branch.name}</p>
+                  <p className="text-xs" style={{ color: "#987783" }}>{booking.branch.address}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: "#D6BCAE" }} />
-                <p className="text-sm" style={{ color: "#3B2A24" }}>{dateStr}</p>
+                <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+                <p className="text-sm" style={{ color: "#49333B" }}>{dateStr}</p>
               </div>
               <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 flex-shrink-0" style={{ color: "#D6BCAE" }} />
-                <p className="text-sm" style={{ color: "#3B2A24" }}>{booking.startTime} — {booking.endTime} น.</p>
+                <Clock className="w-4 h-4 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+                <p className="text-sm" style={{ color: "#49333B" }}>{booking.startTime} — {booking.endTime} น.</p>
               </div>
               <div className="flex items-center gap-3">
-                <User className="w-4 h-4 flex-shrink-0" style={{ color: "#D6BCAE" }} />
-                <p className="text-sm" style={{ color: "#3B2A24" }}>{booking.staff?.name ?? "ช่างที่ว่างในขณะนั้น"}</p>
+                <User className="w-4 h-4 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+                <p className="text-sm" style={{ color: "#49333B" }}>{booking.staff?.name ?? "ช่างที่ว่างในขณะนั้น"}</p>
               </div>
             </div>
 
-            <hr style={{ borderColor: "#F0E4D8" }} />
+            <hr style={{ borderColor: "#F3E2E8" }} />
 
             {[
               ["บริการ", booking.service.nameTh || booking.service.name],
@@ -114,8 +114,8 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
               ["โทรศัพท์", booking.customer.phone],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between">
-                <span className="text-sm" style={{ color: "#A08070" }}>{label}</span>
-                <span className="font-medium text-sm" style={{ color: "#3B2A24" }}>{value}</span>
+                <span className="text-sm" style={{ color: "#987783" }}>{label}</span>
+                <span className="font-medium text-sm" style={{ color: "#49333B" }}>{value}</span>
               </div>
             ))}
 
@@ -126,20 +126,20 @@ export default async function ConfirmPage({ params }: { params: Promise<{ id: st
           <Link
             href="/my-bookings"
             className="flex items-center justify-center w-full py-3 rounded-xl text-white font-medium transition-opacity hover:opacity-90"
-            style={{ backgroundColor: "#8B1D24" }}
+            style={{ backgroundColor: "#B7355A" }}
           >
             จัดการการจองของฉัน
           </Link>
           <Link
             href="/"
             className="flex items-center justify-center w-full py-3 rounded-xl font-medium border-2 transition-colors"
-            style={{ borderColor: "#D6BCAE", color: "#6B5245" }}
+            style={{ borderColor: "#DBA8B8", color: "#70545F" }}
           >
             จองคิวอีกครั้ง
           </Link>
         </div>
 
-        <p className="text-xs mt-6 flex items-center justify-center gap-1" style={{ color: "#A08070" }}>
+        <p className="text-xs mt-6 flex items-center justify-center gap-1" style={{ color: "#987783" }}>
           <Phone className="w-3 h-3" /> โทร: {booking.branch.phone}
         </p>
       </div>

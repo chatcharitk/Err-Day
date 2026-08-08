@@ -44,10 +44,10 @@ const PRODUCTS: Product[] = [
   },
 ];
 
-const PRIMARY = "#8B1D24";
-const BORDER  = "#E8D8CC";
-const TEXT    = "#3B2A24";
-const MUTED   = "#A08070";
+const PRIMARY = "#B7355A";
+const BORDER  = "#EFD9E1";
+const TEXT    = "#49333B";
+const MUTED   = "#987783";
 const BG      = "#FDF7F2";
 
 type Step = "loading" | "form" | "submitting" | "success" | "error";
@@ -156,7 +156,7 @@ export default function LiffMembershipSignupPage() {
         <div className="text-center">
           <div
             className="w-12 h-12 rounded-full border-4 border-t-transparent animate-spin mx-auto mb-4"
-            style={{ borderColor: "#E8D8CC", borderTopColor: PRIMARY }}
+            style={{ borderColor: "#EFD9E1", borderTopColor: PRIMARY }}
           />
           <p className="text-sm" style={{ color: MUTED }}>กำลังเชื่อมต่อ LINE...</p>
         </div>
@@ -223,13 +223,13 @@ export default function LiffMembershipSignupPage() {
                 className="w-full text-left rounded-2xl border-2 p-3.5 transition-all flex items-start gap-3"
                 style={{
                   borderColor: isSelected ? PRIMARY : BORDER,
-                  background:  isSelected ? "#FFF8F4" : "white",
+                  background:  isSelected ? "#FFFAFB" : "white",
                 }}
               >
                 <div
                   className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center"
                   style={{
-                    background: isSelected ? PRIMARY : "#FFF0E8",
+                    background: isSelected ? PRIMARY : "#FFF0F4",
                     color:      isSelected ? "white"  : PRIMARY,
                   }}
                 >

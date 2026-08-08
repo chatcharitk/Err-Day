@@ -5,10 +5,10 @@ import { ArrowLeft, CheckCircle2, MapPin, Phone, AlertCircle, CalendarDays } fro
 import BrandLogo from "@/components/BrandLogo";
 export const dynamic = "force-dynamic";
 
-const PRIMARY = "#8B1D24";
-const TEXT    = "#3B2A24";
-const MUTED   = "#A08070";
-const BORDER  = "#E8D8CC";
+const PRIMARY = "#B7355A";
+const TEXT    = "#49333B";
+const MUTED   = "#987783";
+const BORDER  = "#EFD9E1";
 const BG      = "#FDF7F2";
 
 const PRODUCT_INFO: Record<string, { name: string; priceTh: string; validityTh: string; perkTh: string }> = {
@@ -113,7 +113,7 @@ export default async function PendingPage({
             {/* Selected product card */}
             <div
               className="rounded-2xl p-4 mb-5 flex items-center gap-3"
-              style={{ background: "#FFF8F4", border: `1.5px solid ${PRIMARY}` }}
+              style={{ background: "#FFFAFB", border: `1.5px solid ${PRIMARY}` }}
             >
               <div
                 className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center font-bold"
@@ -133,7 +133,7 @@ export default async function PendingPage({
             {/* Registration ref code — show big so customer can read it out / screenshot */}
             <div
               className="rounded-2xl p-5 mb-5 text-center"
-              style={{ background: "#FFF8F4", border: `2px solid ${PRIMARY}` }}
+              style={{ background: "#FFFAFB", border: `2px solid ${PRIMARY}` }}
             >
               <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: MUTED }}>
                 รหัสอ้างอิง
@@ -172,7 +172,7 @@ export default async function PendingPage({
             {/* Instructions */}
             <div
               className="rounded-2xl p-5 mb-5"
-              style={{ background: "#FFF8F4", border: `1.5px solid ${BORDER}` }}
+              style={{ background: "#FFFAFB", border: `1.5px solid ${BORDER}` }}
             >
               <p className="text-xs uppercase tracking-widest mb-3 font-semibold" style={{ color: PRIMARY }}>
                 ขั้นตอนต่อไป

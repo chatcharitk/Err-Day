@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 
-const PRIMARY = "#8B1D24";
-const BORDER  = "#E8D8CC";
+const PRIMARY = "#B7355A";
+const BORDER  = "#EFD9E1";
 
 export default function PendingActions({ phone }: { phone: string }) {
   return (
