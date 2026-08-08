@@ -429,22 +429,22 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FFF8FA" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#FFFAF7" }}>
       {/* Top bar */}
-      <div className="bg-white border-b px-6 py-4" style={{ borderColor: "#DBA8B8" }}>
+      <div className="bg-white border-b px-6 py-4" style={{ borderColor: "#D8B4A3" }}>
         <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <Link href="/book" className="transition-colors" style={{ color: "#70545F" }}>
+          <Link href="/book" className="transition-colors" style={{ color: "#6F574D" }}>
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">
-            <p className="text-xs uppercase tracking-widest" style={{ color: "#DBA8B8" }}>{u.bookLabel}</p>
-            <h1 className="text-base font-medium" style={{ color: "#49333B" }}>{branch.name}</h1>
+            <p className="text-xs uppercase tracking-widest" style={{ color: "#D8B4A3" }}>{u.bookLabel}</p>
+            <h1 className="text-base font-medium" style={{ color: "#45352F" }}>{branch.name}</h1>
           </div>
           {/* Language toggle */}
           <button
             onClick={toggle}
             className="text-xs font-medium px-3 py-1 rounded-full border-2 transition-colors"
-            style={{ borderColor: "#DBA8B8", color: "#70545F" }}
+            style={{ borderColor: "#D8B4A3", color: "#6F574D" }}
           >
             {lang === "th" ? "EN" : "TH"}
           </button>
@@ -454,8 +454,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       {/* Persistent LINE status bar */}
       {liff.ready && (
         <div className="border-b" style={{
-          background:  liff.isLoggedIn ? "#F0FFF4" : "#FFFAFB",
-          borderColor: liff.isLoggedIn ? "#BBF7D0" : "#F3E2E8",
+          background:  liff.isLoggedIn ? "#F0FFF4" : "#FFFBF8",
+          borderColor: liff.isLoggedIn ? "#BBF7D0" : "#F1E4DC",
         }}>
           <div className="max-w-2xl mx-auto px-6 py-2 flex items-center gap-3">
             {liff.isLoggedIn && liff.profile ? (
@@ -488,7 +488,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#06C755" }}>
                   {LINE_SVG}
                 </div>
-                <p className="flex-1 text-xs" style={{ color: "#70545F" }}>
+                <p className="flex-1 text-xs" style={{ color: "#6F574D" }}>
                   {lang === "th" ? "ยังไม่ได้เข้าสู่ระบบ LINE" : "Not signed in with LINE"}
                 </p>
                 <button
@@ -505,7 +505,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       )}
 
       {/* Step indicator */}
-      <div className="bg-white border-b" style={{ borderColor: "#F3E2E8" }}>
+      <div className="bg-white border-b" style={{ borderColor: "#F1E4DC" }}>
         <div className="max-w-2xl mx-auto px-6 py-3 flex gap-1">
           {u.steps.map((label, i) => (
             <div key={label} className="flex items-center gap-1 flex-1 min-w-0">
@@ -513,21 +513,21 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium"
                 style={
                   i < step
-                    ? { backgroundColor: "#B7355A", color: "white" }
+                    ? { backgroundColor: "#B52F3A", color: "white" }
                     : i === step
-                    ? { backgroundColor: "#B7355A", color: "white", outline: "2px solid #DBA8B8", outlineOffset: "2px" }
-                    : { backgroundColor: "#F3E2E8", color: "#987783" }
+                    ? { backgroundColor: "#B52F3A", color: "white", outline: "2px solid #D8B4A3", outlineOffset: "2px" }
+                    : { backgroundColor: "#F1E4DC", color: "#977A6F" }
                 }
               >
                 {i < step ? <Check className="w-3 h-3" /> : i + 1}
               </div>
               <span
                 className="text-xs truncate hidden sm:block"
-                style={{ color: i === step ? "#49333B" : "#987783", fontWeight: i === step ? 500 : 400 }}
+                style={{ color: i === step ? "#45352F" : "#977A6F", fontWeight: i === step ? 500 : 400 }}
               >
                 {label}
               </span>
-              {i < u.steps.length - 1 && <div className="flex-1 h-px mx-1" style={{ backgroundColor: "#EFD9E1" }} />}
+              {i < u.steps.length - 1 && <div className="flex-1 h-px mx-1" style={{ backgroundColor: "#EADDD4" }} />}
             </div>
           ))}
         </div>
@@ -538,10 +538,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
         {/* ── Step 0: Service selection ── */}
         {step === 0 && (
           <div>
-            <h2 className="text-xl font-medium mb-1" style={{ color: "#49333B" }}>
-              {u.chooseService} <span className="text-base font-light" style={{ color: "#987783" }}>/ {u.chooseServiceSub}</span>
+            <h2 className="text-xl font-medium mb-1" style={{ color: "#45352F" }}>
+              {u.chooseService} <span className="text-base font-light" style={{ color: "#977A6F" }}>/ {u.chooseServiceSub}</span>
             </h2>
-            <p className="text-sm mb-6" style={{ color: "#987783" }}>{u.chooseServiceHint}</p>
+            <p className="text-sm mb-6" style={{ color: "#977A6F" }}>{u.chooseServiceHint}</p>
 
             {showPromotion && promoService && (
               <section
@@ -576,7 +576,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                     className="mt-5 w-full rounded-xl py-3 text-sm font-semibold transition-transform active:scale-[0.98]"
                     style={selectedService?.id === promoService.id
                       ? { backgroundColor: "#FFE08A", color: "#5A1519" }
-                      : { backgroundColor: "white", color: "#B7355A" }}
+                      : { backgroundColor: "white", color: "#B52F3A" }}
                   >
                     {selectedService?.id === promoService.id ? "✓ เลือกโปรโมชั่นนี้แล้ว" : "เลือกโปรโมชั่นนี้"}
                   </button>
@@ -599,15 +599,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                     onClick={() => toggleCat(cat)}
                     className="w-full flex items-center gap-2 mb-2 py-1"
                   >
-                    <div className="h-px flex-1" style={{ backgroundColor: "#DBA8B8" }} />
-                    <p className="text-xs font-semibold uppercase tracking-widest px-2 flex items-center gap-1.5" style={{ color: "#B7355A" }}>
+                    <div className="h-px flex-1" style={{ backgroundColor: "#D8B4A3" }} />
+                    <p className="text-xs font-semibold uppercase tracking-widest px-2 flex items-center gap-1.5" style={{ color: "#B52F3A" }}>
                       {catLabel}
                       {hasSelectedInCat && !isOpen && (
-                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: "#B7355A" }} />
+                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: "#B52F3A" }} />
                       )}
                     </p>
-                    <div className="h-px flex-1" style={{ backgroundColor: "#DBA8B8" }} />
-                    <span className="text-xs flex-shrink-0 ml-1" style={{ color: "#987783" }}>
+                    <div className="h-px flex-1" style={{ backgroundColor: "#D8B4A3" }} />
+                    <span className="text-xs flex-shrink-0 ml-1" style={{ color: "#977A6F" }}>
                       {isOpen ? "▲" : "▼"}
                     </span>
                   </button>
@@ -615,8 +615,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                   {isOpen && (
                     <>
                       {cat === "ย้อมผม NIGAO" && (
-                        <div className="flex items-start gap-2 p-3 rounded-lg mb-3 text-sm" style={{ backgroundColor: "#FFF0F4", borderLeft: "3px solid #B7355A" }}>
-                          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#B7355A" }} />
+                        <div className="flex items-start gap-2 p-3 rounded-lg mb-3 text-sm" style={{ backgroundColor: "#FFF3ED", borderLeft: "3px solid #B52F3A" }}>
+                          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#B52F3A" }} />
                           <div style={{ color: "#5C4A42" }}>
                             <p className="text-xs">{u.nigaoTitle}</p>
                           </div>
@@ -638,14 +638,14 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                 onClick={() => setSelectedService(bs)}
                                 className="w-full text-left p-4 rounded-xl border-2 transition-all"
                                 style={isSelected
-                                  ? { borderColor: "#B7355A", backgroundColor: "#B7355A", color: "white" }
-                                  : { borderColor: "#EFD9E1", backgroundColor: "white", color: "#49333B" }}
+                                  ? { borderColor: "#B52F3A", backgroundColor: "#B52F3A", color: "white" }
+                                  : { borderColor: "#EADDD4", backgroundColor: "white", color: "#45352F" }}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1">
                                     <p className="font-medium">{svcName}</p>
                                     {svcDesc && (
-                                      <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#987783" }}>
+                                      <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#977A6F" }}>
                                         {svcDesc}
                                       </p>
                                     )}
@@ -666,7 +666,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                       const memberPrice = computeMemberPrice(bs.service, bs.price);
                                       if (memberPrice == null || memberPrice >= bs.price) return null;
                                       return (
-                                        <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#B7355A" }}>
+                                        <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#B52F3A" }}>
                                           <Star className="w-3 h-3" />
                                           {u.memberPrice} {formatPrice(memberPrice)}
                                         </p>
@@ -676,13 +676,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                   <div className="flex-shrink-0 text-right">
                                     {bs.serviceId === DAVINES_SPA_PROMOTION.serviceId && showPromotion ? (
                                       <>
-                                        <p className="text-xs line-through" style={{ color: isSelected ? "rgba(255,255,255,0.65)" : "#987783" }}>{formatPrice(bs.price)}</p>
+                                        <p className="text-xs line-through" style={{ color: isSelected ? "rgba(255,255,255,0.65)" : "#977A6F" }}>{formatPrice(bs.price)}</p>
                                         <p className="font-semibold text-lg">฿788</p>
                                       </>
                                     ) : (
                                       <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
                                     )}
-                                    <p className="text-xs flex items-center gap-1 justify-end mt-0.5" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#987783" }}>
+                                    <p className="text-xs flex items-center gap-1 justify-end mt-0.5" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#977A6F" }}>
                                       <Clock className="w-3 h-3" /> {bs.duration} {u.minutes}
                                     </p>
                                   </div>
@@ -702,23 +702,23 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
         {/* ── Step 1: Add-ons ── */}
         {step === 1 && (
           <div>
-            <h2 className="text-xl font-medium mb-1" style={{ color: "#49333B" }}>
-              {u.addons} <span className="text-base font-light" style={{ color: "#987783" }}>/ {u.addonsSub}</span>
+            <h2 className="text-xl font-medium mb-1" style={{ color: "#45352F" }}>
+              {u.addons} <span className="text-base font-light" style={{ color: "#977A6F" }}>/ {u.addonsSub}</span>
             </h2>
-            <p className="text-sm mb-6" style={{ color: "#987783" }}>{u.addonsHint}</p>
+            <p className="text-sm mb-6" style={{ color: "#977A6F" }}>{u.addonsHint}</p>
             <div className="grid gap-3">
               {/* None option */}
               <button
                 onClick={handleNoAddons}
                 className="w-full text-left p-4 rounded-xl border-2 transition-all flex items-center gap-3"
                 style={noAddons
-                  ? { borderColor: "#B7355A", backgroundColor: "#B7355A", color: "white" }
-                  : { borderColor: "#EFD9E1", backgroundColor: "white" }}
+                  ? { borderColor: "#B52F3A", backgroundColor: "#B52F3A", color: "white" }
+                  : { borderColor: "#EADDD4", backgroundColor: "white" }}
               >
-                <Ban className="w-4 h-4 flex-shrink-0" style={{ color: noAddons ? "white" : "#987783" }} />
+                <Ban className="w-4 h-4 flex-shrink-0" style={{ color: noAddons ? "white" : "#977A6F" }} />
                 <div>
-                  <p className="font-medium" style={{ color: noAddons ? "white" : "#49333B" }}>{u.noAddons}</p>
-                  <p className="text-xs" style={{ color: noAddons ? "rgba(255,255,255,0.7)" : "#987783" }}>{u.noAddonsSub}</p>
+                  <p className="font-medium" style={{ color: noAddons ? "white" : "#45352F" }}>{u.noAddons}</p>
+                  <p className="text-xs" style={{ color: noAddons ? "rgba(255,255,255,0.7)" : "#977A6F" }}>{u.noAddonsSub}</p>
                 </div>
               </button>
 
@@ -730,29 +730,29 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                     onClick={() => toggleAddon(a.id)}
                     className="w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between"
                     style={isChecked
-                      ? { borderColor: "#B7355A", backgroundColor: "#FFF0F4" }
-                      : { borderColor: "#EFD9E1", backgroundColor: "white" }}
+                      ? { borderColor: "#B52F3A", backgroundColor: "#FFF3ED" }
+                      : { borderColor: "#EADDD4", backgroundColor: "white" }}
                   >
                     <div className="flex items-center gap-3">
                       <div
                         className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2"
                         style={isChecked
-                          ? { backgroundColor: "#B7355A", borderColor: "#B7355A" }
-                          : { borderColor: "#DBA8B8" }}
+                          ? { backgroundColor: "#B52F3A", borderColor: "#B52F3A" }
+                          : { borderColor: "#D8B4A3" }}
                       >
                         {isChecked && <Check className="w-3 h-3 text-white" />}
                       </div>
-                      <p className="font-medium" style={{ color: "#49333B" }}>
+                      <p className="font-medium" style={{ color: "#45352F" }}>
                         {lang === "th" ? a.nameTh : (a.name || a.nameTh)}
                       </p>
                     </div>
-                    <p className="font-semibold" style={{ color: "#B7355A" }}>+{formatPrice(a.price)}</p>
+                    <p className="font-semibold" style={{ color: "#B52F3A" }}>+{formatPrice(a.price)}</p>
                   </button>
                 );
               })}
             </div>
             {selectedAddons.size > 0 && (
-              <div className="mt-4 p-3 rounded-lg text-sm" style={{ backgroundColor: "#FFF0F4" }}>
+              <div className="mt-4 p-3 rounded-lg text-sm" style={{ backgroundColor: "#FFF3ED" }}>
                 <p style={{ color: "#5C4A42" }}>{u.addonsTotal}: <span className="font-semibold">+{formatPrice(addonsTotal)}</span></p>
               </div>
             )}
@@ -762,12 +762,12 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
         {/* ── Step 2: Date & Time ── */}
         {step === 2 && (
           <div>
-            <h2 className="text-xl font-medium mb-1" style={{ color: "#49333B" }}>
-              {u.dateTime} <span className="text-base font-light" style={{ color: "#987783" }}>/ {u.dateTimeSub}</span>
+            <h2 className="text-xl font-medium mb-1" style={{ color: "#45352F" }}>
+              {u.dateTime} <span className="text-base font-light" style={{ color: "#977A6F" }}>/ {u.dateTimeSub}</span>
             </h2>
 
             {/* Opening hours hint */}
-            <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: "#987783" }}>
+            <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: "#977A6F" }}>
               <Clock className="w-3.5 h-3.5 flex-shrink-0" />
               {lang === "th"
                 ? "จ–ส 08:00–21:00 · อา 10:00–21:00 (รับจองถึง 20:30)"
@@ -775,11 +775,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             </p>
 
             {isHairColor && (
-              <p className="text-sm mb-4 flex items-center gap-1" style={{ color: "#B7355A" }}>
+              <p className="text-sm mb-4 flex items-center gap-1" style={{ color: "#B52F3A" }}>
                 <AlertCircle className="w-4 h-4" /> {u.hairColorNotice}
               </p>
             )}
-            <div className="bg-white rounded-xl border p-4 mb-6 flex justify-center" style={{ borderColor: "#EFD9E1" }}>
+            <div className="bg-white rounded-xl border p-4 mb-6 flex justify-center" style={{ borderColor: "#EADDD4" }}>
               <Calendar
                 mode="single"
                 selected={selectedDate}
@@ -790,7 +790,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             </div>
             {selectedDate && (
               <div>
-                <p className="text-sm font-medium mb-3" style={{ color: "#70545F" }}>
+                <p className="text-sm font-medium mb-3" style={{ color: "#6F574D" }}>
                   {loadingSlots ? u.loadingSlots : u.availableSlots}
                 </p>
                 <div className="grid grid-cols-4 gap-2">
@@ -804,10 +804,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                         className="py-2 rounded-lg text-sm border-2 transition-all"
                         style={
                           isTaken
-                            ? { backgroundColor: "#F5F0EC", borderColor: "#EFD9E1", color: "#C4B0A4", cursor: "not-allowed" }
+                            ? { backgroundColor: "#F5F0EC", borderColor: "#EADDD4", color: "#C4B0A4", cursor: "not-allowed" }
                             : selectedTime === t
-                            ? { backgroundColor: "#B7355A", borderColor: "#B7355A", color: "white", fontWeight: 500 }
-                            : { backgroundColor: "white", borderColor: "#EFD9E1", color: "#5C4A42" }
+                            ? { backgroundColor: "#B52F3A", borderColor: "#B52F3A", color: "white", fontWeight: 500 }
+                            : { backgroundColor: "white", borderColor: "#EADDD4", color: "#5C4A42" }
                         }
                       >
                         {t}
@@ -824,8 +824,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
         {/* ── Step 3: Customer details ── */}
         {step === 3 && (
           <div>
-            <h2 className="text-xl font-medium mb-6" style={{ color: "#49333B" }}>
-              {u.details} <span className="text-base font-light" style={{ color: "#987783" }}>/ {u.detailsSub}</span>
+            <h2 className="text-xl font-medium mb-6" style={{ color: "#45352F" }}>
+              {u.details} <span className="text-base font-light" style={{ color: "#977A6F" }}>/ {u.detailsSub}</span>
             </h2>
 
             {/* Logged-in profile card (only shown if user came in via Line) */}
@@ -836,7 +836,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                   <img src={liff.profile.pictureUrl} alt="" className="w-9 h-9 rounded-full" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium" style={{ color: "#49333B" }}>{liff.profile.displayName}</p>
+                  <p className="text-sm font-medium" style={{ color: "#45352F" }}>{liff.profile.displayName}</p>
                   <p className="text-xs" style={{ color: "#166534" }}>
                     {form.phone
                       ? (lang === "th" ? "ยินดีต้อนรับกลับ — กรอกข้อมูลให้แล้ว ✓" : "Welcome back — details pre-filled ✓")
@@ -851,13 +851,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 <span className="text-xs" style={{ color: "#166534" }}>
                   {lang === "th" ? "ชื่อ LINE:" : "LINE name:"}
                 </span>
-                <span className="text-sm font-medium" style={{ color: "#49333B" }}>{lineName}</span>
+                <span className="text-sm font-medium" style={{ color: "#45352F" }}>{lineName}</span>
                 <span className="text-xs ml-auto" style={{ color: "#A0A0A0" }}>
                   {lang === "th" ? "(เพื่อความถูกต้อง กรุณากรอกชื่อจริงด้านล่าง)" : "(please enter your real name below)"}
                 </span>
               </div>
             )}
-            <div className="bg-white rounded-xl border p-6 space-y-4" style={{ borderColor: "#EFD9E1" }}>
+            <div className="bg-white rounded-xl border p-6 space-y-4" style={{ borderColor: "#EADDD4" }}>
               <div className="space-y-1.5">
                 <Label htmlFor="name" style={{ color: "#5C4A42" }}>{u.name} <span className="text-red-500">*</span></Label>
                 <Input id="name" placeholder={u.namePh} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
@@ -865,7 +865,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               <div className="space-y-1.5">
                 <Label htmlFor="nickname" style={{ color: "#5C4A42" }}>
                   {lang === "th" ? "ชื่อเล่น" : "Nickname"}
-                  <span className="text-sm font-normal ml-1" style={{ color: "#987783" }}>{u.optional}</span>
+                  <span className="text-sm font-normal ml-1" style={{ color: "#977A6F" }}>{u.optional}</span>
                 </Label>
                 <Input id="nickname" placeholder={lang === "th" ? "เช่น แอม, บิ๊ก" : "e.g. Aim, Big"} value={form.nickname} onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))} />
               </div>
@@ -874,11 +874,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 <Input id="phone" type="tel" placeholder="08X-XXX-XXXX" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="email" style={{ color: "#5C4A42" }}>{u.email} <span className="text-sm font-normal" style={{ color: "#987783" }}>{u.optional}</span></Label>
+                <Label htmlFor="email" style={{ color: "#5C4A42" }}>{u.email} <span className="text-sm font-normal" style={{ color: "#977A6F" }}>{u.optional}</span></Label>
                 <Input id="email" type="email" placeholder="you@email.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="notes" style={{ color: "#5C4A42" }}>{u.notes} <span className="text-sm font-normal" style={{ color: "#987783" }}>{u.optional}</span></Label>
+                <Label htmlFor="notes" style={{ color: "#5C4A42" }}>{u.notes} <span className="text-sm font-normal" style={{ color: "#977A6F" }}>{u.optional}</span></Label>
                 <Textarea id="notes" placeholder={u.notesPh} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} />
               </div>
             </div>
@@ -888,10 +888,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
         {/* ── Step 4: Confirm ── */}
         {step === 4 && selectedService && selectedDate && (
           <div>
-            <h2 className="text-xl font-medium mb-6" style={{ color: "#49333B" }}>
-              {u.confirm} <span className="text-base font-light" style={{ color: "#987783" }}>/ {u.confirmSub}</span>
+            <h2 className="text-xl font-medium mb-6" style={{ color: "#45352F" }}>
+              {u.confirm} <span className="text-base font-light" style={{ color: "#977A6F" }}>/ {u.confirmSub}</span>
             </h2>
-            <Card className="mb-4" style={{ borderColor: "#EFD9E1" }}>
+            <Card className="mb-4" style={{ borderColor: "#EADDD4" }}>
               <CardContent className="pt-6 space-y-3">
                 {[
                   [u.branch, branch.name],
@@ -901,22 +901,22 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                   [u.duration, `${selectedService.duration} ${u.minutes}`],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between items-start">
-                    <span className="text-sm" style={{ color: "#987783" }}>{label}</span>
-                    <span className="text-sm font-medium text-right max-w-[60%]" style={{ color: "#49333B" }}>{value}</span>
+                    <span className="text-sm" style={{ color: "#977A6F" }}>{label}</span>
+                    <span className="text-sm font-medium text-right max-w-[60%]" style={{ color: "#45352F" }}>{value}</span>
                   </div>
                 ))}
 
                 {isDavinesSpaPromotionDay(selectedDate) && selectedService.serviceId === DAVINES_SPA_PROMOTION.serviceId && (
                   <div className="flex justify-between items-start">
-                    <span className="text-sm" style={{ color: "#987783" }}>ราคาโปรโมชัน</span>
-                    <span className="text-sm font-medium text-right" style={{ color: "#B7355A" }}>฿788 · สมาชิก ฿688</span>
+                    <span className="text-sm" style={{ color: "#977A6F" }}>ราคาโปรโมชัน</span>
+                    <span className="text-sm font-medium text-right" style={{ color: "#B52F3A" }}>฿788 · สมาชิก ฿688</span>
                   </div>
                 )}
 
                 {selectedAddonItems.length > 0 && (
                   <>
-                    <hr style={{ borderColor: "#F3E2E8" }} />
-                    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#B7355A" }}>{u.addons}</p>
+                    <hr style={{ borderColor: "#F1E4DC" }} />
+                    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#B52F3A" }}>{u.addons}</p>
                     {selectedAddonItems.map((a) => (
                       <div key={a.id} className="flex justify-between">
                         <span className="text-sm" style={{ color: "#5C4A42" }}>{lang === "th" ? a.nameTh : (a.name || a.nameTh)}</span>
@@ -926,15 +926,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                   </>
                 )}
 
-                <hr style={{ borderColor: "#F3E2E8" }} />
+                <hr style={{ borderColor: "#F1E4DC" }} />
                 {[
                   [u.name, form.name],
                   [u.phone, form.phone],
                   ...(form.email ? [[u.email, form.email]] : []),
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between">
-                    <span className="text-sm" style={{ color: "#987783" }}>{label}</span>
-                    <span className="text-sm font-medium" style={{ color: "#49333B" }}>{value}</span>
+                    <span className="text-sm" style={{ color: "#977A6F" }}>{label}</span>
+                    <span className="text-sm font-medium" style={{ color: "#45352F" }}>{value}</span>
                   </div>
                 ))}
               </CardContent>
@@ -946,11 +946,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               onClick={handleSubmit}
               disabled={loading}
               className="w-full h-12 rounded-xl text-base font-medium text-white transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: "#B7355A" }}
+              style={{ backgroundColor: "#B52F3A" }}
             >
               {loading ? u.submitting : u.submitBtn}
             </button>
-            <p className="text-center text-xs mt-3" style={{ color: "#987783" }}>
+            <p className="text-center text-xs mt-3" style={{ color: "#977A6F" }}>
               {u.terms}
             </p>
           </div>
@@ -960,7 +960,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
         {step < 4 && (
           <div className="flex gap-3 mt-8">
             {step > 0 && (
-              <Button variant="outline" onClick={() => setStep((s) => s - 1)} className="flex-1" style={{ borderColor: "#DBA8B8", color: "#70545F" }}>
+              <Button variant="outline" onClick={() => setStep((s) => s - 1)} className="flex-1" style={{ borderColor: "#D8B4A3", color: "#6F574D" }}>
                 <ArrowLeft className="w-4 h-4 mr-2" /> {u.back}
               </Button>
             )}
@@ -968,7 +968,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               onClick={() => setStep((s) => s + 1)}
               disabled={!canProceed()}
               className="flex-1 h-8 rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-40 flex items-center justify-center gap-1"
-              style={{ backgroundColor: "#B7355A" }}
+              style={{ backgroundColor: "#B52F3A" }}
             >
               {step === 3 ? u.review : u.next} <ArrowRight className="w-4 h-4" />
             </button>
@@ -977,13 +977,13 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
         {/* Sticky summary strip */}
         {selectedService && step > 0 && step < 4 && (
-          <div className="mt-6 p-4 rounded-xl flex items-center justify-between text-sm" style={{ backgroundColor: "#FFF0F4" }}>
+          <div className="mt-6 p-4 rounded-xl flex items-center justify-between text-sm" style={{ backgroundColor: "#FFF3ED" }}>
             <div>
-              <p className="font-medium" style={{ color: "#49333B" }}>{lang === "th" ? selectedService.service.nameTh : (selectedService.service.name || selectedService.service.nameTh)}</p>
-              <p style={{ color: "#987783" }}>{selectedService.duration} {u.minutes}</p>
+              <p className="font-medium" style={{ color: "#45352F" }}>{lang === "th" ? selectedService.service.nameTh : (selectedService.service.name || selectedService.service.nameTh)}</p>
+              <p style={{ color: "#977A6F" }}>{selectedService.duration} {u.minutes}</p>
             </div>
             {selectedDate && selectedTime && (
-              <Badge style={{ backgroundColor: "#B7355A", color: "white", border: "none" }}>
+              <Badge style={{ backgroundColor: "#B52F3A", color: "white", border: "none" }}>
                 {selectedDate.toLocaleDateString("th-TH", { day: "numeric", month: "short" })} {selectedTime}
               </Badge>
             )}

@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, User, Phone, Mail, Loader2, AlertCircle } from "lucide-react";
 import PdpaConsentBlock from "@/components/PdpaConsentBlock";
 
-const PRIMARY = "#B7355A";
-const TEXT    = "#49333B";
-const MUTED   = "#987783";
-const BORDER  = "#EFD9E1";
+const PRIMARY = "#B52F3A";
+const TEXT    = "#45352F";
+const MUTED   = "#977A6F";
+const BORDER  = "#EADDD4";
 const BG      = "#FDF7F2";
 
 export default function SignupForm() {

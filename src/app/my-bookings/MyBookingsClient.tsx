@@ -179,21 +179,21 @@ export default function MyBookingsClient() {
   // ── Loading / not signed in screens ──────────────────────────────────────────
   if (!liff.ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FFF8FA" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FFFAF7" }}>
         <div className="w-10 h-10 border-4 rounded-full animate-spin"
-          style={{ borderColor: "#EFD9E1", borderTopColor: "#B7355A" }} />
+          style={{ borderColor: "#EADDD4", borderTopColor: "#B52F3A" }} />
       </div>
     );
   }
 
   if (!liff.isLoggedIn) {
     return (
-      <main className="min-h-screen" style={{ background: "#FFF8FA" }}>
+      <main className="min-h-screen" style={{ background: "#FFFAF7" }}>
         <Header />
         <div className="max-w-md mx-auto px-6 py-16 text-center">
-          <CalendarIcon className="w-12 h-12 mx-auto mb-4" style={{ color: "#DBA8B8" }} />
-          <h1 className="text-2xl font-medium mb-2" style={{ color: "#49333B" }}>การจองของฉัน</h1>
-          <p className="text-sm mb-8" style={{ color: "#987783" }}>
+          <CalendarIcon className="w-12 h-12 mx-auto mb-4" style={{ color: "#D8B4A3" }} />
+          <h1 className="text-2xl font-medium mb-2" style={{ color: "#45352F" }}>การจองของฉัน</h1>
+          <p className="text-sm mb-8" style={{ color: "#977A6F" }}>
             เข้าสู่ระบบด้วย LINE เพื่อดูและจัดการการจองของคุณ
           </p>
           <button
@@ -215,7 +215,7 @@ export default function MyBookingsClient() {
   const past     = (bookings ?? []).filter((b) => !isUpcoming(b));
 
   return (
-    <main className="min-h-screen" style={{ background: "#FFF8FA" }}>
+    <main className="min-h-screen" style={{ background: "#FFFAF7" }}>
       <Header
         rightSlot={
           !liff.isInClient && (
@@ -240,8 +240,8 @@ export default function MyBookingsClient() {
               <img src={liff.profile.pictureUrl} alt="" className="w-12 h-12 rounded-full" />
             )}
             <div>
-              <p className="text-xs uppercase tracking-widest" style={{ color: "#987783" }}>การจองของฉัน</p>
-              <h1 className="text-lg font-medium" style={{ color: "#49333B" }}>
+              <p className="text-xs uppercase tracking-widest" style={{ color: "#977A6F" }}>การจองของฉัน</p>
+              <h1 className="text-lg font-medium" style={{ color: "#45352F" }}>
                 สวัสดี {liff.profile.displayName}
               </h1>
             </div>
@@ -254,17 +254,17 @@ export default function MyBookingsClient() {
         {bookings === null || loading ? (
           <div className="text-center py-16">
             <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto mb-3"
-              style={{ borderColor: "#EFD9E1", borderTopColor: "#B7355A" }} />
-            <p className="text-sm" style={{ color: "#987783" }}>กำลังโหลด...</p>
+              style={{ borderColor: "#EADDD4", borderTopColor: "#B52F3A" }} />
+            <p className="text-sm" style={{ color: "#977A6F" }}>กำลังโหลด...</p>
           </div>
         ) : bookings.length === 0 ? (
-          <div className="text-center py-16 rounded-2xl bg-white" style={{ border: "1.5px solid #EFD9E1" }}>
-            <CalendarIcon className="w-10 h-10 mx-auto mb-3" style={{ color: "#DBA8B8" }} />
-            <p className="text-sm mb-4" style={{ color: "#987783" }}>ยังไม่มีการจอง</p>
+          <div className="text-center py-16 rounded-2xl bg-white" style={{ border: "1.5px solid #EADDD4" }}>
+            <CalendarIcon className="w-10 h-10 mx-auto mb-3" style={{ color: "#D8B4A3" }} />
+            <p className="text-sm mb-4" style={{ color: "#977A6F" }}>ยังไม่มีการจอง</p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 rounded-xl text-white text-sm font-medium"
-              style={{ background: "#B7355A" }}
+              style={{ background: "#B52F3A" }}
             >
               จองคิวเลย
             </Link>
@@ -316,16 +316,16 @@ export default function MyBookingsClient() {
               <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "#FEE2E2" }}>
                 <AlertCircle className="w-5 h-5" style={{ color: "#991B1B" }} />
               </div>
-              <h3 className="text-base font-semibold" style={{ color: "#49333B" }}>ยกเลิกการจอง?</h3>
+              <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>ยกเลิกการจอง?</h3>
             </div>
-            <p className="text-sm mb-5" style={{ color: "#70545F" }}>
+            <p className="text-sm mb-5" style={{ color: "#6F574D" }}>
               คุณกำลังจะยกเลิกการจองที่ {confirmCancel.branch.name} วันที่ {formatDate(confirmCancel.date)} เวลา {confirmCancel.startTime} น.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setConfirmCancel(null)}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium border-2"
-                style={{ borderColor: "#DBA8B8", color: "#70545F" }}
+                style={{ borderColor: "#D8B4A3", color: "#6F574D" }}
                 disabled={loading}
               >
                 เก็บไว้
@@ -352,17 +352,17 @@ function EntitlementCards({ data }: { data: EntitlementsPayload | "none" }) {
     return (
       <div
         className="rounded-2xl mb-6 p-4 flex items-center gap-3"
-        style={{ background: "#FFFAFB", border: "1.5px dashed #EFD9E1" }}
+        style={{ background: "#FFFBF8", border: "1.5px dashed #EADDD4" }}
       >
-        <CardIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+        <CardIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#D8B4A3" }} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium" style={{ color: "#49333B" }}>ยังไม่มีสมาชิกหรือแพ็กเกจ</p>
-          <p className="text-xs mt-0.5" style={{ color: "#987783" }}>สมัครเพื่อรับสิทธิประโยชน์ — เริ่มต้น ฿990</p>
+          <p className="text-sm font-medium" style={{ color: "#45352F" }}>ยังไม่มีสมาชิกหรือแพ็กเกจ</p>
+          <p className="text-xs mt-0.5" style={{ color: "#977A6F" }}>สมัครเพื่อรับสิทธิประโยชน์ — เริ่มต้น ฿990</p>
         </div>
         <a
           href="/liff/membership/signup"
           className="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
-          style={{ background: "#B7355A" }}
+          style={{ background: "#B52F3A" }}
         >
           สมัคร
         </a>
@@ -492,7 +492,7 @@ function PackageCard({ pkg }: { pkg: ActivePackage }) {
 // ── Header ────────────────────────────────────────────────────────────────────
 function Header({ rightSlot }: { rightSlot?: React.ReactNode }) {
   return (
-    <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#B7355A" }}>
+    <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#B52F3A" }}>
       <div className="flex items-center gap-3">
         <Link href="/" className="text-white/80 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -513,14 +513,14 @@ function Section({
   return (
     <section className="mb-8">
       <div className="mb-3">
-        <h2 className="text-base font-semibold" style={{ color: "#49333B" }}>{title}</h2>
-        <p className="text-xs" style={{ color: "#987783" }}>{subtitle}</p>
+        <h2 className="text-base font-semibold" style={{ color: "#45352F" }}>{title}</h2>
+        <p className="text-xs" style={{ color: "#977A6F" }}>{subtitle}</p>
       </div>
       {hasChildren ? (
         <div className="space-y-3">{children}</div>
       ) : empty ? (
         <p className="text-sm py-4 text-center rounded-xl bg-white"
-          style={{ color: "#987783", border: "1px dashed #EFD9E1" }}>
+          style={{ color: "#977A6F", border: "1px dashed #EADDD4" }}>
           {empty}
         </p>
       ) : null}
@@ -534,13 +534,13 @@ function BookingCard({
 }: { booking: Booking; onEdit?: () => void; onCancel?: () => void; showActions: boolean }) {
   const style = STATUS_STYLE[booking.status];
   return (
-    <div className="rounded-2xl bg-white p-5" style={{ border: "1.5px solid #EFD9E1" }}>
+    <div className="rounded-2xl bg-white p-5" style={{ border: "1.5px solid #EADDD4" }}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold mb-0.5" style={{ color: "#49333B" }}>
+          <h3 className="text-base font-semibold mb-0.5" style={{ color: "#45352F" }}>
             {booking.service.nameTh || booking.service.name}
           </h3>
-          <p className="text-xs" style={{ color: "#987783" }}>{booking.service.category}</p>
+          <p className="text-xs" style={{ color: "#977A6F" }}>{booking.service.category}</p>
         </div>
         <span className="text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap"
           style={{ background: style.bg, color: style.fg }}>
@@ -550,15 +550,15 @@ function BookingCard({
 
       <div className="space-y-1.5 text-sm" style={{ color: "#5C4A42" }}>
         <p className="flex items-center gap-2">
-          <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+          <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D8B4A3" }} />
           {booking.branch.name}
         </p>
         <p className="flex items-center gap-2">
-          <CalendarIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+          <CalendarIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D8B4A3" }} />
           {formatDate(booking.date)}
         </p>
         <p className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#DBA8B8" }} />
+          <Clock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D8B4A3" }} />
           {booking.startTime} — {booking.endTime} น.
         </p>
       </div>
@@ -568,7 +568,7 @@ function BookingCard({
           <button
             onClick={onEdit}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border-2 transition-colors"
-            style={{ borderColor: "#B7355A", color: "#B7355A", background: "white" }}
+            style={{ borderColor: "#B52F3A", color: "#B52F3A", background: "white" }}
           >
             <Edit3 className="w-3.5 h-3.5" />
             เปลี่ยนแปลง
@@ -677,13 +677,13 @@ function RescheduleModal({
         className="bg-white sm:rounded-2xl rounded-t-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #F3E2E8" }}>
+        <div className="sticky top-0 bg-white px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #F1E4DC" }}>
           <div>
-            <h3 className="text-base font-semibold" style={{ color: "#49333B" }}>เปลี่ยนแปลงการจอง</h3>
-            <p className="text-xs" style={{ color: "#987783" }}>{booking.service.nameTh || booking.service.name}</p>
+            <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>เปลี่ยนแปลงการจอง</h3>
+            <p className="text-xs" style={{ color: "#977A6F" }}>{booking.service.nameTh || booking.service.name}</p>
           </div>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100">
-            <X className="w-5 h-5" style={{ color: "#70545F" }} />
+            <X className="w-5 h-5" style={{ color: "#6F574D" }} />
           </button>
         </div>
 
@@ -700,16 +700,16 @@ function RescheduleModal({
                     onClick={() => setBranchId(b.id)}
                     className="w-full text-left p-3 rounded-xl border-2 transition-colors"
                     style={{
-                      borderColor: selected ? "#B7355A" : "#EFD9E1",
-                      background:  selected ? "#FFFAFB" : "white",
+                      borderColor: selected ? "#B52F3A" : "#EADDD4",
+                      background:  selected ? "#FFFBF8" : "white",
                     }}
                   >
                     <div className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium" style={{ color: "#49333B" }}>{b.name}</p>
-                        <p className="text-xs truncate" style={{ color: "#987783" }}>{b.address}</p>
+                        <p className="text-sm font-medium" style={{ color: "#45352F" }}>{b.name}</p>
+                        <p className="text-xs truncate" style={{ color: "#977A6F" }}>{b.address}</p>
                       </div>
-                      {selected && <Check className="w-4 h-4 flex-shrink-0" style={{ color: "#B7355A" }} />}
+                      {selected && <Check className="w-4 h-4 flex-shrink-0" style={{ color: "#B52F3A" }} />}
                     </div>
                   </button>
                 );
@@ -720,7 +720,7 @@ function RescheduleModal({
           {/* Date */}
           <div>
             <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>วันที่</label>
-            <div className="rounded-xl border" style={{ borderColor: "#EFD9E1" }}>
+            <div className="rounded-xl border" style={{ borderColor: "#EADDD4" }}>
               <Calendar
                 mode="single"
                 selected={date}
@@ -735,7 +735,7 @@ function RescheduleModal({
           <div>
             <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>เวลา</label>
             {loadingSlots ? (
-              <p className="text-sm text-center py-4" style={{ color: "#987783" }}>กำลังโหลด...</p>
+              <p className="text-sm text-center py-4" style={{ color: "#977A6F" }}>กำลังโหลด...</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {ALL_SLOTS.map((t) => {
@@ -749,10 +749,10 @@ function RescheduleModal({
                       className="py-2 rounded-lg text-sm border-2 transition-all"
                       style={
                         isTaken
-                          ? { background: "#F5F0EC", borderColor: "#EFD9E1", color: "#C4B0A4", cursor: "not-allowed" }
+                          ? { background: "#F5F0EC", borderColor: "#EADDD4", color: "#C4B0A4", cursor: "not-allowed" }
                           : isSelected
-                          ? { background: "#B7355A", borderColor: "#B7355A", color: "white", fontWeight: 500 }
-                          : { background: "white", borderColor: "#EFD9E1", color: "#5C4A42" }
+                          ? { background: "#B52F3A", borderColor: "#B52F3A", color: "white", fontWeight: 500 }
+                          : { background: "white", borderColor: "#EADDD4", color: "#5C4A42" }
                       }
                     >
                       {t}
@@ -771,11 +771,11 @@ function RescheduleModal({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white px-6 py-4 flex gap-2" style={{ borderTop: "1px solid #F3E2E8" }}>
+        <div className="sticky bottom-0 bg-white px-6 py-4 flex gap-2" style={{ borderTop: "1px solid #F1E4DC" }}>
           <button
             onClick={onClose}
             className="flex-1 py-3 rounded-xl text-sm font-medium border-2"
-            style={{ borderColor: "#DBA8B8", color: "#70545F" }}
+            style={{ borderColor: "#D8B4A3", color: "#6F574D" }}
             disabled={saving}
           >
             ยกเลิก
@@ -784,7 +784,7 @@ function RescheduleModal({
             onClick={handleSave}
             disabled={saving || !duration}
             className="flex-1 py-3 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-            style={{ background: "#B7355A" }}
+            style={{ background: "#B52F3A" }}
           >
             {saving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
           </button>

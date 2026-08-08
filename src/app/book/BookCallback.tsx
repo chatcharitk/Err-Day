@@ -86,11 +86,11 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (!liff.ready || !showBranches) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FFF8FA" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#FFFAF7" }}>
         <div className="text-center">
           <div className="w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4"
-            style={{ borderColor: "#EFD9E1", borderTopColor: "#B7355A" }} />
-          <p className="text-sm" style={{ color: "#987783" }}>กำลังโหลด...</p>
+            style={{ borderColor: "#EADDD4", borderTopColor: "#B52F3A" }} />
+          <p className="text-sm" style={{ color: "#977A6F" }}>กำลังโหลด...</p>
         </div>
       </div>
     );
@@ -103,9 +103,9 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
   const showLogin = !liff.isInClient && !liff.isLoggedIn && !skipLine;
 
   return (
-    <main className="min-h-screen" style={{ backgroundColor: "#FFF8FA" }}>
+    <main className="min-h-screen" style={{ backgroundColor: "#FFFAF7" }}>
       {/* ── Top nav ── */}
-      <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#B7355A" }}>
+      <nav className="px-6 py-3 flex items-center justify-between" style={{ backgroundColor: "#B52F3A" }}>
         <BrandLogo light size="md" />
         <div className="flex items-center gap-5">
           <Link href="/my-bookings" className="text-white/80 hover:text-white text-sm transition-colors">
@@ -119,8 +119,8 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
       </nav>
 
       {/* ── Hero ── */}
-      <section className="px-6 py-5 text-center" style={{ backgroundColor: "#B7355A" }}>
-        <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: "#DBA8B8" }}>ยินดีต้อนรับสู่</p>
+      <section className="px-6 py-5 text-center" style={{ backgroundColor: "#B52F3A" }}>
+        <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: "#D8B4A3" }}>ยินดีต้อนรับสู่</p>
         <h1 className="mb-1"><BrandLogo light size="lg" /></h1>
         <p className="text-sm max-w-md mx-auto" style={{ color: "rgba(255,255,255,0.75)" }}>
           สระไดร์ที่เข้าใจผู้หญิงที่สุด
@@ -128,10 +128,10 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
       </section>
 
       {/* Wave divider */}
-      <div style={{ backgroundColor: "#B7355A", lineHeight: 0 }}>
+      <div style={{ backgroundColor: "#B52F3A", lineHeight: 0 }}>
         <svg viewBox="0 0 1440 28" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"
           style={{ display: "block", width: "100%", height: 28 }}>
-          <path d="M0,28 C360,0 1080,0 1440,28 L1440,28 L0,28 Z" fill="#FFF8FA" />
+          <path d="M0,28 C360,0 1080,0 1440,28 L1440,28 L0,28 Z" fill="#FFFAF7" />
         </svg>
       </div>
 
@@ -140,8 +140,8 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
         {/* ── Either show login choice OR proceed to branches ── */}
         {showLogin ? (
           <div className="text-center">
-            <h2 className="text-xl font-medium mb-1" style={{ color: "#49333B" }}>เริ่มจองคิว</h2>
-            <p className="text-sm mb-8" style={{ color: "#987783" }}>
+            <h2 className="text-xl font-medium mb-1" style={{ color: "#45352F" }}>เริ่มจองคิว</h2>
+            <p className="text-sm mb-8" style={{ color: "#977A6F" }}>
               เข้าสู่ระบบด้วย LINE เพื่อรับการแจ้งเตือนและจองได้เร็วขึ้น
             </p>
 
@@ -158,7 +158,7 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
               <button
                 onClick={() => setSkipLine(true)}
                 className="w-full py-4 rounded-2xl font-medium text-sm transition-colors hover:bg-stone-100"
-                style={{ color: "#70545F", border: "1.5px solid #DBA8B8", background: "transparent" }}
+                style={{ color: "#6F574D", border: "1.5px solid #D8B4A3", background: "transparent" }}
               >
                 ดำเนินการต่อโดยไม่เข้าสู่ระบบ
               </button>
@@ -179,7 +179,7 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
                   <img src={liff.profile.pictureUrl} alt="" className="w-10 h-10 rounded-full" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: "#49333B" }}>
+                  <p className="text-sm font-semibold truncate" style={{ color: "#45352F" }}>
                     {liff.profile.displayName}
                   </p>
                   <p className="text-xs" style={{ color: "#166534" }}>เชื่อมต่อ LINE แล้ว ✓</p>
@@ -198,8 +198,8 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
             )}
 
             {/* Branch picker */}
-            <h2 className="text-2xl font-medium mb-1" style={{ color: "#49333B" }}>เลือกสาขา</h2>
-            <p className="text-sm mb-6" style={{ color: "#987783" }}>
+            <h2 className="text-2xl font-medium mb-1" style={{ color: "#45352F" }}>เลือกสาขา</h2>
+            <p className="text-sm mb-6" style={{ color: "#977A6F" }}>
               Our Locations — เลือกสาขาเพื่อดูบริการและจองคิว
             </p>
 
@@ -210,22 +210,22 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
                   <div
                     key={branch.id}
                     className="rounded-2xl bg-white overflow-hidden transition-shadow hover:shadow-md"
-                    style={{ border: "1.5px solid #EFD9E1" }}
+                    style={{ border: "1.5px solid #EADDD4" }}
                   >
                     <div className="px-6 pt-6 pb-4">
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
-                        <h3 className="text-lg font-medium" style={{ color: "#49333B" }}>{bookingBranchLabel(branch.name)}</h3>
+                        <h3 className="text-lg font-medium" style={{ color: "#45352F" }}>{bookingBranchLabel(branch.name)}</h3>
                         <span className="text-xs px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: "#FFF0F4", color: "#B7355A" }}>
+                          style={{ backgroundColor: "#FFF3ED", color: "#B52F3A" }}>
                           เปิดให้บริการ
                         </span>
                       </div>
-                      <p className="flex items-start gap-1.5 text-sm mb-1" style={{ color: "#70545F" }}>
+                      <p className="flex items-start gap-1.5 text-sm mb-1" style={{ color: "#6F574D" }}>
                         <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                         {branch.address}
                       </p>
                       {branch.phone && (
-                        <p className="flex items-center gap-1.5 text-sm" style={{ color: "#70545F" }}>
+                        <p className="flex items-center gap-1.5 text-sm" style={{ color: "#6F574D" }}>
                           <Phone className="w-3.5 h-3.5 flex-shrink-0" />
                           {branch.phone}
                         </p>
@@ -235,7 +235,7 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
                       <Link
                         href={`/book/${branch.id}`}
                         className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-medium text-sm transition-opacity hover:opacity-90"
-                        style={{ backgroundColor: "#B7355A" }}
+                        style={{ backgroundColor: "#B52F3A" }}
                       >
                         จองคิวที่สาขานี้ <ArrowRight className="w-4 h-4" />
                       </Link>
@@ -246,11 +246,11 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
                   <div
                     key={branch.id}
                     className="rounded-2xl overflow-hidden"
-                    style={{ border: "1.5px solid #EFD9E1", backgroundColor: "#FAFAFA", opacity: 0.8 }}
+                    style={{ border: "1.5px solid #EADDD4", backgroundColor: "#FAFAFA", opacity: 0.8 }}
                   >
                     <div className="px-6 pt-6 pb-4">
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
-                        <h3 className="text-lg font-medium" style={{ color: "#70545F" }}>{bookingBranchLabel(branch.name)}</h3>
+                        <h3 className="text-lg font-medium" style={{ color: "#6F574D" }}>{bookingBranchLabel(branch.name)}</h3>
                         <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
                           style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>
                           เร็วๆ นี้
