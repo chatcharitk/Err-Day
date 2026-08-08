@@ -49,20 +49,25 @@ interface EntitlementsPayload {
   packages:   ActivePackage[];
 }
 
-interface Booking {
+export interface ReschedulableBooking {
   id:         string;
   branchId:   string;
   serviceId:  string;
   date:       string;       // ISO
   startTime:  string;
   endTime:    string;
+  service: { id: string; name: string; nameTh: string };
+}
+
+interface Booking extends ReschedulableBooking {
   status:     BookingStatus;
   branch:  { id: string; name: string; address: string; phone: string };
   service: { id: string; name: string; nameTh: string; category: string };
   addons:  { addon: { id: string; name: string; nameTh: string } }[];
 }
 
-interface Branch { id: string; name: string; address: string; phone: string }
+export interface CustomerBranch { id: string; name: string; address: string; phone: string }
+type Branch = CustomerBranch;
 
 const STATUS_TH: Record<BookingStatus, string> = {
   PENDING:   "รอยืนยัน",
@@ -639,11 +644,11 @@ function BookingCard({
 }
 
 // ── Reschedule modal ──────────────────────────────────────────────────────────
-function RescheduleModal({
+export function RescheduleModal({
   booking, branches, lineUserId, onClose, onSaved, lang,
 }: {
-  booking: Booking;
-  branches: Branch[];
+  booking: ReschedulableBooking;
+  branches: CustomerBranch[];
   lineUserId: string;
   onClose: () => void;
   onSaved: () => void;

@@ -7,12 +7,14 @@ import { AlertCircle, CalendarDays, Clock3, CreditCard, MapPin, Sparkles, Star, 
 import { useLiff } from "@/hooks/useLiff";
 import { useLang } from "@/components/LanguageProvider";
 import { LangSwitcher } from "@/components/LangSwitcher";
+import { RescheduleModal, type ReschedulableBooking } from "@/app/my-bookings/MyBookingsClient";
 
 type Tab = "home" | "book" | "history" | "tarot";
-type Branch = { id: string; name: string; address: string; bookingEnabled: boolean };
-type Booking = {
-  id: string; date: string; startTime: string; endTime: string; status: string;
-  branch: { name: string; phone?: string | null }; service: { name: string; nameTh?: string | null; category?: string | null };
+type Branch = { id: string; name: string; address: string; phone: string; bookingEnabled: boolean };
+type Booking = ReschedulableBooking & {
+  status: string;
+  branch: { name: string; phone?: string | null };
+  service: { id: string; name: string; nameTh: string; category?: string | null };
 };
 type MembershipData = {
   membership?: { label?: string | null; expiresAt?: string | null; isExpired?: boolean } | null;
@@ -104,6 +106,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   const [cancelDialog, setCancelDialog] = useState<"confirm" | "contact" | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [editing, setEditing] = useState<Booking | null>(null);
 
   const loadCustomerData = useCallback(async () => {
     if (!liff.accessToken) return;
@@ -251,7 +254,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
           </section>
 
           <section className="hub-section"><div className="section-heading"><div><h2>{u.next}</h2><p>Next appointment</p></div><button onClick={() => setTab("history")}>{u.viewAll}</button></div>
-            {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{lang === "th" ? upcoming.service.nameTh || upcoming.service.name : upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[lang][upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {displayDate(upcoming.date, lang)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><Link href={`/my-bookings?edit=${encodeURIComponent(upcoming.id)}`}>{u.manage}</Link><button type="button" onClick={requestCancellation}><Trash2 />{u.cancel}</button></div></article> : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}
+            {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{lang === "th" ? upcoming.service.nameTh || upcoming.service.name : upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[lang][upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {displayDate(upcoming.date, lang)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(upcoming)}>{u.manage}</button><button type="button" onClick={requestCancellation}><Trash2 />{u.cancel}</button></div></article> : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}
           </section>
 
           <section className="hub-section"><button className={`tarot-teaser${tarotEnabled ? "" : " coming-soon"}`} disabled={!tarotEnabled} onClick={() => setTab("tarot")}><span className="mini-card"><Star /></span><span><small>{tarotEnabled ? "DAILY READING" : "COMING SOON"}</small><strong>{tarotEnabled ? (lang === "th" ? "ดวงวันนี้ของคุณ" : "Your daily reading") : u.comingSoon}</strong><em>{tarotEnabled ? (lang === "th" ? "เลือกไพ่ 3 ใบ เพื่ออ่านความรัก การงาน และการเงิน" : "Choose 3 cards for love, career, and finance") : u.tarotSoon}</em></span>{tarotEnabled ? <b>›</b> : <b className="soon-badge">{u.soon}</b>}</button></section>
@@ -269,6 +272,18 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
           {reading && <div className="reading"><div className="reading-divider">YOUR READING</div>{[{ icon: "♡", title: "ความรัก", body: reading.love }, { icon: "✦", title: "การงาน", body: reading.career }, { icon: "฿", title: "การเงิน", body: reading.finance }].map(item => <article key={item.title}><span>{item.icon}</span><div><h2>{item.title}</h2><p>{item.body}</p></div></article>)}<p className="provider">คำทำนายโดย AstrologyAPI · ใช้เพื่อความบันเทิงและการสะท้อนตนเอง</p></div>}
         </section>}
       </div>
+
+      {editing && liff.profile && <RescheduleModal
+        booking={editing}
+        branches={branches}
+        lineUserId={liff.profile.userId}
+        lang={lang}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          void loadCustomerData();
+        }}
+      />}
 
       {cancelDialog && upcoming && <div className="hub-dialog-backdrop" role="presentation" onClick={() => !cancelBusy && setCancelDialog(null)}>
         <section className="hub-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-dialog-title" onClick={(event) => event.stopPropagation()}>

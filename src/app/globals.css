@@ -222,6 +222,7 @@
 .appointment-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
 .appointment-actions a { margin-top:0; display:flex; align-items:center; justify-content:center; }
 .appointment-actions button { display:flex; align-items:center; justify-content:center; gap:5px; border:1.5px solid #e3b7a9; border-radius:11px; padding:10px 7px; background:#fffdfa; color:#9f2833; font-size:11px; }
+.appointment-actions .manage-appointment { border-color:var(--wine); color:var(--wine); font-weight:600; }
 .appointment-actions button svg { width:14px; height:14px; }
 .hub-dialog-backdrop { position:fixed; z-index:60; inset:0; display:flex; align-items:flex-end; justify-content:center; padding:18px; background:#291b1890; }
 .hub-dialog { position:relative; width:min(354px,100%); padding:26px 20px 20px; border-radius:24px; background:#fffdfa; text-align:center; box-shadow:0 24px 70px #291b1840; animation:hub-rise .22s ease; }

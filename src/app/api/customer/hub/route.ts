@@ -20,7 +20,7 @@ export async function POST(request: Request) {
         where: { serviceId: { notIn: SALE_ONLY_SKUS } },
         include: {
           branch: { select: { name: true, phone: true } },
-          service: { select: { name: true, nameTh: true, category: true } },
+          service: { select: { id: true, name: true, nameTh: true, category: true } },
         },
         orderBy: [{ date: "desc" }, { startTime: "asc" }],
       },
