@@ -136,12 +136,13 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
     });
   }, [branchServices]);
 
-  // Slot list adapts to day-of-week (Sunday opens at 10:00)
+  // Slot list adapts to day-of-week (Sunday opens at 10:00, except branch-bangna
+  // which is open 07:00–21:00 every day including Sunday)
   const timeSlots = useMemo(() => {
     if (!branch) return [];
     const [y, m, d] = date.split("-").map(Number);
     const isSunday  = new Date(y, m - 1, d).getDay() === 0;
-    const open  = isSunday ? "10:00" : (branch.openTime  ?? "08:00");
+    const open  = isSunday && branch.id !== "branch-bangna" ? "10:00" : (branch.openTime  ?? "08:00");
     const close = branch.closeTime ?? "21:00";
     return generateTimeSlots(open, close);
   }, [branch, date]);

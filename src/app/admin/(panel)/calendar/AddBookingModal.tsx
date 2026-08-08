@@ -91,13 +91,13 @@ export default function AddBookingModal({
   const timeSlots = useMemo(() => {
     const [y, mo, d] = date.split("-").map(Number);
     const isSunday = new Date(y, mo - 1, d).getDay() === 0;
-    const openMins = isSunday ? 10 * 60 : 8 * 60;
+    const openMins = isSunday && branchId !== "branch-bangna" ? 10 * 60 : 8 * 60;
     const slots: string[] = [];
     for (let t = openMins; t <= 21 * 60 - 30; t += 15) {
       slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
     }
     return slots;
-  }, [date]);
+  }, [date, branchId]);
 
   const selectedSvc    = branchServices.find(s => s.id === serviceId);
   const effectiveSvcPx = selectedSvc

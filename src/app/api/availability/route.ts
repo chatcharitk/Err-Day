@@ -12,7 +12,7 @@ import { getTakenSlots, addMinutes } from "@/lib/capacity";
  *
  * Open hours are read from the Branch record:
  *   Mon–Sat → branch.openTime  (default "08:00")
- *   Sunday  → "10:00" override
+ *   Sunday  → "10:00" override (except branch-bangna, open 07:00–21:00 every day)
  *   Close   → branch.closeTime (default "21:00")
  */
 export async function GET(request: Request) {
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     select: { openTime: true, closeTime: true },
   });
 
-  const openTime  = isSunday ? "10:00" : (branch?.openTime  ?? "08:00");
+  const openTime  = isSunday && branchId !== "branch-bangna" ? "10:00" : (branch?.openTime  ?? "08:00");
   const closeTime = branch?.closeTime ?? "21:00";
 
   // 30-min buffer before close: don't accept new bookings whose start is
