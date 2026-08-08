@@ -41,6 +41,12 @@ function daysUntil(value?: string | null) {
   return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
 }
 
+function bookingStartsAt(dateValue: string, startTime: string) {
+  const localDate = dateValue.slice(0, 10);
+  const localTime = startTime.length === 5 ? `${startTime}:00` : startTime;
+  return Date.parse(`${localDate}T${localTime}+07:00`);
+}
+
 export default function CustomerHub({ branches, tarotEnabled }: { branches: Branch[]; tarotEnabled: boolean }) {
   const liff = useLiff();
   const [openedAt] = useState(() => Date.now());
@@ -88,8 +94,13 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   }, [tab]);
 
   const upcoming = useMemo(() => bookings
-    .filter(b => !["CANCELLED", "COMPLETED", "NO_SHOW"].includes(b.status) && new Date(`${b.date}T${b.startTime}`).getTime() >= openedAt)
-    .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))[0], [bookings, openedAt]);
+    .filter(b => {
+      const startsAt = bookingStartsAt(b.date, b.startTime);
+      return !["CANCELLED", "COMPLETED", "NO_SHOW"].includes(b.status)
+        && Number.isFinite(startsAt)
+        && startsAt >= openedAt;
+    })
+    .sort((a, b) => bookingStartsAt(a.date, a.startTime) - bookingStartsAt(b.date, b.startTime))[0], [bookings, openedAt]);
   const activePackage = membership?.packages?.[0];
   const displayName = customer?.nickname || customer?.name?.split(" ")[0] || liff.profile?.displayName || "คุณ";
 
