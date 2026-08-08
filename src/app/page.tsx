@@ -10,6 +10,7 @@ export const revalidate = 3600;
  * and the AstrologyAPI-powered tarot experience.
  */
 export default async function HomePage() {
+  const tarotEnabled = process.env.TAROT_ENABLED === "true";
   const branches = await prisma.branch.findMany({
     where:   { isActive: true },                                  // only admin-active branches
     orderBy: [{ bookingEnabled: "desc" }, { name: "asc" }],      // open branches first
@@ -22,5 +23,5 @@ export default async function HomePage() {
     return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
   });
 
-  return <CustomerHub branches={branches} />;
+  return <CustomerHub branches={branches} tarotEnabled={tarotEnabled} />;
 }

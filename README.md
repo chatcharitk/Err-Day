@@ -3,6 +3,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ## AstrologyAPI tarot
 
 The customer hub calls AstrologyAPI through the server-side `/api/tarot` route.
+The feature is disabled by default. Enable it only when the integration is ready:
+
+```env
+TAROT_ENABLED=true
+```
+
 For a new wallet/pay-as-you-go account, set its access token (never expose it
 with a `NEXT_PUBLIC_` prefix):
 

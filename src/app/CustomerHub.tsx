@@ -41,7 +41,7 @@ function daysUntil(value?: string | null) {
   return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
 }
 
-export default function CustomerHub({ branches }: { branches: Branch[] }) {
+export default function CustomerHub({ branches, tarotEnabled }: { branches: Branch[]; tarotEnabled: boolean }) {
   const liff = useLiff();
   const [openedAt] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -153,22 +153,30 @@ export default function CustomerHub({ branches }: { branches: Branch[] }) {
           <section className="welcome"><p>WELCOME BACK</p><h1>สวัสดี {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</section>
           <div className="welcome-wave" />
           <section className="hub-section entitlement">
-            {membership?.membership ? <div className="member-card">
+            {membership?.membership ? <div className="member-card rabbit-card">
               <span className="foil" /><div className="card-top"><div><small>ERR.DAY MEMBER</small><h2>{membership.membership.label || "สมาชิก err.day"}</h2></div><b>{membership.membership.isExpired ? "หมดอายุ" : "ใช้งานได้"}</b></div>
               <div className="card-stats"><div><small>สมาชิกเหลืออีก</small><strong>{daysUntil(membership.membership.expiresAt)}<em> วัน</em></strong></div><div><small>หมดอายุ</small><span>{membership.membership.expiresAt ? thaiDate(membership.membership.expiresAt) : "ไม่กำหนด"}</span></div></div>
             </div> : activePackage ? <div className="package-card"><small>ERR.DAY PACKAGE</small><h2>{activePackage.nameTh}</h2><div className="card-stats"><strong>{activePackage.usagesLeft}<em> / {activePackage.usageLimit} ครั้ง</em></strong><span>หมดอายุ {thaiDate(activePackage.expiresAt)}</span></div></div> : <div className="empty-card"><small>ERR.DAY MEMBER</small><h2>ยังไม่มีสมาชิกหรือแพ็กเกจ</h2><p>สมัครสมาชิกเพื่อรับราคาพิเศษและสิทธิประโยชน์จาก err.day</p><Link href="/liff/membership/signup">ดูแพ็กเกจสมาชิก</Link></div>}
+          </section>
+
+          <section className="hub-section booking-priority">
+            <button type="button" onClick={() => setTab("book")}>
+              <span className="booking-icon"><CalendarDays /></span>
+              <span><strong>จองคิว</strong><small>เลือกสาขาและเวลาที่สะดวก</small></span>
+              <b>เริ่มจอง <span aria-hidden="true">›</span></b>
+            </button>
           </section>
 
           <section className="hub-section"><div className="section-heading"><div><h2>นัดหมายถัดไป</h2><p>Next appointment</p></div><button onClick={() => setTab("history")}>ดูทั้งหมด</button></div>
             {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{upcoming.service.nameTh || upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {thaiDate(upcoming.date)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} น.</p><Link href="/my-bookings">จัดการนัดหมาย</Link></article> : <div className="empty-appointment"><CalendarDays /><p>ยังไม่มีนัดหมายที่กำลังจะมาถึง</p><button onClick={() => setTab("book")}>จองคิวเลย</button></div>}
           </section>
 
-          <section className="hub-section"><button className="tarot-teaser" onClick={() => setTab("tarot")}><span className="mini-card"><Star /></span><span><small>DAILY READING</small><strong>ดวงวันนี้ของคุณ</strong><em>เลือกไพ่ 3 ใบ เพื่ออ่านความรัก การงาน และการเงิน</em></span><b>›</b></button></section>
+          <section className="hub-section"><button className={`tarot-teaser${tarotEnabled ? "" : " coming-soon"}`} disabled={!tarotEnabled} onClick={() => setTab("tarot")}><span className="mini-card"><Star /></span><span><small>{tarotEnabled ? "DAILY READING" : "COMING SOON"}</small><strong>{tarotEnabled ? "ดวงวันนี้ของคุณ" : "ดูดวง เร็ว ๆ นี้"}</strong><em>{tarotEnabled ? "เลือกไพ่ 3 ใบ เพื่ออ่านความรัก การงาน และการเงิน" : "ฟีเจอร์ดูดวงกำลังเตรียมเปิดให้บริการ"}</em></span>{tarotEnabled ? <b>›</b> : <b className="soon-badge">เร็ว ๆ นี้</b>}</button></section>
         </>}
 
         {tab === "book" && <section className="hub-section tab-page"><small>BOOK AN APPOINTMENT</small><h1>เลือกสาขาเพื่อจองคิว</h1><p>เลือกสาขาที่สะดวก แล้วทำรายการจองในขั้นตอนถัดไป</p><div className="branch-list">{branches.map(branch => <article key={branch.id}><div><h2>{branch.name}</h2><p><MapPin /> {branch.address}</p></div>{branch.bookingEnabled ? <Link href={`/book/${branch.id}`}>เลือกสาขานี้</Link> : <span>เร็วๆ นี้</span>}</article>)}</div></section>}
 
-        {tab === "history" && <section className="hub-section tab-page"><small>YOUR VISITS</small><h1>ประวัติการจอง</h1><p>ดูนัดหมายทั้งหมดและจัดการนัดหมายที่กำลังจะมาถึง</p><div className="history-list">{bookings.length ? bookings.map(b => <article key={b.id}><div><h2>{b.service.nameTh || b.service.name}</h2><p>{b.branch.name}</p><p>{thaiDate(b.date)} · {b.startTime} น.</p></div><span>{STATUS[b.status] || b.status}</span></article>) : <div className="empty-appointment"><Clock3 /><p>ยังไม่มีประวัติการจอง</p></div>}</div><Link className="manage-link" href="/my-bookings">เปิดหน้าจัดการการจอง</Link></section>}
+        {tab === "history" && <section className="hub-section tab-page"><small>YOUR VISITS</small><h1>ประวัติการจอง</h1><p>ดูนัดหมายที่กำลังจะมาถึงและประวัติการใช้บริการ</p><div className="history-list">{bookings.length ? bookings.map(b => <article key={b.id}><div><h2>{b.service.nameTh || b.service.name}</h2><p>{b.branch.name}</p><p>{thaiDate(b.date)} · {b.startTime} น.</p></div><span>{STATUS[b.status] || b.status}</span></article>) : <div className="empty-appointment"><Clock3 /><p>ยังไม่มีประวัติการจอง</p></div>}</div></section>}
 
         {tab === "tarot" && <section className="tarot-page"><div className="tarot-title"><span>✦ ERR.DAY TAROT ✦</span><h1>ดูดวงแบบละเอียด</h1><p>เลือกไพ่ตามความรู้สึก 3 ใบ สำหรับความรัก การงาน และการเงิน</p></div>
           {customer?.dateOfBirth && <div className="birthday"><span>วันเกิดของคุณ</span><strong>{thaiDate(customer.dateOfBirth)}</strong><small>บันทึกไว้จากโปรไฟล์สมาชิก</small></div>}
@@ -181,7 +189,10 @@ export default function CustomerHub({ branches }: { branches: Branch[] }) {
 
       <nav className="hub-tabs" aria-label="เมนูลูกค้า">{[
         ["home", CreditCard, "สมาชิก"], ["book", CalendarDays, "จองคิว"], ["history", Clock3, "ประวัติ"], ["tarot", Sparkles, "ดูดวง"],
-      ].map(([id, Icon, label]) => <button type="button" key={String(id)} onClick={() => setTab(id as Tab)} className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined}><Icon /><span>{String(label)}</span></button>)}</nav>
+      ].map(([id, Icon, label]) => {
+        const disabled = id === "tarot" && !tarotEnabled;
+        return <button type="button" key={String(id)} disabled={disabled} onClick={() => setTab(id as Tab)} className={`${tab === id ? "active " : ""}${id === "book" ? "booking-tab" : ""}`} aria-current={tab === id ? "page" : undefined} aria-label={disabled ? "ดูดวง เร็ว ๆ นี้" : String(label)}><Icon /><span>{String(label)}</span></button>;
+      })}</nav>
     </main>
   );
 }

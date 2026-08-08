@@ -11,6 +11,13 @@ function isTarotId(value: unknown): value is number {
 }
 
 export async function POST(request: Request) {
+  if (process.env.TAROT_ENABLED !== "true") {
+    return NextResponse.json(
+      { error: "tarot_coming_soon", message: "ฟีเจอร์ดูดวงกำลังจะเปิดให้บริการเร็ว ๆ นี้" },
+      { status: 503 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

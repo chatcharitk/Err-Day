@@ -174,3 +174,28 @@
   body { background:#ede7e1; }
   .customer-hub { height:calc(100dvh - 32px); margin:16px auto; border-radius:28px; }
 }
+
+/* Booking-first customer hub and temporary tarot launch state. */
+.rabbit-card {
+  min-height:206px;
+  background-image:linear-gradient(90deg,rgba(74,15,20,.98) 0%,rgba(74,15,20,.93) 46%,rgba(74,15,20,.42) 68%,rgba(74,15,20,.08) 100%),url("/membership/membership.jpg");
+  background-size:cover;
+  background-position:center;
+}
+.rabbit-card .card-top,.rabbit-card .card-stats { position:relative; z-index:1; }
+.rabbit-card .card-top>div,.rabbit-card .card-stats>div:first-child { max-width:58%; }
+.rabbit-card .card-stats>div:last-child { max-width:46%; }
+.booking-priority { padding-top:14px; }
+.booking-priority>button { width:100%; display:flex; align-items:center; gap:12px; border:0; border-radius:17px; padding:14px; background:linear-gradient(135deg,#9b2229,#79171e); color:white; text-align:left; box-shadow:0 12px 24px -16px #4a0f14; }
+.booking-icon { width:42px; height:42px; flex:none; display:grid; place-items:center; border-radius:13px; background:#ffffff18; }
+.booking-icon svg { width:21px; }
+.booking-priority button>span:nth-child(2) { display:flex; flex-direction:column; min-width:0; }
+.booking-priority strong { font-size:16px; }
+.booking-priority small { margin-top:2px; color:#ffffffb8; font-size:10px; }
+.booking-priority b { margin-left:auto; white-space:nowrap; padding:8px 10px; border-radius:10px; background:#f6e7b0; color:#6e161c; font-size:11px; }
+.tarot-teaser.coming-soon { cursor:not-allowed; background:#faf3ed; color:#8f7e73; }
+.tarot-teaser.coming-soon .mini-card { filter:saturate(.65); opacity:.82; }
+.tarot-teaser .soon-badge { padding:6px 8px; border-radius:99px; background:#eadfd6; color:#775f53; font:600 9px/1 var(--font-sans); white-space:nowrap; }
+.hub-tabs button.booking-tab:not(.active) { color:var(--wine); }
+.hub-tabs button.booking-tab svg { width:27px; height:27px; padding:5px; border-radius:9px; background:var(--wine); color:#fff; }
+.hub-tabs button:disabled { cursor:not-allowed; opacity:.48; }
