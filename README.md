@@ -1,5 +1,22 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## AstrologyAPI tarot
+
+The customer hub calls AstrologyAPI through the server-side `/api/tarot` route.
+For a new wallet/pay-as-you-go account, set its access token (never expose it
+with a `NEXT_PUBLIC_` prefix):
+
+```env
+ASTROLOGY_API_ACCESS_TOKEN=your-access-token
+```
+
+Legacy subscription accounts can instead use:
+
+```env
+ASTROLOGY_API_USER_ID=your-user-id
+ASTROLOGY_API_KEY=your-api-key
+```
+
 ## Getting Started
 
 First, run the development server:

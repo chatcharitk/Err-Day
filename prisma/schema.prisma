@@ -221,6 +221,17 @@ model Customer {
   @@index([phone(ops: raw("gin_trgm_ops"))], map: "Customer_phone_trgm_idx", type: Gin)
 }
 
+model TarotUsage {
+  id         String   @id @default(cuid())
+  lineUserId String
+  usageDate  String
+  count      Int      @default(1)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([lineUserId, usageDate])
+  @@index([updatedAt])
+}
+
 model MembershipTier {
   id              String       @id @default(cuid())
   name            String

@@ -15,18 +15,20 @@ export interface LiffState {
   isLoggedIn: boolean;   // user is authenticated with LINE
   isInClient: boolean;   // opened inside the LINE app
   profile:    LiffProfile | null;
+  accessToken: string | null;
   login:      () => void;
   logout:     () => void;
 }
 
 export function useLiff(): LiffState {
-  const [ready,      setReady]      = useState(false);
+  const [ready,      setReady]      = useState(() => !process.env.NEXT_PUBLIC_LIFF_ID);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isInClient, setIsInClient] = useState(false);
   const [profile,    setProfile]    = useState<LiffProfile | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_LIFF_ID) { setReady(true); return; }
+    if (!process.env.NEXT_PUBLIC_LIFF_ID) return;
 
     getLiff()
       .then(async (liff) => {
@@ -55,6 +57,7 @@ export function useLiff(): LiffState {
           pictureUrl:  p.pictureUrl,
           email,
         });
+        setAccessToken(liff.getAccessToken());
         setIsLoggedIn(true);
       })
       .catch(err => console.error("LIFF init/profile failed:", err))
@@ -70,8 +73,9 @@ export function useLiff(): LiffState {
       liff.logout();
       setIsLoggedIn(false);
       setProfile(null);
+      setAccessToken(null);
     });
   }, []);
 
-  return { ready, isLoggedIn, isInClient, profile, login, logout };
+  return { ready, isLoggedIn, isInClient, profile, accessToken, login, logout };
 }

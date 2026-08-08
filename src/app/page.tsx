@@ -1,15 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import BookCallback from "./book/BookCallback";
+import CustomerHub from "./CustomerHub";
 
 // The branch list is reference data — cache the render (ISR) so the entry page
 // is served from the edge instead of a cold dynamic render + DB hit per open.
 export const revalidate = 3600;
 
 /**
- * `/` — Unified entry point.
- * Asks the user to sign in with LINE first (or continue without),
- * then shows the branch picker. Clicking a branch goes to `/book/[branchId]`
- * which is the booking flow.
+ * `/` — Unified customer hub for membership, booking history, booking entry,
+ * and the AstrologyAPI-powered tarot experience.
  */
 export default async function HomePage() {
   const branches = await prisma.branch.findMany({
@@ -17,6 +15,12 @@ export default async function HomePage() {
     orderBy: [{ bookingEnabled: "desc" }, { name: "asc" }],      // open branches first
     select:  { id: true, name: true, address: true, phone: true, bookingEnabled: true },
   });
+  const branchOrder = ["branch-sukhumvit", "branch-bangna"];
+  branches.sort((a, b) => {
+    const aIndex = branchOrder.indexOf(a.id);
+    const bIndex = branchOrder.indexOf(b.id);
+    return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+  });
 
-  return <BookCallback branches={branches} />;
+  return <CustomerHub branches={branches} />;
 }
