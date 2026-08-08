@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Calendar as CalendarIcon, Clock, MapPin, X, Edit3, Trash2, Check, AlertCircle, LogOut } from "lucide-react";
@@ -108,6 +108,7 @@ export default function MyBookingsClient() {
   const [loading,     setLoading]     = useState(false);
   const [editing,     setEditing]     = useState<Booking | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Booking | null>(null);
+  const directEditHandled = useRef(false);
 
   const fetchBookings = useCallback(async (uid: string) => {
     setLoading(true);
@@ -119,8 +120,17 @@ export default function MyBookingsClient() {
       ]);
       const data = await bookingsRes.json();
       const branchData = await branchesRes.json();
-      setBookings(data.bookings ?? []);
+      const nextBookings: Booking[] = data.bookings ?? [];
+      setBookings(nextBookings);
       setBranches(branchData);
+      if (!directEditHandled.current && typeof window !== "undefined") {
+        directEditHandled.current = true;
+        const requestedId = new URLSearchParams(window.location.search).get("edit");
+        const requestedBooking = requestedId
+          ? nextBookings.find(booking => booking.id === requestedId && isUpcoming(booking))
+          : null;
+        if (requestedBooking) setEditing(requestedBooking);
+      }
       if (membershipRes.ok) {
         const payload = await membershipRes.json();
         setEntitlements({
