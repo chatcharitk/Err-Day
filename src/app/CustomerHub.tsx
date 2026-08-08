@@ -153,7 +153,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
           <section className="welcome"><p>WELCOME BACK</p><h1>สวัสดี {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</section>
           <div className="welcome-wave" />
           <section className="hub-section entitlement">
-            {membership?.membership ? <div className="member-card rabbit-card">
+            {membership?.membership ? <div className="member-card">
               <span className="foil" /><div className="card-top"><div><small>ERR.DAY MEMBER</small><h2>{membership.membership.label || "สมาชิก err.day"}</h2></div><b>{membership.membership.isExpired ? "หมดอายุ" : "ใช้งานได้"}</b></div>
               <div className="card-stats"><div><small>สมาชิกเหลืออีก</small><strong>{daysUntil(membership.membership.expiresAt)}<em> วัน</em></strong></div><div><small>หมดอายุ</small><span>{membership.membership.expiresAt ? thaiDate(membership.membership.expiresAt) : "ไม่กำหนด"}</span></div></div>
             </div> : activePackage ? <div className="package-card"><small>ERR.DAY PACKAGE</small><h2>{activePackage.nameTh}</h2><div className="card-stats"><strong>{activePackage.usagesLeft}<em> / {activePackage.usageLimit} ครั้ง</em></strong><span>หมดอายุ {thaiDate(activePackage.expiresAt)}</span></div></div> : <div className="empty-card"><small>ERR.DAY MEMBER</small><h2>ยังไม่มีสมาชิกหรือแพ็กเกจ</h2><p>สมัครสมาชิกเพื่อรับราคาพิเศษและสิทธิประโยชน์จาก err.day</p><Link href="/liff/membership/signup">ดูแพ็กเกจสมาชิก</Link></div>}
