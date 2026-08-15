@@ -32,7 +32,7 @@ export function buildTarotFlex(card: TarotCard): LineMessage {
         type:        "image",
         url:         imageUrl,
         size:        "full",
-        aspectRatio: "3:4",     // matches the tall tarot-card aspect
+        aspectRatio: "5:8",     // matches the tarot card PNGs (720x1152)
         aspectMode:  "cover",
         backgroundColor: BG_BEIGE,
       },
