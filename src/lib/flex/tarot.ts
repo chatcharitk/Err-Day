@@ -14,11 +14,16 @@ const BG_BEIGE = "#FDF8F3";
 
 const APP_HOST = process.env.NEXT_PUBLIC_APP_URL ?? "https://err-day.vercel.app";
 
+// LINE caches Flex image URLs aggressively and doesn't revalidate — swapping
+// the file at the same URL (e.g. new card art) keeps showing the old cached
+// copy to users indefinitely. Bump this whenever public/tarot/*.png changes
+// so the URL itself changes and LINE is forced to re-fetch.
+const TAROT_ART_VERSION = "2";
 
 export function buildTarotFlex(card: TarotCard): LineMessage {
   // URL-encode the filename so spaces ("Wheel of Fortune.png") and other
   // characters work in LINE — which fetches the URL strictly.
-  const imageUrl = `${APP_HOST}/tarot/${encodeURIComponent(card.image)}`;
+  const imageUrl = `${APP_HOST}/tarot/${encodeURIComponent(card.image)}?v=${TAROT_ART_VERSION}`;
   const bookUrl  = `${APP_HOST}/book`;
 
   return {
