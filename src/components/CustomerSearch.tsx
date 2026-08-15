@@ -7,6 +7,8 @@ export interface CustomerValue {
   id: string | null;
   name: string;
   phone: string;
+  /** Currently-active membership, when known (set when picked from search suggestions). */
+  isMember?: boolean;
 }
 
 interface Suggestion {
@@ -80,7 +82,7 @@ export default function CustomerSearch({
   }, []);
 
   const select = (c: Suggestion) => {
-    onChange({ id: c.id, name: c.name, phone: c.phone ?? "" });
+    onChange({ id: c.id, name: c.name, phone: c.phone ?? "", isMember: c.isMember });
     setShowSug(false);
     setSuggestions([]);
   };

@@ -36,7 +36,11 @@ export interface ServiceOption {
   id: string;
   duration: number;
   price: number;
-  service: { id: string; name: string; nameTh: string };
+  service: {
+    id: string; name: string; nameTh: string;
+    memberPrice: number | null;
+    memberDiscountPercent: number;
+  };
 }
 export interface BranchServiceItem {
   id:                    string;

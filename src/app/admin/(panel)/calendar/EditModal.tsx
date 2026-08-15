@@ -11,6 +11,17 @@ import {
 } from "./_shared";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 
+/** List price, or the member price when isMember — mirrors the same formula
+ * used by the kiosk walk-in routes and the mobile booking-detail page. */
+function priceForService(svc: ServiceOption, isMember: boolean): number {
+  if (!isMember) return svc.price;
+  if (svc.service.memberPrice != null) return Math.min(svc.price, svc.service.memberPrice);
+  if (svc.service.memberDiscountPercent > 0) {
+    return Math.min(svc.price, Math.round(svc.price * (1 - svc.service.memberDiscountPercent / 100)));
+  }
+  return svc.price;
+}
+
 export default function EditModal({
   booking, branchId, branches, staff, onClose, onSaved,
 }: {
@@ -56,11 +67,20 @@ export default function EditModal({
         const match = data.find(s => s.service.id === booking.serviceId);
         if (match) {
           setBsId(match.id);
-          setPrice(match.price);
+          // Only re-price when the admin has actually moved the booking to a
+          // different branch (a genuinely different price list) — loading
+          // the booking's own branch/service must never touch `price`, since
+          // booking.totalPrice may already reflect a member discount,
+          // package redemption, or manual adjustment that the plain list
+          // price would silently clobber.
+          if (selectedBranch !== branchId) {
+            setPrice(priceForService(match, !!selectedCustomer.isMember));
+          }
         } else if (data.length > 0) {
           setBsId(data[0].id);
         }
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBranch, booking.serviceId]);
 
   function handleServiceChange(id: string) {
@@ -68,8 +88,18 @@ export default function EditModal({
     const svc = services.find(s => s.id === id);
     if (svc) {
       setEndTime(addMinutes(startTime, svc.duration));
-      setPrice(svc.price);
+      setPrice(priceForService(svc, !!selectedCustomer.isMember));
     }
+  }
+
+  /** Reassigning the booking to a different customer should re-price it for
+   * their membership status — otherwise a walk-in created before the
+   * customer was linked keeps charging the non-member rate. */
+  function handleCustomerChange(v: CustomerValue) {
+    setSelectedCustomer(v);
+    if (v.id === booking.customer.id) return; // no actual reassignment — leave price alone
+    const svc = services.find(s => s.id === bsId);
+    if (svc) setPrice(priceForService(svc, !!v.isMember));
   }
 
   function handleStartChange(t: string) {
@@ -263,7 +293,7 @@ export default function EditModal({
           {/* Customer — reassign the booking to a different customer */}
           <div>
             <label className="text-xs text-gray-500 block mb-1">ลูกค้า (เปลี่ยนได้หากจองผิดคน)</label>
-            <CustomerSearch value={selectedCustomer} onChange={setSelectedCustomer} showManualPhone={false} />
+            <CustomerSearch value={selectedCustomer} onChange={handleCustomerChange} showManualPhone={false} />
             {selectedCustomer.id && selectedCustomer.id !== booking.customer.id && (
               <p className="text-[11px] mt-1.5 px-2 py-1 rounded-lg" style={{ background: "#FFF7ED", color: "#9A3412" }}>
                 จะย้ายการจองนี้ไปยัง <b>{selectedCustomer.name}</b>
