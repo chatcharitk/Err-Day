@@ -24,8 +24,18 @@ export async function GET(request: Request) {
   if (!customer) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const activePackages = await findActivePackages(customer.id);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const membership = customer.membership;
+  const hasActiveMembership = !!membership
+    && !membership.pendingActivation
+    && (!membership.expiresAt || membership.expiresAt >= today)
+    && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
   return NextResponse.json({
     ...customer,
+    // Active packages receive the same service pricing as the ฿990 membership,
+    // even when the selected service is not redeemed from the package.
+    hasMemberPricing: hasActiveMembership || activePackages.length > 0,
     packages: activePackages.map(p => ({
       id:               p.id,
       sku:              p.packageSku,

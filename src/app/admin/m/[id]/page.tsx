@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCachedBranchServices, getCachedBranchStaff, getCachedAddons } from "@/lib/branches-cache";
+import { findActivePackages } from "@/lib/packages";
 import BookingDetail from "./BookingDetail";
 
 export const revalidate = 30;
@@ -56,10 +57,12 @@ export default async function MobileBookingDetailPage({
   // Resolve membership validity server-side
   const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
   const mem = booking.customer.membership;
-  const isMember = !!mem
+  const hasActiveMembership = !!mem
     && !mem.pendingActivation
     && !(mem.expiresAt != null && new Date(mem.expiresAt) < todayUTC)
     && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
+  const hasActivePackage = (await findActivePackages(booking.customerId)).length > 0;
+  const isMember = hasActiveMembership || hasActivePackage;
 
   const [branchServices, branchStaff, allAddons, branches] = await Promise.all([
     getCachedBranchServices(booking.branchId),

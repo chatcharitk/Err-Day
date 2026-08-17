@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getKioskBranch } from "@/lib/kiosk-auth";
 import { addMinutes, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokNowHm, bangkokTodayYmd, bookingDateForYmd } from "@/lib/desk";
+import { findActivePackages } from "@/lib/packages";
 
 // Walk-ins are always "wash & blow" (สระไดร์) — staff don't pick a service at
 // the counter. A serviceId in the body still overrides this if ever needed.
@@ -78,11 +79,12 @@ export async function POST(request: Request) {
     const todayUTC = new Date();
     todayUTC.setUTCHours(0, 0, 0, 0);
     const mem = existing.membership;
-    const isMember = !!mem
+    const hasActiveMembership = !!mem
       && !mem.pendingActivation
       && !(mem.expiresAt != null && mem.expiresAt < todayUTC)
       && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
-    if (isMember) {
+    const hasActivePackage = (await findActivePackages(existing.id)).length > 0;
+    if (hasActiveMembership || hasActivePackage) {
       let memberPrice = bs.price;
       if (bs.service.memberPrice != null) {
         memberPrice = bs.service.memberPrice;

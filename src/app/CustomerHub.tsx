@@ -19,7 +19,7 @@ type Booking = ReschedulableBooking & {
 };
 type MembershipData = {
   membership?: { label?: string | null; expiresAt?: string | null; isExpired?: boolean } | null;
-  packages?: Array<{ id: string; nameTh: string; expiresAt: string; usagesLeft: number; usageLimit: number }>;
+  packages?: Array<{ id: string; nameTh: string; expiresAt: string; usagesUsed: number; usagesLeft: number | null; usageLimit: number }>;
 };
 type Customer = { name: string; nickname?: string | null; phone: string; dateOfBirth?: string | null };
 type Reading = { love: string; career: string; finance: string };
@@ -43,7 +43,7 @@ const HUB_UI = {
     loginIntro: "พื้นที่สำหรับลูกค้า err.day", loginTitle: "เข้าสู่ระบบเพื่อดูสมาชิก การจอง และบริการของคุณ", loginButton: "เข้าสู่ระบบด้วย LINE", loginNote: "เราใช้ LINE เพื่อยืนยันตัวตนและแสดงข้อมูลของคุณอย่างปลอดภัย",
     preparing: "กำลังเตรียมพื้นที่ของคุณ...", loading: "กำลังโหลดข้อมูลของคุณ...", loadFailed: "โหลดข้อมูลไม่สำเร็จ", retry: "ลองใหม่",
     hello: "สวัสดี", active: "ใช้งานได้", expired: "หมดอายุ", member: "สมาชิก err.day",
-    daysLeft: "สมาชิกเหลืออีก", days: "วัน", expires: "หมดอายุ", noExpiry: "ไม่กำหนด", uses: "ครั้ง",
+    daysLeft: "สมาชิกเหลืออีก", days: "วัน", expires: "หมดอายุ", noExpiry: "ไม่กำหนด", uses: "ครั้ง", usesRemaining: "ครั้งที่ยังใช้ได้", totalUses: "ทั้งหมด", usedUses: "ใช้ไปแล้ว", unlimitedUses: "ใช้ได้ไม่จำกัด", memberPricing: "พร้อมสิทธิ์ราคาสมาชิก",
     noPlan: "ยังไม่มีสมาชิกหรือแพ็กเกจ", noPlanText: "สมัครสมาชิกเพื่อรับราคาพิเศษและสิทธิประโยชน์จาก err.day", viewPlans: "ดูแพ็กเกจสมาชิก",
     book: "จองคิว", bookHint: "เลือกสาขาและเวลาที่สะดวก", startBooking: "เริ่มจอง",
     next: "นัดหมายถัดไป", viewAll: "ดูทั้งหมด", manage: "จัดการนัดหมาย", cancel: "ยกเลิกนัดหมาย", noUpcoming: "ยังไม่มีนัดหมายที่กำลังจะมาถึง", bookNow: "จองคิวเลย",
@@ -59,7 +59,7 @@ const HUB_UI = {
     loginIntro: "Your err.day space", loginTitle: "Sign in to view your membership, bookings, and services.", loginButton: "Sign in with LINE", loginNote: "We use LINE to verify your identity and display your information securely.",
     preparing: "Preparing your space...", loading: "Loading your information...", loadFailed: "Unable to load your information", retry: "Try again",
     hello: "Hello", active: "Active", expired: "Expired", member: "err.day Member",
-    daysLeft: "Membership remaining", days: "days", expires: "Expires", noExpiry: "No expiry", uses: "uses",
+    daysLeft: "Membership remaining", days: "days", expires: "Expires", noExpiry: "No expiry", uses: "uses", usesRemaining: "uses remaining", totalUses: "total", usedUses: "used", unlimitedUses: "Unlimited uses", memberPricing: "Member pricing included",
     noPlan: "No membership or package yet", noPlanText: "Join to enjoy member pricing and err.day benefits.", viewPlans: "View membership plans",
     book: "Book an appointment", bookHint: "Choose a branch and convenient time", startBooking: "Book now",
     next: "Next appointment", viewAll: "View all", manage: "Manage appointment", cancel: "Cancel appointment", noUpcoming: "You have no upcoming appointments", bookNow: "Book now",
@@ -243,10 +243,12 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
           </section>
           <div className="welcome-wave" />
           <section className="hub-section entitlement">
-            {membership?.membership ? <div className="member-card">
+            {membership?.membership && <div className="member-card">
               <span className="foil" /><div className="card-top"><div><small>ERR.DAY MEMBER</small><h2>{membership.membership.label || u.member}</h2></div><b>{membership.membership.isExpired ? u.expired : u.active}</b></div>
               <div className="card-stats"><div><small>{u.daysLeft}</small><strong>{daysUntil(membership.membership.expiresAt)}<em> {u.days}</em></strong></div><div><small>{u.expires}</small><span>{membership.membership.expiresAt ? displayDate(membership.membership.expiresAt, lang) : u.noExpiry}</span></div></div>
-            </div> : activePackage ? <div className="package-card"><small>ERR.DAY PACKAGE</small><h2>{activePackage.nameTh}</h2><div className="card-stats"><strong>{activePackage.usagesLeft}<em> / {activePackage.usageLimit} {u.uses}</em></strong><span>{u.expires} {displayDate(activePackage.expiresAt, lang)}</span></div></div> : <div className="empty-card"><small>ERR.DAY MEMBER</small><h2>{u.noPlan}</h2><p>{u.noPlanText}</p><Link href="/liff/membership/signup">{u.viewPlans}</Link></div>}
+            </div>}
+            {activePackage && <div className="package-card"><small>ERR.DAY PACKAGE · {u.memberPricing}</small><h2>{activePackage.nameTh}</h2><div className="card-stats"><div>{activePackage.usagesLeft !== null ? <><small>{u.usesRemaining}</small><strong>{activePackage.usagesLeft}<em> {u.uses}</em></strong><small>{u.totalUses} {activePackage.usageLimit} {u.uses} · {u.usedUses} {activePackage.usagesUsed} {u.uses}</small></> : <><small>{u.unlimitedUses}</small><strong>{activePackage.usagesUsed}<em> {u.uses}</em></strong><small>{u.usedUses}</small></>}</div><span>{u.expires} {displayDate(activePackage.expiresAt, lang)}</span></div></div>}
+            {!membership?.membership && !activePackage && <div className="empty-card"><small>ERR.DAY MEMBER</small><h2>{u.noPlan}</h2><p>{u.noPlanText}</p><Link href="/liff/membership/signup">{u.viewPlans}</Link></div>}
           </section>
 
           <section className="hub-section booking-priority">

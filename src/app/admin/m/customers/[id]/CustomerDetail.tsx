@@ -760,7 +760,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                   </div>
                   <p className="text-xs" style={{ color: TEXT }}>
                     หมดอายุ: {fmtDate(p.expiresAt)}
-                    {p.usagesLeft != null && ` · เหลือ ${p.usagesLeft}/${p.usageLimit} ครั้ง`}
+                    {p.usagesLeft != null && ` · ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง (ใช้ไปแล้ว ${p.usagesUsed})`}
                   </p>
                   <div className="flex gap-2 mt-2">
                     {p.pendingActivation && (

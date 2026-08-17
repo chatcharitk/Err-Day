@@ -142,6 +142,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const [fromBookingId] = useState<string | null>(prefillBooking?.id ?? null);
   const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null);
   const [activePackages, setActivePackages] = useState<ActivePackage[]>([]);
+  const [hasMemberPricing, setHasMemberPricing] = useState(false);
 
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -171,17 +172,22 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
     setCustomer({ id: null, name: "", phone: "" });
     setMemberInfo(null);
     setActivePackages([]);
+    setHasMemberPricing(false);
   };
 
   // ── Fetch membership whenever a known customer is selected ──
   useEffect(() => {
     if (!customer.id || !customer.phone) {
       setMemberInfo(null);
+      setActivePackages([]);
+      setHasMemberPricing(false);
       return;
     }
+    setHasMemberPricing(false);
     fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
+        setHasMemberPricing(data?.hasMemberPricing === true);
         // Membership block
         if (data?.membership) {
           const m = data.membership;
@@ -197,7 +203,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         // Packages block
         setActivePackages(Array.isArray(data?.packages) ? data.packages : []);
       })
-      .catch(() => { setMemberInfo(null); setActivePackages([]); });
+      .catch(() => { setMemberInfo(null); setActivePackages([]); setHasMemberPricing(false); });
   }, [customer.id, customer.phone]);
 
   // ── Auto-add a service by SKU (used when navigating from pending membership tab) ──
@@ -223,13 +229,13 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
   // ── Re-price cart items when member status changes ──
   useEffect(() => {
-    const active = memberInfo?.isValid ?? false;
+    const active = hasMemberPricing;
     setCart(prev => prev.map(item => {
       if (item.isCustom) return item;
       if (item.redeemPackageId) return item; // redemption stays at ฿0
       return { ...item, price: active ? item.memberPrice : item.basePrice };
     }));
-  }, [memberInfo]);
+  }, [hasMemberPricing]);
 
   // ── Category helpers ──
   const catsBeforeAddons = CATS_BEFORE_ADDONS.filter(c =>
@@ -242,7 +248,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const discountSatang = Math.min(subtotal, Math.round(discountBaht * 100));
   const total = Math.max(0, subtotal - discountSatang);
-  const memberActive = memberInfo?.isValid ?? false;
+  const memberActive = hasMemberPricing;
 
   /**
    * Pick the active package most-eligible to redeem against this service.
@@ -606,7 +612,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                 <PackageIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#2563EB" }} />
                 <p className="text-xs font-semibold flex-1" style={{ color: "#1E40AF" }}>
-                  {p.nameTh} {p.usagesLeft !== null ? `· เหลือ ${p.usagesLeft}/${p.usageLimit} ครั้ง` : "· ไม่จำกัด"}
+                  {p.nameTh} {p.usagesLeft !== null ? `· ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง` : "· ไม่จำกัด"} · ได้ราคาสมาชิก
                 </p>
               </div>
             ))}

@@ -40,21 +40,27 @@ export async function GET(request: Request) {
       // not yet paid) — so we can drive both the "แพ็กเกจ" and "รอเปิดใช้" badges.
       packages: {
         where:  { closedAt: null, OR: [{ pendingActivation: true }, { expiresAt: { gte: now } }] },
-        select: { id: true, pendingActivation: true },
+        select: { id: true, pendingActivation: true, usageLimit: true, usagesUsed: true },
       },
     },
   });
 
   return NextResponse.json(customers.map(c => {
     const pendingPkg = c.packages.some(p => p.pendingActivation);
-    const activePkg  = c.packages.some(p => !p.pendingActivation);
+    const activePkg  = c.packages.some(p =>
+      !p.pendingActivation && (p.usageLimit === 0 || p.usagesUsed < p.usageLimit)
+    );
+    const activeMembership = !!c.membership
+      && !c.membership.pendingActivation
+      && (!c.membership.expiresAt || c.membership.expiresAt >= now);
     return {
       id:         c.id,
       name:       c.name,
       nickname:   c.nickname,
       phone:      c.phone,
       email:      c.email,
-      isMember:   !!c.membership && !c.membership.pendingActivation && (!c.membership.expiresAt || c.membership.expiresAt >= now),
+      // `isMember` is consumed as "eligible for member pricing" by booking/POS.
+      isMember:   activeMembership || activePkg,
       isPending:  !!c.membership?.pendingActivation || pendingPkg,
       hasPackage: activePkg,
     };

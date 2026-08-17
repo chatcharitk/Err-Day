@@ -65,7 +65,7 @@ function computeMemberPrice(
   return null;
 }
 
-/** Whether a phone belongs to an active (non-expired, non-pending, not-used-up) member. */
+/** Whether a phone has member pricing via an active membership or package. */
 async function fetchIsMember(phone: string): Promise<boolean> {
   const p = phone.trim();
   if (p.length < 8) return false;
@@ -73,12 +73,7 @@ async function fetchIsMember(phone: string): Promise<boolean> {
     const r = await fetch(`/api/membership?phone=${encodeURIComponent(p)}`);
     if (!r.ok) return false;
     const data = await r.json();
-    const m = data?.membership;
-    if (!m) return false;
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-    const expired = m.expiresAt && new Date(m.expiresAt) < today;
-    const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-    return !expired && !usedUp && !m.pendingActivation;
+    return data?.hasMemberPricing === true;
   } catch {
     return false;
   }

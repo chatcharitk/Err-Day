@@ -208,7 +208,9 @@ function MemberTableRow({
           {main ? (
             <>
               <div className="font-medium">
-                {isUnlim ? `${main.usagesUsed} (ไม่จำกัด)` : `${main.usagesUsed} / ${main.usageLimit}`}
+                {isUnlim
+                  ? `ใช้ไปแล้ว ${main.usagesUsed} ครั้ง (ไม่จำกัด)`
+                  : `ยังใช้ได้อีก ${Math.max(0, main.usageLimit - main.usagesUsed)} ครั้ง จากทั้งหมด ${main.usageLimit} ครั้ง`}
               </div>
               {!isUnlim && usedPct !== null && (
                 <div className="w-20 h-1 rounded-full mt-1" style={{ background: "#DBEAFE" }}>

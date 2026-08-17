@@ -129,6 +129,9 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   });
   const [memberInfo,     setMemberInfo]     = useState<MemberInfo | null>(null);
   const [activePackages, setActivePackages] = useState<ActivePackage[]>(() => initialActivePackages ?? []);
+  const [hasMemberPricing, setHasMemberPricing] = useState(
+    () => (prefillBooking?.isMember ?? false) || (initialActivePackages?.length ?? 0) > 0,
+  );
   const [cart,           setCart]           = useState<CartItem[]>(() => {
     if (!prefillBooking) return [];
 
@@ -148,12 +151,13 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     if (bs) {
       const mPrice = getServiceMemberPrice(bs);
       const pkg    = pickInitialPkg(bs.serviceId);
-      // Package coverage wins over member price; otherwise use server-resolved isMember flag.
+      // Package coverage wins; any active package also unlocks member pricing
+      // for services that are not redeemed from the package.
       items.push({
         id:                pkg ? `${bs.id}__pkg-${pkg.id}-0` : bs.id,
         name:              bs.service.nameTh,
         basePrice:         bs.price,
-        price:             pkg ? 0 : (prefillBooking.isMember ? mPrice : bs.price),
+        price:             pkg ? 0 : ((prefillBooking.isMember || initPkgs.length > 0) ? mPrice : bs.price),
         qty:               1,
         memberPrice:       mPrice,
         redeemPackageId:   pkg?.id,
@@ -202,7 +206,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     const initPkgs = initialActivePackages ?? [];
     const hasPkg   = initPkgs.some(p => p.coversServiceIds.includes(prefillBooking.serviceId) && (p.usageLimit === 0 || (p.usagesLeft ?? 0) > 0));
     const servicePrice = hasPkg ? 0 : bs
-      ? (prefillBooking.isMember ? getServiceMemberPrice(bs) : bs.price)
+      ? ((prefillBooking.isMember || initPkgs.length > 0) ? getServiceMemberPrice(bs) : bs.price)
       : prefillBooking.totalPrice;
     const addonsTotal = prefillBooking.addons.reduce((s, a) => s + a.price, 0);
     const implied = (servicePrice + addonsTotal) - prefillBooking.totalPrice;
@@ -217,11 +221,14 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     if (!customer.id || !customer.phone) {
       setMemberInfo(null);
       setActivePackages([]);
+      setHasMemberPricing(false);
       return;
     }
+    setHasMemberPricing(false);
     fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
+        setHasMemberPricing(data?.hasMemberPricing === true);
         if (data?.membership) {
           const m = data.membership;
           const today = new Date(); today.setUTCHours(0, 0, 0, 0);
@@ -238,7 +245,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
         }
         setActivePackages(Array.isArray(data?.packages) ? data.packages : []);
       })
-      .catch(() => { setMemberInfo(null); setActivePackages([]); });
+      .catch(() => { setMemberInfo(null); setActivePackages([]); setHasMemberPricing(false); });
   }, [customer.id, customer.phone]);
 
   // When packages load (after customer selection), retroactively apply package
@@ -292,7 +299,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   // pending. While holding, the paying visit gets NO member pricing (the
   // membership isn't active yet), so it must not count toward memberActive.
   const [holdMembership, setHoldMembership] = useState(false);
-  const memberActive = (memberInfo?.isValid ?? false) || (cartHasMembership && !holdMembership);
+  const memberActive = hasMemberPricing || (cartHasMembership && !holdMembership);
 
   // Re-price cart whenever member-active status changes — an existing member
   // selected/deselected, a membership added to the cart, or the "hold" toggle
@@ -576,7 +583,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
               <div key={p.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                 <Sparkles size={14} style={{ color: "#1D4ED8" }} />
                 <p className="text-xs font-semibold flex-1" style={{ color: "#1D4ED8" }}>
-                  {p.nameTh}{p.usagesLeft != null && ` — เหลือ ${p.usagesLeft} ครั้ง`}
+                  {p.nameTh}{p.usagesLeft != null && ` — ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง`} · ได้ราคาสมาชิก
                 </p>
               </div>
             ))}

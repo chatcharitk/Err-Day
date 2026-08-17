@@ -914,7 +914,7 @@ function PackageRow({
           <span>หมดอายุ <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{expiresLabel}</strong>{!isPending && ` (${daysLeft} วัน)`}</span>
           <span>
             {p.usagesLeft !== null
-              ? <>เหลือ <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{p.usagesLeft}/{p.usageLimit}</strong> ครั้ง</>
+              ? <>ยังใช้ได้อีก <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{p.usagesLeft}</strong> ครั้ง จากทั้งหมด {p.usageLimit} ครั้ง (ใช้ไปแล้ว {p.usagesUsed})</>
               : <>ใช้แล้ว <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{p.usagesUsed}</strong> ครั้ง (ไม่จำกัด)</>}
           </span>
         </div>

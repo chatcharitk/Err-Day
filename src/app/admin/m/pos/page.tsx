@@ -85,6 +85,7 @@ export default async function MobilePosPage({
   let initialActivePackages: InitialPackage[] = [];
   if (prefillBooking) {
     const pkgs = await findActivePackages(prefillBooking.customer.id);
+    if (pkgs.length > 0) prefillBooking.isMember = true;
     initialActivePackages = pkgs.map(p => ({
       id:               p.id,
       sku:              p.packageSku,

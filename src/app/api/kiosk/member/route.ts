@@ -79,6 +79,9 @@ export async function GET(request: Request) {
 
   const results = customers.map((c) => {
     const mem = c.membership;
+    const usablePackages = c.packages.filter(p =>
+      p.usageLimit === 0 || p.usagesUsed < p.usageLimit
+    );
     // Three states for the counter: active member / used to be a member
     // (expired or used up) / never a member. A pending (not yet activated)
     // signup counts as "none" — no member price until it's activated at POS.
@@ -88,6 +91,9 @@ export async function GET(request: Request) {
         || (mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
       memberStatus = lapsed ? "expired" : "active";
     }
+    // An active package also grants member pricing, even without a separate
+    // ฿990 membership record.
+    if (usablePackages.length > 0) memberStatus = "active";
 
     let price = bs.price;
     if (memberStatus === "active") {
@@ -104,8 +110,10 @@ export async function GET(request: Request) {
       customer:     { id: c.id, name: c.name, nickname: c.nickname, phone: c.phone },
       memberStatus,
       // Active: valid-through date. Expired: when it lapsed (for the card text).
-      memberUntil:  memberStatus !== "none" ? (mem!.expiresAt?.toISOString() ?? null) : null,
-      packages:     c.packages.map(p => ({
+      memberUntil:  memberStatus !== "none"
+        ? (mem?.expiresAt?.toISOString() ?? usablePackages[0]?.expiresAt.toISOString() ?? null)
+        : null,
+      packages:     usablePackages.map(p => ({
         sku:        p.packageSku,
         expiresAt:  p.expiresAt.toISOString(),
         usagesLeft: p.usageLimit > 0 ? Math.max(0, p.usageLimit - p.usagesUsed) : null,

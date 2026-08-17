@@ -46,13 +46,7 @@ export default function AddBookingModal({
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled) return;
-        if (data?.membership) {
-          const m = data.membership;
-          const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-          const expired = m.expiresAt && new Date(m.expiresAt) < today;
-          const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-          setIsMember(!expired && !usedUp && !m.pendingActivation);
-        } else { setIsMember(false); }
+        setIsMember(data?.hasMemberPricing === true);
       })
       .catch(() => { if (!cancelled) setIsMember(false); })
       .finally(() => { if (!cancelled) setMemberLoading(false); });

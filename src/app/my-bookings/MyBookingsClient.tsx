@@ -479,7 +479,7 @@ function MembershipCard({ m }: { m: MembershipStatus }) {
           <p className="text-sm font-bold" style={{ color: isActive ? "#065F46" : "#991B1B" }}>{m.label}</p>
           <div className="flex items-center gap-3 mt-0.5 text-xs flex-wrap" style={{ color: isActive ? "#059669" : "#DC2626" }}>
             <span>{expiresDate ? `หมดอายุ ${expiresDate}` : "ไม่หมดอายุ"}</span>
-            {usagesLeft !== null && <span>· เหลือ {usagesLeft}/{m.usagesAllowed} ครั้ง</span>}
+            {usagesLeft !== null && <span>· ยังใช้ได้อีก {usagesLeft} ครั้ง จากทั้งหมด {m.usagesAllowed} ครั้ง (ใช้ไปแล้ว {m.usagesUsed})</span>}
           </div>
         </div>
       </div>
@@ -496,9 +496,9 @@ function PackageCard({ pkg }: { pkg: ActivePackage }) {
     <div className="flex items-center gap-3 mt-0.5 text-xs flex-wrap" style={{ color: "#2563EB" }}>
       <span>เหลือ {daysLeft} วัน · หมดอายุ {expiresDate}</span>
       {pkg.usagesLeft !== null ? (
-        <span>· เหลือ {pkg.usagesLeft}/{pkg.usageLimit} ครั้ง</span>
+        <span>· ยังใช้ได้อีก {pkg.usagesLeft} ครั้ง จากทั้งหมด {pkg.usageLimit} ครั้ง (ใช้ไปแล้ว {pkg.usagesUsed}) · ได้ราคาสมาชิก</span>
       ) : (
-        <span>· ใช้แล้ว {pkg.usagesUsed} ครั้ง (ไม่จำกัด)</span>
+        <span>· ใช้แล้ว {pkg.usagesUsed} ครั้ง (ไม่จำกัด) · ได้ราคาสมาชิก</span>
       )}
     </div>
   );
