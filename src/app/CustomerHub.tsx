@@ -49,8 +49,8 @@ const HUB_UI = {
     next: "นัดหมายถัดไป", viewAll: "ดูทั้งหมด", manage: "จัดการนัดหมาย", cancel: "ยกเลิกนัดหมาย", noUpcoming: "ยังไม่มีนัดหมายที่กำลังจะมาถึง", bookNow: "จองคิวเลย",
     comingSoon: "ดูดวง เร็ว ๆ นี้", tarotSoon: "ฟีเจอร์ดูดวงกำลังเตรียมเปิดให้บริการ", soon: "เร็ว ๆ นี้",
     chooseBranch: "เลือกสาขาเพื่อจองคิว", chooseBranchHint: "เลือกสาขาที่สะดวก แล้วทำรายการจองในขั้นตอนถัดไป", chooseThisBranch: "เลือกสาขานี้",
-    history: "ประวัติการจอง", historyHint: "ดูนัดหมายที่กำลังจะมาถึงและประวัติการใช้บริการ", noHistory: "ยังไม่มีประวัติการจอง",
-    memberTab: "สมาชิก", bookTab: "จองคิว", historyTab: "ประวัติ", tarotTab: "ดูดวง",
+    history: "จัดการการจอง", historyHint: "ดูและแก้ไขนัดหมายที่กำลังจะมาถึง พร้อมตรวจสอบประวัติการจอง", upcomingSection: "การจองที่กำลังจะมาถึง", historySection: "ประวัติการจอง", noHistory: "ยังไม่มีประวัติการจอง",
+    memberTab: "สมาชิก", bookTab: "จองคิว", historyTab: "จัดการการจอง", tarotTab: "ดูดวง",
     cancelTitle: "ยืนยันการยกเลิกนัดหมาย?", cancelText: "นัดหมายนี้จะถูกยกเลิกและไม่สามารถย้อนกลับได้", keep: "เก็บนัดหมายไว้", confirmCancel: "ยืนยันยกเลิก", cancelling: "กำลังยกเลิก...",
     contactTitle: "กรุณาติดต่อแอดมิน", contactText: "ไม่สามารถยกเลิกออนไลน์ภายใน 30 นาทีก่อนเวลานัด กรุณาติดต่อร้านเพื่อขอความช่วยเหลือ", close: "ปิด", call: "โทรหาร้าน",
     cancelError: "ไม่สามารถยกเลิกนัดหมายได้ กรุณาลองใหม่อีกครั้ง",
@@ -65,8 +65,8 @@ const HUB_UI = {
     next: "Next appointment", viewAll: "View all", manage: "Manage appointment", cancel: "Cancel appointment", noUpcoming: "You have no upcoming appointments", bookNow: "Book now",
     comingSoon: "Tarot coming soon", tarotSoon: "We’re preparing the tarot experience for you.", soon: "Coming soon",
     chooseBranch: "Choose a branch", chooseBranchHint: "Select your preferred branch to continue booking.", chooseThisBranch: "Choose this branch",
-    history: "Booking history", historyHint: "View upcoming appointments and your visit history.", noHistory: "No booking history yet",
-    memberTab: "Member", bookTab: "Book", historyTab: "History", tarotTab: "Tarot",
+    history: "Manage bookings", historyHint: "View and edit upcoming appointments, and review booking history.", upcomingSection: "Upcoming bookings", historySection: "Booking history", noHistory: "No booking history yet",
+    memberTab: "Member", bookTab: "Book", historyTab: "Manage bookings", tarotTab: "Tarot",
     cancelTitle: "Cancel this appointment?", cancelText: "This appointment will be cancelled and cannot be restored.", keep: "Keep appointment", confirmCancel: "Cancel appointment", cancelling: "Cancelling...",
     contactTitle: "Please contact the salon", contactText: "Online cancellation is unavailable within 30 minutes of your appointment. Please contact the salon for assistance.", close: "Close", call: "Call salon",
     cancelError: "We couldn’t cancel this appointment. Please try again.",
@@ -108,6 +108,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   const [cancelDialog, setCancelDialog] = useState<"confirm" | "contact" | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
 
   const loadCustomerData = useCallback(async () => {
@@ -141,30 +142,34 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
     scrollRef.current?.scrollTo({ top: 0 });
   }, [tab]);
 
-  const upcoming = useMemo(() => bookings
+  const upcomingBookings = useMemo(() => bookings
     .filter(b => {
       const startsAt = bookingStartsAt(b.date, b.startTime);
       return !["CANCELLED", "COMPLETED", "NO_SHOW"].includes(b.status)
         && Number.isFinite(startsAt)
         && startsAt >= openedAt;
     })
-    .sort((a, b) => bookingStartsAt(a.date, a.startTime) - bookingStartsAt(b.date, b.startTime))[0], [bookings, openedAt]);
+    .sort((a, b) => bookingStartsAt(a.date, a.startTime) - bookingStartsAt(b.date, b.startTime)), [bookings, openedAt]);
+  const upcoming = upcomingBookings[0];
+  const historicalBookings = useMemo(() => bookings
+    .filter(b => !upcomingBookings.some(item => item.id === b.id))
+    .sort((a, b) => bookingStartsAt(b.date, b.startTime) - bookingStartsAt(a.date, a.startTime)), [bookings, upcomingBookings]);
   const activePackage = membership?.packages?.[0];
   const displayName = customer?.nickname || customer?.name?.split(" ")[0] || liff.profile?.displayName || "คุณ";
 
-  function requestCancellation() {
-    if (!upcoming) return;
+  function requestCancellation(booking: Booking) {
     setCancelError("");
-    const remaining = bookingStartsAt(upcoming.date, upcoming.startTime) - Date.now();
+    setCancelTarget(booking);
+    const remaining = bookingStartsAt(booking.date, booking.startTime) - Date.now();
     setCancelDialog(remaining <= 30 * 60 * 1000 ? "contact" : "confirm");
   }
 
   async function confirmCancellation() {
-    if (!upcoming || !liff.profile?.userId) return;
+    if (!cancelTarget || !liff.profile?.userId) return;
     setCancelBusy(true);
     setCancelError("");
     try {
-      const response = await fetch(`/api/customer/bookings/${encodeURIComponent(upcoming.id)}?lineUserId=${encodeURIComponent(liff.profile.userId)}`, { method: "DELETE" });
+      const response = await fetch(`/api/customer/bookings/${encodeURIComponent(cancelTarget.id)}?lineUserId=${encodeURIComponent(liff.profile.userId)}`, { method: "DELETE" });
       const data = await response.json().catch(() => ({}));
       if (response.status === 409 && data.error === "cancellation_cutoff") {
         setCancelDialog("contact");
@@ -172,6 +177,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
       }
       if (!response.ok) throw new Error("cancel_failed");
       setCancelDialog(null);
+      setCancelTarget(null);
       await loadCustomerData();
     } catch {
       setCancelError(u.cancelError);
@@ -260,7 +266,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
           </section>
 
           <section className="hub-section"><div className="section-heading"><div><h2>{u.next}</h2><p>Next appointment</p></div><button onClick={() => setTab("history")}>{u.viewAll}</button></div>
-            {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{lang === "th" ? upcoming.service.nameTh || upcoming.service.name : upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[lang][upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {displayDate(upcoming.date, lang)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(upcoming)}>{u.manage}</button><button type="button" onClick={requestCancellation}><Trash2 />{u.cancel}</button></div></article> : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}
+            {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{lang === "th" ? upcoming.service.nameTh || upcoming.service.name : upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[lang][upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {displayDate(upcoming.date, lang)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(upcoming)}>{u.manage}</button><button type="button" onClick={() => requestCancellation(upcoming)}><Trash2 />{u.cancel}</button></div></article> : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}
           </section>
 
           <section className="hub-section"><button className={`tarot-teaser${tarotEnabled ? "" : " coming-soon"}`} disabled={!tarotEnabled} onClick={() => setTab("tarot")}><span className="mini-card"><Star /></span><span><small>{tarotEnabled ? "DAILY READING" : "COMING SOON"}</small><strong>{tarotEnabled ? (lang === "th" ? "ดวงวันนี้ของคุณ" : "Your daily reading") : u.comingSoon}</strong><em>{tarotEnabled ? (lang === "th" ? "เลือกไพ่ 3 ใบ เพื่ออ่านความรัก การงาน และการเงิน" : "Choose 3 cards for love, career, and finance") : u.tarotSoon}</em></span>{tarotEnabled ? <b>›</b> : <b className="soon-badge">{u.soon}</b>}</button></section>
@@ -268,7 +274,12 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
 
         {tab === "book" && <section className="hub-section tab-page"><small>BOOK AN APPOINTMENT</small><h1>{u.chooseBranch}</h1><p>{u.chooseBranchHint}</p><div className="branch-list">{branches.map(branch => <article key={branch.id}><div><h2>{branch.name}</h2><p><MapPin /> {branch.address}</p></div>{branch.bookingEnabled ? <Link href={`/book/${branch.id}`}>{u.chooseThisBranch}</Link> : <span>{u.soon}</span>}</article>)}</div></section>}
 
-        {tab === "history" && <section className="hub-section tab-page"><small>YOUR VISITS</small><h1>{u.history}</h1><p>{u.historyHint}</p><div className="history-list">{bookings.length ? bookings.map(b => <article key={b.id}><div><h2>{lang === "th" ? b.service.nameTh || b.service.name : b.service.name}</h2><p>{b.branch.name}</p><p>{displayDate(b.date, lang)} · {b.startTime} {lang === "th" ? "น." : ""}</p></div><span>{STATUS[lang][b.status] || b.status}</span></article>) : <div className="empty-appointment"><Clock3 /><p>{u.noHistory}</p></div>}</div></section>}
+        {tab === "history" && <section className="hub-section tab-page manage-bookings-page"><small>MANAGE BOOKINGS</small><h1>{u.history}</h1><p>{u.historyHint}</p>
+          <h2 className="manage-section-title">{u.upcomingSection}</h2>
+          <div className="manage-upcoming-list">{upcomingBookings.length ? upcomingBookings.map(b => <article className="appointment" key={b.id}><div className="appointment-title"><div><h3>{lang === "th" ? b.service.nameTh || b.service.name : b.service.name}</h3><p>{b.service.category}</p></div><span>{STATUS[lang][b.status] || b.status}</span></div><p><MapPin /> {b.branch.name}</p><p><CalendarDays /> {displayDate(b.date, lang)}</p><p><Clock3 /> {b.startTime} — {b.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(b)}>{u.manage}</button><button type="button" onClick={() => requestCancellation(b)}><Trash2 />{u.cancel}</button></div></article>) : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}</div>
+          <h2 className="manage-section-title history-heading">{u.historySection}</h2>
+          <div className="history-list">{historicalBookings.length ? historicalBookings.map(b => <article key={b.id}><div><h2>{lang === "th" ? b.service.nameTh || b.service.name : b.service.name}</h2><p>{b.branch.name}</p><p>{displayDate(b.date, lang)} · {b.startTime} {lang === "th" ? "น." : ""}</p></div><span>{STATUS[lang][b.status] || b.status}</span></article>) : <div className="empty-appointment"><Clock3 /><p>{u.noHistory}</p></div>}</div>
+        </section>}
 
         {tab === "tarot" && <section className="tarot-page"><div className="tarot-title"><span>✦ ERR.DAY TAROT ✦</span><h1>ดูดวงแบบละเอียด</h1><p>เลือกไพ่ตามความรู้สึก 3 ใบ สำหรับความรัก การงาน และการเงิน</p></div>
           {customer?.dateOfBirth && <div className="birthday"><span>วันเกิดของคุณ</span><strong>{displayDate(customer.dateOfBirth, lang)}</strong><small>บันทึกไว้จากโปรไฟล์สมาชิก</small></div>}
@@ -291,18 +302,18 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
         }}
       />}
 
-      {cancelDialog && upcoming && <div className="hub-dialog-backdrop" role="presentation" onClick={() => !cancelBusy && setCancelDialog(null)}>
+      {cancelDialog && cancelTarget && <div className="hub-dialog-backdrop" role="presentation" onClick={() => { if (!cancelBusy) { setCancelDialog(null); setCancelTarget(null); } }}>
         <section className="hub-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-dialog-title" onClick={(event) => event.stopPropagation()}>
-          <button className="hub-dialog-close" type="button" aria-label={u.close} onClick={() => setCancelDialog(null)} disabled={cancelBusy}><X /></button>
+          <button className="hub-dialog-close" type="button" aria-label={u.close} onClick={() => { setCancelDialog(null); setCancelTarget(null); }} disabled={cancelBusy}><X /></button>
           <span className={`hub-dialog-icon ${cancelDialog === "contact" ? "contact" : "cancel"}`}><AlertCircle /></span>
           <h2 id="cancel-dialog-title">{cancelDialog === "contact" ? u.contactTitle : u.cancelTitle}</h2>
           <p>{cancelDialog === "contact" ? u.contactText : u.cancelText}</p>
           {cancelError && <p className="hub-dialog-error" role="alert">{cancelError}</p>}
           {cancelDialog === "contact" ? <div className="hub-dialog-actions">
-            {upcoming.branch.phone && <a className="dialog-primary" href={`tel:${upcoming.branch.phone}`}>{u.call} · {upcoming.branch.phone}</a>}
-            <button type="button" onClick={() => setCancelDialog(null)}>{u.close}</button>
+            {cancelTarget.branch.phone && <a className="dialog-primary" href={`tel:${cancelTarget.branch.phone}`}>{u.call} · {cancelTarget.branch.phone}</a>}
+            <button type="button" onClick={() => { setCancelDialog(null); setCancelTarget(null); }}>{u.close}</button>
           </div> : <div className="hub-dialog-actions split">
-            <button type="button" onClick={() => setCancelDialog(null)} disabled={cancelBusy}>{u.keep}</button>
+            <button type="button" onClick={() => { setCancelDialog(null); setCancelTarget(null); }} disabled={cancelBusy}>{u.keep}</button>
             <button className="dialog-danger" type="button" onClick={() => void confirmCancellation()} disabled={cancelBusy}>{cancelBusy ? u.cancelling : u.confirmCancel}</button>
           </div>}
         </section>
