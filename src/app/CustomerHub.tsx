@@ -230,13 +230,15 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
         <div className="hub-profile">
           <LangSwitcher />
           {liff.isLoggedIn && <span className="line-pill"><i /> LINE</span>}
-          {liff.profile?.pictureUrl ? <Image src={liff.profile.pictureUrl} alt="" width={36} height={36} className="hub-avatar" unoptimized /> : <span className="hub-avatar hub-initial">{displayName[0]}</span>}
         </div>
       </header>
 
       <div className="hub-scroll" ref={scrollRef}>
         {tab === "home" && <>
-          <section className="welcome"><p>WELCOME BACK</p><h1>{u.hello} {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</section>
+          <section className="welcome">
+            <div className="welcome-copy"><p>WELCOME BACK</p><h1>{u.hello} {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</div>
+            {liff.profile.pictureUrl ? <Image src={liff.profile.pictureUrl} alt="" width={64} height={64} className="hub-avatar welcome-avatar" unoptimized /> : <span className="hub-avatar hub-initial welcome-avatar">{displayName[0]}</span>}
+          </section>
           <div className="welcome-wave" />
           <section className="hub-section entitlement">
             {membership?.membership ? <div className="member-card">
