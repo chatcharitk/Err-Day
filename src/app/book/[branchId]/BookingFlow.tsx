@@ -649,11 +649,6 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                         {svcDesc}
                                       </p>
                                     )}
-                                    {bs.serviceId === DAVINES_SPA_PROMOTION.serviceId && (
-                                      <p className="text-xs mt-1 font-medium" style={{ color: isSelected ? "#fff4d8" : "#B42318" }}>
-                                        {DAVINES_SPA_PROMOTION.labelTh}: ฿788 · สมาชิก ฿688
-                                      </p>
-                                    )}
                                     {/*
                                       Via computeMemberPrice, not service.memberPrice directly: a
                                       service can express its member rate as a percentage instead of
