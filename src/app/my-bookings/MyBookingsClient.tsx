@@ -21,6 +21,10 @@ const ALL_SLOTS: string[] = (() => {
   return slots;
 })();
 
+const NON_APPOINTMENT_SERVICE_IDS = new Set([
+  "svc-membership-30d", "svc-member-monthly", "svc-member-pkg", "svc-buffet", "svc-pkg5",
+]);
+
 type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 
 interface MembershipStatus {
@@ -56,7 +60,9 @@ export interface ReschedulableBooking {
   date:       string;       // ISO
   startTime:  string;
   endTime:    string;
+  notes?:      string | null;
   service: { id: string; name: string; nameTh: string };
+  addons?: { addon: { id: string; name: string; nameTh: string } }[];
 }
 
 interface Booking extends ReschedulableBooking {
@@ -617,6 +623,16 @@ function BookingCard({
           <Clock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#D8B4A3" }} />
           {booking.startTime} — {booking.endTime} น.
         </p>
+        {booking.addons && booking.addons.length > 0 && (
+          <p className="text-xs pl-5" style={{ color: "#977A6F" }}>
+            {lang === "th" ? "ตัวเลือกเสริม" : "Add-ons"}: {booking.addons.map(item => lang === "th" ? item.addon.nameTh : (item.addon.name || item.addon.nameTh)).join(", ")}
+          </p>
+        )}
+        {booking.notes && (
+          <p className="text-xs pl-5 whitespace-pre-wrap" style={{ color: "#977A6F" }}>
+            {lang === "th" ? "หมายเหตุ" : "Notes"}: {booking.notes}
+          </p>
+        )}
       </div>
 
       {showActions && (
@@ -627,7 +643,7 @@ function BookingCard({
             style={{ borderColor: "#B52F3A", color: "#B52F3A", background: "white" }}
           >
             <Edit3 className="w-3.5 h-3.5" />
-            {lang === "th" ? "เปลี่ยนแปลง" : "Reschedule"}
+            {lang === "th" ? "แก้ไขการจอง" : "Edit booking"}
           </button>
           <button
             onClick={onCancel}
@@ -655,24 +671,31 @@ export function RescheduleModal({
   lang: Lang;
 }) {
   const [branchId,   setBranchId]   = useState(booking.branchId);
+  const [serviceId,  setServiceId]  = useState(booking.serviceId);
   const [date,       setDate]       = useState<Date>(new Date(booking.date));
   const [startTime,  setStartTime]  = useState(booking.startTime);
   const [duration,   setDuration]   = useState<number | null>(null);
+  const [services,   setServices]   = useState<{ duration: number; price: number; service: { id: string; name: string; nameTh: string; category: string } }[]>([]);
+  const [addons,     setAddons]     = useState<{ id: string; name: string; nameTh: string; price: number }[]>([]);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(() => booking.addons?.map(item => item.addon.id) ?? []);
+  const [notes,      setNotes]      = useState(booking.notes ?? "");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
 
-  // Look up duration from BranchService for the chosen branch + this service
+  // Load services for the selected branch and resolve the selected duration.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/services?branchId=${encodeURIComponent(branchId)}`);
         if (!res.ok) throw new Error();
-        const services: { duration: number; service: { id: string } }[] = await res.json();
+        const responseServices: { duration: number; price: number; service: { id: string; name: string; nameTh: string; category: string } }[] = await res.json();
+        const nextServices = responseServices.filter(item => !NON_APPOINTMENT_SERVICE_IDS.has(item.service.id));
         if (cancelled) return;
-        const match = services.find((s) => s.service.id === booking.serviceId);
+        setServices(nextServices);
+        const match = nextServices.find((s) => s.service.id === serviceId);
         setDuration(match ? match.duration : null);
         if (!match) setError(lang === "th" ? "สาขานี้ไม่มีบริการนี้" : "This service is unavailable at this branch.");
         else setError("");
@@ -681,7 +704,16 @@ export function RescheduleModal({
       }
     })();
     return () => { cancelled = true; };
-  }, [branchId, booking.serviceId, lang]);
+  }, [branchId, serviceId, lang]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/addons")
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (!cancelled) setAddons(data); })
+      .catch(() => { if (!cancelled) setAddons([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Fetch taken slots for the selected date+branch+duration
   useEffect(() => {
@@ -705,7 +737,7 @@ export function RescheduleModal({
       const res = await fetch(`/api/customer/bookings/${booking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineUserId, branchId, date: localDate, startTime }),
+        body: JSON.stringify({ lineUserId, branchId, serviceId, date: localDate, startTime, addonIds: selectedAddonIds, notes }),
       });
       if (res.status === 409) {
         setError(lang === "th" ? "เวลาที่เลือกถูกจองแล้ว กรุณาเลือกเวลาอื่น" : "That time is no longer available. Please choose another.");
@@ -737,8 +769,9 @@ export function RescheduleModal({
         <div className="sticky top-0 bg-white px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #F1E4DC" }}>
           <div>
             <h3 className="text-base font-semibold" style={{ color: "#45352F" }}>{lang === "th" ? "เปลี่ยนแปลงการจอง" : "Reschedule appointment"}</h3>
-            <p className="text-xs" style={{ color: "#977A6F" }}>{booking.service.nameTh || booking.service.name}</p>
+            <p className="text-xs" style={{ color: "#977A6F" }}>{lang === "th" ? "บริการ วันเวลา ตัวเลือกเสริม และหมายเหตุ" : "Service, schedule, add-ons and notes"}</p>
           </div>
+
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100">
             <X className="w-5 h-5" style={{ color: "#6F574D" }} />
           </button>
@@ -774,6 +807,23 @@ export function RescheduleModal({
             </div>
           </div>
 
+          {/* Service */}
+          <div>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "บริการ" : "Service"}</label>
+            <select
+              value={serviceId}
+              onChange={(event) => setServiceId(event.target.value)}
+              className="w-full p-3 rounded-xl border-2 bg-white text-sm"
+              style={{ borderColor: "#EADDD4", color: "#45352F" }}
+            >
+              {services.map(item => (
+                <option key={item.service.id} value={item.service.id}>
+                  {lang === "th" ? item.service.nameTh : (item.service.name || item.service.nameTh)} · ฿{(item.price / 100).toLocaleString()}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Date */}
           <div>
             <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "วันที่" : "Date"}</label>
@@ -796,7 +846,10 @@ export function RescheduleModal({
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {ALL_SLOTS.map((t) => {
-                  const isTaken = takenSlots.includes(t) && t !== booking.startTime; // own current slot is fine
+                  const currentDate = booking.date.slice(0, 10);
+                  const selectedDate = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+                  const isOwnCurrentSlot = branchId === booking.branchId && serviceId === booking.serviceId && selectedDate === currentDate && t === booking.startTime;
+                  const isTaken = takenSlots.includes(t) && !isOwnCurrentSlot;
                   const isSelected = startTime === t;
                   return (
                     <button
@@ -818,6 +871,47 @@ export function RescheduleModal({
                 })}
               </div>
             )}
+          </div>
+
+          {/* Add-ons */}
+          <div>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "ตัวเลือกเสริม" : "Add-ons"}</label>
+            {addons.length === 0 ? (
+              <p className="text-xs" style={{ color: "#977A6F" }}>{lang === "th" ? "ไม่มีตัวเลือกเสริม" : "No add-ons available"}</p>
+            ) : (
+              <div className="space-y-2">
+                {addons.map(addon => {
+                  const selected = selectedAddonIds.includes(addon.id);
+                  return (
+                    <button
+                      type="button"
+                      key={addon.id}
+                      onClick={() => setSelectedAddonIds(current => selected ? current.filter(id => id !== addon.id) : [...current, addon.id])}
+                      className="w-full p-3 rounded-xl border-2 flex items-center gap-3 text-left"
+                      style={{ borderColor: selected ? "#B52F3A" : "#EADDD4", background: selected ? "#FFFBF8" : "white" }}
+                    >
+                      <span className="w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0" style={{ borderColor: selected ? "#B52F3A" : "#D8B4A3", background: selected ? "#B52F3A" : "white", color: "white" }}>{selected && <Check className="w-3.5 h-3.5" />}</span>
+                      <span className="flex-1 text-sm" style={{ color: "#45352F" }}>{lang === "th" ? addon.nameTh : (addon.name || addon.nameTh)}</span>
+                      <span className="text-sm" style={{ color: "#977A6F" }}>+฿{(addon.price / 100).toLocaleString()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "หมายเหตุ" : "Notes"}</label>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              maxLength={1000}
+              rows={3}
+              placeholder={lang === "th" ? "แจ้งรายละเอียดเพิ่มเติมให้ร้านทราบ" : "Add a note for the salon"}
+              className="w-full p-3 rounded-xl border-2 text-sm resize-none"
+              style={{ borderColor: "#EADDD4", color: "#45352F" }}
+            />
           </div>
 
           {error && (

@@ -21,6 +21,7 @@ export async function POST(request: Request) {
         include: {
           branch: { select: { name: true, phone: true } },
           service: { select: { id: true, name: true, nameTh: true, category: true } },
+          addons: { include: { addon: { select: { id: true, name: true, nameTh: true } } } },
         },
         orderBy: [{ date: "desc" }, { startTime: "asc" }],
       },
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       id: item.id,
       nameTh: item.spec.nameTh,
       expiresAt: item.expiresAt.toISOString(),
+      usagesUsed: item.usagesUsed,
       usagesLeft: item.usagesLeft,
       usageLimit: item.usageLimit,
     })),
