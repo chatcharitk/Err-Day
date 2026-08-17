@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CalendarDays, Clock3, CreditCard, MapPin, Sparkles, Star, Trash2, X } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
@@ -88,12 +89,13 @@ function bookingStartsAt(dateValue: string, startTime: string) {
 }
 
 export default function CustomerHub({ branches, tarotEnabled }: { branches: Branch[]; tarotEnabled: boolean }) {
+  const searchParams = useSearchParams();
   const liff = useLiff();
   const { lang } = useLang();
   const u = HUB_UI[lang];
   const [openedAt] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<Tab>("home");
+  const [tab, setTab] = useState<Tab>(() => searchParams.get("tab") === "book" ? "book" : "home");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [membership, setMembership] = useState<MembershipData | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);

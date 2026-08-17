@@ -433,7 +433,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       {/* Top bar */}
       <div className="bg-white border-b px-6 py-4" style={{ borderColor: "#D8B4A3" }}>
         <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <Link href="/book" className="transition-colors" style={{ color: "#6F574D" }}>
+          <Link href="/?tab=book" replace className="transition-colors" style={{ color: "#6F574D" }}>
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">

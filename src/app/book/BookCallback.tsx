@@ -69,7 +69,8 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
     }
   };
 
-  // After LIFF init: redirect back to a saved path if present, otherwise show the page.
+  // After LIFF init: redirect back to a saved path if present. The old standalone
+  // branch picker is retired; its fallback now opens the customer hub's Book tab.
   useEffect(() => {
     if (!liff.ready) return;
     try {
@@ -80,6 +81,7 @@ export default function BookCallback({ branches: branchesProp }: { branches: Bra
         return;
       }
     } catch { /* ignore */ }
+    router.replace("/?tab=book");
     setShowBranches(true);
   }, [liff.ready, router]);
 

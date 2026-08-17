@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Suspense } from "react";
 import CustomerHub from "./CustomerHub";
 
 // The branch list is reference data — cache the render (ISR) so the entry page
@@ -23,5 +24,9 @@ export default async function HomePage() {
     return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
   });
 
-  return <CustomerHub branches={branches} tarotEnabled={tarotEnabled} />;
+  return (
+    <Suspense fallback={<div className="hub-loading"><span /><p>กำลังเตรียมพื้นที่ของคุณ...</p></div>}>
+      <CustomerHub branches={branches} tarotEnabled={tarotEnabled} />
+    </Suspense>
+  );
 }
