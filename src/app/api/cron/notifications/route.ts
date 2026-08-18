@@ -125,14 +125,18 @@ export async function GET(request: Request) {
     select: { id: true },
   });
 
-  // ── Send all (sequentially to keep LINE rate-limit-friendly) ─────────────
+  // ── Send with small bounded concurrency ─────────────────────────────────
+  // Four jobs overlap external I/O without opening an unbounded number of DB
+  // connections or LINE requests during a busy reminder window.
   const results: { kind: string; targetId: string; status: string; reason?: string }[] = [];
-
-  for (const b of dueBookings) {
-    results.push(await sendBookingReminder4h(b.id));
-  }
-  for (const p of duePackages) {
-    results.push(await sendPackageExpiryWarning1d(p.id));
+  const notificationJobs = [
+    ...dueBookings.map((b) => () => sendBookingReminder4h(b.id)),
+    ...duePackages.map((p) => () => sendPackageExpiryWarning1d(p.id)),
+  ];
+  const NOTIFICATION_CONCURRENCY = 4;
+  for (let i = 0; i < notificationJobs.length; i += NOTIFICATION_CONCURRENCY) {
+    const batch = notificationJobs.slice(i, i + NOTIFICATION_CONCURRENCY);
+    results.push(...await Promise.all(batch.map((run) => run())));
   }
 
   // ── 4) Branch daily summary — fires in the 20:00–23:59 Bangkok window ──

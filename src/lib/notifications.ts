@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { pushText, pushLine } from "@/lib/line-messaging";
+import { pushText, pushLine, multicastText } from "@/lib/line-messaging";
 import { buildBookingFlex } from "@/lib/flex/booking";
 import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
 import { branchGroupId } from "@/lib/line-groups";
@@ -98,12 +98,22 @@ const STAFF_LINE_IDS = [
   "U2548106b79ded01779f134727dc373d3", // Chatcharit
 ];
 
-export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
-  const b = await prisma.booking.findUnique({
+async function loadBookingNotification(bookingId: string) {
+  return prisma.booking.findUnique({
     where:   { id: bookingId },
     include: { customer: { include: { membership: true } }, branch: true, service: true, staff: true },
   });
+}
+
+type BookingNotification = NonNullable<Awaited<ReturnType<typeof loadBookingNotification>>>;
+
+export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
+  const b = await loadBookingNotification(bookingId);
   if (!b) return;
+  await sendStaffBookingAlertLoaded(b);
+}
+
+async function sendStaffBookingAlertLoaded(b: BookingNotification): Promise<void> {
 
   // Strip "err.day " prefix for a cleaner alert header.
   const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
@@ -116,8 +126,7 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
     && (m.expiresAt == null || m.expiresAt > now)
     && (m.usagesAllowed === 0 || m.usagesUsed < m.usagesAllowed);
 
-  // Owner alert → in-app notification + Web Push.
-  await notifyAdmins({
+  const adminNotice = {
     type:  "BOOKING_NEW",
     title: `จองใหม่ · ${branchShort}`,
     body:
@@ -126,7 +135,7 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
       (isMember ? " · 🎟️สมาชิก" : ""),
     href:     `/admin/m/${b.id}`,
     branchId: b.branchId,
-  });
+  } as const;
 
   // Also DM the owners on LINE — kept as a reliable channel alongside in-app.
   const lineText =
@@ -137,12 +146,19 @@ export async function sendStaffBookingAlert(bookingId: string): Promise<void> {
 ⏰ ${b.startTime}–${b.endTime}
 💆 ${b.service.nameTh}
 👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}${isMember ? "\n🎟️ สมาชิก ✅" : ""}`;
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const r = await pushText(uid, lineText);
-      if (!r.ok) console.error("[notify] staff alert (LINE) failed", uid, r.error);
-    })
-  );
+  // In-app/Web Push and LINE are independent I/O, so overlap their wait time.
+  const [adminResult, lineResult] = await Promise.allSettled([
+    notifyAdmins(adminNotice),
+    multicastText(STAFF_LINE_IDS, lineText),
+  ]);
+  if (adminResult.status === "rejected") {
+    console.error("[notify] staff alert (admin) failed", adminResult.reason);
+  }
+  if (lineResult.status === "rejected") {
+    console.error("[notify] staff alert (LINE) failed", lineResult.reason);
+  } else if (!lineResult.value.ok) {
+    console.error("[notify] staff alert (LINE) failed", lineResult.value.error);
+  }
 }
 
 // ── Booking time-change notification (customer) ───────────────────────────────
@@ -196,13 +212,9 @@ export async function sendBookingTimeChanged(
 👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}
 ${memberLineR}`;
 
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const rs = await pushText(uid, staffText);
-      if (!rs.ok) console.error("[notify] time changed (staff) failed", uid, rs.error);
-      else        console.log("[notify] time changed (staff) sent",    uid);
-    })
-  );
+  const staffResult = await multicastText(STAFF_LINE_IDS, staffText);
+  if (!staffResult.ok) console.error("[notify] time changed (staff) failed", staffResult.error);
+  else                 console.log("[notify] time changed (staff) sent");
 }
 
 // ── Booking cancellation (customer + staff) ──────────────────────────────────
@@ -229,7 +241,8 @@ export async function sendBookingCancelled(
   });
 
   // Customer notification (skipped silently if no LINE link)
-  if (b.customer.lineUserId) {
+  const customerLineUserId = b.customer.lineUserId;
+  const customerTask = customerLineUserId ? (async () => {
     const text =
 `❌ err·day — ยกเลิกการจองแล้วค่ะ
 
@@ -242,15 +255,15 @@ export async function sendBookingCancelled(
 📍 ${b.branch.name}
 
 หากต้องการจองใหม่ ทักเราได้เลยนะคะ 🌸`;
-    const r = await pushText(b.customer.lineUserId, text);
+    const r = await pushText(customerLineUserId, text);
     if (!r.ok) console.error("[notify] booking cancelled (customer) failed", bookingId, r.error);
     else        console.log("[notify] booking cancelled (customer) sent",    bookingId);
-  }
+  })() : Promise.resolve();
 
   // Owner alert → in-app notification + Web Push.
   const branchShort = b.branch.name.replace(/^err\.day\s*/i, "");
   const who = opts?.byCustomer ? "ลูกค้ายกเลิกเอง" : "ยกเลิกโดยร้าน";
-  await notifyAdmins({
+  const adminTask = notifyAdmins({
     type:  "BOOKING_CANCELLED",
     title: `ยกเลิกการจอง · ${branchShort}`,
     body:
@@ -270,15 +283,24 @@ export async function sendBookingCancelled(
 ⏰ ${b.startTime}–${b.endTime}
 💆 ${b.service.nameTh}
 👤 ${b.staff?.name ?? "ไม่ระบุช่าง"}`;
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const r = await pushText(uid, staffText);
-      if (!r.ok) console.error("[notify] booking cancelled (LINE) failed", uid, r.error);
-    })
-  );
+  const staffTask = multicastText(STAFF_LINE_IDS, staffText).then((result) => {
+    if (!result.ok) console.error("[notify] booking cancelled (LINE) failed", result.error);
+  });
 
-  // Post to the branch's LINE group too (no-op if group not configured).
-  await sendGroupBookingNotice(bookingId, "cancelled").catch(e => console.error("[notify] group cancel failed", e));
+  // All channels are independent. Reuse the booking snapshot for the group
+  // eligibility check instead of querying the booking a second time.
+  const results = await Promise.allSettled([
+    customerTask,
+    adminTask,
+    staffTask,
+    sendGroupBookingNoticeLoaded(b, "cancelled"),
+  ]);
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const channel = ["customer", "admin", "staff", "group"][index];
+      console.error(`[notify] booking cancelled ${channel} failed`, result.reason);
+    }
+  });
 }
 
 // ── Branch LINE-group notifications (per-branch staff group chat) ────────────
@@ -388,6 +410,13 @@ export async function sendGroupBookingNotice(
     select: { branchId: true, date: true, startTime: true },
   });
   if (!b) return;
+  await sendGroupBookingNoticeLoaded(b, action);
+}
+
+async function sendGroupBookingNoticeLoaded(
+  b: Pick<BookingNotification, "branchId" | "date" | "startTime">,
+  action: "created" | "cancelled" | "changed",
+): Promise<void> {
   const groupId = branchGroupId(b.branchId);
   if (!groupId) return;
 
@@ -556,13 +585,18 @@ export async function sendStaffShiftSummary(): Promise<{ status: string; count: 
 
 export async function sendBookingCreated(bookingId: string): Promise<SendResult> {
   const kind: Kind = "BOOKING_CREATED";
-  if (await alreadySent(kind, bookingId)) return { kind, targetId: bookingId, status: "SENT", reason: "already" };
-
-  const b = await prisma.booking.findUnique({
-    where:   { id: bookingId },
-    include: { customer: true, branch: true, service: true, staff: true },
-  });
+  const [sent, b] = await Promise.all([
+    alreadySent(kind, bookingId),
+    loadBookingNotification(bookingId),
+  ]);
+  if (sent) return { kind, targetId: bookingId, status: "SENT", reason: "already" };
   if (!b) return { kind, targetId: bookingId, status: "FAILED", reason: "not_found" };
+  return sendBookingCreatedLoaded(b);
+}
+
+async function sendBookingCreatedLoaded(b: BookingNotification): Promise<SendResult> {
+  const kind: Kind = "BOOKING_CREATED";
+  const bookingId = b.id;
 
   if (!b.customer.lineUserId) {
     await recordLog({ kind, targetId: bookingId, status: "SKIPPED", error: "no_line_link" });
@@ -576,6 +610,35 @@ export async function sendBookingCreated(bookingId: string): Promise<SendResult>
   }
   await recordLog({ kind, targetId: bookingId, status: "FAILED", recipient: b.customer.lineUserId, error: r.error });
   return { kind, targetId: bookingId, status: "FAILED", reason: r.error };
+}
+
+/**
+ * New-booking coordinator: one booking read feeds every notification channel.
+ * Channels run concurrently because they are independent external I/O.
+ */
+export async function sendNewBookingNotifications(bookingId: string): Promise<void> {
+  const kind: Kind = "BOOKING_CREATED";
+  const [sent, b] = await Promise.all([
+    alreadySent(kind, bookingId),
+    loadBookingNotification(bookingId),
+  ]);
+  if (!b) return;
+
+  const customerTask = sent
+    ? Promise.resolve<SendResult>({ kind, targetId: bookingId, status: "SENT", reason: "already" })
+    : sendBookingCreatedLoaded(b);
+
+  const results = await Promise.allSettled([
+    customerTask,
+    sendStaffBookingAlertLoaded(b),
+    sendGroupBookingNoticeLoaded(b, "created"),
+  ]);
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const channel = ["customer", "staff", "group"][index];
+      console.error(`[notify] new booking ${channel} failed`, result.reason);
+    }
+  });
 }
 
 // ── Booking confirmed by admin ─────────────────────────────────────────────
@@ -670,12 +733,8 @@ export async function sendStaffMembershipAlert(membershipId: string): Promise<vo
 📅 หมดอายุ: ${expiryStr}
 🔢 ${usageStr}`;
 
-  await Promise.all(
-    STAFF_LINE_IDS.map(async uid => {
-      const r = await pushText(uid, text);
-      if (!r.ok) console.error("[notify] staff membership alert failed", uid, r.error);
-    })
-  );
+  const lineResult = await multicastText(STAFF_LINE_IDS, text);
+  if (!lineResult.ok) console.error("[notify] staff membership alert failed", lineResult.error);
 }
 
 // ── Membership activated ─────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
-import { sendBookingCreated, sendStaffBookingAlert, sendGroupBookingNotice } from "@/lib/notifications";
+import { sendNewBookingNotifications } from "@/lib/notifications";
 import { getPromotionServicePrice } from "@/lib/promotions";
 
 export async function POST(request: Request) {
@@ -176,10 +176,10 @@ export async function POST(request: Request) {
     }
     const booking = outcome.booking;
 
-    // Fire-and-forget: customer confirmation (skipped if no LINE link) + staff alert + branch group.
-    sendBookingCreated(booking.id).catch(e => console.error("[notify] booking created failed", e));
-    sendStaffBookingAlert(booking.id).catch(e => console.error("[notify] staff alert failed", e));
-    sendGroupBookingNotice(booking.id, "created").catch(e => console.error("[notify] group new booking failed", e));
+    // Respond immediately, then keep one bounded invocation alive for all three
+    // notification channels. The coordinator shares one booking query and
+    // overlaps external I/O instead of launching three untracked promises.
+    after(() => sendNewBookingNotifications(booking.id));
 
     return NextResponse.json(booking, { status: 201 });
   } catch (error) {

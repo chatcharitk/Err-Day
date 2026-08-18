@@ -10,7 +10,9 @@
  */
 
 const PUSH_URL  = "https://api.line.me/v2/bot/message/push";
+const MULTICAST_URL = "https://api.line.me/v2/bot/message/multicast";
 const REPLY_URL = "https://api.line.me/v2/bot/message/reply";
+const LINE_REQUEST_TIMEOUT_MS = 4_000;
 
 export type LineMessage =
   | { type: "text"; text: string }
@@ -49,6 +51,7 @@ export async function pushLine(
         "Authorization": `Bearer ${token}`,
       },
       body: JSON.stringify({ to: toLineUserId, messages }),
+      signal: AbortSignal.timeout(LINE_REQUEST_TIMEOUT_MS),
     });
 
     if (res.ok) return { ok: true };
@@ -61,6 +64,45 @@ export async function pushLine(
     const msg = e instanceof Error ? e.message : "fetch_failed";
     return { ok: false, error: msg };
   }
+}
+
+/** Send the same messages to multiple LINE users in one HTTP request. */
+export async function multicastLine(
+  toLineUserIds: string[],
+  messages: LineMessage[],
+): Promise<PushResult> {
+  const token = getToken();
+  if (!token) return { ok: false, error: "no_token" };
+  const recipients = [...new Set(toLineUserIds.filter(Boolean))];
+  if (recipients.length === 0) return { ok: false, error: "no_recipient" };
+  if (recipients.length > 500) return { ok: false, error: "too_many_recipients" };
+  if (messages.length === 0) return { ok: false, error: "no_messages" };
+  if (messages.length > 5) return { ok: false, error: "too_many_messages" };
+
+  try {
+    const res = await fetch(MULTICAST_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ to: recipients, messages }),
+      signal: AbortSignal.timeout(LINE_REQUEST_TIMEOUT_MS),
+    });
+
+    if (res.ok) return { ok: true };
+    let body = "";
+    try { body = await res.text(); } catch { /* ignore */ }
+    return { ok: false, error: `${res.status} ${body.slice(0, 300)}` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "fetch_failed";
+    return { ok: false, error: msg };
+  }
+}
+
+/** Convenience helper for one text message sent to multiple LINE users. */
+export async function multicastText(toLineUserIds: string[], text: string): Promise<PushResult> {
+  return multicastLine(toLineUserIds, [{ type: "text", text }]);
 }
 
 /** Convenience helper for the common single-text-message case. */
@@ -96,6 +138,7 @@ export async function replyLine(
         "Authorization": `Bearer ${token}`,
       },
       body: JSON.stringify({ replyToken, messages }),
+      signal: AbortSignal.timeout(LINE_REQUEST_TIMEOUT_MS),
     });
 
     if (res.ok) return { ok: true };
@@ -124,6 +167,7 @@ export async function getLineMessageContent(
   try {
     const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(LINE_REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error(`[line] content download failed: ${res.status} for message ${messageId}`);
