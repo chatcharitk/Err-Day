@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Banknote, Check, Loader2, Settings, CalendarDays, Wallet, CalendarRange, Receipt, X } from "lucide-react";
@@ -71,7 +71,16 @@ export default function PayrollView({ branches, activeBranchId, activeDate, toda
         ))}
       </div>
 
-      {tab === "daily" && <DailyTab key={`${activeBranchId}:${activeDate}`} branches={branches} activeBranchId={activeBranchId} activeDate={activeDate} todayStr={todayStr} rows={rows} onNav={go} />}
+      {tab === "daily" && <DailyTab
+        key={`${activeBranchId}:${activeDate}`}
+        branches={branches}
+        activeBranchId={activeBranchId}
+        activeDate={activeDate}
+        todayStr={todayStr}
+        rows={rows}
+        onNav={go}
+        expenseBasePath={basePath.startsWith("/admin/m") ? "/admin/m/expenses" : "/admin/expenses"}
+      />}
       {tab === "monthly" && <MonthlyTab branches={branches} activeBranchId={activeBranchId} />}
       {tab === "settings" && <SettingsTab branches={branches} staffConfig={staffConfig} services={services} addons={addons} />}
     </div>
@@ -79,15 +88,20 @@ export default function PayrollView({ branches, activeBranchId, activeDate, toda
 }
 
 // ─── Daily payout tab ─────────────────────────────────────────────────────────
-function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav }: {
+function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav, expenseBasePath }: {
   branches: Branch[]; activeBranchId: string; activeDate: string; todayStr: string; rows: Row[];
   onNav: (b: string, d: string) => void;
+  expenseBasePath: string;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [otEdits, setOtEdits] = useState<Record<string, string>>({});
   const [tipEdits, setTipEdits] = useState<Record<string, string>>({});
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  // Tapping Pay moves focus out of an input before click fires. Suppress the
+  // separate blur-save in that case; the Pay request below saves all values
+  // atomically and avoids a race that could snapshot a ฿0 tip.
+  const payIntentRef = useRef<string | null>(null);
 
   async function patch(staffId: string, body: Record<string, unknown>) {
     setBusyId(staffId);
@@ -107,7 +121,8 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
 
   const totalCommission = rows.reduce((s, r) => s + r.commissionSatang, 0);
   const totalOt = rows.reduce((s, r) => s + r.otSatang, 0);
-  const grand = totalCommission + totalOt;
+  const totalTip = rows.reduce((s, r) => s + r.tipSatang, 0);
+  const grand = totalCommission + totalOt + totalTip;
   const isToday = activeDate === todayStr;
 
   return (
@@ -131,7 +146,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
 
       {/* summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-4">
-        {[["ค่ามือรวม", totalCommission], ["OT รวม", totalOt], ["รวมจ่ายวันนี้", grand]].map(([label, val], i) => (
+        {[["ค่ามือรวม", totalCommission], ["OT + ทิปรวม", totalOt + totalTip], ["รวมจ่ายวันนี้", grand]].map(([label, val], i) => (
           <div key={i} className="rounded-xl bg-white p-3" style={{ border: `1.5px solid ${i === 2 ? PRIMARY : BORDER}` }}>
             <p className="text-xs" style={{ color: MUTED }}>{label as string}</p>
             <p className="text-lg font-bold" style={{ color: i === 2 ? PRIMARY : TEXT }}>{baht(val as number)}</p>
@@ -169,6 +184,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
                     disabled={paid || busyId === r.staffId}
                     onChange={e => setOtEdits(p => ({ ...p, [r.staffId]: e.target.value }))}
                     onBlur={() => {
+                      if (payIntentRef.current === r.staffId) return;
                       const raw = otEdits[r.staffId];
                       if (raw === undefined) return;            // not edited
                       const h = Math.min(24, Math.max(0, parseFloat(raw)));
@@ -190,6 +206,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
                     disabled={paid || busyId === r.staffId}
                     onChange={e => setTipEdits(p => ({ ...p, [r.staffId]: e.target.value }))}
                     onBlur={() => {
+                      if (payIntentRef.current === r.staffId) return;
                       const raw = tipEdits[r.staffId];
                       if (raw === undefined) return;            // not edited
                       const baht2satang = Math.round(Math.max(0, parseFloat(raw)) * 100);
@@ -214,7 +231,14 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
                     {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} จ่ายแล้ว
                   </button>
                 ) : (
-                  <button onClick={() => patch(r.staffId, { action: "pay" })} disabled={busyId === r.staffId}
+                  <button onClick={() => {
+                    payIntentRef.current = null;
+                    const enteredOt = Math.min(24, Math.max(0, parseFloat(otVal) || 0));
+                    const enteredTipSatang = Math.round(Math.max(0, parseFloat(tipVal) || 0) * 100);
+                    patch(r.staffId, { action: "pay", otHours: enteredOt, tipSatang: enteredTipSatang });
+                  }} onPointerDown={() => { payIntentRef.current = r.staffId; }}
+                    onPointerCancel={() => { payIntentRef.current = null; }}
+                    disabled={busyId === r.staffId}
                     className="text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-50" style={{ background: PRIMARY }}>
                     {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Banknote size={12} />} จ่ายเงิน
                   </button>
@@ -222,7 +246,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
 
                 {/* record as expense */}
                 {r.expenseId ? (
-                  <Link href={`/admin/expenses/${r.expenseId}`}
+                  <Link href={`${expenseBasePath}/${r.expenseId}`}
                     className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: "#DCFCE7", color: "#166534" }}>
                     <Check size={12} /> บันทึกแล้ว
                   </Link>
@@ -248,7 +272,7 @@ function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav 
         })}
       </div>
       <p className="text-[11px] mt-4" style={{ color: MUTED }}>
-        ค่ามือ = ค่าคอมมิชชั่นต่อบริการของงานที่เสร็จ (COMPLETED) วันนั้น · OT = ชั่วโมงที่กรอก × เรตต่อชั่วโมง · เงินเดือน/ค่าแรงฐานจ่ายแยกตามรอบ (ดูแท็บตั้งค่า)
+        ค่ามือ = ค่าตอบแทนที่บันทึกในคิวที่เสร็จ (COMPLETED) วันนั้น หรือค่ามือบริการ/บริการเสริมหากไม่ได้ระบุ · OT = ชั่วโมงที่กรอก × เรตต่อชั่วโมง · เงินเดือน/ค่าแรงฐานจ่ายแยกตามรอบ (ดูแท็บตั้งค่า)
       </p>
     </>
   );

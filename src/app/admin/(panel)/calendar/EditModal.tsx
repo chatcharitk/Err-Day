@@ -38,6 +38,9 @@ export default function EditModal({
   const [startTime,       setStartTime]       = useState(booking.startTime);
   const [endTime,         setEndTime]         = useState(booking.endTime);
   const [price,           setPrice]           = useState(booking.totalPrice);
+  const [commissionBaht,  setCommissionBaht]  = useState(
+    booking.commissionSatang == null ? "" : String(booking.commissionSatang / 100),
+  );
   const [selectedStaff,   setSelectedStaff]   = useState(booking.staff?.id ?? "");
   const [extraStaffIds,   setExtraStaffIds]   = useState<string[]>(booking.extraStaff.map(s => s.id));
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerValue>({
@@ -158,6 +161,10 @@ export default function EditModal({
   }
 
   async function save() {
+    if (commissionBaht !== "" && (!Number.isFinite(Number(commissionBaht)) || Number(commissionBaht) < 0)) {
+      setStatusError("กรุณากรอกค่าตอบแทนเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      return;
+    }
     setSaving(true);
     const selectedSvc = services.find(s => s.id === bsId);
     await fetch(`/api/bookings/${booking.id}`, {
@@ -168,6 +175,7 @@ export default function EditModal({
         startTime,
         endTime,
         totalPrice: price,
+        commissionSatang: commissionBaht === "" ? null : Math.round(Number(commissionBaht) * 100),
         staffId: selectedStaff || null,
         extraStaffIds,
         notes: notes || null,
@@ -226,6 +234,19 @@ export default function EditModal({
               <span className={`w-2 h-2 rounded-full ${c.dot}`} />
               {STATUS_LABEL[currentStatus] ?? currentStatus}
             </span>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">ค่าตอบแทนช่าง (บาท)</label>
+            <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
+              <span className="text-sm text-gray-400">฿</span>
+              <input type="number" min={0} step="0.01" value={commissionBaht}
+                onChange={e => setCommissionBaht(e.target.value)}
+                placeholder="ใช้ค่ามือที่ตั้งไว้"
+                className="flex-1 text-sm outline-none bg-transparent min-w-0" />
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              จำนวนนี้จะใช้คำนวณค่าตอบแทนเมื่อคิวเสร็จสิ้น
+            </p>
           </div>
           {booking.addons.length > 0 && (
             <div className="rounded-xl p-3 space-y-1" style={{ background: "#FFF8F4", border: "1px solid #E8D8CC" }}>

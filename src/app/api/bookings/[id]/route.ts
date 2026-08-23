@@ -25,7 +25,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await request.json();
     const {
-      status, staffId, notes, startTime, endTime, totalPrice, serviceId, date,
+      status, staffId, notes, startTime, endTime, totalPrice, commissionSatang, serviceId, date,
       completedAt, receiptUrl, paidAt,
       extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
@@ -38,6 +38,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         { error: "ไม่สามารถเปลี่ยนคิวเป็นแพ็กเกจ/สมาชิกได้ (ขายผ่าน POS เท่านั้น)" },
         { status: 400 },
       );
+    }
+    if (commissionSatang !== undefined && commissionSatang !== null
+      && (!Number.isFinite(Number(commissionSatang)) || Number(commissionSatang) < 0)) {
+      return NextResponse.json({ error: "Invalid commission" }, { status: 400 });
     }
 
     // Capture previous fields we need to compare after the update (paidAt so a
@@ -67,6 +71,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(startTime      !== undefined ? { startTime }                             : {}),
         ...(endTime        !== undefined ? { endTime }                               : {}),
         ...(totalPrice     !== undefined ? { totalPrice: Number(totalPrice) }        : {}),
+        ...(commissionSatang !== undefined
+          ? { commissionSatang: commissionSatang === null
+              ? null
+              : Math.max(0, Math.round(Number(commissionSatang))) }
+          : {}),
         ...(serviceId      !== undefined ? { serviceId }                             : {}),
         ...(date           !== undefined ? { date: new Date(date + "T12:00:00") }   : {}),
         ...(newBranchId    !== undefined ? { branchId: newBranchId }                : {}),

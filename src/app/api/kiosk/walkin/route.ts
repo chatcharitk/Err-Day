@@ -4,6 +4,7 @@ import { getKioskBranch } from "@/lib/kiosk-auth";
 import { addMinutes, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokNowHm, bangkokTodayYmd, bookingDateForYmd } from "@/lib/desk";
 import { findActivePackages } from "@/lib/packages";
+import { applyMembershipPricingForBooking } from "@/lib/membership";
 
 // Walk-ins are always "wash & blow" (สระไดร์) — staff don't pick a service at
 // the counter. A serviceId in the body still overrides this if ever needed.
@@ -61,61 +62,60 @@ export async function POST(request: Request) {
   const endTime   = addMinutes(startTime, bs.duration);
   const now       = new Date();
 
-  // Resolve the customer + effective price.
-  let bookingCustomerId: string;
-  let totalPrice = bs.price;
   if (customerId) {
-    const existing = await prisma.customer.findUnique({
-      where:  { id: customerId },
-      select: {
-        id: true,
-        membership: { select: { expiresAt: true, pendingActivation: true, usagesUsed: true, usagesAllowed: true } },
-      },
-    });
-    if (!existing) return NextResponse.json({ error: "ไม่พบลูกค้า" }, { status: 404 });
-    bookingCustomerId = existing.id;
-
-    // Valid membership → member price (inclusive expiry, same rule everywhere).
-    const todayUTC = new Date();
-    todayUTC.setUTCHours(0, 0, 0, 0);
-    const mem = existing.membership;
-    const hasActiveMembership = !!mem
-      && !mem.pendingActivation
-      && !(mem.expiresAt != null && mem.expiresAt < todayUTC)
-      && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
-    const hasActivePackage = (await findActivePackages(existing.id)).length > 0;
-    if (hasActiveMembership || hasActivePackage) {
-      let memberPrice = bs.price;
-      if (bs.service.memberPrice != null) {
-        memberPrice = bs.service.memberPrice;
-      } else if (bs.service.memberDiscountPercent > 0) {
-        memberPrice = Math.round(bs.price * (1 - bs.service.memberDiscountPercent / 100));
-      }
-      totalPrice = Math.min(bs.price, memberPrice);
-    }
-  } else {
-    const customer = await prisma.customer.create({
-      data: { name: "Walk-in", phone: `walkin-${now.getTime()}` },
-      select: { id: true },
-    });
-    bookingCustomerId = customer.id;
+    const exists = await prisma.customer.findUnique({ where: { id: customerId }, select: { id: true } });
+    if (!exists) return NextResponse.json({ error: "ไม่พบลูกค้า" }, { status: 404 });
   }
 
-  const booking = await prisma.booking.create({
-    data: {
-      branchId:   branch.id,
-      serviceId,
-      customerId: bookingCustomerId,
-      staffId:    staffId || null,
-      date:       bookingDateForYmd(bangkokTodayYmd()),
-      startTime,
-      endTime,
-      totalPrice,
-      status:     "CONFIRMED",
-      // If a staff was chosen, the walk-in is already in service.
-      ...(staffId ? { checkedInAt: now } : {}),
-    },
-    select: { id: true },
+  const bookingDate = bookingDateForYmd(bangkokTodayYmd());
+
+  // Resolve the customer + effective price, and create the booking atomically —
+  // a held (pre-paid, pending) membership auto-activates in the same transaction
+  // as the booking insert, dated from this walk-in's own day.
+  const booking = await prisma.$transaction(async (tx) => {
+    let bookingCustomerId: string;
+    let totalPrice = bs!.price;
+    let activatesMembership = false;
+    if (customerId) {
+      bookingCustomerId = customerId;
+
+      const { isActiveMember, activatedNow } = await applyMembershipPricingForBooking(tx, customerId, bookingDate);
+      const hasActivePackage = (await findActivePackages(customerId)).length > 0;
+      activatesMembership = activatedNow;
+      if (isActiveMember || hasActivePackage) {
+        let memberPrice = bs!.price;
+        if (bs!.service.memberPrice != null) {
+          memberPrice = bs!.service.memberPrice;
+        } else if (bs!.service.memberDiscountPercent > 0) {
+          memberPrice = Math.round(bs!.price * (1 - bs!.service.memberDiscountPercent / 100));
+        }
+        totalPrice = Math.min(bs!.price, memberPrice);
+      }
+    } else {
+      const customer = await tx.customer.create({
+        data: { name: "Walk-in", phone: `walkin-${now.getTime()}` },
+        select: { id: true },
+      });
+      bookingCustomerId = customer.id;
+    }
+
+    return tx.booking.create({
+      data: {
+        branchId:   branch.id,
+        serviceId,
+        customerId: bookingCustomerId,
+        staffId:    staffId || null,
+        date:       bookingDate,
+        startTime,
+        endTime,
+        totalPrice,
+        status:     "CONFIRMED",
+        activatesMembership,
+        // If a staff was chosen, the walk-in is already in service.
+        ...(staffId ? { checkedInAt: now } : {}),
+      },
+      select: { id: true },
+    });
   });
 
   return NextResponse.json({ ok: true, id: booking.id }, { status: 201 });

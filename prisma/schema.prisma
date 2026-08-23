@@ -342,6 +342,10 @@ model Booking {
   status            BookingStatus  @default(PENDING)
   notes             String?
   totalPrice        Int
+  /// Commission (ค่าตอบแทน/ค่ามือ) for this specific booking, in satang.
+  /// New bookings snapshot the current service + add-on commission here;
+  /// admins may override it. null keeps legacy bookings on the old live lookup.
+  commissionSatang  Int?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   completedAt       DateTime?
@@ -355,6 +359,10 @@ model Booking {
   paidAt            DateTime?
   receiptUploadedAt DateTime?
   receiptUrl        String?
+  /// Set true when creating this booking auto-activated a pending (pre-paid)
+  /// membership — i.e. this was the customer's first visit after paying in
+  /// advance. Purely informational; see holdMembershipPrepaid/applyMembershipPricingForBooking.
+  activatesMembership Boolean      @default(false)
   branch            Branch         @relation(fields: [branchId], references: [id])
   customer          Customer       @relation(fields: [customerId], references: [id])
   service           Service        @relation(fields: [serviceId], references: [id])

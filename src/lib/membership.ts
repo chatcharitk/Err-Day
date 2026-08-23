@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
+
+type Db = Prisma.TransactionClient | typeof prisma;
 
 /** SKU for the 30-day membership service. Sold at POS to activate / renew. */
 export const MEMBERSHIP_SKU = "svc-membership-30d";
@@ -142,29 +145,69 @@ export async function holdMembershipPrepaid(opts: ActivateOpts) {
 }
 
 /**
+ * Core of activating a held (pre-paid, pending) membership, parameterized on
+ * the window's start date and the db/tx client so it can run either standalone
+ * (the "เปิดใช้งาน" button) or inside an existing booking-creation transaction
+ * (see applyMembershipPricingForBooking). Rewrites the open prepayment cycle's
+ * placeholder window to match, so purchase history reads correctly.
+ */
+async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: Date) {
+  const expiresAt = new Date(startDate.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * 24 * 60 * 60 * 1000);
+
+  const membership = await tx.membership.update({
+    where: { customerId },
+    data:  { activatedAt: startDate, expiresAt, usagesUsed: 0, pendingActivation: false },
+  });
+  // Rewrite the held (still-open) cycle's placeholder window to the real
+  // 30 days. If there was no held cycle (e.g. a manual pending entry), this
+  // simply affects nothing.
+  await tx.membershipCycle.updateMany({
+    where: { membershipId: membership.id, closedAt: null },
+    data:  { startedAt: startDate, endedAt: expiresAt },
+  });
+  return membership;
+}
+
+/**
  * Activate a held (pre-paid, pending) membership — the return-visit step. Starts
- * a fresh 30-day window from today and rewrites the open prepayment cycle's
- * placeholder window to match, so purchase history reads correctly. Used by the
+ * a fresh 30-day window from `startDate` (defaults to now). Used by the
  * "เปิดใช้งาน" button on the customer screen.
  */
-export async function activateHeldMembership(customerId: string) {
-  const now       = new Date();
-  const expiresAt = new Date(now.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * 24 * 60 * 60 * 1000);
+export async function activateHeldMembership(customerId: string, startDate: Date = new Date()) {
+  return prisma.$transaction((tx) => activateHeldMembershipTx(tx, customerId, startDate));
+}
 
-  return prisma.$transaction(async (tx) => {
-    const membership = await tx.membership.update({
-      where: { customerId },
-      data:  { activatedAt: now, expiresAt, usagesUsed: 0, pendingActivation: false },
-    });
-    // Rewrite the held (still-open) cycle's placeholder window to the real
-    // 30 days. If there was no held cycle (e.g. a manual pending entry), this
-    // simply affects nothing.
-    await tx.membershipCycle.updateMany({
-      where: { membershipId: membership.id, closedAt: null },
-      data:  { startedAt: now, endedAt: expiresAt },
-    });
-    return membership;
+/**
+ * Decide member pricing for a booking being created, and — if the customer's
+ * membership is a held/pre-paid one (`pendingActivation`) — auto-activate it
+ * using the booking's own date as the 30-day window's start. This is what lets
+ * a customer who paid in advance get member pricing (and start their clock) on
+ * their next visit, instead of requiring a separate manual activation step.
+ * Must be called with the same `tx` the booking is being created in, so the
+ * activation and the booking insert commit atomically.
+ */
+export async function applyMembershipPricingForBooking(
+  tx: Db,
+  customerId: string,
+  bookingDate: Date,
+): Promise<{ isActiveMember: boolean; activatedNow: boolean }> {
+  const membership = await tx.membership.findUnique({
+    where:  { customerId },
+    select: { expiresAt: true, usagesAllowed: true, usagesUsed: true, pendingActivation: true },
   });
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const isCurrentlyActive = !!membership
+    && !membership.pendingActivation
+    && (!membership.expiresAt || membership.expiresAt >= today)
+    && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
+  if (isCurrentlyActive) return { isActiveMember: true, activatedNow: false };
+
+  if (membership?.pendingActivation) {
+    await activateHeldMembershipTx(tx, customerId, bookingDate);
+    return { isActiveMember: true, activatedNow: true };
+  }
+  return { isActiveMember: false, activatedNow: false };
 }
 
 export async function activateOrRenewMembership(opts: ActivateOpts) {

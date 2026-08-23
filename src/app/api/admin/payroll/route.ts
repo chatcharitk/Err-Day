@@ -91,12 +91,15 @@ export async function PATCH(request: Request) {
       const bookings = await prisma.booking.findMany({
         where: { branchId, staffId, status: "COMPLETED", date: { gte: start, lte: end } },
         select: {
+          commissionSatang: true,
           service: { select: { commissionSatang: true } },
           addons:  { select: { addon: { select: { commissionSatang: true } } } },
         },
       });
       const commissionSatang = bookings.reduce(
-        (s, b) => s + (b.service?.commissionSatang ?? 0) + b.addons.reduce((t, a) => t + (a.addon?.commissionSatang ?? 0), 0),
+        (s, b) => s + (b.commissionSatang
+          ?? ((b.service?.commissionSatang ?? 0)
+            + b.addons.reduce((t, a) => t + (a.addon?.commissionSatang ?? 0), 0))),
         0,
       );
       const existing = await prisma.staffDailyPayout.findUnique({ where: { staffId_date: { staffId, date: noon } } });

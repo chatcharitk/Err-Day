@@ -34,10 +34,12 @@ interface Booking {
   endTime:       string;
   status:        Status;
   totalPrice:    number;
+  commissionSatang: number | null;
   notes:         string | null;
   receiptUrl:    string | null;
   paidAt:        string | null; // ISO — null = ยังไม่ชำระ
   isMember:      boolean;
+  activatesMembership: boolean;
   addons: { id: string; addonId: string; name: string; price: number }[];
 }
 
@@ -116,6 +118,10 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const [savingNotes, setSavingNotes] = useState(false);
   const [discountBaht, setDiscountBaht] = useState(0);
   const [savingDiscount, setSavingDiscount] = useState(false);
+  const [commissionBaht, setCommissionBaht] = useState(
+    initial.commissionSatang == null ? "" : String(initial.commissionSatang / 100),
+  );
+  const [savingCommission, setSavingCommission] = useState(false);
 
   const meta = STATUS_META[b.status];
   const isClosed = b.status === "COMPLETED" || b.status === "CANCELLED" || b.status === "NO_SHOW";
@@ -170,6 +176,18 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     const iso = paid ? new Date().toISOString() : null;
     const updated = await patch({ paidAt: iso });
     if (updated) setB((x) => ({ ...x, paidAt: iso }));
+  };
+
+  const saveCommission = async () => {
+    const satang = commissionBaht === "" ? null : Math.round(Number(commissionBaht) * 100);
+    if (satang !== null && (!Number.isFinite(satang) || satang < 0)) {
+      setErr("กรุณากรอกค่าตอบแทนเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      return;
+    }
+    setSavingCommission(true);
+    const updated = await patch({ commissionSatang: satang });
+    if (updated) setB((x) => ({ ...x, commissionSatang: satang }));
+    setSavingCommission(false);
   };
 
   const setStaff = async (staffId: string | null) => {
@@ -337,6 +355,12 @@ export default function BookingDetail({ booking: initial, branchServices, branch
       {err && (
         <div className="mx-4 mt-3 p-3 rounded-xl flex items-center gap-2 text-xs" style={{ background: "#FEF2F2", color: "#991b1b" }}>
           <AlertCircle size={14} /> {err}
+        </div>
+      )}
+
+      {b.activatesMembership && (
+        <div className="mx-4 mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-xs font-medium" style={{ background: "#ECFDF5", color: "#047857" }}>
+          <Sparkles size={14} /> เริ่มใช้งานสมาชิกวันนี้ (จ่ายล่วงหน้าแล้ว)
         </div>
       )}
 
@@ -584,6 +608,33 @@ export default function BookingDetail({ booking: initial, branchServices, branch
               {discountBaht > 0 ? formatPrice(Math.max(0, b.totalPrice - Math.round(discountBaht * 100))) : formatPrice(b.totalPrice)}
             </p>
           </div>
+        </div>
+        <div className="rounded-xl px-3 py-2 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+          <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>ค่าตอบแทนช่าง</p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm" style={{ color: MUTED }}>฿</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={commissionBaht}
+              onChange={e => setCommissionBaht(e.target.value)}
+              placeholder="ใช้ค่ามือที่ตั้งไว้"
+              className="flex-1 min-w-0 text-sm outline-none bg-transparent"
+              style={{ color: TEXT }}
+            />
+            {(commissionBaht === "" ? b.commissionSatang !== null : Math.round(Number(commissionBaht) * 100) !== b.commissionSatang) && (
+              <button
+                onClick={saveCommission}
+                disabled={savingCommission}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                style={{ background: PRIMARY }}
+              >
+                {savingCommission ? <Loader2 size={12} className="animate-spin" /> : "บันทึก"}
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: MUTED }}>ใช้คำนวณค่าตอบแทนเมื่อคิวเสร็จสิ้น</p>
         </div>
       </section>
 
@@ -876,4 +927,3 @@ function formatDateThai(iso: string): string {
     weekday: "short", day: "numeric", month: "short", year: "numeric",
   });
 }
-

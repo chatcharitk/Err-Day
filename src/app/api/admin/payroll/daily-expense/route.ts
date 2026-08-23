@@ -85,10 +85,16 @@ export async function POST(request: Request) {
       include: { items: true },
     });
 
+    // Persist the (possibly-edited) amounts back onto the payout snapshot too —
+    // otherwise the "ค่าตอบแทน" table keeps showing the pre-edit numbers while
+    // the Expense just created reflects what was actually confirmed here.
     await prisma.staffDailyPayout.upsert({
       where: { staffId_date: { staffId, date: noon } },
-      update: { expenseId: expense.id },
-      create: { staffId, branchId: staff.branchId, date: noon, expenseId: expense.id },
+      update: { expenseId: expense.id, commissionSatang, otSatang, tipSatang, status: "PAID" },
+      create: {
+        staffId, branchId: staff.branchId, date: noon, expenseId: expense.id,
+        commissionSatang, otSatang, tipSatang, status: "PAID",
+      },
     });
 
     return NextResponse.json({ expense, alreadyRecorded: false }, { status: 201 });

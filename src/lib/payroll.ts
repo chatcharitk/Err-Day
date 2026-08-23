@@ -8,9 +8,9 @@
  *
  * The DAILY cash-out the owner pays = service commission earned that day + OT pay.
  *   • Commission: per COMPLETED booking, the PRIMARY stylist (booking.staffId)
- *     earns that service's fixed `commissionSatang` (ค่ามือ) — independent of what
- *     the customer actually paid (member discount / package redemption don't
- *     reduce it). Add-ons and extra (non-primary) stylists do not earn here.
+ *     earns the booking's saved `commissionSatang` (ค่ามือ). Legacy bookings
+ *     without a saved value use the service + add-on settings. This is independent
+ *     of what the customer paid; extra (non-primary) stylists do not earn here.
  *   • OT: admin-entered hours for the day × the staff's OT hourly rate.
  *
  * Base salary/wage is disbursed on its own cadence (monthly / weekly) and is NOT
@@ -107,8 +107,9 @@ export async function computeBranchDailyPayout(
       select: { id: true, name: true, payType: true, baseSatang: true, payCadence: true, otRateSatang: true },
       orderBy: { name: "asc" },
     }),
-    // Completed bookings this branch/day, attributed to a primary stylist, with
-    // their service's + add-ons' fixed commission.
+    // Completed bookings this branch/day, attributed to a primary stylist.
+    // New records carry a per-booking snapshot/override; legacy null records
+    // continue to use their service's + add-ons' configured commission.
     prisma.booking.findMany({
       where: {
         branchId,
@@ -118,6 +119,7 @@ export async function computeBranchDailyPayout(
       },
       select: {
         staffId: true,
+        commissionSatang: true,
         service: { select: { commissionSatang: true } },
         addons:  { select: { addon: { select: { commissionSatang: true } } } },
       },
@@ -132,8 +134,9 @@ export async function computeBranchDailyPayout(
     if (!b.staffId) continue;
     const serviceComm = b.service?.commissionSatang ?? 0;
     const addonComm = b.addons.reduce((s, a) => s + (a.addon?.commissionSatang ?? 0), 0);
+    const bookingComm = b.commissionSatang ?? (serviceComm + addonComm);
     const cur = commByStaff.get(b.staffId) ?? { sum: 0, count: 0 };
-    cur.sum += serviceComm + addonComm;
+    cur.sum += bookingComm;
     cur.count += 1;
     commByStaff.set(b.staffId, cur);
   }

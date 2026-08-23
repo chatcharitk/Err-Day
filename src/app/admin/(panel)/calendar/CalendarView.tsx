@@ -28,9 +28,12 @@ interface BookingItem {
   endTime: string;
   status: string;
   totalPrice: number;
+  commissionSatang: number | null;
   notes: string | null;
   /** ISO — payment received. null on a COMPLETED booking = ยังไม่ชำระ. */
   paidAt: string | null;
+  /** True when creating this booking auto-activated a held (pre-paid) membership. */
+  activatesMembership: boolean;
   serviceId: string;
   service: { name: string; nameTh: string; category: string };
   customer: { id: string; name: string; nickname: string | null; phone: string };
@@ -555,6 +558,11 @@ function ListView({ weekBookings, onClickBooking }: {
                       {b.addons.length > 0 && (
                         <div className="text-xs truncate mt-0.5" style={{ color: "#8B1D24" }}>
                           + {b.addons.map(a => a.nameTh || a.name).join(", ")}
+                        </div>
+                      )}
+                      {b.activatesMembership && (
+                        <div className="text-xs truncate mt-0.5 font-medium" style={{ color: "#047857" }}>
+                          เริ่มใช้งานสมาชิกวันนี้
                         </div>
                       )}
                     </div>

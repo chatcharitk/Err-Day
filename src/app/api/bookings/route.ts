@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendNewBookingNotifications } from "@/lib/notifications";
 import { getPromotionServicePrice } from "@/lib/promotions";
+import { applyMembershipPricingForBooking } from "@/lib/membership";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +16,18 @@ export async function POST(request: Request) {
       skipConflictCheck,            // trusted flag for POS / admin use
       isWalkin,                     // admin flag — skip customer info, use placeholder
       extraStaffIds,                // optional array of additional staff IDs
+      commissionSatang,             // admin-only per-booking override
     } = body;
+
+    // Customer-facing callers must never be able to influence staff payroll.
+    // Supplying a manual commission therefore requires an admin session.
+    if (commissionSatang !== undefined) {
+      const gate = await requireAdmin().catch((e: unknown) => e as Response);
+      if (gate instanceof Response) return gate;
+      if (commissionSatang === null || !Number.isFinite(Number(commissionSatang)) || Number(commissionSatang) < 0) {
+        return NextResponse.json({ error: "Invalid commission" }, { status: 400 });
+      }
+    }
 
     // For walk-in bookings name/phone are optional; everything else is required
     if (!branchId || !serviceId || !date || !startTime || !endTime) {
@@ -46,10 +59,26 @@ export async function POST(request: Request) {
     const finalPhone = phone?.trim() || `walkin-${Date.now()}`;
 
     // Resolve add-on prices up front (read-only, safe outside the transaction).
-    const addonCreates = Array.isArray(addonIds) && addonIds.length > 0
-      ? (await prisma.serviceAddon.findMany({ where: { id: { in: addonIds } }, select: { id: true, price: true } }))
-          .map((a) => ({ addonId: a.id, price: a.price }))
+    const addonRows = Array.isArray(addonIds) && addonIds.length > 0
+      ? await prisma.serviceAddon.findMany({
+          where: { id: { in: addonIds } },
+          select: { id: true, price: true, commissionSatang: true },
+        })
       : [];
+    const addonCreates = addonRows.map((a) => ({ addonId: a.id, price: a.price }));
+
+    // Snapshot today's configured commission for every new booking. A manual
+    // value from the admin booking form takes precedence.
+    const serviceCommission = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { commissionSatang: true },
+    });
+    const defaultCommissionSatang =
+      (serviceCommission?.commissionSatang ?? 0)
+      + addonRows.reduce((sum, addon) => sum + addon.commissionSatang, 0);
+    const savedCommissionSatang = commissionSatang !== undefined
+      ? Math.round(Number(commissionSatang))
+      : defaultCommissionSatang;
 
     // Critical section: capacity check + customer upsert + booking insert run in
     // ONE transaction guarded by a per-branch-day advisory lock. Without this,
@@ -99,18 +128,14 @@ export async function POST(request: Request) {
       // The client displays the promotion, but price is also resolved here so
       // a crafted request cannot receive it outside the advertised dates.
       // Membership eligibility mirrors the booking page: active, not expired,
-      // not pending activation and not exhausted.
+      // and not exhausted. A held (pre-paid, pending) membership auto-activates
+      // right here, dated from this booking's own date — see
+      // applyMembershipPricingForBooking.
       let finalTotalPrice = Number(totalPrice) || 0;
-      const membership = await tx.membership.findUnique({
-        where: { customerId: customer.id },
-        select: { expiresAt: true, usagesAllowed: true, usagesUsed: true, pendingActivation: true },
-      });
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      const isActiveMember = !!membership
-        && !membership.pendingActivation
-        && (!membership.expiresAt || membership.expiresAt >= today)
-        && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
+      const bookingDate = new Date(date + "T12:00:00");
+      const { isActiveMember, activatedNow } = await applyMembershipPricingForBooking(
+        tx, customer.id, bookingDate,
+      );
       const promotionalServicePrice = getPromotionServicePrice(serviceId, date, isActiveMember);
       if (promotionalServicePrice != null) {
         finalTotalPrice = promotionalServicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
@@ -122,18 +147,20 @@ export async function POST(request: Request) {
           serviceId,
           staffId: staffId || null,
           customerId: customer.id,
-          date: new Date(date + "T12:00:00"), // noon local avoids UTC-midnight = prev-day-in-Thailand bug
+          date: bookingDate, // noon local avoids UTC-midnight = prev-day-in-Thailand bug
           startTime,
           endTime,
           totalPrice: finalTotalPrice,
+          commissionSatang: savedCommissionSatang,
           notes: notes || null,
           status: reqStatus,
+          activatesMembership: activatedNow,
           // "Create + checkout in one go": when the caller creates the booking
           // already COMPLETED, stamp completedAt with the booking's own day so
           // back-dated records land on the right day in sales history / payroll.
           // An admin recording an already-finished sale means it was paid too.
           ...(reqStatus === "COMPLETED"
-            ? { completedAt: new Date(date + "T12:00:00"), paidAt: new Date(date + "T12:00:00") }
+            ? { completedAt: bookingDate, paidAt: bookingDate }
             : {}),
           ...(addonCreates.length > 0 ? { addons: { create: addonCreates } } : {}),
           ...(Array.isArray(extraStaffIds) && extraStaffIds.length > 0
@@ -149,7 +176,9 @@ export async function POST(request: Request) {
           startTime: true,
           endTime: true,
           totalPrice: true,
+          commissionSatang: true,
           status: true,
+          activatesMembership: true,
           branchId: true,
           serviceId: true,
           staffId: true,
@@ -203,7 +232,9 @@ export async function GET(request: Request) {
       endTime: true,
       status: true,
       totalPrice: true,
+      commissionSatang: true,
       notes: true,
+      activatesMembership: true,
       branchId: true,
       serviceId: true,
       staffId: true,

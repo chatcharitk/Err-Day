@@ -27,6 +27,7 @@ export default function AddBookingModal({
   const [isWalkin,         setIsWalkin]         = useState(false);
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [discountBaht,     setDiscountBaht]     = useState(0);
+  const [commissionBaht,   setCommissionBaht]   = useState("");
   const [notesVal,         setNotesVal]         = useState("");
   const [saving,           setSaving]           = useState(false);
   const [error,            setError]            = useState("");
@@ -110,6 +111,10 @@ export default function AddBookingModal({
       setError("กรุณากรอกชื่อและเบอร์โทร หรือเลือก Walk-in");
       return;
     }
+    if (commissionBaht !== "" && (!Number.isFinite(Number(commissionBaht)) || Number(commissionBaht) < 0)) {
+      setError("กรุณากรอกค่าตอบแทนเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      return;
+    }
     // Wait for the membership check so a member is never saved at full price.
     if (memberLoading) { setError("กำลังตรวจสอบสถานะสมาชิก กรุณารอสักครู่"); return; }
     setSaving(true);
@@ -125,6 +130,9 @@ export default function AddBookingModal({
         startTime:         time,
         endTime:           addMinutes(time, selectedSvc!.duration),
         totalPrice:        finalPrice,
+        ...(commissionBaht !== ""
+          ? { commissionSatang: Math.round(Number(commissionBaht) * 100) }
+          : {}),
         name:              customer.name.trim()  || undefined,
         phone:             customer.phone.trim() || undefined,
         notes:             notesVal || null,
@@ -321,6 +329,21 @@ export default function AddBookingModal({
                 </div>
               </div>
             )}
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">
+                ค่าตอบแทนช่าง (บาท)
+              </label>
+              <div className="flex items-center gap-2 border border-[#E8D8CC] rounded-xl px-3 py-2.5">
+                <span className="text-sm text-[#A08070]">฿</span>
+                <input type="number" min={0} step="0.01" value={commissionBaht}
+                  onChange={e => setCommissionBaht(e.target.value)}
+                  placeholder="ใช้ค่ามือที่ตั้งไว้"
+                  className="flex-1 text-sm outline-none bg-transparent text-[#3B2A24]" />
+              </div>
+              <p className="text-[11px] mt-1 text-[#A08070]">
+                เว้นว่างเพื่อใช้ค่ามือของบริการและบริการเสริมอัตโนมัติ
+              </p>
+            </div>
             <div>
               <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">หมายเหตุ (ไม่บังคับ)</label>
               <input value={notesVal} onChange={e => setNotesVal(e.target.value)}

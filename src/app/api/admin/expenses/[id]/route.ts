@@ -43,6 +43,15 @@ export async function PATCH(
     // find-or-create runs outside the transaction since it's a simple lookup,
     // not something that needs to roll back with the rest of the update.
     const vendorId = vendor !== undefined ? await findOrCreateVendorId(vendor, category) : undefined;
+    const normalizedItems = Array.isArray(items)
+      ? items.map((it: { description: string; quantity: number; unitPrice: number; totalPrice: number }) => ({
+          expenseId: id,
+          description: String(it.description),
+          quantity:   Number(it.quantity)   || 1,
+          unitPrice:  Math.round(Number(it.unitPrice)  || 0),
+          totalPrice: Math.round(Number(it.totalPrice) || 0),
+        }))
+      : null;
 
     // If items/attachments provided, replace them entirely (simpler than diffing).
     const result = await prisma.$transaction(async (tx) => {
@@ -62,17 +71,34 @@ export async function PATCH(
         },
       });
 
-      if (Array.isArray(items)) {
+      if (normalizedItems) {
         await tx.expenseItem.deleteMany({ where: { expenseId: id } });
-        if (items.length > 0) {
+        if (normalizedItems.length > 0) {
           await tx.expenseItem.createMany({
-            data: items.map((it: { description: string; quantity: number; unitPrice: number; totalPrice: number }) => ({
-              expenseId: id,
-              description: String(it.description),
-              quantity:   Number(it.quantity)   || 1,
-              unitPrice:  Math.round(Number(it.unitPrice)  || 0),
-              totalPrice: Math.round(Number(it.totalPrice) || 0),
-            })),
+            data: normalizedItems,
+          });
+        }
+
+        // Expenses created from payroll are linked back by expenseId. Keep the
+        // paid snapshot in sync when its commission/OT/tip line items are edited,
+        // so returning to the payroll screen does not keep showing the old tip.
+        const linkedPayout = await tx.staffDailyPayout.findFirst({
+          where: { expenseId: id },
+          select: { id: true },
+        });
+        if (linkedPayout) {
+          let commissionSatang = 0;
+          let otSatang = 0;
+          let tipSatang = 0;
+          for (const item of normalizedItems) {
+            const description = item.description.trim().toLowerCase();
+            if (description.includes("ทิป")) tipSatang += item.totalPrice;
+            else if (description.includes("ot")) otSatang += item.totalPrice;
+            else if (description.includes("คอม")) commissionSatang += item.totalPrice;
+          }
+          await tx.staffDailyPayout.update({
+            where: { id: linkedPayout.id },
+            data: { commissionSatang, otSatang, tipSatang },
           });
         }
       }
