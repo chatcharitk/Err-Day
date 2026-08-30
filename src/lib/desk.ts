@@ -75,6 +75,9 @@ export interface DeskBooking {
   /** Membership status of the booking's customer — shown on upcoming cards.
    *  active = สมาชิก, expired = หมดอายุ, none = ทั่วไป / walk-in. */
   memberStatus:     MemberStatus;
+  /** Remaining uses on the customer's active 5-visit package, or null when
+   *  they do not currently have one. Displayed prominently on the desk. */
+  fiveVisitPackageUsesLeft: number | null;
   serviceName:      string;
   notes:            string | null;
 }
@@ -167,6 +170,7 @@ export async function deskBoardEtag(branchId: string): Promise<string> {
 export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
   const ymd = bangkokTodayYmd();
   const { gte, lt } = dayRange(ymd);
+  const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
 
   const [staff, rows] = await Promise.all([
     prisma.staff.findMany({
@@ -190,6 +194,17 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
           select: {
             name: true, nickname: true, phone: true,
             membership: { select: { expiresAt: true, pendingActivation: true, usagesUsed: true, usagesAllowed: true } },
+            packages: {
+              where: {
+                packageSku: "svc-pkg5",
+                closedAt: null,
+                pendingActivation: false,
+                expiresAt: { gte: todayUTC },
+              },
+              select: { usagesUsed: true, usageLimit: true },
+              orderBy: { startedAt: "desc" },
+              take: 1,
+            },
           },
         },
         staff:    { select: { id: true, name: true } },
@@ -197,10 +212,13 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
     }),
   ]);
 
-  const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
-
   const bookings: DeskBooking[] = rows.map(b => {
     const walkin = isWalkinCustomer(b.customer.name, b.customer.phone);
+    const fiveVisitPackage = b.customer.packages.find(p => p.usagesUsed < p.usageLimit);
+    const fiveVisitPackageUsesLeft = fiveVisitPackage
+      ? Math.max(0, fiveVisitPackage.usageLimit - fiveVisitPackage.usagesUsed)
+      : null;
+    const membershipStatus = memberStatusOf(b.customer.membership, todayUTC);
     return {
       id:               b.id,
       startTime:        b.startTime,
@@ -215,7 +233,8 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       customerNickname: walkin ? null : b.customer.nickname,
       customerPhone:    walkin ? null : b.customer.phone,
       isWalkin:         walkin,
-      memberStatus:     walkin ? "none" : memberStatusOf(b.customer.membership, todayUTC),
+      memberStatus:     walkin ? "none" : fiveVisitPackage ? "active" : membershipStatus,
+      fiveVisitPackageUsesLeft: walkin ? null : fiveVisitPackageUsesLeft,
       serviceName:      b.service.nameTh || b.service.name,
       notes:            b.internalNotes,
     };

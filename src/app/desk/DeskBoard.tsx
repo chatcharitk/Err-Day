@@ -351,6 +351,14 @@ function CustomerLine({ b }: { b: DeskBooking }) {
           </span>
         )}
       </p>
+      {b.fiveVisitPackageUsesLeft !== null && (
+        <p className="mt-2">
+          <span className="text-sm font-extrabold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"
+            style={{ background: "#DBEAFE", color: "#1D4ED8", border: "2px solid #60A5FA" }}>
+            แพ็กเกจ 5 ครั้ง · เหลือ {b.fiveVisitPackageUsesLeft} ครั้ง
+          </span>
+        </p>
+      )}
     </div>
   );
 }
@@ -432,6 +440,11 @@ function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: 
           {b.isWalkin && <span className="text-[10px] ml-1.5" style={{ color: MUTED }}>(วอร์คอิน)</span>}
         </p>
         <p className="text-xs truncate" style={{ color: MUTED }}>{b.serviceName} · ช่าง {b.staffName ?? "—"}</p>
+        {b.fiveVisitPackageUsesLeft !== null && (
+          <p className="text-xs font-extrabold mt-1" style={{ color: "#1D4ED8" }}>
+            แพ็กเกจ 5 ครั้ง · เหลือ {b.fiveVisitPackageUsesLeft} ครั้ง
+          </p>
+        )}
       </div>
       {/* Read-only payment badge — only admin flows can mark a booking paid. */}
       {!b.paidAt && (
