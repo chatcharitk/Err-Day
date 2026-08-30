@@ -902,7 +902,9 @@ export function RescheduleModal({
 
           {/* Notes */}
           <div>
-            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>{lang === "th" ? "หมายเหตุ" : "Notes"}</label>
+            <label className="text-sm font-medium mb-2 block" style={{ color: "#5C4A42" }}>
+              {lang === "th" ? "หมายเหตุถึงร้าน (แก้ไขได้)" : "Note to the salon (editable)"}
+            </label>
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
@@ -912,6 +914,11 @@ export function RescheduleModal({
               className="w-full p-3 rounded-xl border-2 text-sm resize-none"
               style={{ borderColor: "#EADDD4", color: "#45352F" }}
             />
+            <p className="text-xs mt-1.5" style={{ color: "#977A6F" }}>
+              {lang === "th"
+                ? "แก้ไขข้อความนี้ได้จากหน้าจัดการการจอง โดยไม่กระทบหมายเหตุภายในของร้าน"
+                : "You can update this from Manage Booking without changing the salon's internal note."}
+            </p>
           </div>
 
           {error && (
