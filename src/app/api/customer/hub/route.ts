@@ -18,7 +18,16 @@ export async function POST(request: Request) {
       membership: true,
       bookings: {
         where: { serviceId: { notIn: SALE_ONLY_SKUS } },
-        include: {
+        // Explicitly omit Booking.internalNotes from this customer response.
+        select: {
+          id: true,
+          branchId: true,
+          serviceId: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          notes: true,
           branch: { select: { name: true, phone: true } },
           service: { select: { id: true, name: true, nameTh: true, category: true } },
           addons: { include: { addon: { select: { id: true, name: true, nameTh: true } } } },

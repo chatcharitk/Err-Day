@@ -103,7 +103,9 @@ export async function POST(request: Request) {
         data: {
           status:     "COMPLETED",
           totalPrice,
-          notes:      fullNotes || existing.notes,
+          // Checkout details are operational and must not overwrite the note
+          // that the customer sees.
+          internalNotes: fullNotes || existing.internalNotes,
           completedAt: now,
           // POS checkout = money received. Keep an earlier payment time if a
           // transfer slip was already confirmed for this booking.
@@ -215,6 +217,7 @@ export async function POST(request: Request) {
         endTime,
         totalPrice,
         notes:       fullNotes || null,
+        internalNotes: fullNotes || null,
         status:      "COMPLETED",
         completedAt: now,
         paidAt:      now, // walk-in POS sale is paid on the spot

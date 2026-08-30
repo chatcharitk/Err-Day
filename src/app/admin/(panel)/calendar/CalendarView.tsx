@@ -30,6 +30,7 @@ interface BookingItem {
   totalPrice: number;
   commissionSatang: number | null;
   notes: string | null;
+  internalNotes: string | null;
   /** ISO — payment received. null on a COMPLETED booking = ยังไม่ชำระ. */
   paidAt: string | null;
   /** True when creating this booking auto-activated a held (pre-paid) membership. */

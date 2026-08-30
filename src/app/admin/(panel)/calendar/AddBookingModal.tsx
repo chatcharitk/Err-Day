@@ -345,7 +345,7 @@ export default function AddBookingModal({
               </p>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">หมายเหตุ (ไม่บังคับ)</label>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">หมายเหตุเริ่มต้น (คัดลอกไปภายนอกและภายใน)</label>
               <input value={notesVal} onChange={e => setNotesVal(e.target.value)}
                 placeholder="ข้อมูลพิเศษเกี่ยวกับลูกค้าหรือนัด"
                 className="w-full border border-[#E8D8CC] rounded-xl px-3 py-2.5 text-sm outline-none text-[#3B2A24]" />

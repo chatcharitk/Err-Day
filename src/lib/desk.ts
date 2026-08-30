@@ -184,7 +184,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       orderBy: [{ startTime: "asc" }, { createdAt: "asc" }],
       select: {
         id: true, startTime: true, endTime: true, status: true,
-        staffId: true, checkedInAt: true, paidAt: true, notes: true,
+        staffId: true, checkedInAt: true, paidAt: true, internalNotes: true,
         service:  { select: { name: true, nameTh: true } },
         customer: {
           select: {
@@ -217,7 +217,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       isWalkin:         walkin,
       memberStatus:     walkin ? "none" : memberStatusOf(b.customer.membership, todayUTC),
       serviceName:      b.service.nameTh || b.service.name,
-      notes:            b.notes,
+      notes:            b.internalNotes,
     };
   });
 

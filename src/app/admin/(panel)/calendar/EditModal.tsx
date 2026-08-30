@@ -48,6 +48,7 @@ export default function EditModal({
   });
   const [selectedBranch,  setSelectedBranch]  = useState(branchId);
   const [notes,           setNotes]           = useState(booking.notes ?? "");
+  const [internalNotes,   setInternalNotes]   = useState(booking.internalNotes ?? "");
   const [saving,          setSaving]          = useState(false);
   const [checkedOut,      setCheckedOut]      = useState(booking.status === "COMPLETED");
   const [currentStatus,   setCurrentStatus]   = useState(booking.status);
@@ -179,6 +180,7 @@ export default function EditModal({
         staffId: selectedStaff || null,
         extraStaffIds,
         notes: notes || null,
+        internalNotes: internalNotes || null,
         customerId: (selectedCustomer.id && selectedCustomer.id !== booking.customer.id) ? selectedCustomer.id : undefined,
         branchId: selectedBranch !== branchId ? selectedBranch : undefined,
       }),
@@ -370,10 +372,16 @@ export default function EditModal({
             </div>
           )}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">หมายเหตุ</label>
+            <label className="text-xs text-gray-500 block mb-1">หมายเหตุภายนอก <span className="text-gray-400">(ลูกค้าเห็น)</span></label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30"
-              placeholder="หมายเหตุ..." />
+              placeholder="ข้อความสำหรับลูกค้า..." />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">หมายเหตุภายใน <span className="text-gray-400">(พนักงานเท่านั้น)</span></label>
+            <textarea value={internalNotes} onChange={e => setInternalNotes(e.target.value)} rows={2}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30"
+              placeholder="ข้อความภายในสำหรับทีม..." />
           </div>
         </div>
         <div className="flex gap-2 px-5 pb-5 flex-shrink-0">

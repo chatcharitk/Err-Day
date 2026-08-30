@@ -308,7 +308,7 @@ export async function sendBookingCancelled(
 type GroupBooking = {
   startTime: string;
   totalPrice: number;
-  notes: string | null;
+  internalNotes: string | null;
   date: Date;
   serviceId: string;
   addons: { price: number }[];
@@ -336,7 +336,7 @@ type GroupBooking = {
 const groupBookingSelect = () => ({
   startTime:  true,
   totalPrice: true,
-  notes:      true,
+  internalNotes: true,
   date:       true,
   serviceId:  true,
   addons:     { select: { price: true } },
@@ -388,7 +388,7 @@ function fmtGroupBookingLine(b: GroupBooking): string {
   const satang      = coveredByPackage ? addonsTotal : b.totalPrice;
 
   const price = `฿${(satang / 100).toLocaleString()}`;
-  const note  = b.notes?.trim();
+  const note  = b.internalNotes?.trim();
   return `${b.startTime} : ${name} - ${price}${note ? ` - ${note}` : ""}`;
 }
 

@@ -153,6 +153,7 @@ export async function POST(request: Request) {
           totalPrice: finalTotalPrice,
           commissionSatang: savedCommissionSatang,
           notes: notes || null,
+          internalNotes: notes || null,
           status: reqStatus,
           activatesMembership: activatedNow,
           // "Create + checkout in one go": when the caller creates the booking

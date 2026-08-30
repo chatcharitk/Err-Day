@@ -340,7 +340,11 @@ model Booking {
   startTime         String
   endTime           String
   status            BookingStatus  @default(PENDING)
+  /// Customer-visible note. On creation this is copied to internalNotes once;
+  /// subsequent customer and staff edits are intentionally independent.
   notes             String?
+  /// Staff/admin-only note. Never expose this field through customer APIs.
+  internalNotes     String?
   totalPrice        Int
   /// Commission (ค่าตอบแทน/ค่ามือ) for this specific booking, in satang.
   /// New bookings snapshot the current service + add-on commission here;

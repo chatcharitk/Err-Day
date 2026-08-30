@@ -36,6 +36,7 @@ interface Booking {
   totalPrice:    number;
   commissionSatang: number | null;
   notes:         string | null;
+  internalNotes: string | null;
   receiptUrl:    string | null;
   paidAt:        string | null; // ISO — null = ยังไม่ชำระ
   isMember:      boolean;
@@ -115,6 +116,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
 
   const [editStart, setEditStart] = useState(b.startTime);
   const [notesDraft, setNotesDraft] = useState(b.notes ?? "");
+  const [internalNotesDraft, setInternalNotesDraft] = useState(b.internalNotes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
   const [discountBaht, setDiscountBaht] = useState(0);
   const [savingDiscount, setSavingDiscount] = useState(false);
@@ -302,9 +304,9 @@ export default function BookingDetail({ booking: initial, branchServices, branch
 
   const saveNotes = async () => {
     setSavingNotes(true);
-    await patch({ notes: notesDraft });
+    await patch({ notes: notesDraft, internalNotes: internalNotesDraft });
     setSavingNotes(false);
-    setB((x) => ({ ...x, notes: notesDraft }));
+    setB((x) => ({ ...x, notes: notesDraft, internalNotes: internalNotesDraft }));
   };
 
   const applyDiscount = async () => {
@@ -679,18 +681,27 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         />
       </section>
 
-      {/* ── Notes ── */}
+      {/* ── External and internal notes ── */}
       <section className="px-4 mt-5">
-        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุ</p>
+        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุภายนอก · ลูกค้าเห็น</p>
         <textarea
           value={notesDraft}
           onChange={(e) => setNotesDraft(e.target.value)}
-          placeholder="พิมพ์หมายเหตุ..."
+          placeholder="ข้อความสำหรับลูกค้า..."
           rows={3}
           className="w-full rounded-xl px-4 py-3 text-sm outline-none bg-white"
           style={{ border: `1px solid ${BORDER}`, color: TEXT, resize: "none" }}
         />
-        {notesDraft !== (b.notes ?? "") && (
+        <p className="text-[10px] uppercase tracking-widest mt-4 mb-2" style={{ color: MUTED }}>หมายเหตุภายใน · พนักงานเท่านั้น</p>
+        <textarea
+          value={internalNotesDraft}
+          onChange={(e) => setInternalNotesDraft(e.target.value)}
+          placeholder="ข้อความภายในสำหรับทีม..."
+          rows={3}
+          className="w-full rounded-xl px-4 py-3 text-sm outline-none bg-white"
+          style={{ border: `1px solid ${BORDER}`, color: TEXT, resize: "none" }}
+        />
+        {(notesDraft !== (b.notes ?? "") || internalNotesDraft !== (b.internalNotes ?? "")) && (
           <button
             onClick={saveNotes}
             disabled={savingNotes}
@@ -698,7 +709,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
             style={{ background: PRIMARY }}
           >
             {savingNotes && <Loader2 size={14} className="animate-spin" />}
-            บันทึกหมายเหตุ
+            บันทึกหมายเหตุทั้งสองส่วน
           </button>
         )}
       </section>

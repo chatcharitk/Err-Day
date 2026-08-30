@@ -44,7 +44,7 @@ export default async function StaffBookingDetailPage({
       endTime:    true,
       status:     true,
       totalPrice: true,
-      notes:      true,
+      internalNotes: true,
       staffId:    true,
       branchId:   true,
       service:    { select: { name: true, nameTh: true } },
@@ -158,7 +158,7 @@ export default async function StaffBookingDetailPage({
         </section>
 
         {/* Notes (if any) */}
-        {b.notes && (
+        {b.internalNotes && (
           <section className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${BORDER}` }}>
             <div className="flex items-start gap-3">
               <div className="rounded-lg p-2" style={{ background: "#FFF8F4" }}>
@@ -166,7 +166,7 @@ export default async function StaffBookingDetailPage({
               </div>
               <div className="flex-1">
                 <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>หมายเหตุจากผู้จัดการ</p>
-                <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: TEXT }}>{b.notes}</p>
+                <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: TEXT }}>{b.internalNotes}</p>
               </div>
             </div>
           </section>

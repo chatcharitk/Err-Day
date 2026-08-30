@@ -142,7 +142,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           });
         }
       }
-      return tx.booking.update({
+      const result = await tx.booking.update({
         where: { id },
         data: {
           branchId:   newBranchId,
@@ -155,8 +155,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           // Clear specific staff assignment when branch changes — admin will re-assign
           ...(branchId && branchId !== booking.branchId ? { staffId: null } : {}),
         },
-        include: { branch: true, service: true, staff: true, customer: true, addons: { include: { addon: true } } },
+        select: {
+          id: true, branchId: true, serviceId: true, staffId: true, customerId: true,
+          date: true, startTime: true, endTime: true, status: true, notes: true,
+          totalPrice: true, createdAt: true, updatedAt: true,
+          branch: true, service: true, staff: true, customer: true,
+          addons: { include: { addon: true } },
+        },
       });
+      return result;
     });
 
     // Refresh the branch group's today-list when the customer moved the slot

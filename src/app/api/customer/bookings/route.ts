@@ -27,7 +27,22 @@ export async function GET(request: Request) {
 
   const bookings = await prisma.booking.findMany({
     where: { customerId: customer.id, serviceId: { notIn: SALE_ONLY_SKUS } },
-    include: {
+    // Explicit select is a privacy boundary: internalNotes must never be sent
+    // to a customer-facing caller.
+    select: {
+      id: true,
+      branchId: true,
+      serviceId: true,
+      staffId: true,
+      customerId: true,
+      date: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+      notes: true,
+      totalPrice: true,
+      createdAt: true,
+      updatedAt: true,
       branch:  { select: { id: true, name: true, address: true, phone: true } },
       service: { select: { id: true, name: true, nameTh: true, category: true } },
       addons:  { include: { addon: { select: { id: true, name: true, nameTh: true } } } },

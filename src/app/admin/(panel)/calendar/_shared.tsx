@@ -22,6 +22,7 @@ export interface BookingItem {
   totalPrice: number;
   commissionSatang: number | null;
   notes: string | null;
+  internalNotes: string | null;
   /** ISO — payment received. null on a COMPLETED booking = ยังไม่ชำระ. */
   paidAt: string | null;
   serviceId: string;

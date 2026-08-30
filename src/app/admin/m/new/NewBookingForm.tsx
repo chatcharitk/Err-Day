@@ -624,7 +624,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
 
       {/* Notes */}
       <section className="px-4 pt-5">
-        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุ <span style={{ color: MUTED }}>(ไม่บังคับ)</span></p>
+        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุเริ่มต้น <span style={{ color: MUTED }}>(คัดลอกไปภายนอกและภายใน)</span></p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

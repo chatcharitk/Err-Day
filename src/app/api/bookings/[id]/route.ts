@@ -25,7 +25,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await request.json();
     const {
-      status, staffId, notes, startTime, endTime, totalPrice, commissionSatang, serviceId, date,
+      status, staffId, notes, internalNotes, startTime, endTime, totalPrice, commissionSatang, serviceId, date,
       completedAt, receiptUrl, paidAt,
       extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
@@ -68,6 +68,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(status         !== undefined ? { status }                                : {}),
         ...(staffId        !== undefined ? { staffId: staffId || null }              : {}),
         ...(notes          !== undefined ? { notes: notes || null }                  : {}),
+        ...(internalNotes  !== undefined ? { internalNotes: internalNotes || null }  : {}),
         ...(startTime      !== undefined ? { startTime }                             : {}),
         ...(endTime        !== undefined ? { endTime }                               : {}),
         ...(totalPrice     !== undefined ? { totalPrice: Number(totalPrice) }        : {}),
