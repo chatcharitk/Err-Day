@@ -4,6 +4,7 @@ import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendNewBookingNotifications } from "@/lib/notifications";
 import { getPromotionServicePrice } from "@/lib/promotions";
 import { applyMembershipPricingForBooking } from "@/lib/membership";
+import { issueReceiptForBookingTx } from "@/lib/receipts";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export async function POST(request: Request) {
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
           commissionSatang: true,
           status: true,
           activatesMembership: true,
+          paidAt: true,
           branchId: true,
           serviceId: true,
           staffId: true,
@@ -189,6 +191,12 @@ export async function POST(request: Request) {
           staff:    { select: { id: true, name: true } },
         },
       });
+
+      // Created already paid ("create + checkout in one go") — issue its receipt
+      // in the same transaction, so a sale never exists without its document.
+      if (created.paidAt) {
+        await issueReceiptForBookingTx(tx, created.id);
+      }
 
       return { ok: true as const, booking: created };
     });

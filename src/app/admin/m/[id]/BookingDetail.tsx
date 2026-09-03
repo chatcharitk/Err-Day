@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Phone, Clock, User, Plus, Trash2, Check, X,
   XCircle, Calendar, Pencil, Loader2, CreditCard,
-  AlertCircle, Sparkles, RefreshCw, ChevronRight,
+  AlertCircle, Sparkles, RefreshCw, ChevronRight, Receipt,
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
@@ -39,6 +39,8 @@ interface Booking {
   internalNotes: string | null;
   receiptUrl:    string | null;
   paidAt:        string | null; // ISO — null = ยังไม่ชำระ
+  createdAt:     string;
+  completedAt:   string | null;
   isMember:      boolean;
   activatesMembership: boolean;
   addons: { id: string; addonId: string; name: string; price: number }[];
@@ -124,6 +126,8 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     initial.commissionSatang == null ? "" : String(initial.commissionSatang / 100),
   );
   const [savingCommission, setSavingCommission] = useState(false);
+  const [amountBaht, setAmountBaht] = useState(String(initial.totalPrice / 100));
+  const [savingAmount, setSavingAmount] = useState(false);
 
   const meta = STATUS_META[b.status];
   const isClosed = b.status === "COMPLETED" || b.status === "CANCELLED" || b.status === "NO_SHOW";
@@ -183,13 +187,25 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const saveCommission = async () => {
     const satang = commissionBaht === "" ? null : Math.round(Number(commissionBaht) * 100);
     if (satang !== null && (!Number.isFinite(satang) || satang < 0)) {
-      setErr("กรุณากรอกค่าตอบแทนเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      setErr("กรุณากรอกค่าทิปเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
       return;
     }
     setSavingCommission(true);
     const updated = await patch({ commissionSatang: satang });
     if (updated) setB((x) => ({ ...x, commissionSatang: satang }));
     setSavingCommission(false);
+  };
+
+  const saveAmount = async () => {
+    const satang = Math.round(Number(amountBaht) * 100);
+    if (!Number.isFinite(satang) || satang < 0) {
+      setErr("กรุณากรอกยอดรวมเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      return;
+    }
+    setSavingAmount(true);
+    const updated = await patch({ totalPrice: satang });
+    if (updated) setB((x) => ({ ...x, totalPrice: satang }));
+    setSavingAmount(false);
   };
 
   const setStaff = async (staffId: string | null) => {
@@ -221,6 +237,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
       endTime:    newEnd,
       totalPrice: newTotal,
     }));
+    setAmountBaht(String(newTotal / 100));
     setShowServiceSheet(false);
   };
 
@@ -281,6 +298,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         addons: [...x.addons, { id: json.addons.find((aa: { addonId: string }) => aa.addonId === addonId)?.id ?? "", addonId, name: addon.nameTh, price: addon.price }],
         totalPrice: x.totalPrice + addon.price,
       }));
+      setAmountBaht(String((b.totalPrice + addon.price) / 100));
       setShowAddonSheet(false);
       router.refresh();
     } finally { setBusy(false); }
@@ -298,6 +316,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         addons: x.addons.filter((a) => a.id !== bookingAddonId),
         totalPrice: x.totalPrice - (removed?.price ?? 0),
       }));
+      setAmountBaht(String((b.totalPrice - (removed?.price ?? 0)) / 100));
       router.refresh();
     } finally { setBusy(false); }
   };
@@ -315,7 +334,11 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     setSavingDiscount(true);
     const updated = await patch({ totalPrice: newTotal });
     setSavingDiscount(false);
-    if (updated) { setB((x) => ({ ...x, totalPrice: newTotal })); setDiscountBaht(0); }
+    if (updated) {
+      setB((x) => ({ ...x, totalPrice: newTotal }));
+      setAmountBaht(String(newTotal / 100));
+      setDiscountBaht(0);
+    }
   };
 
   const goToPos = () => {
@@ -331,7 +354,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
             <ArrowLeft size={18} />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-xs" style={{ color: MUTED }}>การจอง</p>
+            <p className="text-xs" style={{ color: MUTED }}>รายละเอียดรายการ</p>
             <p className="text-sm font-medium truncate" style={{ color: TEXT }}>
               {b.customerNickname || b.customerName}
             </p>
@@ -365,6 +388,57 @@ export default function BookingDetail({ booking: initial, branchServices, branch
           <Sparkles size={14} /> เริ่มใช้งานสมาชิกวันนี้ (จ่ายล่วงหน้าแล้ว)
         </div>
       )}
+
+      {/* Transaction identity and accounting timestamps. This is shared by
+          booking detail and sales history, so completed POS rows remain fully
+          inspectable and editable on mobile. */}
+      <section className="px-4 pt-4">
+        <div className="rounded-2xl bg-white p-4 space-y-3" style={{ border: `1px solid ${BORDER}` }}>
+          <div className="flex items-center gap-2">
+            <Receipt size={15} style={{ color: PRIMARY }} />
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>ข้อมูลธุรกรรม</p>
+          </div>
+          <div className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-2 text-xs">
+            <span style={{ color: MUTED }}>รหัสรายการ</span>
+            <span className="font-mono break-all text-right" style={{ color: TEXT }}>{b.id}</span>
+            <span style={{ color: MUTED }}>บันทึกเมื่อ</span>
+            <span className="text-right" style={{ color: TEXT }}>{fmtPaidAt(b.createdAt)}</span>
+            {b.completedAt && (
+              <>
+                <span style={{ color: MUTED }}>เสร็จสิ้นเมื่อ</span>
+                <span className="text-right" style={{ color: TEXT }}>{fmtPaidAt(b.completedAt)}</span>
+              </>
+            )}
+            <span style={{ color: MUTED }}>ชำระเงิน</span>
+            <span className="text-right font-medium" style={{ color: b.paidAt ? "#166534" : "#B45309" }}>
+              {b.paidAt ? fmtPaidAt(b.paidAt) : "ยังไม่ชำระ"}
+            </span>
+          </div>
+          <div className="pt-3 flex items-center gap-2" style={{ borderTop: `1px solid ${BORDER}` }}>
+            <label className="text-xs flex-shrink-0" style={{ color: MUTED }}>ยอดรวม ฿</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              value={amountBaht}
+              onChange={e => setAmountBaht(e.target.value)}
+              className="flex-1 min-w-0 rounded-lg border px-2 py-1.5 text-sm text-right outline-none"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+            {Math.round((Number(amountBaht) || 0) * 100) !== b.totalPrice && (
+              <button
+                onClick={saveAmount}
+                disabled={savingAmount}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                style={{ background: PRIMARY }}
+              >
+                {savingAmount ? <Loader2 size={12} className="animate-spin" /> : "บันทึก"}
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* ── Quick status actions ── */}
       <section className="px-4 pt-4">
@@ -612,7 +686,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
           </div>
         </div>
         <div className="rounded-xl px-3 py-2 bg-white" style={{ border: `1px solid ${BORDER}` }}>
-          <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>ค่าตอบแทนช่าง</p>
+          <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>ค่าทิป</p>
           <div className="flex items-center gap-2">
             <span className="text-sm" style={{ color: MUTED }}>฿</span>
             <input
@@ -636,7 +710,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
               </button>
             )}
           </div>
-          <p className="text-[10px] mt-1" style={{ color: MUTED }}>ใช้คำนวณค่าตอบแทนเมื่อคิวเสร็จสิ้น</p>
+          <p className="text-[10px] mt-1" style={{ color: MUTED }}>ใช้คำนวณค่าทิปเมื่อคิวเสร็จสิ้น</p>
         </div>
       </section>
 

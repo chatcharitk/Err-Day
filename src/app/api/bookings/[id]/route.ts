@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendBookingConfirmed, sendBookingTimeChanged, sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
+import { issueReceiptForBooking } from "@/lib/receipts";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const _gate = await requireAdmin().catch((e: unknown) => e as Response);
@@ -18,8 +19,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
-  if (_gate instanceof Response) return _gate;
+  const gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (gate instanceof Response) return gate;
+  const admin = gate;
 
   try {
     const { id } = await params;
@@ -46,7 +48,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Capture previous fields we need to compare after the update (paidAt so a
     // receipt upload preserves an earlier payment time instead of re-stamping).
-    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined || !!receiptUrl;
+    const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined
+      || !!receiptUrl || paidAt !== undefined;
     const prev = needsPrev
       ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true, customerId: true, paidAt: true } })
       : null;
@@ -96,6 +99,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       },
       include: { branch: true, service: true, staff: true, customer: true },
     });
+
+    // Payment just recorded (null → set) through any admin path — slip confirm,
+    // receipt/slip upload, explicit mark-paid. Awaited rather than fired off:
+    // a receipt is a record, not a notification, and it must not be cut short
+    // when the function returns. Non-fatal — the payment itself is already saved.
+    if (booking.paidAt && !prev?.paidAt) {
+      try {
+        await issueReceiptForBooking(booking.id, {
+          issuedByAdminId: admin.id,
+          issuedByName:    admin.name,
+        });
+      } catch (e) {
+        console.error("[receipt] issue on mark-paid failed", e);
+      }
+    }
 
     // Fire-and-forget LINE confirmation when status flips to CONFIRMED.
     if (status === "CONFIRMED" && prev?.status !== "CONFIRMED") {

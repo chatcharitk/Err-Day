@@ -31,6 +31,8 @@ export default async function MobileBookingDetailPage({
       internalNotes: true,
       receiptUrl: true,
       paidAt:     true,
+      createdAt:  true,
+      completedAt: true,
       activatesMembership: true,
       branch:   { select: { name: true } },
       service:  { select: { nameTh: true } },
@@ -126,6 +128,8 @@ export default async function MobileBookingDetailPage({
     internalNotes: booking.internalNotes,
     receiptUrl:   booking.receiptUrl,
     paidAt:       booking.paidAt ? booking.paidAt.toISOString() : null,
+    createdAt:    booking.createdAt.toISOString(),
+    completedAt:  booking.completedAt ? booking.completedAt.toISOString() : null,
     activatesMembership: booking.activatesMembership,
     addons:       booking.addons.map((a) => ({
       id:      a.id,

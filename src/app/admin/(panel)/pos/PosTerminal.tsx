@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon } from "lucide-react";
+import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon, ReceiptText } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import { getPromotionServicePrice } from "@/lib/promotions";
@@ -155,6 +155,10 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const [showMemberPrompt, setShowMemberPrompt] = useState(false);
   // "Pay now, activate later" for a membership in the cart.
   const [holdMembership, setHoldMembership] = useState(false);
+  // Printed on the receipt; cash is the counter default.
+  const [paymentMethod, setPaymentMethod] = useState("เงินสด");
+  // Receipt issued by the last sale — drives the print link on the done screen.
+  const [receipt, setReceipt] = useState<{ number: string; url: string } | null>(null);
 
   const MEMBERSHIP_SKU = "svc-membership-30d";
   const membershipBsId = useMemo(
@@ -356,30 +360,35 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || undefined,
           items: [
-            ...cart.flatMap(i =>
-              Array.from({ length: i.qty }, () => {
-                // Strip any redemption marker suffix from the row id to recover
-                // the underlying BranchService.id for the API.
-                const baseId = i.id.split("__")[0];
-                const isService = !i.isCustom
-                  && !baseId.startsWith("addon-")
-                  && !baseId.startsWith("prefill-")
-                  && !baseId.startsWith("custom-");
-                return {
-                  name:            i.name,
-                  price:           i.price,
-                  branchServiceId: isService ? baseId : undefined,
-                  redeemPackageId: i.redeemPackageId,
-                };
-              }),
-            ),
-            ...(discountSatang > 0 ? [{ name: "ส่วนลด", price: -discountSatang, branchServiceId: undefined, redeemPackageId: undefined }] : []),
+            // One line per cart row carrying its own qty — the receipt needs
+            // "2 x ฿250", not the same line twice.
+            ...cart.map(i => {
+              // Strip any redemption marker suffix from the row id to recover
+              // the underlying BranchService.id for the API.
+              const baseId = i.id.split("__")[0];
+              const isService = !i.isCustom
+                && !baseId.startsWith("addon-")
+                && !baseId.startsWith("prefill-")
+                && !baseId.startsWith("custom-");
+              return {
+                name:            i.name,
+                price:           i.price,
+                qty:             i.qty,
+                branchServiceId: isService ? baseId : undefined,
+                redeemPackageId: i.redeemPackageId,
+              };
+            }),
+            ...(discountSatang > 0 ? [{ name: "ส่วนลด", price: -discountSatang, qty: 1, branchServiceId: undefined, redeemPackageId: undefined }] : []),
           ],
+          paymentMethod,
           ...(fromBookingId ? { fromBookingId } : {}),
           ...(cartHasMembership && holdMembership ? { holdMembership: true } : {}),
         }),
       });
       if (!res.ok) throw new Error();
+      // Keep the receipt link so the cashier can print or hand over the QR.
+      const sale = await res.json().catch(() => null);
+      setReceipt(sale?.receipt ?? null);
       setLastCustomerPhone(customerPhone.trim() || null);
       setDone(true);
       setShowMemberPrompt(!!customerPhone.trim());
@@ -774,6 +783,17 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 <div className="flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: "#22c55e" }}>
                   <Check className="w-4 h-4" /> บันทึกเรียบร้อย!
                 </div>
+                {receipt && (
+                  <a
+                    href={receipt.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white"
+                    style={{ background: "#3B2A24" }}
+                  >
+                    <ReceiptText className="w-4 h-4" /> พิมพ์ใบเสร็จ {receipt.number}
+                  </a>
+                )}
                 {showMemberPrompt && lastCustomerPhone && (
                   <a
                     href={`/admin/customers?phone=${encodeURIComponent(lastCustomerPhone)}`}
@@ -785,14 +805,32 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 )}
               </div>
             ) : (
-              <button
-                onClick={checkout}
-                disabled={loading || cart.length === 0 || !customerName.trim()}
-                className="w-full py-3 rounded-xl text-white font-medium text-base transition-opacity disabled:opacity-40"
-                style={{ backgroundColor: "#8B1D24" }}
-              >
-                {loading ? "กำลังบันทึก..." : "ชำระเงิน / Checkout"}
-              </button>
+              <>
+                {/* Payment method — printed on the receipt. */}
+                <div className="flex gap-1.5 mb-2">
+                  {["เงินสด", "โอน", "บัตร"].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPaymentMethod(m)}
+                      className="flex-1 py-2 rounded-xl text-xs font-medium transition-colors"
+                      style={paymentMethod === m
+                        ? { background: "#8B1D24", color: "#fff" }
+                        : { background: "#fff", color: "#5C4A42", border: "1.5px solid #E8D8CC" }}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={checkout}
+                  disabled={loading || cart.length === 0 || !customerName.trim()}
+                  className="w-full py-3 rounded-xl text-white font-medium text-base transition-opacity disabled:opacity-40"
+                  style={{ backgroundColor: "#8B1D24" }}
+                >
+                  {loading ? "กำลังบันทึก..." : "ชำระเงิน / Checkout"}
+                </button>
+              </>
             )}
             <p className="text-xs text-center mt-2" style={{ color: "#A08070" }}>
               {cart.length === 0 ? "เพิ่มรายการก่อนชำระเงิน" : !customerName.trim() ? "กรุณาระบุชื่อลูกค้า" : `${cart.reduce((s, i) => s + i.qty, 0)} รายการ`}

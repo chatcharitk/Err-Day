@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Pencil, Trash2, X, Save, Search, ChevronDown, ExternalLink, Calendar, Download } from "lucide-react";
+import { Pencil, Trash2, X, Save, Search, ChevronDown, ExternalLink, Calendar, Download, ReceiptText } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,8 @@ interface SaleRecord {
   service:  { name: string; nameTh: string };
   staff:    { id: string; name: string } | null;
   customer: { id: string; name: string; phone: string };
+  /** Issued receipt, if this sale has one. */
+  receipt:  { number: string; publicToken: string; voided: boolean } | null;
 }
 
 interface Props {
@@ -533,6 +535,28 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
   const [editing,    setEditing]    = useState<SaleRecord | null>(null);
   const [deleteId,   setDeleteId]   = useState<string | null>(null);
   const [deleting,   setDeleting]   = useState(false);
+  // Booking id currently having a receipt issued (recovery path for sales made
+  // before receipts existed, or where issuing failed at checkout).
+  const [issuing,    setIssuing]    = useState<string | null>(null);
+
+  async function issueReceipt(bookingId: string) {
+    setIssuing(bookingId);
+    try {
+      const res = await fetch("/api/admin/receipts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "ออกใบเสร็จไม่สำเร็จ");
+      window.open(`/receipt/${data.publicToken}`, "_blank", "noopener");
+      router.refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setIssuing(null);
+    }
+  }
 
   // filters
   const [branchId,  setBranchId]  = useState<string>("");
@@ -914,14 +938,40 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                           {/* Price */}
                           <td className="px-4 py-3 whitespace-nowrap text-right align-top">
                             <p className="font-semibold text-sm" style={{ color: PRIMARY }}>{fmt(sale.totalPrice)}</p>
-                            <p className="text-[10px] font-mono" style={{ color: "#C4B0A4" }}>
-                              #{sale.id.slice(-6).toUpperCase()}
+                            <p
+                              className="text-[10px] font-mono"
+                              style={{ color: sale.receipt?.voided ? "#DC2626" : "#C4B0A4" }}
+                            >
+                              {sale.receipt
+                                ? `${sale.receipt.number}${sale.receipt.voided ? " (ยกเลิก)" : ""}`
+                                : `#${sale.id.slice(-6).toUpperCase()}`}
                             </p>
                           </td>
 
                           {/* Actions */}
                           <td className="px-4 py-3 whitespace-nowrap align-top">
                             <div className="flex items-center gap-1.5">
+                              {sale.receipt ? (
+                                <a
+                                  href={`/receipt/${sale.receipt.publicToken}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-stone-50"
+                                  style={{ color: "#3B2A24", border: "1.5px solid #E8D8CC", background: "#FFF8F4" }}
+                                >
+                                  <ReceiptText size={12} /> ใบเสร็จ
+                                </a>
+                              ) : sale.paidAt ? (
+                                <button
+                                  onClick={e => { e.stopPropagation(); issueReceipt(sale.id); }}
+                                  disabled={issuing === sale.id}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-stone-50 disabled:opacity-50"
+                                  style={{ color: "#3B2A24", border: "1.5px solid #E8D8CC", background: "#FFF8F4" }}
+                                >
+                                  <ReceiptText size={12} /> {issuing === sale.id ? "..." : "ออกใบเสร็จ"}
+                                </button>
+                              ) : null}
                               <button
                                 onClick={e => { e.stopPropagation(); setEditing(sale); }}
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-blue-50"

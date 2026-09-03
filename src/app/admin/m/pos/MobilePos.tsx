@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ShoppingBag, Plus, Minus, X, Check, Loader2, Tag,
-  Sparkles, ChevronDown, AlertCircle,
+  Sparkles, ChevronDown, AlertCircle, ReceiptText,
 } from "lucide-react";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import { getPromotionServicePrice } from "@/lib/promotions";
@@ -197,6 +197,10 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState("");
   const [done,       setDone]       = useState(false);
+  // Printed on the receipt; cash is the counter default.
+  const [paymentMethod, setPaymentMethod] = useState("เงินสด");
+  // Receipt issued by the last sale — drives the print link on the done screen.
+  const [receipt, setReceipt] = useState<{ number: string; url: string } | null>(null);
   // When prefilled from a booking, carry over any discount the booking already had:
   //   booking.totalPrice is post-discount, while the cart re-prices from the catalog
   //   (bs.price / member price). The difference is the implicit bill-level discount.
@@ -442,28 +446,29 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     setSubmitting(true);
     setError("");
     try {
-      const items = cart.flatMap(i =>
-        Array.from({ length: i.qty }).map(() => {
-          const isService = !i.isCustom && !i.id.startsWith("addon-");
-          return {
-            name:            i.name,
-            price:           i.price,
-            branchServiceId: isService ? (i.redeemPackageId ? i.id.split("__")[0] : i.id) : undefined,
-            redeemPackageId: i.redeemPackageId,
-          };
-        })
-      );
+      // One line per cart row carrying its own qty — the receipt needs
+      // "2 x ฿250" rather than the same line repeated twice.
+      const items = cart.map(i => {
+        const isService = !i.isCustom && !i.id.startsWith("addon-");
+        return {
+          name:            i.name,
+          price:           i.price,
+          qty:             i.qty,
+          branchServiceId: isService ? (i.redeemPackageId ? i.id.split("__")[0] : i.id) : undefined,
+          redeemPackageId: i.redeemPackageId,
+        };
+      });
       // Per-item discounts as negative line items
       for (const item of cart) {
         if ((item.itemDiscountBaht ?? 0) > 0) {
           const raw      = item.price * item.qty;
           const discSat  = Math.min(raw, Math.round(item.itemDiscountBaht! * 100));
-          items.push({ name: `ส่วนลด (${item.name})`, price: -discSat, branchServiceId: undefined, redeemPackageId: undefined });
+          items.push({ name: `ส่วนลด (${item.name})`, price: -discSat, qty: 1, branchServiceId: undefined, redeemPackageId: undefined });
         }
       }
       // Bill-level discount
       if (discountSatang > 0) {
-        items.push({ name: `ส่วนลดทั้งบิล`, price: -discountSatang, branchServiceId: undefined, redeemPackageId: undefined });
+        items.push({ name: `ส่วนลดทั้งบิล`, price: -discountSatang, qty: 1, branchServiceId: undefined, redeemPackageId: undefined });
       }
       const res = await fetch("/api/pos/sale", {
         method:  "POST",
@@ -473,6 +478,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           customerName:  customer.name.trim(),
           customerPhone: customer.phone.trim() || undefined,
           items,
+          paymentMethod,
           ...(fromBookingId ? { fromBookingId } : {}),
           ...(cartHasMembership && holdMembership ? { holdMembership: true } : {}),
         }),
@@ -483,21 +489,11 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
         setSubmitting(false);
         return;
       }
+      const sale = await res.json().catch(() => null);
+      setReceipt(sale?.receipt ?? null);
       setDone(true);
-      // Reset after 1.5s — when continuing from a booking, return to home
-      setTimeout(() => {
-        if (fromBookingId) {
-          router.replace("/admin/m");
-          router.refresh();
-          return;
-        }
-        setDone(false);
-        setCart([]);
-        setCustomer({ id: null, name: "", phone: "" });
-        setShowCart(false);
-        setSubmitting(false);
-        router.refresh();
-      }, 1500);
+      // The done screen now offers a receipt link, so it stays put until staff
+      // dismiss it — auto-resetting after 1.5s would yank the link away.
     } catch {
       setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
       setSubmitting(false);
@@ -505,14 +501,50 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   };
 
   if (done) {
+    const finish = () => {
+      if (fromBookingId) {
+        router.replace("/admin/m");
+        router.refresh();
+        return;
+      }
+      setDone(false);
+      setReceipt(null);
+      setCart([]);
+      setCustomer({ id: null, name: "", phone: "" });
+      setShowCart(false);
+      setSubmitting(false);
+      router.refresh();
+    };
+
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center">
+        <div className="text-center w-full max-w-xs">
           <div className="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: "#F0FDF4" }}>
             <Check size={40} style={{ color: "#16a34a" }} />
           </div>
           <p className="text-lg font-semibold" style={{ color: TEXT }}>ขายสำเร็จ</p>
           <p className="text-sm mt-1" style={{ color: MUTED }}>ยอดรวม {formatPrice(total)}</p>
+
+          {receipt && (
+            <a
+              href={receipt.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-5 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium text-white"
+              style={{ background: PRIMARY }}
+            >
+              <ReceiptText size={16} /> พิมพ์ใบเสร็จ {receipt.number}
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={finish}
+            className="mt-2 w-full py-3 rounded-2xl text-sm font-medium"
+            style={{ border: `1px solid ${BORDER}`, color: TEXT }}
+          >
+            เสร็จสิ้น
+          </button>
         </div>
       </main>
     );
@@ -858,6 +890,22 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm" style={{ color: MUTED }}>ยอดรวม</p>
                 <p className="text-xl font-bold" style={{ color: TEXT }}>{formatPrice(total)}</p>
+              </div>
+              {/* Payment method — printed on the receipt. */}
+              <div className="flex gap-1.5 mb-2">
+                {["เงินสด", "โอน", "บัตร"].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPaymentMethod(m)}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-medium"
+                    style={paymentMethod === m
+                      ? { background: PRIMARY, color: "#fff" }
+                      : { background: "#fff", color: TEXT, border: `1.5px solid ${BORDER}` }}
+                  >
+                    {m}
+                  </button>
+                ))}
               </div>
               <button
                 onClick={checkout}

@@ -2,19 +2,36 @@
 
 import { useState } from "react";
 import { defaultBranchId, DEFAULT_BRANCH_ID } from "@/lib/utils";
-import { MapPin, Phone, Clock, Globe, Check, Loader2, ExternalLink } from "lucide-react";
+import { MapPin, Phone, Clock, Globe, Check, Loader2, ExternalLink, ReceiptText } from "lucide-react";
 
 interface Branch {
-  id:        string;
-  name:      string;
-  address:   string;
-  phone:     string;
-  openTime:  string | null;
-  closeTime: string | null;
-  mapUrl:    string | null;
-  mapLat:    number | null;
-  mapLng:    number | null;
+  id:            string;
+  name:          string;
+  address:       string;
+  phone:         string;
+  openTime:      string | null;
+  closeTime:     string | null;
+  mapUrl:        string | null;
+  mapLat:        number | null;
+  mapLng:        number | null;
+  taxBranchCode: string | null;
 }
+
+interface Company {
+  legalName:       string;
+  legalNameEn:     string | null;
+  taxId:           string;
+  addressLine:     string;
+  phone:           string | null;
+  vatRegistered:   boolean;
+  vatRatePercent:  number;
+  receiptFooterTh: string | null;
+}
+
+const EMPTY_COMPANY: Company = {
+  legalName: "", legalNameEn: null, taxId: "", addressLine: "",
+  phone: null, vatRegistered: false, vatRatePercent: 7, receiptFooterTh: null,
+};
 
 const TIME_OPTIONS: string[] = [];
 for (let h = 7; h <= 23; h++) {
@@ -38,12 +55,49 @@ function inputClass() {
   return "w-full px-3 py-2.5 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30";
 }
 
-export default function SettingsManager({ branches }: { branches: Branch[] }) {
+export default function SettingsManager({
+  branches,
+  company,
+}: {
+  branches: Branch[];
+  company: Company | null;
+}) {
   const [selectedId, setSelectedId] = useState(() => defaultBranchId(branches));
   const [form,  setForm]  = useState<Branch>(() => branches.find(b => b.id === DEFAULT_BRANCH_ID) ?? branches[0] ?? {} as Branch);
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [error,   setError]   = useState("");
+
+  // Company profile — company-wide (not per branch), saved through its own
+  // owner-only endpoint, so it keeps its own form state and save button.
+  const [co,      setCo]      = useState<Company>(() => company ?? EMPTY_COMPANY);
+  const [coSaving, setCoSaving] = useState(false);
+  const [coSaved,  setCoSaved]  = useState(false);
+  const [coError,  setCoError]  = useState("");
+
+  function setCompany<K extends keyof Company>(k: K, v: Company[K]) {
+    setCo((c) => ({ ...c, [k]: v }));
+    setCoSaved(false);
+  }
+
+  async function saveCompany(e: React.FormEvent) {
+    e.preventDefault();
+    setCoSaving(true);
+    setCoError("");
+    try {
+      const res = await fetch("/api/admin/company-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(co),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
+      setCoSaved(true);
+    } catch (err) {
+      setCoError((err as Error).message || "เกิดข้อผิดพลาด");
+    } finally {
+      setCoSaving(false);
+    }
+  }
 
   function selectBranch(id: string) {
     const b = branches.find((x) => x.id === id);
@@ -76,6 +130,7 @@ export default function SettingsManager({ branches }: { branches: Branch[] }) {
           mapUrl:    form.mapUrl    || null,
           mapLat:    form.mapLat    ?? null,
           mapLng:    form.mapLng    ?? null,
+          taxBranchCode: form.taxBranchCode || null,
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
@@ -102,6 +157,129 @@ export default function SettingsManager({ branches }: { branches: Branch[] }) {
           <h1 className="text-2xl font-medium" style={{ color: "#3B2A24" }}>ตั้งค่าร้าน</h1>
           <p className="text-sm" style={{ color: "#A08070" }}>Shop Settings — แก้ไขข้อมูลสาขา</p>
         </div>
+
+        {/* ── Company profile (company-wide — printed on every receipt) ── */}
+        <form onSubmit={saveCompany} className="mb-8">
+          <div className="rounded-2xl bg-white p-6 space-y-4" style={{ border: "1.5px solid #E8D8CC" }}>
+            <div className="flex items-center gap-2">
+              <ReceiptText className="w-4 h-4" style={{ color: "#8B1D24" }} />
+              <p className="text-sm font-semibold" style={{ color: "#3B2A24" }}>ข้อมูลบริษัท (สำหรับใบเสร็จ)</p>
+            </div>
+            <p className="text-xs" style={{ color: "#A08070" }}>
+              ข้อมูลนี้จะถูกพิมพ์บนหัวใบเสร็จทุกใบ — ใบเสร็จที่ออกไปแล้วจะไม่เปลี่ยนตาม
+              (เก็บสำเนาข้อมูล ณ วันที่ออกไว้)
+            </p>
+
+            <Field label="ชื่อนิติบุคคล" hint="ตามที่จดทะเบียน เช่น บริษัท เอิร์กเดย์ จำกัด">
+              <input
+                value={co.legalName}
+                onChange={(e) => setCompany("legalName", e.target.value)}
+                className={inputClass()}
+                style={{ border: "1.5px solid #E8D8CC" }}
+                placeholder="บริษัท ... จำกัด"
+              />
+            </Field>
+
+            <Field label="เลขประจำตัวผู้เสียภาษี" hint="13 หลัก">
+              <input
+                value={co.taxId}
+                onChange={(e) => setCompany("taxId", e.target.value)}
+                className={inputClass()}
+                style={{ border: "1.5px solid #E8D8CC" }}
+                inputMode="numeric"
+                placeholder="0105566xxxxxx"
+              />
+            </Field>
+
+            <Field label="ที่อยู่สำนักงานใหญ่" hint="ตามที่จดทะเบียน (ขึ้นบรรทัดใหม่ได้)">
+              <textarea
+                value={co.addressLine}
+                onChange={(e) => setCompany("addressLine", e.target.value)}
+                className={inputClass() + " resize-none"}
+                style={{ border: "1.5px solid #E8D8CC" }}
+                rows={3}
+              />
+            </Field>
+
+            <Field label="เบอร์โทรบนใบเสร็จ">
+              <input
+                type="tel"
+                value={co.phone ?? ""}
+                onChange={(e) => setCompany("phone", e.target.value || null)}
+                className={inputClass()}
+                style={{ border: "1.5px solid #E8D8CC" }}
+              />
+            </Field>
+
+            {/* VAT toggle — off until registration completes. */}
+            <div className="rounded-xl p-4" style={{ background: "#FFF8F4", border: "1px solid #E8D8CC" }}>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={co.vatRegistered}
+                  onChange={(e) => setCompany("vatRegistered", e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[#8B1D24]"
+                />
+                <span>
+                  <span className="text-sm font-medium block" style={{ color: "#3B2A24" }}>
+                    จดทะเบียนภาษีมูลค่าเพิ่มแล้ว
+                  </span>
+                  <span className="text-xs block mt-0.5" style={{ color: "#A08070" }}>
+                    เปิดเมื่อจด VAT เรียบร้อยแล้วเท่านั้น — ใบเสร็จจะแสดงมูลค่าก่อนภาษีและ VAT
+                    แยกบรรทัด และเปลี่ยนหัวเอกสารเป็น &ldquo;ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ&rdquo;
+                    (ราคาในระบบรวม VAT อยู่แล้ว จึงถอด VAT ออกจากยอด ไม่ใช่บวกเพิ่ม)
+                  </span>
+                </span>
+              </label>
+
+              {co.vatRegistered && (
+                <div className="mt-3 pl-7">
+                  <Field label="อัตราภาษี (%)">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={co.vatRatePercent}
+                      onChange={(e) => setCompany("vatRatePercent", Number(e.target.value))}
+                      className={inputClass()}
+                      style={{ border: "1.5px solid #E8D8CC", maxWidth: "8rem" }}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+
+            <Field label="ข้อความท้ายใบเสร็จ" hint="ไม่บังคับ เช่น เงื่อนไขการคืนเงิน">
+              <input
+                value={co.receiptFooterTh ?? ""}
+                onChange={(e) => setCompany("receiptFooterTh", e.target.value || null)}
+                className={inputClass()}
+                style={{ border: "1.5px solid #E8D8CC" }}
+              />
+            </Field>
+
+            {coError && (
+              <p className="text-sm p-3 rounded-xl" style={{ color: "#991B1B", background: "#FEE2E2" }}>
+                {coError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={coSaving}
+              className="w-full py-3 rounded-2xl text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
+              style={{ background: coSaved ? "#16A34A" : "#8B1D24" }}
+            >
+              {coSaving ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> กำลังบันทึก...</>
+              ) : coSaved ? (
+                <><Check className="w-4 h-4" /> บันทึกแล้ว</>
+              ) : (
+                "บันทึกข้อมูลบริษัท"
+              )}
+            </button>
+          </div>
+        </form>
 
         {/* Branch tabs */}
         {branches.length > 1 && (
@@ -162,6 +340,20 @@ export default function SettingsManager({ branches }: { branches: Branch[] }) {
                   required
                 />
               </div>
+            </Field>
+
+            <Field
+              label="รหัสสาขา (ภาษี)"
+              hint="พิมพ์บนใบเสร็จ — 00000 = สำนักงานใหญ่, 00001 = สาขาที่ 1"
+            >
+              <input
+                value={form.taxBranchCode ?? ""}
+                onChange={(e) => set("taxBranchCode", e.target.value || null)}
+                className={inputClass()}
+                style={{ border: "1.5px solid #E8D8CC", maxWidth: "10rem" }}
+                inputMode="numeric"
+                placeholder="00000"
+              />
             </Field>
           </div>
 

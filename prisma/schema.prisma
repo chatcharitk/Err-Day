@@ -30,11 +30,15 @@ model Branch {
   ///    * Admin/POS bookings bypass this entirely.
   ///    * Use to reserve some chairs for walk-ins on busy branches.
   onlineCap         Int?
+  /// Revenue-Department branch code printed on receipts: "00000" = สำนักงานใหญ่,
+  /// "00001" = สาขาที่ 1, etc. Null until the company fills it in under settings.
+  taxBranchCode     String?
   blockedSlots      BlockedSlot[]
   bookings          Booking[]
   services          BranchService[]
   capacityOverrides CapacityOverride[]
   expenses          Expense[]
+  receipts          Receipt[]
   staff             Staff[]
 }
 
@@ -373,6 +377,7 @@ model Booking {
   staff             Staff?         @relation(fields: [staffId], references: [id])
   addons            BookingAddon[]
   extraStaff        BookingStaff[]
+  receipt           Receipt?
 
   @@index([branchId, date])
   @@index([customerId])
@@ -605,6 +610,113 @@ model ChatMessage {
   createdAt  DateTime @default(now())
 
   @@index([lineUserId, createdAt])
+}
+
+/// *
+///  * Singleton row holding the selling company's legal identity, printed on
+///  * every receipt. Editable under admin settings so a tax-ID/address change
+///  * never needs a redeploy. Always id = "company".
+model CompanyProfile {
+  id              String   @id @default("company")
+  /// Registered legal name, e.g. "บริษัท เอิร์ก เดย์ จำกัด".
+  legalName       String   @default("")
+  legalNameEn     String?
+  /// 13-digit Revenue Department tax ID (เลขประจำตัวผู้เสียภาษีอากร).
+  taxId           String   @default("")
+  /// Head-office address as printed (free text, newlines allowed).
+  addressLine     String   @default("")
+  phone           String?
+  /// Off until VAT registration completes. Drives whether receipts show a VAT
+  /// breakdown at all — legally you may not print VAT lines before you are
+  /// registered, so this gates the whole tax-invoice presentation.
+  vatRegistered   Boolean  @default(false)
+  vatRatePercent  Int      @default(7)
+  receiptFooterTh String?
+  logoUrl         String?
+  updatedAt       DateTime @updatedAt
+}
+
+/// *
+///  * Global running-number source for receipts. One row (id = "global");
+///  * `lastNumber` is bumped with an atomic UPDATE ... RETURNING inside the
+///  * same transaction that creates the Receipt, so a rolled-back sale gives
+///  * its number back and the sequence stays gap-free.
+model ReceiptCounter {
+  id         String @id @default("global")
+  lastNumber Int    @default(0)
+}
+
+/// *
+///  * An issued sales receipt (ใบเสร็จรับเงิน — also serving as ใบกำกับภาษีอย่างย่อ
+///  * once the company is VAT-registered). One per paid Booking.
+///  *
+///  * Everything the document prints is SNAPSHOT here at issue time — seller
+///  * identity, VAT rate, and the split amounts. Editing CompanyProfile later
+///  * must never rewrite a document that has already been handed to a customer.
+///  *
+///  * Money is satang like everywhere else. Prices in this app are VAT-INCLUSIVE,
+///  * so `grossSatang` is what the customer paid and net/vat are backed out of
+///  * it (netSatang + vatSatang === grossSatang, exactly).
+model Receipt {
+  id               String        @id @default(cuid())
+  /// Printed document number, e.g. "2569-000123". Continuous, never reused.
+  number           String        @unique
+  /// Raw running number behind `number`, for ordering and audit.
+  sequence         Int
+  /// One receipt per sale — also the idempotency key when a payment path fires twice.
+  bookingId        String        @unique
+  branchId         String
+  customerId       String?
+  issuedAt         DateTime      @default(now())
+  /// AdminUser.id of whoever rang the sale. No FK — admins may be deleted.
+  issuedByAdminId  String?
+  issuedByName     String?
+  /// ── Seller snapshot (from CompanyProfile + Branch at issue time) ──
+  sellerName       String
+  sellerTaxId      String
+  sellerAddress    String
+  sellerBranchCode String?
+  sellerPhone      String?
+  /// ── Buyer: unused today; lets a full ใบกำกับภาษีเต็มรูป be added later ──
+  buyerName        String?
+  buyerTaxId       String?
+  buyerAddress     String?
+  /// ── Money snapshot (satang) ──
+  grossSatang      Int
+  netSatang        Int
+  vatSatang        Int
+  vatRatePercent   Int
+  vatRegistered    Boolean
+  /// "RECEIPT" (plain ใบเสร็จรับเงิน) | "ABB_TAX_INVOICE" (ใบกำกับภาษีอย่างย่อ).
+  docType          String        @default("RECEIPT")
+  paymentMethod    String?
+  /// Unguessable id for the public /receipt/<token> URL — never the sequence.
+  publicToken      String        @unique
+  /// A tax document is voided, never deleted: the number stays burnt.
+  voidedAt         DateTime?
+  voidReason       String?
+  voidedBy         String?
+  createdAt        DateTime      @default(now())
+  branch           Branch        @relation(fields: [branchId], references: [id])
+  booking          Booking       @relation(fields: [bookingId], references: [id])
+  items            ReceiptItem[]
+
+  @@index([branchId, issuedAt])
+  @@index([issuedAt])
+  @@index([sequence])
+}
+
+model ReceiptItem {
+  id              String  @id @default(cuid())
+  receiptId       String
+  description     String
+  quantity        Float   @default(1)
+  unitPriceSatang Int
+  totalSatang     Int
+  sortOrder       Int     @default(0)
+  receipt         Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
 }
 
 enum BookingStatus {

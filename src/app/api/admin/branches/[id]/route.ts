@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const body = await request.json();
     const {
       name, address, phone, openTime, closeTime, mapUrl, mapLat, mapLng,
-      onlineCap, bookingEnabled,
+      onlineCap, bookingEnabled, taxBranchCode,
     } = body;
 
     const branch = await prisma.branch.update({
@@ -39,6 +39,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // Capacity controls — null = no cap (use staff count), 0 = online closed, N = cap online
         ...(onlineCap      !== undefined ? { onlineCap:      onlineCap === null || onlineCap === "" ? null : Math.max(0, Number(onlineCap)) } : {}),
         ...(bookingEnabled !== undefined ? { bookingEnabled: Boolean(bookingEnabled) } : {}),
+        // Revenue-Department branch code printed on receipts ("00000" = สำนักงานใหญ่).
+        ...(taxBranchCode  !== undefined ? { taxBranchCode: String(taxBranchCode).trim() || null } : {}),
       },
     });
     revalidateReferenceData();

@@ -4,22 +4,59 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { MEMBERSHIP_SKU, activateOrRenewMembership, holdMembershipPrepaid } from "@/lib/membership";
 import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
 import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
+import { issueReceiptForBooking, receiptUrl, type ReceiptLineInput } from "@/lib/receipts";
+
+/**
+ * Issue the receipt for a completed sale.
+ *
+ * Deliberately non-fatal: the money has already changed hands and the booking
+ * is saved, so a receipt problem must never surface to the cashier as a failed
+ * sale. Staff can re-issue from sales history if this ever returns null.
+ */
+async function attachReceipt(
+  bookingId: string,
+  opts: { items: ReceiptLineInput[]; paymentMethod: string; issuedByAdminId: string; issuedByName: string },
+) {
+  try {
+    const receipt = await issueReceiptForBooking(bookingId, opts);
+    if (!receipt) return null;
+    return {
+      id:          receipt.id,
+      number:      receipt.number,
+      publicToken: receipt.publicToken,
+      url:         receiptUrl(receipt.publicToken),
+    };
+  } catch (e) {
+    console.error("[pos/sale] receipt issue failed", e);
+    return null;
+  }
+}
 
 interface SaleItem {
   name:             string;
+  /** Unit price in satang (already discounted). Negative for discount lines. */
   price:            number;
+  /** Units sold on this line. Optional — older clients repeat the line instead. */
+  qty?:             number;
   branchServiceId?: string; // for service items, the BranchService row id
   /** When set, this item was redeemed against an active package and was free. */
   redeemPackageId?: string;
 }
 
+/** Units on a line, tolerating older clients that omit `qty` entirely. */
+function unitsOf(item: SaleItem): number {
+  const q = Number(item.qty);
+  return Number.isFinite(q) && q > 0 ? q : 1;
+}
+
 export async function POST(request: Request) {
-  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
-  if (_gate instanceof Response) return _gate;
+  const gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (gate instanceof Response) return gate;
+  const admin = gate;
 
   try {
     const body = await request.json();
-    const { branchId, customerName, customerPhone, items, notes, fromBookingId, holdMembership } = body as {
+    const { branchId, customerName, customerPhone, items, notes, fromBookingId, holdMembership, paymentMethod } = body as {
       branchId:       string;
       customerName:   string;
       customerPhone?: string;
@@ -29,6 +66,8 @@ export async function POST(request: Request) {
       /** "Pay now, activate later": record the ฿990 but park the membership as
        *  pending (30-day clock starts when staff activate on the return visit). */
       holdMembership?: boolean;
+      /** How the customer paid — printed on the receipt. Defaults to cash. */
+      paymentMethod?: string;
     };
 
     if (!branchId || !customerName || !Array.isArray(items) || items.length === 0) {
@@ -50,13 +89,32 @@ export async function POST(request: Request) {
     const startTime = `${pad(bkHr)}:${pad(bkMin)}`;
     const endTime   = `${pad((bkHr + 1) % 24)}:${pad(bkMin)}`;
 
-    const totalPrice = items.reduce((s, i) => s + i.price, 0);
+    const totalPrice = items.reduce((s, i) => s + i.price * unitsOf(i), 0);
+    // Cash is the counter default; older clients send nothing at all.
+    const payMethod = paymentMethod?.trim() || "เงินสด";
 
-    // Encode the actual items in notes
+    // Encode the actual items in notes (unchanged format for qty 1 so existing
+    // sales-history rows and the CSV export keep reading the same).
     const itemSummary = items
-      .map(i => `${i.name}: ฿${(i.price / 100).toLocaleString()}`)
+      .map(i => {
+        const units = unitsOf(i);
+        const label = units > 1 ? `${i.name} x${units}` : i.name;
+        return `${label}: ฿${((i.price * units) / 100).toLocaleString()}`;
+      })
       .join("\n");
     const fullNotes = [itemSummary, notes].filter(Boolean).join("\n---\n");
+
+    // Structured lines for the receipt — the whole reason the cart now sends
+    // qty instead of repeating a line N times.
+    const receiptLines = items.map(i => {
+      const units = unitsOf(i);
+      return {
+        description:     i.name,
+        quantity:        units,
+        unitPriceSatang: i.price,
+        totalSatang:     i.price * units,
+      };
+    });
 
     // ── Detect membership / package SKUs in cart ───────────────────────
     // We resolve serviceIds from the BranchService rows referenced in items.
@@ -82,15 +140,20 @@ export async function POST(request: Request) {
         if (svcId === MEMBERSHIP_SKU) {
           if (!membershipItem) membershipItem = { branchServiceId: it.branchServiceId, price: it.price };
         } else if (isPackageSku(svcId)) {
-          packageItems.push({ branchServiceId: it.branchServiceId, serviceId: svcId, price: it.price });
+          // One activation per unit — the cart now sends qty instead of
+          // repeating the line, so expand it back out here.
+          for (let n = 0; n < unitsOf(it); n++) {
+            packageItems.push({ branchServiceId: it.branchServiceId, serviceId: svcId, price: it.price });
+          }
         }
       }
     }
 
-    // Collect package redemptions to apply (one per item line that flagged itself)
-    const redemptionIds = items
-      .map(i => i.redeemPackageId)
-      .filter((x): x is string => !!x);
+    // Collect package redemptions to apply — one per UNIT sold, so a qty-2 line
+    // still burns two uses exactly as the old repeated-line format did.
+    const redemptionIds = items.flatMap(i =>
+      i.redeemPackageId ? Array<string>(unitsOf(i)).fill(i.redeemPackageId) : [],
+    );
 
     // ── If continuing from a booking ───────────────────────────────────
     if (fromBookingId) {
@@ -161,7 +224,13 @@ export async function POST(request: Request) {
         await redeemPackage(rid);
       }
 
-      return NextResponse.json(booking, { status: 200 });
+      const receipt = await attachReceipt(booking.id, {
+        items:           receiptLines,
+        paymentMethod:   payMethod,
+        issuedByAdminId: admin.id,
+        issuedByName:    admin.name,
+      });
+      return NextResponse.json({ ...booking, receipt }, { status: 200 });
     }
 
     // ── New walk-in sale ────────────────────────────────────────────────
@@ -264,7 +333,13 @@ export async function POST(request: Request) {
       await redeemPackage(rid);
     }
 
-    return NextResponse.json(booking, { status: 201 });
+    const receipt = await attachReceipt(booking.id, {
+      items:           receiptLines,
+      paymentMethod:   payMethod,
+      issuedByAdminId: admin.id,
+      issuedByName:    admin.name,
+    });
+    return NextResponse.json({ ...booking, receipt }, { status: 201 });
   } catch (error) {
     console.error("POS sale error:", error);
     return NextResponse.json({ error: "Failed to create sale" }, { status: 500 });
