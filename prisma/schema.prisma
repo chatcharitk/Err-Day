@@ -377,7 +377,9 @@ model Booking {
   staff             Staff?         @relation(fields: [staffId], references: [id])
   addons            BookingAddon[]
   extraStaff        BookingStaff[]
-  receipt           Receipt?
+  /// Normally one, but a void-and-reissue correction leaves the superseded
+  /// row in place (voided, not deleted) alongside its replacement.
+  receipts          Receipt[]
 
   @@index([branchId, date])
   @@index([customerId])
@@ -663,8 +665,12 @@ model Receipt {
   number           String        @unique
   /// Raw running number behind `number`, for ordering and audit.
   sequence         Int
-  /// One receipt per sale — also the idempotency key when a payment path fires twice.
-  bookingId        String        @unique
+  /// One ACTIVE receipt per booking — enforced by a partial unique index
+  /// (bookingId WHERE voidedAt IS NULL, see migration SQL), not by @unique
+  /// here, so a stale receipt can be voided and immediately replaced by a
+  /// corrected one on the same booking without a constraint clash. Still the
+  /// idempotency key in the common case (a payment path firing twice).
+  bookingId        String
   branchId         String
   customerId       String?
   issuedAt         DateTime      @default(now())
@@ -701,6 +707,7 @@ model Receipt {
   booking          Booking       @relation(fields: [bookingId], references: [id])
   items            ReceiptItem[]
 
+  @@index([bookingId])
   @@index([branchId, issuedAt])
   @@index([issuedAt])
   @@index([sequence])

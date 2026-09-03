@@ -18,7 +18,10 @@ async function attachReceipt(
   opts: { items: ReceiptLineInput[]; paymentMethod: string; issuedByAdminId: string; issuedByName: string },
 ) {
   try {
-    const receipt = await issueReceiptForBooking(bookingId, opts);
+    // POS holds the real, final sale — correct a stale receipt left over from
+    // an earlier non-POS payment event (e.g. an admin "mark paid" toggle with
+    // no item/discount detail) rather than silently keeping the wrong total.
+    const receipt = await issueReceiptForBooking(bookingId, { ...opts, correctStaleTotal: true });
     if (!receipt) return null;
     return {
       id:          receipt.id,

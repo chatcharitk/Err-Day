@@ -40,8 +40,11 @@ export default async function HistoryPage({
         service:  { select: { name: true, nameTh: true } },
         staff:    { select: { id: true, name: true } },
         customer: { select: { id: true, name: true, phone: true } },
-        // Drives the print/re-issue link per row.
-        receipt:  { select: { number: true, publicToken: true, voidedAt: true } },
+        // Drives the print/re-issue link per row — only the ACTIVE receipt (a
+        // void is always immediately followed by a corrected reissue, so a
+        // booking whose only receipt is voided reads the same as "none yet"
+        // and offers the same "ออกใบเสร็จ" fallback).
+        receipts: { where: { voidedAt: null }, take: 1, select: { number: true, publicToken: true } },
       },
       orderBy: [{ date: "desc" }, { startTime: "desc" }],
     }),
@@ -69,8 +72,8 @@ export default async function HistoryPage({
         service:  { name: b.service.name, nameTh: b.service.nameTh },
         staff:    b.staff ? { id: b.staff.id, name: b.staff.name } : null,
         customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
-        receipt:  b.receipt
-          ? { number: b.receipt.number, publicToken: b.receipt.publicToken, voided: !!b.receipt.voidedAt }
+        receipt:  b.receipts[0]
+          ? { number: b.receipts[0].number, publicToken: b.receipts[0].publicToken }
           : null,
       }))}
       branches={branches.map(b => ({ id: b.id, name: b.name }))}

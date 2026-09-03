@@ -29,7 +29,7 @@ interface SaleRecord {
   staff:    { id: string; name: string } | null;
   customer: { id: string; name: string; phone: string };
   /** Issued receipt, if this sale has one. */
-  receipt:  { number: string; publicToken: string; voided: boolean } | null;
+  receipt:  { number: string; publicToken: string } | null;
 }
 
 interface Props {
@@ -938,13 +938,8 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                           {/* Price */}
                           <td className="px-4 py-3 whitespace-nowrap text-right align-top">
                             <p className="font-semibold text-sm" style={{ color: PRIMARY }}>{fmt(sale.totalPrice)}</p>
-                            <p
-                              className="text-[10px] font-mono"
-                              style={{ color: sale.receipt?.voided ? "#DC2626" : "#C4B0A4" }}
-                            >
-                              {sale.receipt
-                                ? `${sale.receipt.number}${sale.receipt.voided ? " (ยกเลิก)" : ""}`
-                                : `#${sale.id.slice(-6).toUpperCase()}`}
+                            <p className="text-[10px] font-mono" style={{ color: "#C4B0A4" }}>
+                              {sale.receipt ? sale.receipt.number : `#${sale.id.slice(-6).toUpperCase()}`}
                             </p>
                           </td>
 

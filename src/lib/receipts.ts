@@ -29,6 +29,16 @@ export interface IssueReceiptOpts {
   paymentMethod?:   string | null;
   issuedByAdminId?: string | null;
   issuedByName?:    string | null;
+  /**
+   * POS checkout is the one caller that actually holds the real, final sale
+   * (structured items, any discount, cash in hand right now). If a booking
+   * already carries a receipt from an earlier, less-authoritative event (e.g.
+   * an admin's generic "mark paid" toggle, which has no item/discount detail)
+   * and that receipt's total doesn't match what's being charged now, void it
+   * and issue a corrected one rather than silently keeping the wrong total.
+   * Off by default — every other caller stays purely idempotent.
+   */
+  correctStaleTotal?: boolean;
 }
 
 /**
@@ -133,11 +143,13 @@ export async function issueReceiptForBookingTx(
   bookingId: string,
   opts: IssueReceiptOpts = {},
 ) {
-  const existing = await tx.receipt.findUnique({
-    where:   { bookingId },
+  // bookingId is only unique among ACTIVE receipts (partial index) — a voided
+  // one may coexist with its replacement, so look up the active one by hand.
+  const existing = await tx.receipt.findFirst({
+    where:   { bookingId, voidedAt: null },
+    orderBy: { sequence: "desc" },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
-  if (existing) return existing;
 
   const booking = await tx.booking.findUnique({
     where:  { id: bookingId },
@@ -148,7 +160,23 @@ export async function issueReceiptForBookingTx(
       addons:  { select: { price: true, addon: { select: { name: true, nameTh: true } } } },
     },
   });
-  if (!booking) return null;
+  if (!booking) return existing ?? null;
+
+  if (existing) {
+    const stale = opts.correctStaleTotal && existing.grossSatang !== booking.totalPrice;
+    if (!stale) return existing;
+    // The old document never left the till uncorrected — void it (keeping its
+    // number burnt) and fall through to issue the real one below.
+    await tx.receipt.update({
+      where: { id: existing.id },
+      data: {
+        voidedAt:   new Date(),
+        voidReason: "ยอดชำระถูกแก้ไขที่จุดขาย ออกใบเสร็จใหม่แทน",
+        voidedBy:   opts.issuedByName ?? null,
+      },
+    });
+  }
+
   if (booking.totalPrice <= 0) return null;
 
   // Fall back to blanks rather than failing the sale if settings were never filled in.
