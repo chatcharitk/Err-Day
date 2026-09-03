@@ -163,7 +163,7 @@ export default function EditModal({
 
   async function save() {
     if (commissionBaht !== "" && (!Number.isFinite(Number(commissionBaht)) || Number(commissionBaht) < 0)) {
-      setStatusError("กรุณากรอกค่าตอบแทนเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      setStatusError("กรุณากรอกค่าทิปเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
       return;
     }
     setSaving(true);
@@ -238,7 +238,7 @@ export default function EditModal({
             </span>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">ค่าตอบแทนช่าง (บาท)</label>
+            <label className="text-xs text-gray-500 block mb-1">ค่าทิป (บาท)</label>
             <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
               <span className="text-sm text-gray-400">฿</span>
               <input type="number" min={0} step="0.01" value={commissionBaht}
@@ -247,7 +247,7 @@ export default function EditModal({
                 className="flex-1 text-sm outline-none bg-transparent min-w-0" />
             </div>
             <p className="text-[11px] text-gray-400 mt-1">
-              จำนวนนี้จะใช้คำนวณค่าตอบแทนเมื่อคิวเสร็จสิ้น
+              จำนวนนี้จะใช้คำนวณค่าทิปเมื่อคิวเสร็จสิ้น
             </p>
           </div>
           {booking.addons.length > 0 && (

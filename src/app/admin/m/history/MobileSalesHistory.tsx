@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RefreshCw, TrendingUp } from "lucide-react";
+import { ArrowLeft, ChevronRight, RefreshCw, TrendingUp } from "lucide-react";
 import type { Period } from "./page";
 
 const PRIMARY = "#8B1D24";
@@ -148,7 +148,7 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
             <div
               className="grid text-[10px] font-semibold uppercase tracking-widest px-3 py-2"
               style={{
-                gridTemplateColumns: "3rem 1fr 1fr auto",
+                gridTemplateColumns: "3rem 1fr 1fr auto 1rem",
                 background: "#F9F0EA",
                 borderBottom: `1px solid ${BORDER}`,
                 color: MUTED,
@@ -158,6 +158,7 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
               <span>ชื่อ</span>
               <span>บริการ</span>
               <span className="text-right">ยอด</span>
+              <span aria-hidden="true" />
             </div>
 
             {grouped.map(([dateStr, rows], gi) => {
@@ -183,11 +184,14 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
 
                   {/* Rows */}
                   {rows.map((row, ri) => (
-                    <div
+                    <button
                       key={row.id}
-                      className="grid items-start px-3 py-2"
+                      type="button"
+                      onClick={() => router.push(`/admin/m/${row.id}`)}
+                      aria-label={`ดูและแก้ไขรายการ ${row.customerName} ${row.serviceName}`}
+                      className="grid items-start px-3 py-2 w-full text-left active:opacity-70"
                       style={{
-                        gridTemplateColumns: "3rem 1fr 1fr auto",
+                        gridTemplateColumns: "3rem 1fr 1fr auto 1rem",
                         borderTop: `1px solid ${BORDER}`,
                         background: ri % 2 === 0 ? "white" : "#FDFAF8",
                       }}
@@ -206,7 +210,8 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
                       <span className="text-xs font-semibold text-right pt-px whitespace-nowrap" style={{ color: "#166534" }}>
                         ฿{(row.totalPrice / 100).toLocaleString()}
                       </span>
-                    </div>
+                      <ChevronRight size={14} className="mt-px ml-1" style={{ color: MUTED }} />
+                    </button>
                   ))}
                 </div>
               );

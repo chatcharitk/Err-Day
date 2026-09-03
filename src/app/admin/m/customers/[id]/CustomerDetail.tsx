@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowLeft, Pencil, Phone, Mail, User, Sparkles, Package as PackageIcon,
   Loader2, AlertCircle, Check, Clock, MapPin, Camera, Plus, Trash2, X,
-  Receipt, Info, FileImage, NotebookPen, Cake,
+  Receipt, Info, FileImage, NotebookPen, Cake, ChevronRight,
 } from "lucide-react";
 import LineLinkButton from "@/components/LineLinkButton";
 
@@ -792,25 +793,30 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
       {/* Recent bookings */}
       {c.recentBookings.length > 0 && (
         <section className="px-4 pb-4">
-          <p className="text-xs mb-2 font-medium uppercase tracking-widest" style={{ color: MUTED }}>การจองล่าสุด</p>
+          <p className="text-xs mb-2 font-medium uppercase tracking-widest" style={{ color: MUTED }}>ประวัติการจองและการขาย</p>
           <div className="space-y-2">
             {c.recentBookings.map(b => (
-              <div key={b.id} className="rounded-xl p-3" style={{ border: `1px solid ${BORDER}`, background: "white" }}>
+              <Link key={b.id} href={`/admin/m/${b.id}`}
+                className="block rounded-xl p-3 active:opacity-70"
+                style={{ border: `1px solid ${BORDER}`, background: "white" }}>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-sm font-medium" style={{ color: TEXT }}>{b.serviceName}</p>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{
-                    background: b.status === "COMPLETED" ? "#F0FDF4" : b.status === "CANCELLED" ? "#F3F4F6" : "#FFF8F4",
-                    color:      b.status === "COMPLETED" ? "#166534" : b.status === "CANCELLED" ? "#6B7280" : "#9A3412",
-                  }}>
-                    {STATUS_TH[b.status]}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{
+                      background: b.status === "COMPLETED" ? "#F0FDF4" : b.status === "CANCELLED" ? "#F3F4F6" : "#FFF8F4",
+                      color:      b.status === "COMPLETED" ? "#166534" : b.status === "CANCELLED" ? "#6B7280" : "#9A3412",
+                    }}>
+                      {STATUS_TH[b.status]}
+                    </span>
+                    <ChevronRight size={14} style={{ color: MUTED }} />
+                  </div>
                 </div>
                 <p className="text-[11px] flex items-center gap-2" style={{ color: MUTED }}>
                   <span className="inline-flex items-center gap-1"><Clock size={10} />{fmtDate(b.date)} {b.startTime}</span>
                   <span className="inline-flex items-center gap-1"><MapPin size={10} />{b.branchName}</span>
                 </p>
                 <p className="text-xs mt-1" style={{ color: TEXT }}>{fmtPrice(b.totalPrice)}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </section>

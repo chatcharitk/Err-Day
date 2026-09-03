@@ -72,11 +72,11 @@ export default async function MobileCustomerDetailPage({
   const codeForBooking = (bookingId: string | null) =>
     branchCode(bookingId ? branchByBooking.get(bookingId) : null);
 
-  // Recent bookings (last 5)
+  // Customer history (latest 50), with each row linking to mobile transaction detail.
   const recentBookings = await prisma.booking.findMany({
     where:   { customerId: id },
     orderBy: { date: "desc" },
-    take:    5,
+    take:    50,
     select: {
       id:         true,
       date:       true,

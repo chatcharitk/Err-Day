@@ -112,7 +112,7 @@ export default function AddBookingModal({
       return;
     }
     if (commissionBaht !== "" && (!Number.isFinite(Number(commissionBaht)) || Number(commissionBaht) < 0)) {
-      setError("กรุณากรอกค่าตอบแทนเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      setError("กรุณากรอกค่าทิปเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
       return;
     }
     // Wait for the membership check so a member is never saved at full price.
@@ -331,7 +331,7 @@ export default function AddBookingModal({
             )}
             <div>
               <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">
-                ค่าตอบแทนช่าง (บาท)
+                ค่าทิป (บาท)
               </label>
               <div className="flex items-center gap-2 border border-[#E8D8CC] rounded-xl px-3 py-2.5">
                 <span className="text-sm text-[#A08070]">฿</span>
