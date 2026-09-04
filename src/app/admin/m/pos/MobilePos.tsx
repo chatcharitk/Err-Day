@@ -526,10 +526,11 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           <p className="text-sm mt-1" style={{ color: MUTED }}>ยอดรวม {formatPrice(total)}</p>
 
           {receipt && (
+            // Same tab (not target="_blank") — this is a mobile PWA with no tab
+            // bar, so a new tab has no visible way back. A real history entry
+            // here means the receipt page's own back button works.
             <a
               href={receipt.url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="mt-5 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium text-white"
               style={{ background: PRIMARY }}
             >

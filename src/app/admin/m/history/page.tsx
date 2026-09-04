@@ -76,6 +76,9 @@ export default async function MobileHistoryPage({
         service:  { select: { nameTh: true } },
         customer: { select: { name: true, nickname: true } },
         staff:    { select: { name: true } },
+        // Just a presence indicator here — full access to it lives on the
+        // booking detail screen (row tap), matching the desktop table.
+        receipts: { where: { voidedAt: null }, take: 1, select: { id: true } },
       },
       orderBy: [{ date: "desc" }, { startTime: "desc" }],
       take: LIST_CAP,
@@ -91,6 +94,7 @@ export default async function MobileHistoryPage({
     serviceName:  b.service.nameTh,
     customerName: b.customer.nickname || b.customer.name,
     staffName:    b.staff?.name ?? null,
+    hasReceipt:   b.receipts.length > 0,
   }));
 
   const totalCount = agg._count;

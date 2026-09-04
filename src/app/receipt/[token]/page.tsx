@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { receiptUrl } from "@/lib/receipts";
-import PrintButton from "./PrintButton";
+import PrintButton, { ReceiptBackButton } from "./PrintButton";
 
 // A receipt can be voided after issue, so never serve a cached copy.
 export const dynamic = "force-dynamic";
@@ -86,6 +86,14 @@ const CSS = `
     letter-spacing: 1px;
   }
 
+  .receipt-back {
+    width: 72mm;
+    display: flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 13px; color: #3B2A24;
+    background: none; border: none; padding: 4px 2px;
+    cursor: pointer;
+  }
+
   .receipt-actions { display: flex; gap: 8px; }
   .receipt-btn {
     font: inherit; font-size: 13px;
@@ -149,6 +157,7 @@ export default async function ReceiptPage({
     <>
       <style>{CSS}</style>
       <div className="receipt-screen">
+        <ReceiptBackButton />
         <div className="receipt">
           {receipt.voidedAt && (
             <div className="r-void">

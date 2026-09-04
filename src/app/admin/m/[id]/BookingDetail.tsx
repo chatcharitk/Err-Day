@@ -43,6 +43,9 @@ interface Booking {
   completedAt:   string | null;
   isMember:      boolean;
   activatesMembership: boolean;
+  /** The issued sales receipt (Receipt model) — distinct from receiptUrl
+   *  above, which is a customer-uploaded payment slip image. */
+  receipt:       { number: string; publicToken: string } | null;
   addons: { id: string; addonId: string; name: string; price: number }[];
 }
 
@@ -103,6 +106,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const [b, setB] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");
+  const [issuingReceipt, setIssuingReceipt] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const handleRefresh = () => startRefresh(() => router.refresh());
 
@@ -180,6 +184,29 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     const iso = paid ? new Date().toISOString() : null;
     const updated = await patch({ paidAt: iso });
     if (updated) setB((x) => ({ ...x, paidAt: iso }));
+  };
+
+  /**
+   * Recovery path: a paid booking normally already has a receipt (every
+   * payment path issues one automatically), but a sale from before receipts
+   * existed — or one where issuing silently failed — won't. Manual fallback,
+   * same endpoint sales history uses.
+   */
+  const issueReceipt = async () => {
+    setIssuingReceipt(true);
+    setErr("");
+    try {
+      const res = await fetch("/api/admin/receipts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: b.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setErr(json.error ?? "ออกใบเสร็จไม่สำเร็จ"); return; }
+      setB((x) => ({ ...x, receipt: { number: json.number, publicToken: json.publicToken } }));
+    } finally {
+      setIssuingReceipt(false);
+    }
   };
 
   const saveCommission = async () => {
@@ -671,13 +698,42 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         )}
       </section>
 
-      {/* ── Receipt ── */}
+      {/* ── Sales receipt (the issued document) — every payment path issues one
+          automatically; this is where it's ACTUALLY visible outside POS. ── */}
+      {b.paidAt && (
+        <section className="px-4 mt-3">
+          {b.receipt ? (
+            <a
+              href={`/receipt/${b.receipt.publicToken}`}
+              className="rounded-2xl px-4 py-3 flex items-center justify-between gap-2"
+              style={{ background: "#FFF8F4", border: `1px solid ${BORDER}` }}
+            >
+              <span className="text-sm font-medium flex items-center gap-1.5" style={{ color: TEXT }}>
+                <Receipt size={15} style={{ color: PRIMARY }} /> ใบเสร็จขาย {b.receipt.number}
+              </span>
+              <ChevronRight size={16} style={{ color: MUTED }} />
+            </a>
+          ) : (
+            <button
+              onClick={issueReceipt}
+              disabled={issuingReceipt}
+              className="w-full rounded-2xl px-4 py-3 flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
+              style={{ background: "#FFF8F4", border: `1px solid ${BORDER}`, color: TEXT }}
+            >
+              {issuingReceipt ? <Loader2 size={15} className="animate-spin" /> : <Receipt size={15} style={{ color: PRIMARY }} />}
+              {issuingReceipt ? "กำลังออกใบเสร็จ..." : "ออกใบเสร็จขาย"}
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* ── Receipt upload — customer's payment slip image, not the document above ── */}
       <section className="px-4 mt-5">
         <ImageUpload
           kind="receipt"
           ref={b.id}
           value={b.receiptUrl}
-          label="ใบเสร็จ / สลิปโอนเงิน"
+          label="สลิปโอนเงิน (รูปภาพ)"
           onChange={async (url) => {
             const updated = await patch({ receiptUrl: url });
             // Attaching a receipt also stamps paidAt server-side — mirror it.

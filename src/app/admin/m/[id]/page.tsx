@@ -34,6 +34,9 @@ export default async function MobileBookingDetailPage({
       createdAt:  true,
       completedAt: true,
       activatesMembership: true,
+      // The actual issued sales receipt — distinct from receiptUrl above,
+      // which is a customer-uploaded payment slip image.
+      receipts: { where: { voidedAt: null }, take: 1, select: { number: true, publicToken: true } },
       branch:   { select: { name: true } },
       service:  { select: { nameTh: true } },
       staff:    { select: { name: true } },
@@ -131,6 +134,9 @@ export default async function MobileBookingDetailPage({
     createdAt:    booking.createdAt.toISOString(),
     completedAt:  booking.completedAt ? booking.completedAt.toISOString() : null,
     activatesMembership: booking.activatesMembership,
+    receipt: booking.receipts[0]
+      ? { number: booking.receipts[0].number, publicToken: booking.receipts[0].publicToken }
+      : null,
     addons:       booking.addons.map((a) => ({
       id:      a.id,
       addonId: a.addonId,

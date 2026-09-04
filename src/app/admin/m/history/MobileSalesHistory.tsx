@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronRight, RefreshCw, TrendingUp } from "lucide-react";
+import { ArrowLeft, ChevronRight, ReceiptText, RefreshCw, TrendingUp } from "lucide-react";
 import type { Period } from "./page";
 
 const PRIMARY = "#8B1D24";
@@ -31,6 +31,8 @@ interface SaleRow {
   serviceName:  string;
   customerName: string;
   staffName:    string | null;
+  /** Presence only — tap the row to open, print, or issue it. */
+  hasReceipt:   boolean;
 }
 
 const PERIOD_TABS: { key: Period; label: string }[] = [
@@ -207,7 +209,10 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
 
                       <p className="text-xs truncate pr-2" style={{ color: MUTED }}>{row.serviceName}</p>
 
-                      <span className="text-xs font-semibold text-right pt-px whitespace-nowrap" style={{ color: "#166534" }}>
+                      <span className="flex items-center justify-end gap-1 text-xs font-semibold text-right pt-px whitespace-nowrap" style={{ color: "#166534" }}>
+                        {row.hasReceipt && (
+                          <ReceiptText size={11} style={{ color: PRIMARY }} aria-label="มีใบเสร็จ" />
+                        )}
                         ฿{(row.totalPrice / 100).toLocaleString()}
                       </span>
                       <ChevronRight size={14} className="mt-px ml-1" style={{ color: MUTED }} />
