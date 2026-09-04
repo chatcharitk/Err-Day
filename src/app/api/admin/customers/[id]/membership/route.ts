@@ -153,6 +153,12 @@ export async function PATCH(
 
     return NextResponse.json(membership);
   } catch (error) {
+    if (error instanceof Error && error.message === "MEMBERSHIP_PAYMENT_REQUIRED") {
+      return NextResponse.json({ error: "ยังไม่พบการชำระค่าสมาชิกผ่าน POS" }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === "MEMBERSHIP_NOT_PENDING") {
+      return NextResponse.json({ error: "สมาชิกไม่ได้อยู่ในสถานะรอเปิดใช้งาน" }, { status: 409 });
+    }
     console.error(error);
     return NextResponse.json({ error: "Failed to update membership" }, { status: 500 });
   }

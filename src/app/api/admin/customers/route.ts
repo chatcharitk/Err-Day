@@ -53,10 +53,6 @@ export async function GET(request: Request) {
     const activeMembership = !!c.membership
       && !c.membership.pendingActivation
       && (!c.membership.expiresAt || c.membership.expiresAt >= now);
-    // A held (pre-paid, pending) membership auto-activates on the customer's
-    // next booking (see applyMembershipPricingForBooking), so admin booking
-    // forms should already preview member pricing for it too.
-    const pendingMembership = !!c.membership?.pendingActivation;
     return {
       id:         c.id,
       name:       c.name,
@@ -64,7 +60,7 @@ export async function GET(request: Request) {
       phone:      c.phone,
       email:      c.email,
       // `isMember` is consumed as "eligible for member pricing" by booking/POS.
-      isMember:   activeMembership || pendingMembership || activePkg,
+      isMember:   activeMembership || activePkg,
       isPending:  !!c.membership?.pendingActivation || pendingPkg,
       hasPackage: activePkg,
     };

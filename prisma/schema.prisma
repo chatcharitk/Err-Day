@@ -261,7 +261,9 @@ model Membership {
   usagesAllowed     Int               @default(0)
   usagesUsed        Int               @default(0)
   label             String            @default("สมาชิก")
-  pendingActivation Boolean           @default(false)
+  /// true until payment/activation is confirmed by POS or an admin. Defaulting
+  /// to pending prevents a bare Membership insert from granting benefits.
+  pendingActivation Boolean           @default(true)
   customer          Customer          @relation(fields: [customerId], references: [id])
   tier              MembershipTier?   @relation(fields: [tierId], references: [id])
   cycles            MembershipCycle[]
@@ -367,9 +369,9 @@ model Booking {
   paidAt            DateTime?
   receiptUploadedAt DateTime?
   receiptUrl        String?
-  /// Set true when creating this booking auto-activated a pending (pre-paid)
-  /// membership — i.e. this was the customer's first visit after paying in
-  /// advance. Purely informational; see holdMembershipPrepaid/applyMembershipPricingForBooking.
+  /// Legacy audit flag for bookings that activated a pending membership under
+  /// the former auto-activation flow. New bookings leave this false because a
+  /// booking alone is not proof of payment.
   activatesMembership Boolean      @default(false)
   branch            Branch         @relation(fields: [branchId], references: [id])
   customer          Customer       @relation(fields: [customerId], references: [id])

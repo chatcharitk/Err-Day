@@ -32,9 +32,8 @@ interface SignupBody {
 }
 
 /** POST /api/membership/signup
- *  Creates (or updates) a Customer with PDPA consent, ready to be activated
- *  by staff at POS. Does NOT create a Membership — that happens when payment
- *  is processed in POS.
+ *  Creates (or updates) a Customer with PDPA consent and a pending entitlement.
+ *  The entitlement remains inactive until payment is processed in POS.
  */
 export async function POST(request: Request) {
   try {

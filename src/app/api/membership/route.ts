@@ -31,18 +31,11 @@ export async function GET(request: Request) {
     && !membership.pendingActivation
     && (!membership.expiresAt || membership.expiresAt >= today)
     && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
-  // A held (pre-paid, pending) membership auto-activates on the customer's next
-  // booking (see applyMembershipPricingForBooking), so this preview already
-  // shows member pricing for it — otherwise the price shown here wouldn't match
-  // what the booking actually gets charged once submitted.
-  const hasPendingMembership = !!membership
-    && membership.pendingActivation
-    && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
   return NextResponse.json({
     ...customer,
     // Active packages receive the same service pricing as the ฿990 membership,
     // even when the selected service is not redeemed from the package.
-    hasMemberPricing: hasActiveMembership || hasPendingMembership || activePackages.length > 0,
+    hasMemberPricing: hasActiveMembership || activePackages.length > 0,
     packages: activePackages.map(p => ({
       id:               p.id,
       sku:              p.packageSku,
@@ -73,7 +66,9 @@ export async function POST(request: Request) {
   const membership = await prisma.membership.upsert({
     where: { customerId: customer.id },
     update: {},
-    create: { customerId: customer.id, tierId: bronzeTier.id, points: 0 },
+    // Registration alone is not payment. POS/admin activation must explicitly
+    // clear this flag before member pricing is granted.
+    create: { customerId: customer.id, tierId: bronzeTier.id, points: 0, pendingActivation: true },
     include: { tier: true },
   });
 

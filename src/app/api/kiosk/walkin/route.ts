@@ -4,7 +4,7 @@ import { getKioskBranch } from "@/lib/kiosk-auth";
 import { addMinutes, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokNowHm, bangkokTodayYmd, bookingDateForYmd } from "@/lib/desk";
 import { findActivePackages } from "@/lib/packages";
-import { applyMembershipPricingForBooking } from "@/lib/membership";
+import { hasActiveMembershipForBooking } from "@/lib/membership";
 
 // Walk-ins are always "wash & blow" (สระไดร์) — staff don't pick a service at
 // the counter. A serviceId in the body still overrides this if ever needed.
@@ -69,19 +69,16 @@ export async function POST(request: Request) {
 
   const bookingDate = bookingDateForYmd(bangkokTodayYmd());
 
-  // Resolve the customer + effective price, and create the booking atomically —
-  // a held (pre-paid, pending) membership auto-activates in the same transaction
-  // as the booking insert, dated from this walk-in's own day.
+  // Resolve the customer + effective price and create the booking atomically.
+  // A booking is not payment evidence, so pending signups remain pending.
   const booking = await prisma.$transaction(async (tx) => {
     let bookingCustomerId: string;
     let totalPrice = bs!.price;
-    let activatesMembership = false;
     if (customerId) {
       bookingCustomerId = customerId;
 
-      const { isActiveMember, activatedNow } = await applyMembershipPricingForBooking(tx, customerId, bookingDate);
+      const isActiveMember = await hasActiveMembershipForBooking(tx, customerId);
       const hasActivePackage = (await findActivePackages(customerId)).length > 0;
-      activatesMembership = activatedNow;
       if (isActiveMember || hasActivePackage) {
         let memberPrice = bs!.price;
         if (bs!.service.memberPrice != null) {
@@ -110,7 +107,6 @@ export async function POST(request: Request) {
         endTime,
         totalPrice,
         status:     "CONFIRMED",
-        activatesMembership,
         // If a staff was chosen, the walk-in is already in service.
         ...(staffId ? { checkedInAt: now } : {}),
       },

@@ -145,13 +145,37 @@ export async function holdMembershipPrepaid(opts: ActivateOpts) {
 }
 
 /**
- * Core of activating a held (pre-paid, pending) membership, parameterized on
- * the window's start date and the db/tx client so it can run either standalone
- * (the "เปิดใช้งาน" button) or inside an existing booking-creation transaction
- * (see applyMembershipPricingForBooking). Rewrites the open prepayment cycle's
- * placeholder window to match, so purchase history reads correctly.
+ * Core of activating a held (pre-paid, pending) membership. The open cycle and
+ * its paid POS booking are required as payment evidence; an unpaid app signup
+ * has neither and cannot be activated by mistake. Rewrites the prepayment
+ * cycle's placeholder window so purchase history reads correctly.
  */
 async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: Date) {
+  const membershipBefore = await tx.membership.findUnique({
+    where:  { customerId },
+    select: { id: true, pendingActivation: true },
+  });
+  if (!membershipBefore?.pendingActivation) {
+    throw new Error("MEMBERSHIP_NOT_PENDING");
+  }
+
+  const heldCycle = await tx.membershipCycle.findFirst({
+    where: {
+      membershipId: membershipBefore.id,
+      closedAt:      null,
+      bookingId:     { not: null },
+      paymentMethod: "POS",
+    },
+    orderBy: { startedAt: "desc" },
+    select:  { bookingId: true },
+  });
+  const paidBooking = heldCycle?.bookingId
+    ? await tx.booking.findUnique({ where: { id: heldCycle.bookingId }, select: { paidAt: true } })
+    : null;
+  if (!paidBooking?.paidAt) {
+    throw new Error("MEMBERSHIP_PAYMENT_REQUIRED");
+  }
+
   const expiresAt = new Date(startDate.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * 24 * 60 * 60 * 1000);
 
   const membership = await tx.membership.update({
@@ -178,19 +202,16 @@ export async function activateHeldMembership(customerId: string, startDate: Date
 }
 
 /**
- * Decide member pricing for a booking being created, and — if the customer's
- * membership is a held/pre-paid one (`pendingActivation`) — auto-activate it
- * using the booking's own date as the 30-day window's start. This is what lets
- * a customer who paid in advance get member pricing (and start their clock) on
- * their next visit, instead of requiring a separate manual activation step.
- * Must be called with the same `tx` the booking is being created in, so the
- * activation and the booking insert commit atomically.
+ * Check whether a customer is eligible for member pricing while creating a
+ * booking. A pending membership is deliberately never activated here: pending
+ * can mean an unpaid app signup, and making a booking is not payment evidence.
+ * Prepaid held memberships are activated explicitly by staff when the customer
+ * arrives, via activateHeldMembership().
  */
-export async function applyMembershipPricingForBooking(
+export async function hasActiveMembershipForBooking(
   tx: Db,
   customerId: string,
-  bookingDate: Date,
-): Promise<{ isActiveMember: boolean; activatedNow: boolean }> {
+): Promise<boolean> {
   const membership = await tx.membership.findUnique({
     where:  { customerId },
     select: { expiresAt: true, usagesAllowed: true, usagesUsed: true, pendingActivation: true },
@@ -201,13 +222,7 @@ export async function applyMembershipPricingForBooking(
     && !membership.pendingActivation
     && (!membership.expiresAt || membership.expiresAt >= today)
     && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
-  if (isCurrentlyActive) return { isActiveMember: true, activatedNow: false };
-
-  if (membership?.pendingActivation) {
-    await activateHeldMembershipTx(tx, customerId, bookingDate);
-    return { isActiveMember: true, activatedNow: true };
-  }
-  return { isActiveMember: false, activatedNow: false };
+  return isCurrentlyActive;
 }
 
 export async function activateOrRenewMembership(opts: ActivateOpts) {

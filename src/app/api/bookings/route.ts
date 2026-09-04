@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendNewBookingNotifications } from "@/lib/notifications";
 import { getPromotionServicePrice } from "@/lib/promotions";
-import { applyMembershipPricingForBooking } from "@/lib/membership";
+import { hasActiveMembershipForBooking } from "@/lib/membership";
 import { issueReceiptForBookingTx } from "@/lib/receipts";
 import { requireAdmin } from "@/lib/admin-auth";
 
@@ -128,15 +128,12 @@ export async function POST(request: Request) {
 
       // The client displays the promotion, but price is also resolved here so
       // a crafted request cannot receive it outside the advertised dates.
-      // Membership eligibility mirrors the booking page: active, not expired,
-      // and not exhausted. A held (pre-paid, pending) membership auto-activates
-      // right here, dated from this booking's own date — see
-      // applyMembershipPricingForBooking.
+      // Membership eligibility mirrors the booking page: active, paid, not
+      // expired, and not exhausted. Creating a booking never activates an
+      // unpaid/pending signup.
       let finalTotalPrice = Number(totalPrice) || 0;
       const bookingDate = new Date(date + "T12:00:00");
-      const { isActiveMember, activatedNow } = await applyMembershipPricingForBooking(
-        tx, customer.id, bookingDate,
-      );
+      const isActiveMember = await hasActiveMembershipForBooking(tx, customer.id);
       const promotionalServicePrice = getPromotionServicePrice(serviceId, date, isActiveMember);
       if (promotionalServicePrice != null) {
         finalTotalPrice = promotionalServicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
@@ -156,7 +153,6 @@ export async function POST(request: Request) {
           notes: notes || null,
           internalNotes: notes || null,
           status: reqStatus,
-          activatesMembership: activatedNow,
           // "Create + checkout in one go": when the caller creates the booking
           // already COMPLETED, stamp completedAt with the booking's own day so
           // back-dated records land on the right day in sales history / payroll.
