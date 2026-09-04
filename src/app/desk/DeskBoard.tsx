@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserPlus, RefreshCw, Settings, Check, Clock, Undo2, X, Loader2, CircleAlert,
-  Sparkles, ArrowLeft,
+  Sparkles, ArrowLeft, Search,
 } from "lucide-react";
 import type { DeskBooking } from "@/lib/desk";
 
@@ -568,10 +568,10 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
   const [options, setOptions]   = useState<MemberLookup[]>([]);
   const [result, setResult]     = useState<MemberLookup | null>(null);
   const [saving, setSaving]     = useState(false);
+  const [query, setQuery]       = useState("");
 
-  // No searching at the counter — load the whole member list (current members
-  // first, then lapsed) as soon as the modal opens and let staff tap the name.
-  // State updates only happen inside async callbacks.
+  // Load every currently eligible customer when the modal opens; the search
+  // field below filters this list immediately as the employee types.
   useEffect(() => {
     let alive = true;
     fetch("/api/kiosk/member")
@@ -581,6 +581,15 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleOptions = normalizedQuery.length === 0
+    ? options
+    : options.filter(c =>
+        c.customer.name.toLocaleLowerCase().includes(normalizedQuery)
+        || c.customer.nickname?.toLocaleLowerCase().includes(normalizedQuery)
+        || c.customer.phone.replace(/[\s-]/g, "").includes(normalizedQuery.replace(/[\s-]/g, ""))
+      );
 
   async function create(staffId: string) {
     if (saving || !result) return;
@@ -616,7 +625,19 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
           {!result ? (
             <div>
               <p className="text-base font-bold mb-1" style={{ color: TEXT }}>เลือกสมาชิก{options.length > 0 ? ` (${options.length})` : ""}</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>แตะชื่อสมาชิกที่มาใช้บริการ — สมาชิกปัจจุบันอยู่ด้านบน</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>พิมพ์ชื่อ ชื่อเล่น หรือเบอร์โทรเพื่อค้นหา</p>
+
+              <label className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-3" style={{ border: `1.5px solid ${BORDER}`, background: "white" }}>
+                <Search size={18} style={{ color: MUTED }} />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="ค้นหาสมาชิก"
+                  className="min-w-0 flex-1 bg-transparent text-base outline-none"
+                  style={{ color: TEXT }}
+                  autoFocus
+                />
+              </label>
 
               {loading ? (
                 <div className="flex items-center justify-center py-12" style={{ color: MUTED }}>
@@ -624,12 +645,12 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                 </div>
               ) : (
                 <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${BORDER}`, background: "white" }}>
-                  {options.length === 0 ? (
+                  {visibleOptions.length === 0 ? (
                     <p className="flex items-center gap-1.5 text-sm px-4 py-4" style={{ color: MUTED }}>
-                      <CircleAlert size={15} /> ยังไม่มีสมาชิกในระบบ
+                      <CircleAlert size={15} /> {options.length === 0 ? "ยังไม่มีสมาชิกหรือผู้ถือแพ็กเกจในระบบ" : "ไม่พบสมาชิกที่ค้นหา"}
                     </p>
                   ) : (
-                    options.map((c, i) => (
+                    visibleOptions.map((c, i) => (
                       <button key={c.customer.id} onClick={() => setResult(c)}
                         className="w-full text-left px-4 py-3 flex items-center gap-3 active:bg-black/5 transition-colors"
                         style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
@@ -640,7 +661,12 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                           </p>
                           <p className="text-xs" style={{ color: MUTED }}>{c.customer.phone}</p>
                         </div>
-                        {c.memberStatus === "active" ? (
+                        {c.packages.some(p => p.sku === "svc-pkg5") ? (
+                          <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
+                            style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
+                            แพ็กเกจ 5 ครั้ง
+                          </span>
+                        ) : c.memberStatus === "active" ? (
                           <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
                             style={{ background: GREENBG, color: GREEN }}>
                             <Sparkles size={11} /> สมาชิก

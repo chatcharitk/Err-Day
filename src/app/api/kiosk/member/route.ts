@@ -7,8 +7,8 @@ const WALKIN_SERVICE = "svc-walkin";
 /**
  * Member list / lookup for the desk's "วอร์คอิน สมาชิก" flow.
  *
- * GET /api/kiosk/member            → ALL activated members (the modal's
- *                                    dropdown list; active first, then lapsed)
+ * GET /api/kiosk/member            → active members and active package holders
+ *                                    (the desk modal's dropdown list)
  * GET /api/kiosk/member?q=<text>   → name/nickname/phone lookup (any customer)
  *
  * Every entry carries membership validity, active packages (a hint for the
@@ -35,8 +35,27 @@ export async function GET(request: Request) {
   const customers = await prisma.customer.findMany({
     where: {
       ...(listMode
-        // List mode: everyone who has an ACTIVATED membership (current or lapsed).
-        ? { membership: { is: { pendingActivation: false } } }
+        // List mode: show people eligible for the member walk-in flow. A
+        // 5-times package grants that eligibility even without a membership,
+        // so package holders must be included in the counter list too.
+        ? {
+            OR: [
+              { membership: { is: { pendingActivation: false } } },
+              {
+                packages: {
+                  some: {
+                    closedAt: null,
+                    pendingActivation: false,
+                    expiresAt: { gte: todayUTC },
+                    OR: [
+                      { usageLimit: 0 },
+                      { usageLimit: 5, usagesUsed: { lt: 5 } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
         : {
             OR: [
               { name:     { contains: q, mode: "insensitive" } },
@@ -122,9 +141,9 @@ export async function GET(request: Request) {
     };
   });
 
-  // The walk-in dropdown lists CURRENT members only — expired/lapsed ones are
-  // dropped (already name-sorted by the query). The q= search path is untouched,
-  // so staff can still look up a lapsed member by name to renew.
+  // The walk-in dropdown lists only people currently eligible for member
+  // pricing. The q= search path is untouched, so staff can still look up a
+  // lapsed member by name to renew.
   if (listMode) {
     return NextResponse.json({ results: results.filter(r => r.memberStatus === "active") });
   }
