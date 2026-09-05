@@ -311,7 +311,10 @@ type GroupBooking = {
   internalNotes: string | null;
   date: Date;
   serviceId: string;
-  addons: { price: number }[];
+  addons: {
+    price: number;
+    addon: { name: string; nameTh: string };
+  }[];
   customer: {
     name: string;
     nickname: string | null;
@@ -339,7 +342,12 @@ const groupBookingSelect = () => ({
   internalNotes: true,
   date:       true,
   serviceId:  true,
-  addons:     { select: { price: true } },
+  addons:     {
+    select: {
+      price: true,
+      addon: { select: { name: true, nameTh: true } },
+    },
+  },
   customer:   {
     select: {
       name:     true,
@@ -367,7 +375,7 @@ function fmtGroupDate(date: Date): string {
 }
 
 /**
- * "14:00 : ชื่อลูกค้า - ฿500 - โน้ต" (note appended only when present).
+ * "14:00 : ชื่อลูกค้า - ฿500 - เสริม: ทรีตเมนต์ - โน้ต" (optional add-ons/note).
  *
  * A service covered by an active package (5-pack / buffet) with uses left is
  * redeemed for free at checkout, so the service portion shows as ฿0 and only
@@ -387,9 +395,15 @@ function fmtGroupBookingLine(b: GroupBooking): string {
   const addonsTotal = b.addons.reduce((s, a) => s + a.price, 0);
   const satang      = coveredByPackage ? addonsTotal : b.totalPrice;
 
-  const price = `฿${(satang / 100).toLocaleString()}`;
-  const note  = b.internalNotes?.trim();
-  return `${b.startTime} : ${name} - ${price}${note ? ` - ${note}` : ""}`;
+  const price      = `฿${(satang / 100).toLocaleString()}`;
+  const addonNames = b.addons
+    .map(item => item.addon.nameTh || item.addon.name)
+    .filter(Boolean)
+    .join(", ");
+  const note = b.internalNotes?.trim();
+  return `${b.startTime} : ${name} - ${price}`
+    + (addonNames ? ` - เสริม: ${addonNames}` : "")
+    + (note ? ` - ${note}` : "");
 }
 
 /**
