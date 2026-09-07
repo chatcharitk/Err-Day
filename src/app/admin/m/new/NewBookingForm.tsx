@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, ChevronDown, Search, Phone, User, Loader2,
+  ArrowLeft, ChevronDown, ChevronRight, Search, Phone, User, Loader2,
   AlertCircle, Check, X, Clock,
 } from "lucide-react";
 
@@ -78,7 +78,13 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
   const router = useRouter();
   const [branchId,      setBranchId]      = useState(activeBranchId);
   const [date,          setDate]          = useState(defaultDate);
-  const [serviceId,     setServiceId]     = useState<string>("");
+  // สระไดร์ (wash & blow) is the walk-in default — nearly every booking is
+  // this service. branchServices is static for the life of this mount (a
+  // branch switch does a full page reload, see the branch <select> below),
+  // so a lazy initializer is enough — no effect needed to keep it in sync.
+  const [serviceId,     setServiceId]     = useState<string>(
+    () => branchServices.find((s) => s.nameTh.startsWith("สระ"))?.id ?? "",
+  );
   const [staffId,       setStaffId]       = useState<string>("");
   const [extraStaffIds, setExtraStaffIds] = useState<string[]>([]);
   const [time,      setTime]      = useState<string>("");
@@ -135,6 +141,24 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
       return aP - bP;
     });
   }, [branchServices]);
+
+  // สระไดร์ (wash & blow) is the walk-in default — nearly every booking is
+  // this service, so it's pinned above the fold as its own card and
+  // pre-selected. Everything else collapses into "บริการอื่นๆ" so admins
+  // don't have to scroll past every category just to reach the time picker.
+  const primaryService = useMemo(
+    () => branchServices.find((s) => s.nameTh.startsWith("สระ")) ?? null,
+    [branchServices],
+  );
+  const otherEntries = useMemo(() => {
+    if (!primaryService) return groupedEntries;
+    return groupedEntries
+      .map(([cat, items]) => [cat, items.filter((s) => s.id !== primaryService.id)] as [string, Service[]])
+      .filter(([, items]) => items.length > 0);
+  }, [groupedEntries, primaryService]);
+  // Collapsed by default; expanded up front only if there's no primary
+  // service to pin (nothing to hide the rest behind, otherwise).
+  const [showOtherServices, setShowOtherServices] = useState(() => !primaryService);
 
   // Slot list adapts to day-of-week (Sunday opens at 10:00, except branch-bangna
   // which is open 07:00–21:00 every day including Sunday)
@@ -216,7 +240,9 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
           name:       name.trim() || undefined,
           phone:      phone.trim() || undefined,
           nickname:   finalNickname || undefined,
-          notes:         notes.trim() || undefined,
+          // Internal only — staff notes on an admin-created booking should
+          // never surface on the customer-facing side.
+          internalNotes: notes.trim() || undefined,
           addonIds:      selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
           extraStaffIds: extraStaffIds.length > 0 ? extraStaffIds : undefined,
           isWalkin:      isWalkin && !(name.trim() && phone.trim()),
@@ -445,46 +471,99 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
         )}
       </section>
 
-      {/* Service */}
+      {/* Service — สระไดร์ pinned as the default; everything else collapses so
+          the time picker below is reachable without scrolling past every
+          category first. */}
       <section className="px-4 pt-5">
         <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>บริการ</p>
-        <div className="space-y-3">
-          {groupedEntries.map(([cat, items]) => (
-            <div key={cat}>
-              <p className="text-xs font-medium mb-1.5" style={{ color: PRIMARY }}>{cat}</p>
-              <div className="grid grid-cols-2 gap-2">
-                {items.map((s) => {
-                  const selected = s.id === serviceId;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setServiceId(s.id)}
-                      className="rounded-xl p-3 text-left"
-                      style={{
-                        background: selected ? "#FFF8F4" : "white",
-                        border: `1.5px solid ${selected ? PRIMARY : BORDER}`,
-                        color: TEXT,
-                      }}
-                    >
-                      <p className="text-xs font-medium leading-tight">{s.nameTh}</p>
-                      <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
-                        <Clock size={9} />{s.duration} นาที
-                      </p>
-                      {isMember && computeMemberPrice(s) !== null && computeMemberPrice(s)! < s.price ? (
-                        <div className="mt-1 flex items-baseline gap-1">
-                          <span className="text-[10px] line-through" style={{ color: MUTED }}>{formatPrice(s.price)}</span>
-                          <span className="text-sm font-bold" style={{ color: "#16a34a" }}>{formatPrice(computeMemberPrice(s)!)}</span>
-                        </div>
-                      ) : (
-                        <p className="text-sm font-bold mt-1" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>
-                      )}
-                    </button>
-                  );
-                })}
+
+        {primaryService && (() => {
+          const s = primaryService;
+          const selected = s.id === serviceId;
+          const memberPrice = computeMemberPrice(s);
+          return (
+            <button
+              onClick={() => setServiceId(s.id)}
+              className="w-full rounded-xl p-3.5 text-left mb-2"
+              style={{
+                background: selected ? "#FFF8F4" : "white",
+                border: `1.5px solid ${selected ? PRIMARY : BORDER}`,
+                color: TEXT,
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">{s.nameTh}</p>
+                  <p className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color: MUTED }}>
+                    <Clock size={10} />{s.duration} นาที
+                  </p>
+                </div>
+                {isMember && memberPrice !== null && memberPrice < s.price ? (
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xs line-through" style={{ color: MUTED }}>{formatPrice(s.price)}</span>
+                    <span className="text-base font-bold" style={{ color: "#16a34a" }}>{formatPrice(memberPrice)}</span>
+                  </div>
+                ) : (
+                  <p className="text-base font-bold" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
+            </button>
+          );
+        })()}
+
+        <button
+          type="button"
+          onClick={() => setShowOtherServices((v) => !v)}
+          className="w-full flex items-center justify-between px-1 py-2"
+          style={{ color: MUTED }}
+        >
+          <span className="text-xs font-medium">บริการอื่นๆ</span>
+          <ChevronRight
+            size={14}
+            style={{ transform: showOtherServices ? "rotate(90deg)" : undefined, transition: "transform 120ms" }}
+          />
+        </button>
+
+        {showOtherServices && (
+          <div className="space-y-3 mt-1">
+            {otherEntries.map(([cat, items]) => (
+              <div key={cat}>
+                <p className="text-xs font-medium mb-1.5" style={{ color: PRIMARY }}>{cat}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {items.map((s) => {
+                    const selected = s.id === serviceId;
+                    const memberPrice = computeMemberPrice(s);
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setServiceId(s.id)}
+                        className="rounded-xl p-3 text-left"
+                        style={{
+                          background: selected ? "#FFF8F4" : "white",
+                          border: `1.5px solid ${selected ? PRIMARY : BORDER}`,
+                          color: TEXT,
+                        }}
+                      >
+                        <p className="text-xs font-medium leading-tight">{s.nameTh}</p>
+                        <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
+                          <Clock size={9} />{s.duration} นาที
+                        </p>
+                        {isMember && memberPrice !== null && memberPrice < s.price ? (
+                          <div className="mt-1 flex items-baseline gap-1">
+                            <span className="text-[10px] line-through" style={{ color: MUTED }}>{formatPrice(s.price)}</span>
+                            <span className="text-sm font-bold" style={{ color: "#16a34a" }}>{formatPrice(memberPrice)}</span>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-bold mt-1" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Add-ons */}
@@ -624,7 +703,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
 
       {/* Notes */}
       <section className="px-4 pt-5">
-        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุเริ่มต้น <span style={{ color: MUTED }}>(คัดลอกไปภายนอกและภายใน)</span></p>
+        <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>หมายเหตุ <span style={{ color: MUTED }}>(ภายในเท่านั้น — ลูกค้าไม่เห็น)</span></p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

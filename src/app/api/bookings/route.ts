@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       branchId, serviceId, staffId, date, startTime, endTime,
-      totalPrice, name, nickname, phone, email, dateOfBirth, notes, addonIds,
+      totalPrice, name, nickname, phone, email, dateOfBirth, notes, internalNotes, addonIds,
       lineUserId, linePictureUrl, lineDisplayName, // from Line LIFF
       skipConflictCheck,            // trusted flag for POS / admin use
       isWalkin,                     // admin flag — skip customer info, use placeholder
@@ -151,7 +151,11 @@ export async function POST(request: Request) {
           totalPrice: finalTotalPrice,
           commissionSatang: savedCommissionSatang,
           notes: notes || null,
-          internalNotes: notes || null,
+          // Admin flows (e.g. the mobile "new booking" form) pass internalNotes
+          // explicitly and never notes — a staff note must not leak to the
+          // customer-facing side. Callers that only send notes (LIFF booking)
+          // keep the original mirror-to-both behavior.
+          internalNotes: internalNotes !== undefined ? (internalNotes || null) : (notes || null),
           status: reqStatus,
           // "Create + checkout in one go": when the caller creates the booking
           // already COMPLETED, stamp completedAt with the booking's own day so
