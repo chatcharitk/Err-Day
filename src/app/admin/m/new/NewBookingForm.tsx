@@ -159,6 +159,9 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
   // Collapsed by default; expanded up front only if there's no primary
   // service to pin (nothing to hide the rest behind, otherwise).
   const [showOtherServices, setShowOtherServices] = useState(() => !primaryService);
+  // Add-ons are optional and picked far less often than the main service —
+  // collapsed by default for the same reason.
+  const [showAddons, setShowAddons] = useState(false);
 
   // Slot list adapts to day-of-week (Sunday opens at 10:00, except branch-bangna
   // which is open 07:00–21:00 every day including Sunday)
@@ -566,37 +569,56 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
         )}
       </section>
 
-      {/* Add-ons */}
+      {/* Add-ons — collapsed by default, same reasoning as "บริการอื่นๆ" above. */}
       {addons.length > 0 && (
         <section className="px-4 pt-5">
-          <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>
-            เพิ่มเติม <span style={{ color: MUTED }}>(ไม่บังคับ)</span>
-          </p>
-          <div className="space-y-2">
-            {addons.map((a) => {
-              const active = selectedAddonIds.includes(a.id);
-              return (
-                <button
-                  key={a.id}
-                  onClick={() =>
-                    setSelectedAddonIds((prev) =>
-                      active ? prev.filter((id) => id !== a.id) : [...prev, a.id]
-                    )
-                  }
-                  className="w-full flex items-center justify-between rounded-xl px-4 py-3 text-left"
-                  style={{
-                    background: active ? "#FFF8F4" : "white",
-                    border:     `1.5px solid ${active ? PRIMARY : BORDER}`,
-                  }}
-                >
-                  <p className="text-sm" style={{ color: TEXT }}>{a.nameTh}</p>
-                  <p className="text-sm font-bold" style={{ color: active ? PRIMARY : MUTED }}>
-                    +{formatPrice(a.price)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddons((v) => !v)}
+            className="w-full flex items-center justify-between px-1 py-1"
+            style={{ color: MUTED }}
+          >
+            <span className="text-[10px] uppercase tracking-widest">
+              เพิ่มเติม <span style={{ color: MUTED }}>(ไม่บังคับ)</span>
+              {selectedAddonIds.length > 0 && (
+                <span className="ml-1.5 font-semibold" style={{ color: PRIMARY }}>
+                  · เลือกแล้ว {selectedAddonIds.length}
+                </span>
+              )}
+            </span>
+            <ChevronRight
+              size={14}
+              style={{ transform: showAddons ? "rotate(90deg)" : undefined, transition: "transform 120ms" }}
+            />
+          </button>
+
+          {showAddons && (
+            <div className="space-y-2 mt-2">
+              {addons.map((a) => {
+                const active = selectedAddonIds.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() =>
+                      setSelectedAddonIds((prev) =>
+                        active ? prev.filter((id) => id !== a.id) : [...prev, a.id]
+                      )
+                    }
+                    className="w-full flex items-center justify-between rounded-xl px-4 py-3 text-left"
+                    style={{
+                      background: active ? "#FFF8F4" : "white",
+                      border:     `1.5px solid ${active ? PRIMARY : BORDER}`,
+                    }}
+                  >
+                    <p className="text-sm" style={{ color: TEXT }}>{a.nameTh}</p>
+                    <p className="text-sm font-bold" style={{ color: active ? PRIMARY : MUTED }}>
+                      +{formatPrice(a.price)}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
