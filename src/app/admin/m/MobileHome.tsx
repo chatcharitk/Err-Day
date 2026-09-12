@@ -221,6 +221,9 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   const pendingRevenue  = visibleBookings
     .filter((b) => b.status === "CONFIRMED" || b.status === "PENDING")
     .reduce((sum, b) => sum + b.displayPrice, 0);
+  // Count of customers who actually paid — same COMPLETED-and-isPaid rule as
+  // paidRevenue above, just a headcount instead of a total.
+  const paidCount = visibleBookings.filter((b) => b.status === "COMPLETED" && b.isPaid).length;
 
 
   // Format date headline
@@ -357,6 +360,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
         </div>
         <p className="text-xs mt-0.5" style={{ color: MUTED }}>
           {visibleBookings.length === 0 ? "ไม่มีนัด" : `${visibleBookings.length} นัด`}
+          {paidCount > 0 && ` · ชำระแล้ว ${paidCount}`}
           {cancelledCount > 0 && ` · ยกเลิก ${cancelledCount}`}
         </p>
       </section>
