@@ -10,7 +10,6 @@ import SettingsTab, {
   type AddonCfg,
 } from "./PayrollSettings";
 import FinanceHistory from "@/components/FinanceHistory";
-import PayeeManager from "@/components/PayeeManager";
 import css from "@/components/Finance.module.css";
 
 interface Branch {
@@ -47,22 +46,30 @@ export default function PayrollView(props: Props) {
   const [tab, setTab] = useState("daily");
   const [staffId, setStaffId] = useState(rows[0]?.staffId ?? "");
   const selected = rows.find((r) => r.staffId === staffId) ?? rows[0];
+  // Mobile already shows "ค่าตอบแทนพนักงาน" in its own sticky header (see
+  // admin/m/payroll/page.tsx), so repeating it here as a big h1 + subtitle is
+  // pure duplication there. Desktop has no page-level title of its own, so it
+  // still needs this — just smaller than before.
+  const isMobile = basePath.startsWith("/admin/m");
   const nav = (branch: string, date: string) =>
     router.push(
       `${basePath}?branchId=${encodeURIComponent(branch)}&date=${date}`,
     );
   return (
     <main className={css.page}>
-      <h1>ค่าตอบแทนพนักงาน</h1>
-      <p className={css.muted}>
-        ตรวจเวลา งานที่คิดค่ามือ และยอดจ่ายให้ครบในหน้าเดียว
-      </p>
+      {!isMobile && (
+        <>
+          <h1 style={{ fontSize: 20 }}>ค่าตอบแทนพนักงาน</h1>
+          <p className={css.muted} style={{ fontSize: 12 }}>
+            ตรวจเวลา งานที่คิดค่ามือ และยอดจ่ายให้ครบในหน้าเดียว
+          </p>
+        </>
+      )}
       <nav className={css.toolbar} aria-label="ค่าตอบแทน">
         {[
           ["daily", "ตรวจและจ่ายรายวัน"],
           ["report", "รายงานการทำงาน"],
           ["settings", "ตั้งค่าค่าตอบแทน"],
-          ["payees", "ข้อมูลผู้รับเงิน"],
         ].map(([id, label]) => (
           <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
             {label}
@@ -98,66 +105,35 @@ export default function PayrollView(props: Props) {
         </div>
       )}
       {tab === "daily" && (
-        <>
-          <div className={css.stats}>
-            <div className={css.stat}>
-              ยืนยันจ่ายแล้ว
-              <strong>
-                {money(
-                  rows
-                    .filter((r) => r.status === "PAID")
-                    .reduce((v, r) => v + r.totalSatang, 0),
-                )}
-              </strong>
-            </div>
-            <div className={css.stat}>
-              รอตรวจยอด
-              <strong>
-                {rows.filter((r) => r.status !== "PAID").length} คน
-              </strong>
-            </div>
-            <div className={css.stat}>
-              ยังไม่มีเวลาเข้า–ออก
-              <strong>
-                {
-                  rows.filter(
-                    (r) => r.workedMinutes == null && r.status !== "PAID",
-                  ).length
-                }{" "}
-                คน
-              </strong>
-            </div>
-          </div>
-          <div className={css.layout}>
-            <aside className={css.people} aria-label="เลือกพนักงาน">
-              {rows.map((r) => (
-                <button
-                  key={r.staffId}
-                  aria-pressed={selected?.staffId === r.staffId}
-                  onClick={() => setStaffId(r.staffId)}
-                >
-                  <span>{r.name}</span>
-                  <span>
-                    {r.completedCount} งาน ·{" "}
-                    {r.status === "PAID" ? "จ่ายแล้ว" : "รอตรวจ"}
-                  </span>
-                  <span>{money(r.totalSatang)}</span>
-                </button>
-              ))}
-            </aside>
-            {selected ? (
-              <DailyReview
-                key={`${activeDate}:${activeBranchId}:${selected.staffId}:${selected.sourceToken}`}
-                row={selected}
-                date={activeDate}
-                branchId={activeBranchId}
-                basePath={basePath}
-              />
-            ) : (
-              <p>ยังไม่มีพนักงาน</p>
-            )}
-          </div>
-        </>
+        <div className={css.layout}>
+          <aside className={css.people} aria-label="เลือกพนักงาน">
+            {rows.map((r) => (
+              <button
+                key={r.staffId}
+                aria-pressed={selected?.staffId === r.staffId}
+                onClick={() => setStaffId(r.staffId)}
+              >
+                <span>{r.name}</span>
+                <span>
+                  {r.completedCount} งาน ·{" "}
+                  {r.status === "PAID" ? "จ่ายแล้ว" : "รอตรวจ"}
+                </span>
+                <span>{money(r.totalSatang)}</span>
+              </button>
+            ))}
+          </aside>
+          {selected ? (
+            <DailyReview
+              key={`${activeDate}:${activeBranchId}:${selected.staffId}:${selected.sourceToken}`}
+              row={selected}
+              date={activeDate}
+              branchId={activeBranchId}
+              basePath={basePath}
+            />
+          ) : (
+            <p>ยังไม่มีพนักงาน</p>
+          )}
+        </div>
       )}
       {tab === "report" && (
         <ReportControls
@@ -175,7 +151,6 @@ export default function PayrollView(props: Props) {
           addons={props.addons}
         />
       )}
-      {tab === "payees" && <PayeeManager />}
     </main>
   );
 }
