@@ -1,3 +1,5 @@
+import { getCurrentAdmin } from "@/lib/admin-auth";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { isExpenseCategory } from "@/lib/expenses";
 import MobileExpenseForm from "../MobileExpenseForm";
@@ -10,6 +12,7 @@ export default async function NewMobileExpensePage({
 }: {
   searchParams: Promise<{ category?: string }>;
 }) {
+  if (!await getCurrentAdmin()) notFound();
   const { category } = await searchParams;
   const branches = await prisma.branch.findMany({
     where:   { isActive: true },

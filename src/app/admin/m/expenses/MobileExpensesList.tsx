@@ -14,6 +14,7 @@ const BORDER  = "#E8D8CC";
 const BG      = "#FDF8F3";
 
 interface ExpenseRow {
+  status: string;
   id:            string;
   branchName:    string | null;
   category:      string;
@@ -52,7 +53,7 @@ function groupByDate(rows: ExpenseRow[]): { date: string; rows: ExpenseRow[]; to
     if (!groups.has(r.date)) groups.set(r.date, { rows: [], total: 0 });
     const g = groups.get(r.date)!;
     g.rows.push(r);
-    g.total += r.totalAmount;
+    g.total += r.status === "CONFIRMED" ? r.totalAmount : 0;
   }
   return Array.from(groups.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
@@ -61,6 +62,7 @@ function groupByDate(rows: ExpenseRow[]): { date: string; rows: ExpenseRow[]; to
 
 export default function MobileExpensesList({ expenses, branches, filters, summary, categoryTotals }: Props) {
   const router = useRouter();
+  const exportQuery = new URLSearchParams(filters).toString();
   const [showFilters, setShowFilters] = useState(false);
 
   function updateFilter(key: string, value: string) {
@@ -179,6 +181,7 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
       </section>
 
       <section className="px-4 pt-3 pb-3">
+        <div className="flex flex-wrap gap-3 my-4"><a className="text-sm underline" href={`/api/admin/expenses/export?${exportQuery}`}>ส่งบัญชี CSV (เจ้าของ)</a><Link className="text-sm underline" href="/admin/payees">จัดการผู้รับเงิน</Link></div>
         <ExpenseQuickMenu
           basePath="/admin/m/expenses/new"
           totals={categoryTotals}
@@ -210,7 +213,7 @@ export default function MobileExpensesList({ expenses, branches, filters, summar
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>
-                              {CATEGORY_LABEL[e.category] ?? e.category}
+                              {CATEGORY_LABEL[e.category] ?? e.category}{e.status === "DRAFT" && " · ฉบับร่าง"}
                             </p>
                             {e.attachmentCount > 0 && (
                               <span className="inline-flex items-center gap-0.5" style={{ color: PRIMARY }}>

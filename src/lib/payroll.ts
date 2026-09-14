@@ -1,280 +1,392 @@
-/**
- * Payroll — staff daily payout (commission + OT) computation.
- *
- * Pay models (per staff, configured on the Staff record):
- *   • MONTHLY_SALARY — baseSatang is a monthly salary; OT hourly = base / (30*8)
- *   • DAILY_WAGE     — baseSatang is a per-day wage;     OT hourly = base / 8
- *   (otRateSatang overrides the derived rate when set.)
- *
- * The DAILY cash-out the owner pays = service commission earned that day + OT pay.
- *   • Commission: per COMPLETED booking, the PRIMARY stylist (booking.staffId)
- *     earns the booking's saved `commissionSatang` (ค่ามือ). Legacy bookings
- *     without a saved value use the service + add-on settings. This is independent
- *     of what the customer paid; extra (non-primary) stylists do not earn here.
- *   • OT: admin-entered hours for the day × the staff's OT hourly rate.
- *
- * Base salary/wage is disbursed on its own cadence (monthly / weekly) and is NOT
- * part of the daily cash-out — it's surfaced separately in rollups.
- *
- * All money is satang (THB*100). Booking.date is UTC-noon of the Bangkok day.
- */
-
+import { createHash } from "crypto";
+import { isDeepStrictEqual } from "node:util";
 import { prisma } from "@/lib/prisma";
-import type { Staff, StaffDailyPayout } from "@/generated/prisma/client";
+import type { Prisma, Staff } from "@/generated/prisma/client";
+import { validDay, workMinutes, overtimeMinutes } from "@/lib/finance-math";
 
-const MONTHLY_OT_DIVISOR = 30 * 8; // owner's rule: monthly salary / (30*8)
-const DAILY_OT_DIVISOR = 8;
-
+type DB = Prisma.TransactionClient;
 type PayConfig = Pick<Staff, "payType" | "baseSatang" | "otRateSatang">;
-
-/** OT hourly rate in satang. Manual override wins; else derived from base pay. */
 export function otRatePerHourSatang(s: PayConfig): number {
-  if (s.otRateSatang != null) return s.otRateSatang;
-  if (s.baseSatang <= 0) return 0;
-  const divisor = s.payType === "DAILY_WAGE" ? DAILY_OT_DIVISOR : MONTHLY_OT_DIVISOR;
-  return s.baseSatang / divisor;
+  return (
+    s.otRateSatang ??
+    (s.baseSatang <= 0
+      ? 0
+      : s.baseSatang / (s.payType === "DAILY_WAGE" ? 8 : 240))
+  );
 }
-
-/** OT pay in satang for a given number of hours (rounded to the satang). */
 export function otPaySatang(s: PayConfig, hours: number): number {
-  return Math.round(otRatePerHourSatang(s) * (hours || 0));
+  return Math.round(otRatePerHourSatang(s) * hours);
 }
-
-/** UTC range covering one "YYYY-MM-DD" Bangkok day as stored on Booking/payout date. */
-export function bangkokDayRange(dateStr: string): { start: Date; end: Date } {
-  const [y, m, d] = dateStr.split("-").map(Number);
+export function bangkokDayRange(day: string) {
+  if (!validDay(day)) throw new Error("วันที่ไม่ถูกต้อง");
   return {
-    start: new Date(Date.UTC(y, m - 1, d, 0, 0, 0)),
-    end:   new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999)),
+    start: new Date(day + "T00:00:00Z"),
+    end: new Date(day + "T23:59:59.999Z"),
   };
 }
-
-/** "YYYY-MM-DD" Bangkok today. */
-export function bangkokTodayStr(): string {
-  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${bkk.getUTCFullYear()}-${p(bkk.getUTCMonth() + 1)}-${p(bkk.getUTCDate())}`;
+export function bangkokTodayStr() {
+  return new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
 }
-
-/** The canonical stored value for a Bangkok day: UTC noon (matches Booking.date). */
-export function bangkokDayNoon(dateStr: string): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+export function bangkokDayNoon(day: string) {
+  bangkokDayRange(day);
+  return new Date(day + "T12:00:00Z");
 }
-
-export interface StaffPayoutRow {
+export function bangkokMonthRange(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month) || !validDay(month + "-01"))
+    throw new Error("เดือนไม่ถูกต้อง");
+  const [y, m] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return {
+    start: new Date(month + "-01T00:00:00Z"),
+    end: new Date(`${month}-${lastDay}T23:59:59.999Z`),
+    lastDay,
+  };
+}
+export function payrollExpenseMarker(staffId: string, month: string) {
+  return `[PAYROLL:${staffId}:${month}]`;
+}
+export interface PayrollBooking {
+  id: string;
+  time: string;
+  customer: string;
+  service: string;
+  addons: string;
+  status: string;
+  primary: boolean;
+  commissionSatang: number;
+  source: string;
+}
+export interface PayrollCalculation {
+  bookings: PayrollBooking[];
+  normalWorkMinutes: number;
+  workedMinutes: number | null;
+  clockIn: string | null;
+  clockOut: string | null;
+  breakMinutes: number;
+  attendanceNotes: string;
+  otMode: string;
+  otHours: number;
+  otRateSatang: number;
+  otSatang: number;
+  commissionSatang: number;
+  tipSatang: number;
+  adjustmentSatang: number;
+  adjustmentReason: string;
+  totalSatang: number;
+}
+export interface StaffPayoutRow extends PayrollCalculation {
   staffId: string;
   name: string;
   payType: Staff["payType"];
   baseSatang: number;
   payCadence: Staff["payCadence"];
-  /** Service commission earned this day (satang). */
-  commissionSatang: number;
-  /** Number of completed, commission-eligible bookings this day. */
   completedCount: number;
-  /** Admin-entered OT hours for the day. */
-  otHours: number;
-  /** Derived (or overridden) OT hourly rate, satang. */
-  otRateSatang: number;
-  /** OT pay this day (satang). */
-  otSatang: number;
-  /** Admin-entered tip amount for the day (satang) — flat entry, not computed. */
-  tipSatang: number;
-  /** Daily cash-out = commission + OT + tip (satang). */
-  totalSatang: number;
-  /** Did the staff work this day (drives daily-wage base accrual). */
   worked: boolean;
-  status: StaffDailyPayout["status"];
+  status: "PENDING" | "PAID";
   paidAt: string | null;
-  /** Set once this day's payout has been recorded as an Expense. */
   expenseId: string | null;
+  sourceToken: string;
+  revision: number;
+  shifts: string[];
+  legacySnapshot: boolean;
+  changedSincePaid: boolean;
+  warnings: string[];
 }
-
-/**
- * Compute the daily payout rows for one branch on one Bangkok day. Returns a row
- * for every ACTIVE staff at the branch (so the admin can enter OT even on a
- * zero-commission day), plus any staff who already have a payout row that day.
- */
 export async function computeBranchDailyPayout(
   branchId: string,
   dateStr: string,
+  db: DB = prisma,
 ): Promise<StaffPayoutRow[]> {
   const { start, end } = bangkokDayRange(dateStr);
-
-  const [staff, bookings, payoutRows] = await Promise.all([
-    prisma.staff.findMany({
-      where: { branchId, isActive: true },
-      select: { id: true, name: true, payType: true, baseSatang: true, payCadence: true, otRateSatang: true },
+  const [staff, bookings, payouts, attendance, shifts] = await Promise.all([
+    db.staff.findMany({
+      where: {
+        OR: [
+          { branchId, isActive: true },
+          {
+            dailyPayouts: {
+              some: { branchId, date: { gte: start, lte: end } },
+            },
+          },
+          { bookings: { some: { branchId, date: { gte: start, lte: end } } } },
+          {
+            bookingStaff: {
+              some: { booking: { branchId, date: { gte: start, lte: end } } },
+            },
+          },
+        ],
+      },
       orderBy: { name: "asc" },
     }),
-    // Completed bookings this branch/day, attributed to a primary stylist.
-    // New records carry a per-booking snapshot/override; legacy null records
-    // continue to use their service's + add-ons' configured commission.
-    prisma.booking.findMany({
-      where: {
-        branchId,
-        status: "COMPLETED",
-        staffId: { not: null },
-        date: { gte: start, lte: end },
+    db.booking.findMany({
+      where: { branchId, date: { gte: start, lte: end } },
+      include: {
+        service: true,
+        customer: { select: { name: true } },
+        addons: { include: { addon: true } },
+        extraStaff: true,
       },
-      select: {
-        staffId: true,
-        commissionSatang: true,
-        service: { select: { commissionSatang: true } },
-        addons:  { select: { addon: { select: { commissionSatang: true } } } },
-      },
+      orderBy: [{ startTime: "asc" }, { id: "asc" }],
     }),
-    prisma.staffDailyPayout.findMany({
+    db.staffDailyPayout.findMany({
       where: { branchId, date: { gte: start, lte: end } },
     }),
+    db.staffAttendance.findMany({
+      where: {
+        date: { gte: start, lte: end },
+        staff: {
+          OR: [
+            { branchId },
+            {
+              dailyPayouts: {
+                some: { branchId, date: { gte: start, lte: end } },
+              },
+            },
+          ],
+        },
+      },
+    }),
+    db.staffShift.findMany({
+      where: {
+        date: { gte: start, lte: end },
+        staff: {
+          OR: [
+            { branchId },
+            {
+              dailyPayouts: {
+                some: { branchId, date: { gte: start, lte: end } },
+              },
+            },
+          ],
+        },
+      },
+      orderBy: { startTime: "asc" },
+    }),
   ]);
-
-  const commByStaff = new Map<string, { sum: number; count: number }>();
-  for (const b of bookings) {
-    if (!b.staffId) continue;
-    const serviceComm = b.service?.commissionSatang ?? 0;
-    const addonComm = b.addons.reduce((s, a) => s + (a.addon?.commissionSatang ?? 0), 0);
-    const bookingComm = b.commissionSatang ?? (serviceComm + addonComm);
-    const cur = commByStaff.get(b.staffId) ?? { sum: 0, count: 0 };
-    cur.sum += bookingComm;
-    cur.count += 1;
-    commByStaff.set(b.staffId, cur);
-  }
-  const payoutByStaff = new Map(payoutRows.map(r => [r.staffId, r]));
-
-  // Union of active staff + any staff with a payout row that day (e.g. deactivated).
-  const ids = new Set<string>([...staff.map(s => s.id), ...payoutRows.map(r => r.staffId)]);
-  const staffById = new Map(staff.map(s => [s.id, s]));
-  // Backfill config for payout-only staff that aren't in the active list.
-  const missing = [...ids].filter(id => !staffById.has(id));
-  if (missing.length > 0) {
-    const extra = await prisma.staff.findMany({
-      where: { id: { in: missing } },
-      select: { id: true, name: true, payType: true, baseSatang: true, payCadence: true, otRateSatang: true },
-    });
-    for (const s of extra) staffById.set(s.id, s);
-  }
-
-  const rows: StaffPayoutRow[] = [];
-  for (const id of ids) {
-    const s = staffById.get(id);
-    if (!s) continue;
-    const comm = commByStaff.get(id) ?? { sum: 0, count: 0 };
-    const pr = payoutByStaff.get(id);
-    const otHours = pr?.otHours ?? 0;
-    const otRate = otRatePerHourSatang(s);
-    // If already settled, trust the snapshot; else compute live.
-    const commissionSatang = pr?.status === "PAID" && pr.commissionSatang != null ? pr.commissionSatang : comm.sum;
-    const otSatang = pr?.status === "PAID" && pr.otSatang != null ? pr.otSatang : otPaySatang(s, otHours);
-    const tipSatang = pr?.tipSatang ?? 0;
-    rows.push({
-      staffId: id,
+  const expenseIds = payouts.flatMap((p) => (p.expenseId ? [p.expenseId] : []));
+  const linkedExpenses = expenseIds.length
+    ? await db.expense.findMany({
+        where: { id: { in: expenseIds } },
+        select: { id: true, status: true, totalAmount: true },
+      })
+    : [];
+  return staff.map((s) => {
+    const payout = payouts.find((p) => p.staffId === s.id);
+    const att = attendance.find((a) => a.staffId === s.id);
+    const details: PayrollBooking[] = bookings
+      .filter(
+        (b) =>
+          b.staffId === s.id || b.extraStaff.some((e) => e.staffId === s.id),
+      )
+      .map((b) => {
+        const primary = b.staffId === s.id;
+        return {
+          id: b.id,
+          time: `${b.startTime}–${b.endTime}`,
+          customer: b.customer.name,
+          service: b.service.nameTh || b.service.name,
+          addons: b.addons
+            .map((a) => a.addon.nameTh || a.addon.name)
+            .join(", "),
+          status: b.status,
+          primary,
+          commissionSatang:
+            b.status === "COMPLETED" && primary
+              ? (b.commissionSatang ??
+                b.service.commissionSatang +
+                  b.addons.reduce((v, a) => v + a.addon.commissionSatang, 0))
+              : 0,
+          source:
+            b.commissionSatang == null
+              ? "เรตบริการเดิม"
+              : "ค่ามือที่บันทึกในบุ๊กกิ้ง",
+        };
+      });
+    const minutes = att
+      ? workMinutes(att.clockIn, att.clockOut, att.breakMinutes)
+      : null;
+    const otMode = payout?.otMode ?? "AUTO";
+    const hours =
+      otMode === "MANUAL"
+        ? (payout?.otHours ?? 0)
+        : minutes == null
+          ? 0
+          : overtimeMinutes(minutes, s.normalWorkMinutes) / 60;
+    const live: PayrollCalculation = {
+      bookings: details,
+      normalWorkMinutes: s.normalWorkMinutes,
+      workedMinutes: minutes,
+      clockIn: att?.clockIn.toISOString() ?? null,
+      clockOut: att?.clockOut.toISOString() ?? null,
+      breakMinutes: att?.breakMinutes ?? 0,
+      attendanceNotes: att?.notes ?? "",
+      otMode,
+      otHours: hours,
+      otRateSatang: otRatePerHourSatang(s),
+      otSatang: otPaySatang(s, hours),
+      commissionSatang: details.reduce((v, b) => v + b.commissionSatang, 0),
+      tipSatang: payout?.tipSatang ?? 0,
+      adjustmentSatang: payout?.adjustmentSatang ?? 0,
+      adjustmentReason: payout?.adjustmentReason ?? "",
+      totalSatang: 0,
+    };
+    live.totalSatang =
+      live.commissionSatang +
+      live.otSatang +
+      live.tipSatang +
+      live.adjustmentSatang;
+    const paid = payout?.status === "PAID";
+    const snapshot =
+      payout?.calculation as unknown as PayrollCalculation | null;
+    const calc = paid
+      ? (snapshot ?? {
+          ...live,
+          commissionSatang: payout.commissionSatang ?? 0,
+          otSatang: payout.otSatang ?? 0,
+          totalSatang:
+            (payout.commissionSatang ?? 0) +
+            (payout.otSatang ?? 0) +
+            payout.tipSatang +
+            payout.adjustmentSatang,
+        })
+      : live;
+    const linkedExpense = linkedExpenses.find(
+      (e) => e.id === payout?.expenseId,
+    );
+    const warnings: string[] = [];
+    if (payout?.expenseId && !linkedExpense)
+      warnings.push(
+        "ไม่พบรายจ่ายที่เคยเชื่อม สามารถลงรายจ่ายใหม่จากยอดจ่ายเดิมได้",
+      );
+    if (linkedExpense && linkedExpense.totalAmount !== calc.totalSatang)
+      warnings.push(
+        "ยอดรายจ่ายเดิมไม่ตรงกับค่าตอบแทนที่บันทึก กรุณาตรวจและเปิดแก้ก่อนส่งบัญชี",
+      );
+    if (linkedExpense?.status === "VOIDED")
+      warnings.push(
+        "รายจ่ายที่เชื่อมถูกยกเลิกแล้ว กรุณาตรวจประวัติและเปิดแก้ค่าตอบแทน",
+      );
+    if (!att && !paid) warnings.push("ยังไม่ยืนยันเวลาเข้า–ออกจริง");
+    if (hours > 0 && live.otRateSatang === 0)
+      warnings.push("ยังไม่มีเรต OT — ตั้งค่าก่อนยืนยันจ่าย");
+    if (
+      details.some(
+        (b) =>
+          b.status === "COMPLETED" && b.primary && b.source === "เรตบริการเดิม",
+      )
+    )
+      warnings.push("มีงานเก่าที่ใช้เรตบริการปัจจุบัน กรุณาตรวจค่ามือ");
+    // Includes all source data, so changing any booking, attendance or payroll setting requires a fresh review.
+    const sourceToken = createHash("sha256")
+      .update(
+        JSON.stringify({
+          live,
+          linkedExpense,
+          revision: payout?.revision ?? 0,
+          status: payout?.status ?? "PENDING",
+          staff: {
+            name: s.name,
+            branchId: s.branchId,
+            base: s.baseSatang,
+            payType: s.payType,
+          },
+        }),
+      )
+      .digest("hex");
+    return {
+      ...calc,
+      staffId: s.id,
       name: s.name,
       payType: s.payType,
       baseSatang: s.baseSatang,
       payCadence: s.payCadence,
-      commissionSatang,
-      completedCount: comm.count,
-      otHours,
-      otRateSatang: otRate,
-      otSatang,
-      tipSatang,
-      totalSatang: commissionSatang + otSatang + tipSatang,
-      worked: pr?.worked ?? true,
-      status: pr?.status ?? "PENDING",
-      paidAt: pr?.paidAt ? pr.paidAt.toISOString() : null,
-      expenseId: pr?.expenseId ?? null,
-    });
-  }
-  rows.sort((a, b) => a.name.localeCompare(b.name, "th"));
-  return rows;
+      completedCount: calc.bookings.filter(
+        (b) => b.status === "COMPLETED" && b.primary,
+      ).length,
+      worked: minutes != null && minutes > 0,
+      status: payout?.status ?? "PENDING",
+      paidAt: payout?.paidAt?.toISOString() ?? null,
+      expenseId: linkedExpense?.id ?? null,
+      revision: payout?.revision ?? 0,
+      sourceToken,
+      shifts: shifts
+        .filter((a) => a.staffId === s.id)
+        .map((a) => `${a.startTime}–${a.endTime}`),
+      legacySnapshot: paid && !snapshot,
+      changedSincePaid: !!(
+        paid &&
+        snapshot &&
+        !isDeepStrictEqual(snapshot.bookings, details)
+      ),
+      warnings,
+    };
+  });
 }
-
-// ── Monthly rollup → Expense integration ────────────────────────────────────
-
-/** The idempotency marker stashed in Expense.notes so re-clicking never double-records a month. */
-export function payrollExpenseMarker(staffId: string, month: string): string {
-  return `[PAYROLL:${staffId}:${month}]`;
-}
-
-export interface MonthlyPayoutRow {
-  staffId: string;
-  name: string;
-  daysPaid: number;
-  commissionSatang: number;
-  otSatang: number;
-  totalSatang: number;
-  /** Set if this staff/month has already been recorded as an Expense. */
-  recordedExpenseId: string | null;
-}
-
-/** "YYYY-MM-01" / "YYYY-MM-<lastDay>" UTC bounds for a "YYYY-MM" month string. */
-export function bangkokMonthRange(month: string): { start: Date; end: Date; lastDay: number } {
-  const [y, m] = month.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return {
-    start: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)),
-    end:   new Date(Date.UTC(y, m - 1, lastDay, 23, 59, 59, 999)),
-    lastDay,
-  };
-}
-
-/**
- * Sum PAID StaffDailyPayout rows (commission + OT actually cashed out, per
- * the snapshot taken when each day was marked paid) for one branch/month, per
- * staff. This deliberately does NOT include base salary/wage — per this
- * file's own convention, base pay is disbursed on its own cadence outside the
- * daily cash-out this app tracks, so there is no reliable per-day "worked"
- * signal to compute it from here.
- */
-export async function computeBranchMonthlyPayout(branchId: string, month: string): Promise<MonthlyPayoutRow[]> {
+export async function computeBranchMonthlyPayout(
+  branchId: string,
+  month: string,
+) {
   const { start, end } = bangkokMonthRange(month);
-
-  const [payouts, staff, existingExpenses] = await Promise.all([
+  const [payouts, attendance] = await Promise.all([
     prisma.staffDailyPayout.findMany({
-      where: { branchId, status: "PAID", date: { gte: start, lte: end } },
-      select: { staffId: true, commissionSatang: true, otSatang: true },
+      where: { branchId, date: { gte: start, lte: end } },
+      include: { staff: { select: { name: true } } },
+      orderBy: { date: "asc" },
     }),
-    prisma.staff.findMany({
-      where: { branchId },
-      select: { id: true, name: true },
-    }),
-    // Idempotency check — has this staff/month already been recorded?
-    prisma.expense.findMany({
-      where: { branchId, category: "commission_bonus", notes: { contains: `:${month}]` } },
-      select: { id: true, notes: true },
+    prisma.staffAttendance.findMany({
+      where: {
+        staff: {
+          OR: [
+            { branchId },
+            {
+              dailyPayouts: {
+                some: { branchId, date: { gte: start, lte: end } },
+              },
+            },
+          ],
+        },
+        date: { gte: start, lte: end },
+      },
     }),
   ]);
-
-  const staffById = new Map(staff.map(s => [s.id, s.name]));
-  const expenseByMarker = new Map<string, string>();
-  for (const e of existingExpenses) {
-    const m = e.notes?.match(/\[PAYROLL:([^:]+):([^\]]+)\]/);
-    if (m) expenseByMarker.set(`${m[1]}:${m[2]}`, e.id);
-  }
-
-  const byStaff = new Map<string, { days: number; commission: number; ot: number }>();
-  for (const p of payouts) {
-    const cur = byStaff.get(p.staffId) ?? { days: 0, commission: 0, ot: 0 };
-    cur.days += 1;
-    cur.commission += p.commissionSatang ?? 0;
-    cur.ot += p.otSatang ?? 0;
-    byStaff.set(p.staffId, cur);
-  }
-
-  const rows: MonthlyPayoutRow[] = [];
-  for (const [staffId, agg] of byStaff) {
-    const name = staffById.get(staffId) ?? staffId;
-    rows.push({
-      staffId,
-      name,
-      daysPaid: agg.days,
-      commissionSatang: agg.commission,
-      otSatang: agg.ot,
-      totalSatang: agg.commission + agg.ot,
-      recordedExpenseId: expenseByMarker.get(`${staffId}:${month}`) ?? null,
-    });
-  }
-  rows.sort((a, b) => a.name.localeCompare(b.name, "th"));
-  return rows;
+  const ids = [
+    ...new Set([
+      ...payouts.map((p) => p.staffId),
+      ...attendance.map((a) => a.staffId),
+    ]),
+  ];
+  const staff = await prisma.staff.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+  return staff.map((s) => {
+    const days = payouts.filter((p) => p.staffId === s.id);
+    const paid = days.filter((p) => p.status === "PAID");
+    const sum = (
+      key: "commissionSatang" | "otSatang" | "tipSatang" | "adjustmentSatang",
+    ) => paid.reduce((v, p) => v + (p[key] ?? 0), 0);
+    return {
+      staffId: s.id,
+      name: s.name,
+      daysPaid: paid.length,
+      daysPending: days.length - paid.length,
+      workedDays: attendance.filter((a) => a.staffId === s.id).length,
+      workedMinutes: attendance
+        .filter((a) => a.staffId === s.id)
+        .reduce(
+          (v, a) => v + workMinutes(a.clockIn, a.clockOut, a.breakMinutes),
+          0,
+        ),
+      commissionSatang: sum("commissionSatang"),
+      otSatang: sum("otSatang"),
+      tipSatang: sum("tipSatang"),
+      adjustmentSatang: sum("adjustmentSatang"),
+      totalSatang:
+        sum("commissionSatang") +
+        sum("otSatang") +
+        sum("tipSatang") +
+        sum("adjustmentSatang"),
+      missingExpenseCount: paid.filter((p) => !p.expenseId).length,
+    };
+  });
 }

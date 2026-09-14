@@ -72,6 +72,7 @@ interface BlockedSlotItem {
 }
 
 interface Props {
+  initialBookingId?: string;
   weekBookings:    BookingItem[];
   staff:           StaffItem[];
   selectedDate:    string;          // "YYYY-MM-DD"
@@ -593,12 +594,12 @@ function ListView({ weekBookings, onClickBooking }: {
 
 /* ─── Main Component ─────────────────────────────────────── */
 export default function CalendarView({
-  weekBookings, staff, selectedDate, branches, activeBranchId, branchServices, addons,
+  weekBookings, staff, selectedDate, branches, activeBranchId, branchServices, addons, initialBookingId,
 }: Props) {
   const router = useRouter();
   const [view,          setView]         = useState<ViewMode>("list");
   const [period,        setPeriod]       = useState<PeriodType>("week");
-  const [editItem,      setEditItem]     = useState<BookingItem | null>(null);
+  const [editItem,      setEditItem]     = useState<BookingItem | null>(() => weekBookings.find(b => b.id === initialBookingId) ?? null);
   const [addOpen,       setAddOpen]      = useState(false);
   const [blockOpen,     setBlockOpen]    = useState(false);
   const [staffShiftMap, setStaffShiftMap] = useState<StaffShiftMap>({});

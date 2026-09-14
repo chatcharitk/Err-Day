@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Isolate local integration previews from an already-running development server.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   images: {
     // WebP only. AVIF compresses ~20% better but its encoder costs seconds of
     // CPU per image versus WebP's tens of milliseconds, and on Fluid that lands

@@ -122,6 +122,9 @@ model Staff {
   /// Optional manual OT hourly-rate override in satang. null → derive from base
   /// (MONTHLY: baseSatang/240 i.e. /(30*8); DAILY: baseSatang/8).
   otRateSatang   Int?
+  normalWorkMinutes Int         @default(540)
+  attendance     StaffAttendance[]
+  payee          Vendor?
   blockedSlots   BlockedSlot[]
   bookings       Booking[]
   bookingStaff   BookingStaff[]
@@ -142,6 +145,11 @@ model StaffDailyPayout {
   date             DateTime
   /// Admin-entered overtime hours for the day (e.g. 1.5).
   otHours          Float        @default(0)
+  otMode           String       @default("MANUAL")
+  adjustmentSatang Int          @default(0)
+  adjustmentReason String?
+  calculation      Json?
+  revision         Int          @default(0)
   /// Admin-entered tip amount for the day (satang) — a flat entry, not hours × rate.
   tipSatang        Int          @default(0)
   /// Whether the staff worked this day — drives daily-wage base accrual.
@@ -162,6 +170,33 @@ model StaffDailyPayout {
   @@unique([staffId, date])
   @@index([branchId, date])
   @@index([status, date])
+}
+
+model StaffAttendance {
+  id String @id @default(cuid())
+  staffId String
+  date DateTime
+  clockIn DateTime
+  clockOut DateTime
+  breakMinutes Int @default(0)
+  confirmedBy String
+  notes String?
+  updatedAt DateTime @updatedAt
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  @@unique([staffId, date])
+  @@index([date])
+}
+
+model FinanceAudit {
+  id String @id @default(cuid())
+  entity String
+  recordId String
+  action String
+  actor String
+  before Json?
+  after Json?
+  createdAt DateTime @default(now())
+  @@index([entity, recordId, createdAt])
 }
 
 model StaffShift {
@@ -499,6 +534,15 @@ model Expense {
   vendorId      String?
   date          DateTime
   totalAmount   Int
+  sourceKey     String? @unique
+  payeeSnapshot Json?
+  invoiceNumber String?
+  documentDate  DateTime?
+  paidAt        DateTime?
+  discountAmount Int @default(0)
+  withholdingAmount Int @default(0)
+  vatMode       String @default("LEGACY")
+  vatRate       Float @default(7)
   vatAmount     Int?
   paymentMethod String?
   /// Legacy single-receipt field, superseded by `attachments` (supports many
@@ -528,6 +572,16 @@ model Expense {
 ///  * hold contact details.
 model Vendor {
   id        String    @id @default(cuid())
+  type      String    @default("BUSINESS")
+  legalName String?
+  taxId     String?
+  address   String?
+  taxBranch String?
+  bankName  String?
+  bankAccount String?
+  bankAccountName String?
+  staffId   String? @unique
+  staff     Staff? @relation(fields: [staffId], references: [id], onDelete: Restrict)
   name      String
   phone     String?
   category  String?   // default expense category, speeds re-entry next time
@@ -563,6 +617,7 @@ model ExpenseAttachment {
 model ExpenseItem {
   id          String  @id @default(cuid())
   expenseId   String
+  kind        String?
   description String
   quantity    Float   @default(1)
   unitPrice   Int

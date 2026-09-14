@@ -28,9 +28,9 @@ function getWeekBounds(dateStr: string) {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; branchId?: string }>;
+  searchParams: Promise<{ date?: string; branchId?: string; bookingId?: string }>;
 }) {
-  const { date, branchId } = await searchParams;
+  const { date, branchId, bookingId } = await searchParams;
 
   const branches = await getCachedBranches();
 
@@ -98,6 +98,8 @@ export default async function CalendarPage({
 
   return (
     <CalendarView
+      key={`${activeBranchId}:${selectedDate}:${bookingId ?? ""}`}
+      initialBookingId={bookingId}
       weekBookings={weekBookings}
       staff={staff}
       selectedDate={selectedDate}

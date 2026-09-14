@@ -42,3 +42,7 @@ next-env.d.ts
 
 /src/generated/prisma
 .env*.local
+
+# Isolated finance integration preview
+/.next-finance-test/
+/.next-finance-build/

@@ -1,657 +1,698 @@
 "use client";
-
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Banknote, Check, Loader2, Settings, CalendarDays, Wallet, CalendarRange, Receipt, X } from "lucide-react";
+import type { StaffPayoutRow } from "@/lib/payroll";
+import { workMinutes, overtimeMinutes } from "@/lib/finance-math";
+import SettingsTab, {
+  type StaffCfg,
+  type ServiceCfg,
+  type AddonCfg,
+} from "./PayrollSettings";
+import FinanceHistory from "@/components/FinanceHistory";
+import PayeeManager from "@/components/PayeeManager";
+import css from "@/components/Finance.module.css";
 
-const PRIMARY = "#8B1D24";
-const TEXT    = "#3B2A24";
-const MUTED   = "#A08070";
-const BORDER  = "#E8D8CC";
-
-type PayType = "MONTHLY_SALARY" | "DAILY_WAGE";
-type Cadence = "MONTHLY" | "WEEKLY";
-
-interface Branch { id: string; name: string }
-interface Row {
-  staffId: string; name: string;
-  payType: PayType; baseSatang: number; payCadence: Cadence;
-  commissionSatang: number; completedCount: number;
-  otHours: number; otRateSatang: number; otSatang: number;
-  tipSatang: number;
-  totalSatang: number; worked: boolean; status: "PENDING" | "PAID"; paidAt: string | null;
-  expenseId: string | null;
+interface Branch {
+  id: string;
+  name: string;
 }
-interface StaffCfg { id: string; name: string; branchId: string; payType: PayType; baseSatang: number; payCadence: Cadence; otRateSatang: number | null }
-interface ServiceCfg { id: string; nameTh: string; category: string; commissionSatang: number }
-interface AddonCfg { id: string; nameTh: string; commissionSatang: number }
-
 interface Props {
   branches: Branch[];
   activeBranchId: string;
   activeDate: string;
   todayStr: string;
-  rows: Row[];
+  rows: StaffPayoutRow[];
   staffConfig: StaffCfg[];
   services: ServiceCfg[];
   addons: AddonCfg[];
-  /** Route the daily branch/date navigation targets. Desktop or /admin/m/payroll. */
   basePath?: string;
 }
-
-const baht = (satang: number) =>
-  `฿${(satang / 100).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-const branchShort = (b: Branch) => b.name.replace(/^err\.day\s*/i, "");
-
-export default function PayrollView({ branches, activeBranchId, activeDate, todayStr, rows, staffConfig, services, addons, basePath = "/admin/payroll" }: Props) {
+const money = (s: number) =>
+  `฿${(s / 100).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const localTime = (s: string | null) =>
+  s
+    ? new Date(new Date(s).getTime() + 7 * 3600000).toISOString().slice(11, 16)
+    : "";
+export default function PayrollView(props: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"daily" | "monthly" | "settings">("daily");
-
-  const go = (branchId: string, date: string) =>
-    router.push(`${basePath}?branchId=${branchId}&date=${date}`);
-
+  const {
+    branches,
+    activeBranchId,
+    activeDate,
+    todayStr,
+    rows,
+    basePath = "/admin/payroll",
+  } = props;
+  const [tab, setTab] = useState("daily");
+  const [staffId, setStaffId] = useState(rows[0]?.staffId ?? "");
+  const selected = rows.find((r) => r.staffId === staffId) ?? rows[0];
+  const nav = (branch: string, date: string) =>
+    router.push(
+      `${basePath}?branchId=${encodeURIComponent(branch)}&date=${date}`,
+    );
   return (
-    <div className="px-6 py-8 max-w-5xl">
-      <div className="mb-5">
-        <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Payroll</p>
-        <h1 className="text-2xl font-medium flex items-center gap-2" style={{ color: TEXT }}>
-          <Wallet size={22} style={{ color: PRIMARY }} /> ค่าตอบแทนพนักงาน
-        </h1>
-      </div>
-
-      {/* tabs */}
-      <div className="flex gap-2 mb-6">
-        {([["daily", "จ่ายรายวัน", CalendarDays], ["monthly", "สรุปรายเดือน", CalendarRange], ["settings", "ตั้งค่าฐานเงิน/ค่ามือ", Settings]] as const).map(([id, label, Icon]) => (
-          <button key={id} onClick={() => setTab(id)}
-            className="text-sm px-4 py-1.5 rounded-full border inline-flex items-center gap-1.5"
-            style={tab === id ? { background: PRIMARY, borderColor: PRIMARY, color: "white" } : { background: "white", borderColor: BORDER, color: "#6B5245" }}>
-            <Icon size={14} /> {label}
+    <main className={css.page}>
+      <h1>ค่าตอบแทนพนักงาน</h1>
+      <p className={css.muted}>
+        ตรวจเวลา งานที่คิดค่ามือ และยอดจ่ายให้ครบในหน้าเดียว
+      </p>
+      <nav className={css.toolbar} aria-label="ค่าตอบแทน">
+        {[
+          ["daily", "ตรวจและจ่ายรายวัน"],
+          ["report", "รายงานการทำงาน"],
+          ["settings", "ตั้งค่าค่าตอบแทน"],
+          ["payees", "ข้อมูลผู้รับเงิน"],
+        ].map(([id, label]) => (
+          <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>
+            {label}
           </button>
         ))}
-      </div>
-
-      {tab === "daily" && <DailyTab
-        key={`${activeBranchId}:${activeDate}`}
-        branches={branches}
-        activeBranchId={activeBranchId}
-        activeDate={activeDate}
-        todayStr={todayStr}
-        rows={rows}
-        onNav={go}
-        expenseBasePath={basePath.startsWith("/admin/m") ? "/admin/m/expenses" : "/admin/expenses"}
-      />}
-      {tab === "monthly" && <MonthlyTab branches={branches} activeBranchId={activeBranchId} />}
-      {tab === "settings" && <SettingsTab branches={branches} staffConfig={staffConfig} services={services} addons={addons} />}
-    </div>
-  );
-}
-
-// ─── Daily payout tab ─────────────────────────────────────────────────────────
-function DailyTab({ branches, activeBranchId, activeDate, todayStr, rows, onNav, expenseBasePath }: {
-  branches: Branch[]; activeBranchId: string; activeDate: string; todayStr: string; rows: Row[];
-  onNav: (b: string, d: string) => void;
-  expenseBasePath: string;
-}) {
-  const router = useRouter();
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [otEdits, setOtEdits] = useState<Record<string, string>>({});
-  const [tipEdits, setTipEdits] = useState<Record<string, string>>({});
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  // Tapping Pay moves focus out of an input before click fires. Suppress the
-  // separate blur-save in that case; the Pay request below saves all values
-  // atomically and avoids a race that could snapshot a ฿0 tip.
-  const payIntentRef = useRef<string | null>(null);
-
-  async function patch(staffId: string, body: Record<string, unknown>) {
-    setBusyId(staffId);
-    try {
-      const res = await fetch("/api/admin/payroll", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffId, date: activeDate, ...body }),
-      });
-      if (res.ok) {
-        // Drop the local edits so the inputs reflect the refreshed server value.
-        setOtEdits(p => { const n = { ...p }; delete n[staffId]; return n; });
-        setTipEdits(p => { const n = { ...p }; delete n[staffId]; return n; });
-        router.refresh();
-      }
-    } finally { setBusyId(null); }
-  }
-
-  const totalCommission = rows.reduce((s, r) => s + r.commissionSatang, 0);
-  const totalOt = rows.reduce((s, r) => s + r.otSatang, 0);
-  const totalTip = rows.reduce((s, r) => s + r.tipSatang, 0);
-  const grand = totalCommission + totalOt + totalTip;
-  const isToday = activeDate === todayStr;
-
-  return (
-    <>
-      {/* branch + date controls */}
-      <div className="flex items-center gap-3 flex-wrap mb-4">
-        <div className="flex gap-2">
-          {branches.map(b => (
-            <button key={b.id} onClick={() => onNav(b.id, activeDate)}
-              className="text-sm px-3 py-1.5 rounded-lg border"
-              style={activeBranchId === b.id ? { background: "#F0E4D8", borderColor: PRIMARY, color: PRIMARY, fontWeight: 600 } : { background: "white", borderColor: BORDER, color: "#6B5245" }}>
-              {branchShort(b)}
-            </button>
-          ))}
-        </div>
-        <input type="date" value={activeDate} max={todayStr}
-          onChange={e => onNav(activeBranchId, e.target.value)}
-          className="px-3 py-1.5 text-sm rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }} />
-        {isToday && <span className="text-xs px-2 py-1 rounded-full" style={{ background: "#ECFDF5", color: "#166534" }}>วันนี้</span>}
-      </div>
-
-      {/* summary cards */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {[["ค่ามือรวม", totalCommission], ["OT + ทิปรวม", totalOt + totalTip], ["รวมจ่ายวันนี้", grand]].map(([label, val], i) => (
-          <div key={i} className="rounded-xl bg-white p-3" style={{ border: `1.5px solid ${i === 2 ? PRIMARY : BORDER}` }}>
-            <p className="text-xs" style={{ color: MUTED }}>{label as string}</p>
-            <p className="text-lg font-bold" style={{ color: i === 2 ? PRIMARY : TEXT }}>{baht(val as number)}</p>
-          </div>
-        ))}
-      </div>
-
-      {rows.length === 0 && (
-        <div className="rounded-2xl bg-white p-10 text-center" style={{ border: `1.5px solid ${BORDER}` }}>
-          <p className="text-sm" style={{ color: MUTED }}>ไม่มีพนักงานในสาขานี้</p>
+      </nav>
+      {(tab === "daily" || tab === "report") && (
+        <div className={css.fields}>
+          <label>
+            สาขา
+            <select
+              value={activeBranchId}
+              onChange={(e) => nav(e.target.value, activeDate)}
+            >
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            วันที่ทำงาน
+            <input
+              type="date"
+              value={activeDate}
+              max={todayStr}
+              onChange={(e) => {
+                if (e.target.value) nav(activeBranchId, e.target.value);
+              }}
+            />
+          </label>
         </div>
       )}
-
-      <div className="space-y-2">
-        {rows.map(r => {
-          const otVal = otEdits[r.staffId] ?? String(r.otHours);
-          const tipVal = tipEdits[r.staffId] ?? String(r.tipSatang / 100);
-          const paid = r.status === "PAID";
-          return (
-            <div key={r.staffId} className="rounded-xl bg-white p-3" style={{ border: `1.5px solid ${paid ? "#86EFAC" : BORDER}` }}>
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex-1 min-w-32">
-                  <p className="font-semibold" style={{ color: TEXT }}>{r.name}</p>
-                  <p className="text-[11px]" style={{ color: MUTED }}>
-                    {r.completedCount} งาน · ค่ามือ {baht(r.commissionSatang)} · OT {baht(r.otRateSatang)}/ชม.
-                  </p>
-                </div>
-
-                {/* OT hours input */}
-                <div className="flex items-center gap-1">
-                  <label className="text-[11px]" style={{ color: MUTED }}>OT ชม.</label>
-                  <input
-                    type="number" step="0.5" min="0" inputMode="decimal"
-                    value={otVal}
-                    disabled={paid || busyId === r.staffId}
-                    onChange={e => setOtEdits(p => ({ ...p, [r.staffId]: e.target.value }))}
-                    onBlur={() => {
-                      if (payIntentRef.current === r.staffId) return;
-                      const raw = otEdits[r.staffId];
-                      if (raw === undefined) return;            // not edited
-                      const h = Math.min(24, Math.max(0, parseFloat(raw)));
-                      if (!Number.isNaN(h) && h !== r.otHours) patch(r.staffId, { otHours: h });
-                      else setOtEdits(p => { const n = { ...p }; delete n[r.staffId]; return n; }); // revert bad/no-op input
-                    }}
-                    className="w-16 px-2 py-1 text-sm rounded-lg border text-right disabled:opacity-50"
-                    style={{ borderColor: BORDER, color: TEXT }}
-                  />
-                  <span className="text-xs w-16 text-right" style={{ color: MUTED }}>{baht(r.otSatang)}</span>
-                </div>
-
-                {/* tip input */}
-                <div className="flex items-center gap-1">
-                  <label className="text-[11px]" style={{ color: MUTED }}>ทิป ฿</label>
-                  <input
-                    type="number" step="1" min="0" inputMode="decimal"
-                    value={tipVal}
-                    disabled={paid || busyId === r.staffId}
-                    onChange={e => setTipEdits(p => ({ ...p, [r.staffId]: e.target.value }))}
-                    onBlur={() => {
-                      if (payIntentRef.current === r.staffId) return;
-                      const raw = tipEdits[r.staffId];
-                      if (raw === undefined) return;            // not edited
-                      const baht2satang = Math.round(Math.max(0, parseFloat(raw)) * 100);
-                      if (!Number.isNaN(baht2satang) && baht2satang !== r.tipSatang) patch(r.staffId, { tipSatang: baht2satang });
-                      else setTipEdits(p => { const n = { ...p }; delete n[r.staffId]; return n; }); // revert bad/no-op input
-                    }}
-                    className="w-16 px-2 py-1 text-sm rounded-lg border text-right disabled:opacity-50"
-                    style={{ borderColor: BORDER, color: TEXT }}
-                  />
-                </div>
-
-                {/* total */}
-                <div className="text-right w-24">
-                  <p className="text-[10px]" style={{ color: MUTED }}>รวม</p>
-                  <p className="font-bold" style={{ color: PRIMARY }}>{baht(r.totalSatang)}</p>
-                </div>
-
-                {/* pay action */}
-                {paid ? (
-                  <button onClick={() => patch(r.staffId, { action: "unpay" })} disabled={busyId === r.staffId}
-                    className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: "#DCFCE7", color: "#166534" }}>
-                    {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} จ่ายแล้ว
-                  </button>
-                ) : (
-                  <button onClick={() => {
-                    payIntentRef.current = null;
-                    const enteredOt = Math.min(24, Math.max(0, parseFloat(otVal) || 0));
-                    const enteredTipSatang = Math.round(Math.max(0, parseFloat(tipVal) || 0) * 100);
-                    patch(r.staffId, { action: "pay", otHours: enteredOt, tipSatang: enteredTipSatang });
-                  }} onPointerDown={() => { payIntentRef.current = r.staffId; }}
-                    onPointerCancel={() => { payIntentRef.current = null; }}
-                    disabled={busyId === r.staffId}
-                    className="text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-50" style={{ background: PRIMARY }}>
-                    {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Banknote size={12} />} จ่ายเงิน
-                  </button>
-                )}
-
-                {/* record as expense */}
-                {r.expenseId ? (
-                  <Link href={`${expenseBasePath}/${r.expenseId}`}
-                    className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: "#DCFCE7", color: "#166534" }}>
-                    <Check size={12} /> บันทึกแล้ว
-                  </Link>
-                ) : (
-                  <button onClick={() => setReviewingId(r.staffId)} disabled={!paid}
-                    title={paid ? undefined : "ต้องกดจ่ายเงินก่อน"}
-                    className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-40"
-                    style={{ border: `1px solid ${BORDER}`, color: PRIMARY }}>
-                    <Receipt size={12} /> บันทึกเป็นรายจ่าย
-                  </button>
-                )}
-              </div>
-
-              {reviewingId === r.staffId && (
-                <RecordExpenseReview
-                  row={r} date={activeDate}
-                  onClose={() => setReviewingId(null)}
-                  onRecorded={() => { setReviewingId(null); router.refresh(); }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <p className="text-[11px] mt-4" style={{ color: MUTED }}>
-        ค่ามือ = ค่าตอบแทนที่บันทึกในคิวที่เสร็จ (COMPLETED) วันนั้น หรือค่ามือบริการ/บริการเสริมหากไม่ได้ระบุ · OT = ชั่วโมงที่กรอก × เรตต่อชั่วโมง · เงินเดือน/ค่าแรงฐานจ่ายแยกตามรอบ (ดูแท็บตั้งค่า)
-      </p>
-    </>
-  );
-}
-
-// ─── Review-and-edit panel: confirm the OT/commission/tip breakdown before recording ──
-function RecordExpenseReview({ row, date, onClose, onRecorded }: {
-  row: Row; date: string; onClose: () => void; onRecorded: () => void;
-}) {
-  const [commissionBaht, setCommissionBaht] = useState(String(row.commissionSatang / 100));
-  const [otBaht, setOtBaht] = useState(String(row.otSatang / 100));
-  const [tipBaht, setTipBaht] = useState(String(row.tipSatang / 100));
-  const [category, setCategory] = useState<"commission_bonus" | "salary">("commission_bonus");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const total = (parseFloat(commissionBaht) || 0) + (parseFloat(otBaht) || 0) + (parseFloat(tipBaht) || 0);
-
-  async function confirm() {
-    setSaving(true);
-    setError("");
-    try {
-      const res = await fetch("/api/admin/payroll/daily-expense", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          staffId: row.staffId, date, category,
-          commissionSatang: Math.round((parseFloat(commissionBaht) || 0) * 100),
-          otSatang: Math.round((parseFloat(otBaht) || 0) * 100),
-          tipSatang: Math.round((parseFloat(tipBaht) || 0) * 100),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "บันทึกไม่สำเร็จ"); return; }
-      onRecorded();
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <div className="mt-3 pt-3 rounded-lg" style={{ borderTop: `1px dashed ${BORDER}` }}>
-      <p className="text-xs font-medium mb-2" style={{ color: TEXT }}>ตรวจสอบก่อนบันทึกเป็นรายจ่าย — {row.name}</p>
-      <div className="grid grid-cols-3 gap-2 mb-2">
-        <div>
-          <label className="text-[11px]" style={{ color: MUTED }}>ค่าคอมมิชชั่น ฿</label>
-          <input type="number" step="1" min="0" value={commissionBaht} onChange={e => setCommissionBaht(e.target.value)}
-            className="w-full px-2 py-1 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-        <div>
-          <label className="text-[11px]" style={{ color: MUTED }}>OT ฿</label>
-          <input type="number" step="1" min="0" value={otBaht} onChange={e => setOtBaht(e.target.value)}
-            className="w-full px-2 py-1 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-        <div>
-          <label className="text-[11px]" style={{ color: MUTED }}>ทิป ฿</label>
-          <input type="number" step="1" min="0" value={tipBaht} onChange={e => setTipBaht(e.target.value)}
-            className="w-full px-2 py-1 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
-        </div>
-      </div>
-      <div className="flex items-center gap-3 flex-wrap">
-        <select value={category} onChange={e => setCategory(e.target.value as "commission_bonus" | "salary")}
-          className="text-xs px-2 py-1.5 rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }}>
-          <option value="commission_bonus">หมวด: ค่าคอม/OT/ทิป</option>
-          <option value="salary">หมวด: เงินเดือน/ค่าแรง</option>
-        </select>
-        <p className="text-xs" style={{ color: MUTED }}>รวม <span className="font-bold" style={{ color: PRIMARY }}>{baht(Math.round(total * 100))}</span></p>
-        {error && <p className="text-xs text-red-600">{error}</p>}
-        <div className="ml-auto flex gap-2">
-          <button onClick={onClose} disabled={saving}
-            className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ border: `1px solid ${BORDER}`, color: MUTED }}>
-            <X size={12} /> ยกเลิก
-          </button>
-          <button onClick={confirm} disabled={saving || total <= 0}
-            className="text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-40" style={{ background: PRIMARY }}>
-            {saving ? <Loader2 size={12} className="animate-spin" /> : <Receipt size={12} />} ยืนยันบันทึก
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Monthly rollup tab: commission+OT already paid this month → record as an Expense ──
-interface MonthlyRow {
-  staffId: string; name: string; daysPaid: number;
-  commissionSatang: number; otSatang: number; totalSatang: number;
-  recordedExpenseId: string | null;
-}
-
-function thisMonthStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function MonthlyTab({ branches, activeBranchId }: { branches: Branch[]; activeBranchId: string }) {
-  const [branchId, setBranchId] = useState(activeBranchId || branches[0]?.id || "");
-  const [month, setMonth] = useState(thisMonthStr());
-  const [rows, setRows] = useState<MonthlyRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    if (!branchId) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/payroll/monthly?branchId=${branchId}&month=${month}`);
-      const data = await res.json();
-      if (res.ok) setRows(data.rows ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [branchId, month]);
-
-  // setTimeout, not a direct call — load() eventually setStates, and calling
-  // that synchronously in the effect body trips react-hooks/set-state-in-effect.
-  useEffect(() => { const t = setTimeout(load, 0); return () => clearTimeout(t); }, [load]);
-
-  async function record(staffId: string) {
-    setBusyId(staffId);
-    setError("");
-    try {
-      const res = await fetch("/api/admin/payroll/monthly", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffId, branchId, month }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "บันทึกไม่สำเร็จ"); return; }
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  const grand = rows.reduce((s, r) => s + r.totalSatang, 0);
-
-  return (
-    <>
-      {/* branch + month controls */}
-      <div className="flex items-center gap-3 flex-wrap mb-4">
-        <div className="flex gap-2">
-          {branches.map(b => (
-            <button key={b.id} onClick={() => setBranchId(b.id)}
-              className="text-sm px-3 py-1.5 rounded-lg border"
-              style={branchId === b.id ? { background: "#F0E4D8", borderColor: PRIMARY, color: PRIMARY, fontWeight: 600 } : { background: "white", borderColor: BORDER, color: "#6B5245" }}>
-              {branchShort(b)}
-            </button>
-          ))}
-        </div>
-        <input type="month" value={month} max={thisMonthStr()}
-          onChange={e => setMonth(e.target.value)}
-          className="px-3 py-1.5 text-sm rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }} />
-      </div>
-
-      <p className="text-[11px] mb-4" style={{ color: MUTED }}>
-        สรุปเฉพาะค่าคอมมิชชั่น + OT ที่กด &ldquo;จ่ายเงิน&rdquo; แล้วในแท็บรายวัน (ไม่รวมเงินเดือน/ค่าแรงฐาน ซึ่งจ่ายแยกตามรอบของตัวเอง)
-        การบันทึกเป็นรายจ่ายทำได้ครั้งเดียวต่อคนต่อเดือน กดซ้ำจะไม่สร้างรายการซ้ำ
-      </p>
-
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-
-      {loading ? (
-        <div className="rounded-2xl bg-white p-10 text-center" style={{ border: `1.5px solid ${BORDER}` }}>
-          <Loader2 size={18} className="animate-spin mx-auto" style={{ color: MUTED }} />
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-2xl bg-white p-10 text-center" style={{ border: `1.5px solid ${BORDER}` }}>
-          <p className="text-sm" style={{ color: MUTED }}>ยังไม่มีการจ่ายเงินที่ยืนยันแล้วในเดือนนี้</p>
-        </div>
-      ) : (
+      {tab === "daily" && (
         <>
-          <div className="rounded-xl bg-white p-3 mb-3" style={{ border: `1.5px solid ${PRIMARY}` }}>
-            <p className="text-xs" style={{ color: MUTED }}>รวมทั้งหมด ({rows.length} คน)</p>
-            <p className="text-lg font-bold" style={{ color: PRIMARY }}>{baht(grand)}</p>
+          <div className={css.stats}>
+            <div className={css.stat}>
+              ยืนยันจ่ายแล้ว
+              <strong>
+                {money(
+                  rows
+                    .filter((r) => r.status === "PAID")
+                    .reduce((v, r) => v + r.totalSatang, 0),
+                )}
+              </strong>
+            </div>
+            <div className={css.stat}>
+              รอตรวจยอด
+              <strong>
+                {rows.filter((r) => r.status !== "PAID").length} คน
+              </strong>
+            </div>
+            <div className={css.stat}>
+              ยังไม่มีเวลาเข้า–ออก
+              <strong>
+                {
+                  rows.filter(
+                    (r) => r.workedMinutes == null && r.status !== "PAID",
+                  ).length
+                }{" "}
+                คน
+              </strong>
+            </div>
           </div>
-          <div className="space-y-2">
-            {rows.map(r => (
-              <div key={r.staffId} className="rounded-xl bg-white p-3" style={{ border: `1.5px solid ${r.recordedExpenseId ? "#86EFAC" : BORDER}` }}>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex-1 min-w-32">
-                    <p className="font-semibold" style={{ color: TEXT }}>{r.name}</p>
-                    <p className="text-[11px]" style={{ color: MUTED }}>
-                      {r.daysPaid} วันที่จ่ายแล้ว · ค่ามือ {baht(r.commissionSatang)} · OT {baht(r.otSatang)}
-                    </p>
-                  </div>
-                  <div className="text-right w-28">
-                    <p className="text-[10px]" style={{ color: MUTED }}>รวม</p>
-                    <p className="font-bold" style={{ color: PRIMARY }}>{baht(r.totalSatang)}</p>
-                  </div>
-                  {r.recordedExpenseId ? (
-                    <Link href={`/admin/expenses/${r.recordedExpenseId}`}
-                      className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: "#DCFCE7", color: "#166534" }}>
-                      <Check size={12} /> บันทึกแล้ว
-                    </Link>
-                  ) : (
-                    <button onClick={() => record(r.staffId)} disabled={busyId === r.staffId}
-                      className="text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-50" style={{ background: PRIMARY }}>
-                      {busyId === r.staffId ? <Loader2 size={12} className="animate-spin" /> : <Receipt size={12} />} บันทึกเป็นรายจ่าย
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className={css.layout}>
+            <aside className={css.people} aria-label="เลือกพนักงาน">
+              {rows.map((r) => (
+                <button
+                  key={r.staffId}
+                  aria-pressed={selected?.staffId === r.staffId}
+                  onClick={() => setStaffId(r.staffId)}
+                >
+                  <span>{r.name}</span>
+                  <span>
+                    {r.completedCount} งาน ·{" "}
+                    {r.status === "PAID" ? "จ่ายแล้ว" : "รอตรวจ"}
+                  </span>
+                  <span>{money(r.totalSatang)}</span>
+                </button>
+              ))}
+            </aside>
+            {selected ? (
+              <DailyReview
+                key={`${activeDate}:${activeBranchId}:${selected.staffId}:${selected.sourceToken}`}
+                row={selected}
+                date={activeDate}
+                branchId={activeBranchId}
+                basePath={basePath}
+              />
+            ) : (
+              <p>ยังไม่มีพนักงาน</p>
+            )}
           </div>
         </>
       )}
-    </>
+      {tab === "report" && (
+        <ReportControls
+          basePath={basePath}
+          branchId={activeBranchId}
+          day={activeDate}
+          staff={props.staffConfig.filter((s) => s.branchId === activeBranchId)}
+        />
+      )}
+      {tab === "settings" && (
+        <SettingsTab
+          branches={branches}
+          staffConfig={props.staffConfig}
+          services={props.services}
+          addons={props.addons}
+        />
+      )}
+      {tab === "payees" && <PayeeManager />}
+    </main>
   );
 }
-
-// ─── Settings tab: staff base pay + per-service commission ─────────────────────
-function SettingsTab({ branches, staffConfig, services, addons }: { branches: Branch[]; staffConfig: StaffCfg[]; services: ServiceCfg[]; addons: AddonCfg[] }) {
+function DailyReview({
+  row: r,
+  date,
+  branchId,
+  basePath,
+}: {
+  row: StaffPayoutRow;
+  date: string;
+  branchId: string;
+  basePath: string;
+}) {
+  const router = useRouter();
+  const [clockIn, setClockIn] = useState(localTime(r.clockIn));
+  const [clockOut, setClockOut] = useState(localTime(r.clockOut));
+  const [overnight, setOvernight] = useState(
+    !!r.clockOut &&
+      new Date(new Date(r.clockOut).getTime() + 7 * 3600000)
+        .toISOString()
+        .slice(0, 10) > date,
+  );
+  const [breaks, setBreaks] = useState(String(r.breakMinutes));
+  const [attNotes, setAttNotes] = useState(r.attendanceNotes);
+  const [mode, setMode] = useState(r.otMode);
+  const [ot, setOt] = useState(String(r.otHours));
+  const [tip, setTip] = useState(String(r.tipSatang / 100));
+  const [adjustment, setAdjustment] = useState(
+    String(r.adjustmentSatang / 100),
+  );
+  const [reason, setReason] = useState(r.adjustmentReason);
+  const [payment, setPayment] = useState("CASH");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [reopen, setReopen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const paid = r.status === "PAID";
+  const endDay = overnight
+    ? new Date(Date.parse(date) + 86400000).toISOString().slice(0, 10)
+    : date;
+  const start = clockIn ? `${date}T${clockIn}:00+07:00` : null;
+  const end = clockOut ? `${endDay}T${clockOut}:00+07:00` : null;
+  let minutes: number | null = null,
+    timeError = "";
+  try {
+    if (start && end) minutes = workMinutes(start, end, Number(breaks));
+    else if (start || end) timeError = "กรอกเวลาเข้าและออกให้ครบ";
+  } catch (e) {
+    timeError = e instanceof Error ? e.message : "เวลาไม่ถูกต้อง";
+  }
+  const effectiveHours = paid
+    ? r.otHours
+    : mode === "MANUAL"
+      ? Number(ot)
+      : minutes == null
+        ? 0
+        : overtimeMinutes(minutes, r.normalWorkMinutes) / 60;
+  const otPay = paid ? r.otSatang : Math.round(effectiveHours * r.otRateSatang);
+  const tipPay = paid ? r.tipSatang : Math.round(Number(tip) * 100);
+  const adjPay = paid
+    ? r.adjustmentSatang
+    : Math.round(Number(adjustment) * 100);
+  const total = r.commissionSatang + otPay + tipPay + adjPay;
+  const invalid =
+    !Number.isFinite(total) ||
+    total < 0 ||
+    effectiveHours < 0 ||
+    effectiveHours > 24 ||
+    tipPay < 0 ||
+    !!timeError;
+  async function submit(action: "save" | "settle" | "reopen") {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/payroll", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: r.staffId,
+          date,
+          sourceToken: r.sourceToken,
+          action,
+          clockIn: start,
+          clockOut: end,
+          breakMinutes: Number(breaks),
+          attendanceNotes: attNotes,
+          otMode: mode,
+          otHours: Number(ot),
+          tipSatang: Math.round(Number(tip) * 100),
+          adjustmentSatang: Math.round(Number(adjustment) * 100),
+          adjustmentReason: reason,
+          paymentMethod: payment,
+          reason: reopenReason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "บันทึกไม่สำเร็จ");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("เชื่อมต่อไม่สำเร็จ ข้อมูลที่กรอกยังอยู่ กรุณาลองใหม่");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <div className="space-y-8">
-      <section>
-        <h2 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>ฐานเงินเดือน / ค่าแรง + เรต OT</h2>
-        <p className="text-[11px] mb-3" style={{ color: MUTED }}>
-          OT/ชม. คำนวณอัตโนมัติ: เงินเดือน ÷ (30×8) หรือ ค่าแรงรายวัน ÷ 8 (กรอกเรตเองได้ถ้าต้องการ)
+    <section className={css.panel}>
+      <h2>
+        {r.name}{" "}
+        <span className={css.badge}>
+          {paid ? "ยืนยันจ่ายแล้ว" : "ตรวจยอดก่อนจ่าย"}
+        </span>
+      </h2>
+      <p className={css.muted}>
+        ฐาน{r.payType === "DAILY_WAGE" ? "ค่าแรง/วัน" : "เงินเดือน"}{" "}
+        {money(r.baseSatang)} · จ่ายฐานเงินแยกตามรอบ{" "}
+        {r.payCadence === "WEEKLY" ? "สัปดาห์" : "เดือน"}
+      </p>
+      {paid && (
+        <p className={css.muted}>
+          {r.paidAt
+            ? `ยืนยันจ่าย ${new Date(r.paidAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`
+            : "ไม่ระบุวันที่จ่ายจริงในข้อมูลเดิม"}
         </p>
-        <div className="space-y-4">
-          {branches.map(b => {
-            const list = staffConfig.filter(s => s.branchId === b.id);
-            if (list.length === 0) return null;
-            return (
-              <div key={b.id}>
-                <p className="text-xs font-medium mb-1" style={{ color: PRIMARY }}>{branchShort(b)}</p>
-                <div className="space-y-2">
-                  {list.map(s => <StaffPayRow key={s.id} staff={s} />)}
-                </div>
-              </div>
-            );
-          })}
+      )}
+      {r.legacySnapshot && (
+        <p className={css.warning}>
+          รายการเก่าเก็บเฉพาะยอดจ่าย
+          รายละเอียดบุ๊กกิ้งด้านล่างเป็นข้อมูลปัจจุบัน อาจต่างจากวันที่จ่าย
+        </p>
+      )}
+      {r.changedSincePaid && (
+        <p className={css.warning}>
+          บุ๊กกิ้งเปลี่ยนหลังจ่ายแล้ว ยอดด้านล่างยังเป็นยอดที่ยืนยันจ่าย
+          หากต้องแก้ให้เปิดแก้พร้อมเหตุผล
+        </p>
+      )}
+      <h3>เวลาเข้า–ออกจริง</h3>
+      <p className={css.muted}>
+        กะตามแผน: {r.shifts.join(", ") || "ยังไม่จัดกะ"} · เกณฑ์ปกติ{" "}
+        {r.normalWorkMinutes / 60} ชม./วัน
+      </p>
+      <fieldset
+        disabled={paid || busy}
+        style={{ border: 0, padding: 0, margin: 0 }}
+      >
+        <div className={css.fields}>
+          <label>
+            เข้างานจริง
+            <input
+              type="time"
+              value={clockIn}
+              onChange={(e) => setClockIn(e.target.value)}
+            />
+          </label>
+          <label>
+            ออกงานจริง
+            <input
+              type="time"
+              value={clockOut}
+              onChange={(e) => setClockOut(e.target.value)}
+            />
+          </label>
+          <label>
+            วันที่ออกงาน
+            <select
+              value={overnight ? "next" : "same"}
+              onChange={(e) => setOvernight(e.target.value === "next")}
+            >
+              <option value="same">วันเดียวกัน</option>
+              <option value="next">วันถัดไป</option>
+            </select>
+          </label>
+          <label>
+            พักที่ไม่นับเวลางาน (นาที)
+            <input
+              type="number"
+              min="0"
+              max="1440"
+              value={breaks}
+              onChange={(e) => setBreaks(e.target.value)}
+            />
+          </label>
         </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>ค่ามือต่อบริการ (commission)</h2>
-        <p className="text-[11px] mb-3" style={{ color: MUTED }}>
-          จำนวนเงิน (บาท) ที่ช่างได้ต่อ 1 ครั้งที่ทำบริการนี้ — ไม่ขึ้นกับส่วนลดสมาชิก/แพ็กเกจ
+        <p className={css.muted}>
+          ค่าเริ่มต้นนับช่วงเข้า–ออกทั้งหมด หากมีเวลาพักที่ไม่นับให้กรอกเพิ่ม
         </p>
-        <div className="space-y-2">
-          {services.map(s => <ServiceCommissionRow key={s.id} service={s} />)}
+        <label>
+          หมายเหตุ / เหตุผลแก้เวลา
+          <input
+            value={attNotes}
+            onChange={(e) => setAttNotes(e.target.value)}
+            placeholder="เช่น แก้เวลาออกตามบันทึกหน้าร้าน"
+          />
+        </label>
+      </fieldset>
+      <p aria-live="polite">
+        ทำงานจริง{" "}
+        {minutes == null
+          ? "—"
+          : `${Math.floor(minutes / 60)} ชม. ${minutes % 60} นาที`}{" "}
+        · OT ตามเวลา{" "}
+        {minutes == null
+          ? "—"
+          : `${overtimeMinutes(minutes, r.normalWorkMinutes)} นาที`}
+      </p>
+      {timeError && <p className={css.error}>{timeError}</p>}
+      <h3>รายละเอียดงานและค่ามือ</h3>
+      <p className={css.muted}>
+        นับเฉพาะงานเสร็จของช่างหลัก
+        งานผู้ช่วยแสดงให้ตรวจสอบและไม่คิดค่ามือตามกติกาเดิม
+      </p>
+      <div className={css.tableWrap}>
+        <table className={css.table}>
+          <thead>
+            <tr>
+              <th>เวลา / งาน</th>
+              <th>สถานะ / ที่มาค่ามือ</th>
+              <th>ค่ามือ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.bookings.map((b) => (
+              <tr key={b.id}>
+                <td>
+                  {b.time}
+                  <br />
+                  {b.customer} · {b.service}
+                  {b.addons && <p className={css.muted}>+ {b.addons}</p>}
+                  <Link
+                    href={`/admin/calendar?date=${date}&branchId=${encodeURIComponent(branchId)}&bookingId=${encodeURIComponent(b.id)}`}
+                  >
+                    เปิดบุ๊กกิ้ง
+                  </Link>
+                </td>
+                <td>
+                  {b.status === "COMPLETED"
+                    ? "เสร็จแล้ว"
+                    : b.status === "CANCELLED"
+                      ? "ยกเลิก"
+                      : "ยังไม่เสร็จ"}
+                  <p className={css.muted}>
+                    {b.primary ? b.source : "ผู้ช่วย — ไม่คิดค่ามือ"}
+                  </p>
+                </td>
+                <td>{money(b.commissionSatang)}</td>
+              </tr>
+            ))}
+            {!r.bookings.length && (
+              <tr>
+                <td colSpan={3}>ไม่มีงานในวันนี้</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <h3>ตรวจยอดจ่าย</h3>
+      <fieldset
+        disabled={paid || busy}
+        style={{ border: 0, padding: 0, margin: 0 }}
+      >
+        <div className={css.fields}>
+          <label>
+            วิธีคิด OT
+            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="AUTO">คำนวณจากเวลาจริง</option>
+              <option value="MANUAL">กำหนด OT เอง</option>
+            </select>
+          </label>
+          {mode === "MANUAL" && (
+            <label>
+              OT (ชั่วโมง)
+              <input
+                type="number"
+                min="0"
+                max="24"
+                step="0.01"
+                value={ot}
+                onChange={(e) => setOt(e.target.value)}
+              />
+            </label>
+          )}
+          <label>
+            ทิป (฿)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={tip}
+              onChange={(e) => setTip(e.target.value)}
+            />
+          </label>
+          <label>
+            ปรับเพิ่ม / ลด (฿)
+            <input
+              type="number"
+              step="0.01"
+              value={adjustment}
+              onChange={(e) => setAdjustment(e.target.value)}
+            />
+          </label>
         </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold mb-1" style={{ color: TEXT }}>ค่ามือต่อบริการเสริม (add-on)</h2>
-        <p className="text-[11px] mb-3" style={{ color: MUTED }}>
-          จำนวนเงิน (บาท) ที่ช่างได้เพิ่ม เมื่อบริการเสริมนี้อยู่ในงานที่เสร็จ
+        <label style={{ marginTop: 12 }}>
+          เหตุผลปรับยอด / กำหนด OT เอง
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="ระบุเหตุผลเพื่อเก็บประวัติ"
+          />
+        </label>
+      </fieldset>
+      <div className={css.tableWrap}>
+        <table className={css.table}>
+          <tbody>
+            <tr>
+              <td>ค่ามือ {r.completedCount} งาน</td>
+              <td>{money(r.commissionSatang)}</td>
+            </tr>
+            <tr>
+              <td>
+                OT{" "}
+                {Number.isFinite(effectiveHours)
+                  ? effectiveHours.toFixed(2)
+                  : "—"}{" "}
+                ชม. × {money(r.otRateSatang)}/ชม.
+              </td>
+              <td>{money(otPay)}</td>
+            </tr>
+            <tr>
+              <td>ทิป</td>
+              <td>{money(tipPay)}</td>
+            </tr>
+            <tr>
+              <td>ปรับเพิ่ม / ลด</td>
+              <td>{money(adjPay)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {r.warnings.map((w) => (
+        <p key={w} className={css.warning}>
+          {w}
         </p>
-        {addons.length === 0
-          ? <p className="text-xs" style={{ color: MUTED }}>— ยังไม่มีบริการเสริม —</p>
-          : <div className="space-y-2">{addons.map(a => <AddonCommissionRow key={a.id} addon={a} />)}</div>}
-      </section>
-    </div>
-  );
-}
-
-function StaffPayRow({ staff }: { staff: StaffCfg }) {
-  const router = useRouter();
-  const [payType, setPayType] = useState<PayType>(staff.payType);
-  const [baseBaht, setBaseBaht] = useState(String(staff.baseSatang / 100));
-  const [cadence, setCadence] = useState<Cadence>(staff.payCadence);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const baseSatang = Math.round((parseFloat(baseBaht) || 0) * 100);
-  const otRate = staff.otRateSatang != null
-    ? staff.otRateSatang
-    : (baseSatang <= 0 ? 0 : baseSatang / (payType === "DAILY_WAGE" ? 8 : 240));
-  const dirty = payType !== staff.payType || baseSatang !== staff.baseSatang || cadence !== staff.payCadence;
-
-  async function save() {
-    setSaving(true); setSaved(false);
-    try {
-      const res = await fetch(`/api/admin/staff/${staff.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payType, baseSatang, payCadence: cadence }),
-      });
-      if (res.ok) { setSaved(true); router.refresh(); setTimeout(() => setSaved(false), 1500); }
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <div className="rounded-xl bg-white p-3 flex items-center gap-2 flex-wrap" style={{ border: `1px solid ${BORDER}` }}>
-      <p className="font-medium w-28 flex-shrink-0" style={{ color: TEXT }}>{staff.name}</p>
-      <select value={payType} onChange={e => setPayType(e.target.value as PayType)}
-        className="text-sm px-2 py-1.5 rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }}>
-        <option value="MONTHLY_SALARY">เงินเดือน</option>
-        <option value="DAILY_WAGE">รายวัน</option>
-      </select>
-      <div className="flex items-center gap-1">
-        <span className="text-xs" style={{ color: MUTED }}>฿</span>
-        <input type="number" min="0" value={baseBaht} onChange={e => setBaseBaht(e.target.value)}
-          className="w-24 px-2 py-1.5 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
-        <span className="text-[11px]" style={{ color: MUTED }}>{payType === "DAILY_WAGE" ? "/วัน" : "/เดือน"}</span>
+      ))}
+      {error && (
+        <p className={css.error} role="alert">
+          {error}{" "}
+          <button onClick={() => router.refresh()}>โหลดข้อมูลล่าสุด</button>
+        </p>
+      )}
+      <div className={css.total} aria-live="polite">
+        <div>
+          {paid ? "จ่ายแล้ว" : "ยอดจ่ายสุทธิ"}
+          <strong style={{ display: "block" }}>
+            {Number.isFinite(total) ? money(total) : "—"}
+          </strong>
+        </div>
+        {(!paid || !r.expenseId) && (
+          <label>
+            วิธีจ่าย
+            <select
+              value={payment}
+              onChange={(e) => setPayment(e.target.value)}
+            >
+              <option value="CASH">เงินสด</option>
+              <option value="TRANSFER">โอนเงิน</option>
+              <option value="OTHER">อื่น ๆ</option>
+            </select>
+          </label>
+        )}
       </div>
-      <select value={cadence} onChange={e => setCadence(e.target.value as Cadence)}
-        className="text-sm px-2 py-1.5 rounded-lg border bg-white" style={{ borderColor: BORDER, color: TEXT }}>
-        <option value="MONTHLY">จ่ายรายเดือน</option>
-        <option value="WEEKLY">จ่ายรายสัปดาห์</option>
-      </select>
-      <span className="text-[11px]" style={{ color: MUTED }}>OT {baht(otRate)}/ชม.</span>
-      <button onClick={save} disabled={!dirty || saving}
-        className="ml-auto text-xs px-3 py-1.5 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-40" style={{ background: PRIMARY }}>
-        {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : null}
-        {saved ? "บันทึกแล้ว" : "บันทึก"}
-      </button>
-    </div>
-  );
-}
-
-function ServiceCommissionRow({ service }: { service: ServiceCfg }) {
-  const router = useRouter();
-  const [val, setVal] = useState(String(service.commissionSatang / 100));
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const satang = Math.round((parseFloat(val) || 0) * 100);
-  const dirty = satang !== service.commissionSatang;
-
-  async function save() {
-    setSaving(true); setSaved(false);
-    try {
-      const res = await fetch(`/api/admin/services/${service.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commissionBaht: parseFloat(val) || 0 }),
-      });
-      if (res.ok) { setSaved(true); router.refresh(); setTimeout(() => setSaved(false), 1500); }
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <div className="rounded-xl bg-white p-2.5 flex items-center gap-2" style={{ border: `1px solid ${BORDER}` }}>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate" style={{ color: TEXT }}>{service.nameTh}</p>
-        <p className="text-[10px]" style={{ color: MUTED }}>{service.category}</p>
+      <div className={css.toolbar}>
+        {!paid && (
+          <button disabled={busy || invalid} onClick={() => submit("save")}>
+            บันทึกการตรวจไว้ก่อน
+          </button>
+        )}
+        {(!paid || !r.expenseId) && (
+          <button
+            className={css.primary}
+            disabled={
+              busy || invalid || (!paid && mode === "AUTO" && minutes == null)
+            }
+            onClick={() => submit("settle")}
+          >
+            {busy
+              ? "กำลังบันทึก…"
+              : paid
+                ? "ลงรายจ่ายจากยอดเดิม"
+                : "ยืนยันจ่ายและบันทึกรายจ่าย"}
+          </button>
+        )}
+        {r.expenseId && (
+          <Link
+            className={css.link}
+            href={`${basePath.startsWith("/admin/m") ? "/admin/m/expenses" : "/admin/expenses"}/${r.expenseId}`}
+          >
+            รายจ่าย / แนบหลักฐาน
+          </Link>
+        )}
+        {paid && (
+          <button onClick={() => setReopen(!reopen)}>
+            แก้รายการที่จ่ายแล้ว
+          </button>
+        )}
       </div>
-      <span className="text-xs" style={{ color: MUTED }}>฿</span>
-      <input type="number" min="0" value={val} onChange={e => setVal(e.target.value)}
-        onBlur={() => { if (dirty) save(); }}
-        className="w-20 px-2 py-1.5 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
-      <button onClick={save} disabled={!dirty || saving}
-        className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-30"
-        style={{ border: `1px solid ${BORDER}`, color: saved ? "#166534" : PRIMARY }}>
-        {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : "บันทึก"}
-      </button>
-    </div>
+      <FinanceHistory
+        query={new URLSearchParams({
+          entity: "PAYROLL",
+          staffId: r.staffId,
+          date,
+        }).toString()}
+      />
+      {reopen && (
+        <div>
+          <p className={css.warning}>
+            เปิดแก้จะยกเลิกรายจ่ายเดิมและเก็บประวัติ
+            เมื่อยืนยันใหม่จะสร้างรายการฉบับแก้ไข
+          </p>
+          <label>
+            เหตุผลเปิดแก้
+            <input
+              value={reopenReason}
+              onChange={(e) => setReopenReason(e.target.value)}
+            />
+          </label>
+          <button
+            disabled={busy || !reopenReason.trim()}
+            onClick={() => submit("reopen")}
+          >
+            เปิดแก้รายการนี้
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
-
-function AddonCommissionRow({ addon }: { addon: AddonCfg }) {
-  const router = useRouter();
-  const [val, setVal] = useState(String(addon.commissionSatang / 100));
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const satang = Math.round((parseFloat(val) || 0) * 100);
-  const dirty = satang !== addon.commissionSatang;
-
-  async function save() {
-    setSaving(true); setSaved(false);
-    try {
-      const res = await fetch(`/api/admin/addons/${addon.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commissionBaht: parseFloat(val) || 0 }),
-      });
-      if (res.ok) { setSaved(true); router.refresh(); setTimeout(() => setSaved(false), 1500); }
-    } finally { setSaving(false); }
-  }
-
+function ReportControls({
+  basePath,
+  branchId,
+  day,
+  staff,
+}: {
+  basePath: string;
+  branchId: string;
+  day: string;
+  staff: StaffCfg[];
+}) {
+  const [from, setFrom] = useState(day.slice(0, 7) + "-01"),
+    [to, setTo] = useState(day),
+    [staffId, setStaffId] = useState("");
+  const query = new URLSearchParams({
+    branchId,
+    from,
+    to,
+    ...(staffId ? { staffId } : {}),
+  }).toString();
   return (
-    <div className="rounded-xl bg-white p-2.5 flex items-center gap-2" style={{ border: `1px solid ${BORDER}` }}>
-      <p className="text-sm font-medium truncate flex-1 min-w-0" style={{ color: TEXT }}>{addon.nameTh}</p>
-      <span className="text-xs" style={{ color: MUTED }}>฿</span>
-      <input type="number" min="0" value={val} onChange={e => setVal(e.target.value)}
-        onBlur={() => { if (dirty) save(); }}
-        className="w-20 px-2 py-1.5 text-sm rounded-lg border text-right" style={{ borderColor: BORDER, color: TEXT }} />
-      <button onClick={save} disabled={!dirty || saving}
-        className="text-xs px-3 py-1.5 rounded-lg inline-flex items-center gap-1 disabled:opacity-30"
-        style={{ border: `1px solid ${BORDER}`, color: saved ? "#166534" : PRIMARY }}>
-        {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : "บันทึก"}
-      </button>
-    </div>
+    <section className={css.panel} style={{ marginTop: 20 }}>
+      <h2>สรุปการทำงานและค่าตอบแทน</h2>
+      <div className={css.fields}>
+        <label>
+          ตั้งแต่
+          <input
+            type="date"
+            value={from}
+            max={to}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </label>
+        <label>
+          ถึง
+          <input
+            type="date"
+            value={to}
+            min={from}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </label>
+        <label>
+          พนักงาน
+          <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+            <option value="">ทุกคนในสาขา</option>
+            {staff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className={css.muted}>
+        รายงานแยกเวลาทำงาน ค่ามือ OT ทิป ยอดปรับ และสถานะจ่าย
+        รายเดือนรวมจากรายการเดิมโดยไม่ลงรายจ่ายซ้ำ
+        ฐานเงินแสดงแยกจากเงินที่จ่ายรายวัน
+      </p>
+      <div className={css.toolbar}>
+        <Link className={css.link} href={`${basePath}/report?${query}`}>
+          ดูรายงาน / พิมพ์ / คัดลอกสรุปส่งพนักงาน
+        </Link>
+        <a
+          className={css.link}
+          href={`/api/admin/payroll/report?${query}&format=csv`}
+        >
+          ดาวน์โหลดสรุปรายวัน CSV
+        </a>
+        <a
+          className={css.link}
+          href={`/api/admin/payroll/report?${query}&format=bookings`}
+        >
+          ดาวน์โหลดรายละเอียดงาน CSV
+        </a>
+      </div>
+    </section>
   );
 }

@@ -1,145 +1,163 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { findOrCreateVendorId } from "@/lib/vendors";
-
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
-  if (_gate instanceof Response) return _gate;
-
+import { requireAdmin, requireOwner } from "@/lib/admin-auth";
+import { expenseData, attachmentData } from "@/lib/expense-write";
+import { jsonSnapshot } from "@/lib/finance-audit";
+type Context = { params: Promise<{ id: string }> };
+export async function GET(_request: Request, { params }: Context) {
+  const gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (gate instanceof Response) return gate;
   const { id } = await params;
   const expense = await prisma.expense.findUnique({
-    where:  { id },
+    where: { id },
     include: {
-      items: { orderBy: { id: "asc" } },
-      attachments: { orderBy: { createdAt: "asc" } },
+      items: true,
+      attachments: true,
       branch: { select: { id: true, name: true } },
     },
   });
-  if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ expense });
+  if (!expense) return Response.json({ error: "ไม่พบรายการ" }, { status: 404 });
+  return Response.json({ expense: { ...expense, payeeSnapshot: gate.role === "OWNER" ? expense.payeeSnapshot : undefined } });
 }
-
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
-  if (_gate instanceof Response) return _gate;
-
-  const { id } = await params;
-  const body = await request.json();
-  const {
-    branchId, category, vendor, date, totalAmount, vatAmount,
-    paymentMethod, receiptUrl, notes, status, items, attachments,
-  } = body;
-
+export async function PATCH(request: Request, { params }: Context) {
+  const gate = await requireAdmin().catch((e: unknown) => e as Response);
+  if (gate instanceof Response) return gate;
   try {
-    // vendorId is re-resolved only when vendor is actually part of this edit —
-    // find-or-create runs outside the transaction since it's a simple lookup,
-    // not something that needs to roll back with the rest of the update.
-    const vendorId = vendor !== undefined ? await findOrCreateVendorId(vendor, category) : undefined;
-    const normalizedItems = Array.isArray(items)
-      ? items.map((it: { description: string; quantity: number; unitPrice: number; totalPrice: number }) => ({
-          expenseId: id,
-          description: String(it.description),
-          quantity:   Number(it.quantity)   || 1,
-          unitPrice:  Math.round(Number(it.unitPrice)  || 0),
-          totalPrice: Math.round(Number(it.totalPrice) || 0),
-        }))
-      : null;
-
-    // If items/attachments provided, replace them entirely (simpler than diffing).
-    const result = await prisma.$transaction(async (tx) => {
+    const { id } = await params,
+      b = await request.json();
+    const expense = await prisma.$transaction(async (tx) => {
+      const old = await tx.expense.findUniqueOrThrow({
+        where: { id },
+        include: { items: true, attachments: true },
+      });
+      if (old.status === "VOIDED")
+        throw new Error("รายการยกเลิกแล้ว แก้ไขไม่ได้");
+      const linked = await tx.staffDailyPayout.findFirst({
+        where: { expenseId: id },
+      });
+      const locked = !!(
+        linked ||
+        old.sourceKey?.startsWith("PAYROLL:") ||
+        old.notes?.includes("[PAYROLL:")
+      );
+      let data;
+      if (locked) {
+        if (
+          Object.keys(b).some(
+            (k) =>
+              ![
+                "attachments",
+                "notes",
+                "invoiceNumber",
+                "refreshPayeeSnapshot",
+              ].includes(k),
+          )
+        )
+          throw new Error(
+            "ยอดนี้เชื่อมค่าตอบแทน กรุณาเปิดแก้จากหน้าค่าตอบแทนเพื่อให้ยอดตรงกัน",
+          );
+        data = {
+          ...(b.notes !== undefined ? { notes: String(b.notes) } : {}),
+          ...(b.invoiceNumber !== undefined
+            ? { invoiceNumber: String(b.invoiceNumber) }
+            : {}),
+        };
+      } else {
+        const normalized = await expenseData(tx, b, old.vatMode === "LEGACY");
+        data = normalized.data;
+        // Preserve the historical payee identity when the selected recipient is unchanged.
+        if (
+          old.vendorId === data.vendorId &&
+          old.payeeSnapshot &&
+          !b.refreshPayeeSnapshot
+        )
+          data.payeeSnapshot = jsonSnapshot(old.payeeSnapshot);
+        await tx.expenseItem.deleteMany({ where: { expenseId: id } });
+        if (normalized.items.length)
+          await tx.expenseItem.createMany({
+            data: normalized.items.map((it) => ({ ...it, expenseId: id })),
+          });
+      }
+      if (b.refreshPayeeSnapshot) {
+        if (gate.role !== "OWNER")
+          throw new Error(
+            "เฉพาะเจ้าของเท่านั้นที่แก้ข้อมูลผู้รับเงินบนเอกสารเดิมได้",
+          );
+        const vendorId = "vendorId" in data ? data.vendorId : old.vendorId;
+        if (vendorId) {
+          const payee = await tx.vendor.findUniqueOrThrow({
+            where: { id: String(vendorId) },
+          });
+          data = {
+            ...data,
+            payeeSnapshot: jsonSnapshot(payee),
+            vendor: payee.legalName || payee.name,
+          };
+        }
+      }
+      if (b.attachments !== undefined) {
+        const files = attachmentData(b.attachments);
+        await tx.expenseAttachment.deleteMany({ where: { expenseId: id } });
+        if (files.length)
+          await tx.expenseAttachment.createMany({
+            data: files.map((a) => ({ ...a, expenseId: id })),
+          });
+      }
       const updated = await tx.expense.update({
         where: { id },
+        data,
+        include: { items: true, attachments: true },
+      });
+      await tx.financeAudit.create({
         data: {
-          ...(branchId !== undefined      ? { branchId: branchId || null }                : {}),
-          ...(category !== undefined      ? { category }                                  : {}),
-          ...(vendor !== undefined        ? { vendor: vendor || null, vendorId }          : {}),
-          ...(date !== undefined          ? { date: new Date(date + "T12:00:00") }        : {}),
-          ...(totalAmount !== undefined   ? { totalAmount: Math.round(totalAmount) }      : {}),
-          ...(vatAmount !== undefined     ? { vatAmount: vatAmount != null ? Math.round(vatAmount) : null } : {}),
-          ...(paymentMethod !== undefined ? { paymentMethod: paymentMethod || null }      : {}),
-          ...(receiptUrl !== undefined    ? { receiptUrl: receiptUrl || null }            : {}),
-          ...(notes !== undefined         ? { notes: notes || null }                      : {}),
-          ...(status !== undefined        ? { status: status === "DRAFT" ? "DRAFT" : "CONFIRMED" } : {}),
+          entity: "EXPENSE",
+          recordId: id,
+          action: "UPDATE",
+          actor: gate.username,
+          before: jsonSnapshot(old),
+          after: jsonSnapshot(updated),
         },
       });
-
-      if (normalizedItems) {
-        await tx.expenseItem.deleteMany({ where: { expenseId: id } });
-        if (normalizedItems.length > 0) {
-          await tx.expenseItem.createMany({
-            data: normalizedItems,
-          });
-        }
-
-        // Expenses created from payroll are linked back by expenseId. Keep the
-        // paid snapshot in sync when its commission/OT/tip line items are edited,
-        // so returning to the payroll screen does not keep showing the old tip.
-        const linkedPayout = await tx.staffDailyPayout.findFirst({
-          where: { expenseId: id },
-          select: { id: true },
-        });
-        if (linkedPayout) {
-          let commissionSatang = 0;
-          let otSatang = 0;
-          let tipSatang = 0;
-          for (const item of normalizedItems) {
-            const description = item.description.trim().toLowerCase();
-            if (description.includes("ทิป")) tipSatang += item.totalPrice;
-            else if (description.includes("ot")) otSatang += item.totalPrice;
-            else if (description.includes("คอม")) commissionSatang += item.totalPrice;
-          }
-          await tx.staffDailyPayout.update({
-            where: { id: linkedPayout.id },
-            data: { commissionSatang, otSatang, tipSatang },
-          });
-        }
-      }
-
-      if (Array.isArray(attachments)) {
-        await tx.expenseAttachment.deleteMany({ where: { expenseId: id } });
-        if (attachments.length > 0) {
-          await tx.expenseAttachment.createMany({
-            data: attachments.map((a: { url: string; filename?: string; fileType?: string }) => ({
-              expenseId: id,
-              url:      String(a.url),
-              filename: a.filename ? String(a.filename) : null,
-              fileType: a.fileType ? String(a.fileType) : null,
-            })),
-          });
-        }
-      }
-
       return updated;
     });
-
-    return NextResponse.json({ expense: result });
+    return Response.json({ expense: { ...expense, payeeSnapshot: gate.role === "OWNER" ? expense.payeeSnapshot : undefined } });
   } catch (e) {
-    console.error("[expenses PATCH]", e);
-    return NextResponse.json({ error: "Failed to update expense" }, { status: 500 });
+    return Response.json(
+      { error: e instanceof Error ? e.message : "บันทึกไม่สำเร็จ" },
+      { status: 400 },
+    );
   }
 }
-
-
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const _gate = await requireAdmin().catch((e: unknown) => e as Response);
-  if (_gate instanceof Response) return _gate;
-
-  const { id } = await params;
+// Preserve issued records for accounting; deletion is a traced void.
+export async function DELETE(request: Request, { params }: Context) {
+  const gate = await requireOwner().catch((e: unknown) => e as Response);
+  if (gate instanceof Response) return gate;
   try {
-    await prisma.expense.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const { id } = await params,
+      b = await request.json().catch(() => ({}));
+    if (!b.reason?.trim()) throw new Error("กรุณาระบุเหตุผลยกเลิก");
+    await prisma.$transaction(async (tx) => {
+      const old = await tx.expense.findUniqueOrThrow({ where: { id } });
+      const linked = await tx.staffDailyPayout.findFirst({
+        where: { expenseId: id },
+      });
+      if (linked) throw new Error("กรุณาเปิดแก้จากหน้าค่าตอบแทน");
+      await tx.expense.update({ where: { id }, data: { status: "VOIDED" } });
+      await tx.financeAudit.create({
+        data: {
+          entity: "EXPENSE",
+          recordId: id,
+          action: "VOID",
+          actor: gate.username,
+          before: jsonSnapshot(old),
+          after: jsonSnapshot({ reason: b.reason }),
+        },
+      });
+    });
+    return Response.json({ ok: true });
+  } catch (e) {
+    return Response.json(
+      { error: e instanceof Error ? e.message : "ยกเลิกไม่สำเร็จ" },
+      { status: 400 },
+    );
   }
 }

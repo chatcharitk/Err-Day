@@ -51,6 +51,7 @@ function localYmd(date: Date) {
 
 export default function ExpensesList({ expenses, branches, filters, summary, categoryTotals }: Props) {
   const router = useRouter();
+  const exportQuery = new URLSearchParams(filters).toString();
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams();
@@ -99,6 +100,7 @@ export default function ExpensesList({ expenses, branches, filters, summary, cat
       </div>
 
       <div className="mb-6 rounded-2xl p-5" style={{ background: "#FDF8F3", border: `1.5px solid ${BORDER}` }}>
+        <div className="flex flex-wrap gap-3 my-4"><a className="text-sm underline" href={`/api/admin/expenses/export?${exportQuery}`}>ส่งบัญชี CSV (เจ้าของ)</a><Link className="text-sm underline" href="/admin/payees">จัดการผู้รับเงิน</Link></div>
         <ExpenseQuickMenu basePath="/admin/expenses/new" totals={categoryTotals} />
       </div>
 
@@ -187,7 +189,7 @@ export default function ExpensesList({ expenses, branches, filters, summary, cat
                   className="border-t cursor-pointer hover:bg-stone-50 transition-colors"
                   style={{ borderColor: BORDER, color: TEXT }}>
                   <td className="px-4 py-3 whitespace-nowrap">{e.date}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{CATEGORY_LABEL[e.category] ?? e.category}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{CATEGORY_LABEL[e.category] ?? e.category}{e.status === "DRAFT" && " · ฉบับร่าง"}</td>
                   <td className="px-4 py-3">{e.vendor || <span style={{ color: MUTED }}>—</span>}</td>
                   <td className="px-4 py-3">{e.branchName || <span style={{ color: MUTED }}>ส่วนกลาง</span>}</td>
                   <td className="px-4 py-3">{e.paymentMethod ? (PAYMENT_LABEL[e.paymentMethod] ?? e.paymentMethod) : <span style={{ color: MUTED }}>—</span>}</td>

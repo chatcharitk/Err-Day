@@ -1,3 +1,4 @@
+import { getCurrentAdmin } from "@/lib/admin-auth";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import MobileExpenseForm from "../MobileExpenseForm";
@@ -10,6 +11,7 @@ export default async function EditMobileExpensePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!await getCurrentAdmin()) notFound();
   const { id } = await params;
 
   const [expense, branches] = await Promise.all([
@@ -28,6 +30,7 @@ export default async function EditMobileExpensePage({
   ]);
 
   if (!expense) notFound();
+  const payout = await prisma.staffDailyPayout.findFirst({ where: { expenseId: id } });
 
   return (
     <MobileExpenseForm
@@ -35,6 +38,14 @@ export default async function EditMobileExpensePage({
       branches={branches}
       initial={{
         id:            expense.id,
+        vendorId: expense.vendorId, vatMode: expense.vatMode, vatRate: expense.vatRate,
+        discountAmount: expense.discountAmount, withholdingAmount: expense.withholdingAmount,
+        invoiceNumber: expense.invoiceNumber, documentDate: expense.documentDate?.toISOString().slice(0,10),
+        paidDate: expense.paidAt ? new Date(expense.paidAt.getTime()+7*3600000).toISOString().slice(0,10) : null,
+        status: expense.status,
+        locked: !!(payout || expense.sourceKey?.startsWith("PAYROLL:") || expense.notes?.includes("[PAYROLL:")),
+        canVoidLegacyMonthly: !payout && !!expense.notes?.includes("[PAYROLL:"),
+        payrollHref: payout ? `/admin/payroll?branchId=${payout.branchId}&date=${payout.date.toISOString().slice(0,10)}` : undefined,
         branchId:      expense.branchId,
         category:      expense.category,
         vendor:        expense.vendor,
@@ -49,9 +60,9 @@ export default async function EditMobileExpensePage({
           unitPrice:   it.unitPrice,
           totalPrice:  it.totalPrice,
         })),
-        attachments: expense.attachments.map(a => ({
+        attachments: [...(expense.receiptUrl && !expense.attachments.some(a => a.url === expense.receiptUrl) ? [{ url: expense.receiptUrl, filename: "หลักฐานเดิม", fileType: "" }] : []), ...expense.attachments.map(a => ({
           url: a.url, filename: a.filename, fileType: a.fileType,
-        })),
+        }))],
       }}
     />
   );

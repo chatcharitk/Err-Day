@@ -34,6 +34,7 @@ export default async function ExpensesPage({
   const categoryFilter = sp.category ?? "all";
 
   const where: Record<string, unknown> = {
+    status: { not: "VOIDED" },
     date: {
       gte: new Date(from + "T00:00:00.000Z"),
       lte: new Date(to   + "T23:59:59.999Z"),
@@ -62,13 +63,13 @@ export default async function ExpensesPage({
       select:  { id: true, name: true },
     }),
     prisma.expense.aggregate({
-      where,
+      where: { ...where, status: "CONFIRMED" },
       _sum: { totalAmount: true },
       _count: true,
     }),
     prisma.expense.groupBy({
       by: ["category"],
-      where,
+      where: { ...where, status: "CONFIRMED" },
       _sum: { totalAmount: true },
     }),
   ]);

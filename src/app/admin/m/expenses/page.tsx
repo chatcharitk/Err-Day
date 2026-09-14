@@ -1,3 +1,5 @@
+import { getCurrentAdmin } from "@/lib/admin-auth";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import MobileExpensesList from "./MobileExpensesList";
 
@@ -25,6 +27,7 @@ export default async function MobileExpensesPage({
 }: {
   searchParams: Promise<{ branchId?: string; category?: string; from?: string; to?: string }>;
 }) {
+  if (!await getCurrentAdmin()) notFound();
   const sp  = await searchParams;
   const def = defaultRange();
   const from = sp.from ?? def.from;
@@ -33,6 +36,7 @@ export default async function MobileExpensesPage({
   const categoryFilter = sp.category ?? "all";
 
   const where: Record<string, unknown> = {
+    status: { not: "VOIDED" },
     date: {
       gte: new Date(from + "T00:00:00.000Z"),
       lte: new Date(to   + "T23:59:59.999Z"),
@@ -60,10 +64,10 @@ export default async function MobileExpensesPage({
       orderBy: { name: "asc" },
       select:  { id: true, name: true },
     }),
-    prisma.expense.aggregate({ where, _sum: { totalAmount: true }, _count: true }),
+    prisma.expense.aggregate({ where: { ...where, status: "CONFIRMED" }, _sum: { totalAmount: true }, _count: true }),
     prisma.expense.groupBy({
       by: ["category"],
-      where,
+      where: { ...where, status: "CONFIRMED" },
       _sum: { totalAmount: true },
     }),
   ]);
@@ -72,6 +76,7 @@ export default async function MobileExpensesPage({
     <MobileExpensesList
       expenses={expenses.map(e => ({
         id:            e.id,
+        status:        e.status,
         branchName:    e.branch?.name ?? null,
         category:      e.category,
         vendor:        e.vendor,
