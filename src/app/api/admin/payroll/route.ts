@@ -143,6 +143,10 @@ export async function PATCH(request: Request) {
           if (otMode !== "AUTO" && otMode !== "MANUAL")
             throw new Error("กรุณาเลือกวิธีคิด OT");
           const tipSatang = numberIn(body.tipSatang, "ทิป", 0, 5_000_000);
+          const commissionSatang =
+            body.commissionSatang == null
+              ? null
+              : numberIn(body.commissionSatang, "ค่าคอมรวม", 0, 50_000_000);
           const adjustmentSatang = numberIn(
             body.adjustmentSatang,
             "ปรับเพิ่ม/ลด",
@@ -151,10 +155,12 @@ export async function PATCH(request: Request) {
           );
           const adjustmentReason = String(body.adjustmentReason ?? "").trim();
           if (
-            (adjustmentSatang !== 0 || otMode === "MANUAL") &&
+            (adjustmentSatang !== 0 ||
+              otMode === "MANUAL" ||
+              commissionSatang != null) &&
             !adjustmentReason
           )
-            throw new Error("กรุณาระบุเหตุผลปรับยอด / OT");
+            throw new Error("กรุณาระบุเหตุผลแก้ค่าคอม / OT / ปรับยอด");
           const otHours =
             otMode === "MANUAL"
               ? numberIn(body.otHours, "ชั่วโมง OT", 0, 24, false)
@@ -220,6 +226,7 @@ export async function PATCH(request: Request) {
               date: noon,
               otMode,
               otHours,
+              commissionSatang,
               tipSatang,
               adjustmentSatang,
               adjustmentReason,
@@ -227,6 +234,7 @@ export async function PATCH(request: Request) {
             update: {
               otMode,
               otHours,
+              commissionSatang,
               tipSatang,
               adjustmentSatang,
               adjustmentReason,

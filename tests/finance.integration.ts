@@ -208,6 +208,34 @@ async function main() {
   assert.equal(porn.otHours, 0);
   assert.equal(porn.totalSatang, 20000);
   assert.equal(porn.changedSincePaid, false);
+  // Pending commission can follow bookings or be replaced with a reviewed total.
+  const manualDay = "2026-09-07";
+  let manual = (
+    await api(`/api/admin/payroll?branchId=${branchId}&date=${manualDay}`)
+  ).body.rows.find((r: StaffPayoutRow) => r.staffId === "finance-normal");
+  assert.equal(
+    (
+      await api("/api/admin/payroll", "PATCH", {
+        ...payload,
+        action: "save",
+        date: manualDay,
+        sourceToken: manual.sourceToken,
+        clockIn: null,
+        clockOut: null,
+        otMode: "MANUAL",
+        otHours: 0,
+        commissionSatang: 12345,
+        adjustmentReason: "แก้ค่าคอมตามใบสรุป",
+      })
+    ).status,
+    200,
+  );
+  manual = (
+    await api(`/api/admin/payroll?branchId=${branchId}&date=${manualDay}`)
+  ).body.rows.find((r: StaffPayoutRow) => r.staffId === "finance-normal");
+  assert.equal(manual.calculatedCommissionSatang, 0);
+  assert.equal(manual.commissionSatang, 12345);
+  assert.equal(manual.commissionOverridden, true);
   // Old paid records must retain their money and unknown paid date when first linked to an expense.
   await prisma.staffDailyPayout.create({
     data: {

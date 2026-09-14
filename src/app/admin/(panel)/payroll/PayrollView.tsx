@@ -203,6 +203,12 @@ function DailyReview({
   const [attNotes, setAttNotes] = useState(r.attendanceNotes);
   const [mode, setMode] = useState(r.otMode);
   const [ot, setOt] = useState(String(r.otHours));
+  const [commissionMode, setCommissionMode] = useState(
+    r.commissionOverridden ? "MANUAL" : "AUTO",
+  );
+  const [commission, setCommission] = useState(
+    String(r.commissionSatang / 100),
+  );
   const [tip, setTip] = useState(String(r.tipSatang / 100));
   const [adjustment, setAdjustment] = useState(
     String(r.adjustmentSatang / 100),
@@ -235,16 +241,22 @@ function DailyReview({
         ? 0
         : overtimeMinutes(minutes, r.normalWorkMinutes) / 60;
   const otPay = paid ? r.otSatang : Math.round(effectiveHours * r.otRateSatang);
+  const commissionPay = paid
+    ? r.commissionSatang
+    : commissionMode === "MANUAL"
+      ? Math.round(Number(commission) * 100)
+      : r.calculatedCommissionSatang;
   const tipPay = paid ? r.tipSatang : Math.round(Number(tip) * 100);
   const adjPay = paid
     ? r.adjustmentSatang
     : Math.round(Number(adjustment) * 100);
-  const total = r.commissionSatang + otPay + tipPay + adjPay;
+  const total = commissionPay + otPay + tipPay + adjPay;
   const invalid =
     !Number.isFinite(total) ||
     total < 0 ||
     effectiveHours < 0 ||
     effectiveHours > 24 ||
+    commissionPay < 0 ||
     tipPay < 0 ||
     !!timeError;
   async function submit(action: "save" | "settle" | "reopen") {
@@ -266,6 +278,10 @@ function DailyReview({
           attendanceNotes: attNotes,
           otMode: mode,
           otHours: Number(ot),
+          commissionSatang:
+            commissionMode === "MANUAL"
+              ? Math.round(Number(commission) * 100)
+              : null,
           tipSatang: Math.round(Number(tip) * 100),
           adjustmentSatang: Math.round(Number(adjustment) * 100),
           adjustmentReason: reason,
@@ -443,6 +459,28 @@ function DailyReview({
       >
         <div className={css.fields}>
           <label>
+            วิธีคิดค่าคอม
+            <select
+              value={commissionMode}
+              onChange={(e) => setCommissionMode(e.target.value)}
+            >
+              <option value="AUTO">รวมจากบุ๊กกิ้ง</option>
+              <option value="MANUAL">กำหนดยอดรวมเอง</option>
+            </select>
+          </label>
+          {commissionMode === "MANUAL" && (
+            <label>
+              ค่าคอมรวม (฿)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={commission}
+                onChange={(e) => setCommission(e.target.value)}
+              />
+            </label>
+          )}
+          <label>
             วิธีคิด OT
             <select value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="AUTO">คำนวณจากเวลาจริง</option>
@@ -483,7 +521,7 @@ function DailyReview({
           </label>
         </div>
         <label style={{ marginTop: 12 }}>
-          เหตุผลปรับยอด / กำหนด OT เอง
+          เหตุผลแก้ค่าคอม / กำหนด OT เอง / ปรับยอด
           <input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -495,8 +533,13 @@ function DailyReview({
         <table className={css.table}>
           <tbody>
             <tr>
-              <td>ค่ามือ {r.completedCount} งาน</td>
-              <td>{money(r.commissionSatang)}</td>
+              <td>
+                ค่ามือ {r.completedCount} งาน
+                {commissionMode === "MANUAL" && !paid && (
+                  <span className={css.muted}> · กำหนดเอง</span>
+                )}
+              </td>
+              <td>{money(commissionPay)}</td>
             </tr>
             <tr>
               <td>
@@ -582,7 +625,7 @@ function DailyReview({
         )}
         {paid && (
           <button onClick={() => setReopen(!reopen)}>
-            แก้รายการที่จ่ายแล้ว
+            เปิดแก้ OT / ค่าคอมที่จ่ายแล้ว
           </button>
         )}
       </div>

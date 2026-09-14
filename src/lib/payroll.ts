@@ -81,6 +81,8 @@ export interface StaffPayoutRow extends PayrollCalculation {
   baseSatang: number;
   payCadence: Staff["payCadence"];
   completedCount: number;
+  calculatedCommissionSatang: number;
+  commissionOverridden: boolean;
   worked: boolean;
   status: "PENDING" | "PAID";
   paidAt: string | null;
@@ -212,6 +214,12 @@ export async function computeBranchDailyPayout(
         : minutes == null
           ? 0
           : overtimeMinutes(minutes, s.normalWorkMinutes) / 60;
+    const calculatedCommissionSatang = details.reduce(
+      (v, b) => v + b.commissionSatang,
+      0,
+    );
+    const commissionOverridden =
+      payout?.status !== "PAID" && payout?.commissionSatang != null;
     const live: PayrollCalculation = {
       bookings: details,
       normalWorkMinutes: s.normalWorkMinutes,
@@ -224,7 +232,7 @@ export async function computeBranchDailyPayout(
       otHours: hours,
       otRateSatang: otRatePerHourSatang(s),
       otSatang: otPaySatang(s, hours),
-      commissionSatang: details.reduce((v, b) => v + b.commissionSatang, 0),
+      commissionSatang: payout?.commissionSatang ?? calculatedCommissionSatang,
       tipSatang: payout?.tipSatang ?? 0,
       adjustmentSatang: payout?.adjustmentSatang ?? 0,
       adjustmentReason: payout?.adjustmentReason ?? "",
@@ -303,6 +311,8 @@ export async function computeBranchDailyPayout(
       completedCount: calc.bookings.filter(
         (b) => b.status === "COMPLETED" && b.primary,
       ).length,
+      calculatedCommissionSatang,
+      commissionOverridden,
       worked: minutes != null && minutes > 0,
       status: payout?.status ?? "PENDING",
       paidAt: payout?.paidAt?.toISOString() ?? null,
