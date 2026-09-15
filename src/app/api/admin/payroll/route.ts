@@ -165,7 +165,11 @@ export async function PATCH(request: Request) {
             otMode === "MANUAL"
               ? numberIn(body.otHours, "ชั่วโมง OT", 0, 24, false)
               : 0;
-          if (body.clockIn || body.clockOut) {
+          // Both times are required to persist an attendance row — an admin
+          // can still save the rest of this form (tip, manual OT, adjustment)
+          // with only clockIn filled in while the staff is still on shift;
+          // that clockIn value just isn't durable until clockOut joins it.
+          if (body.clockIn && body.clockOut) {
             const clockIn = new Date(body.clockIn),
               clockOut = new Date(body.clockOut);
             const breaks = numberIn(body.breakMinutes, "เวลาพัก", 0, 1440);
@@ -176,8 +180,6 @@ export async function PATCH(request: Request) {
                 .slice(0, 10) !== date
             )
               throw new Error("วันเข้างานต้องตรงกับวันที่เลือก");
-            if (clockOut.getTime() > Date.now())
-              throw new Error("เวลาออกงานจริงยังมาไม่ถึง");
             const old = await tx.staffAttendance.findUnique({ where });
             const notes = String(body.attendanceNotes ?? "").trim();
             if (

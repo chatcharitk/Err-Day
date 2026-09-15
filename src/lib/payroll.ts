@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { isDeepStrictEqual } from "node:util";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, Staff } from "@/generated/prisma/client";
-import { validDay, workMinutes, overtimeMinutes } from "@/lib/finance-math";
+import { validDay, workMinutes, overtimeMinutes, roundUpToHalfHour } from "@/lib/finance-math";
 
 type DB = Prisma.TransactionClient;
 type PayConfig = Pick<Staff, "payType" | "baseSatang" | "otRateSatang">;
@@ -213,7 +213,7 @@ export async function computeBranchDailyPayout(
         ? (payout?.otHours ?? 0)
         : minutes == null
           ? 0
-          : overtimeMinutes(minutes, s.normalWorkMinutes) / 60;
+          : roundUpToHalfHour(overtimeMinutes(minutes, s.normalWorkMinutes) / 60);
     const calculatedCommissionSatang = details.reduce(
       (v, b) => v + b.commissionSatang,
       0,

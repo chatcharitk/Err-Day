@@ -113,6 +113,11 @@ export function overtimeMinutes(
   numberIn(normalMinutes, "ชั่วโมงปกติ", 1, 1440);
   return Math.max(0, workedMinutes - normalMinutes);
 }
+/** OT is paid in half-hour blocks, rounded up in the employee's favor — any
+ *  OT at all (even one minute) rounds up to the next 0.5 hr. */
+export function roundUpToHalfHour(hours: number): number {
+  return Math.ceil(hours * 2) / 2;
+}
 export function csvText(rows: unknown[][]): string {
   return (
     "\uFEFF" +

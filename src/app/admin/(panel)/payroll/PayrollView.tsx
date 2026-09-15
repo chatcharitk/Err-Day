@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StaffPayoutRow } from "@/lib/payroll";
-import { workMinutes, overtimeMinutes } from "@/lib/finance-math";
+import { workMinutes, overtimeMinutes, roundUpToHalfHour } from "@/lib/finance-math";
 import SettingsTab, {
   type StaffCfg,
   type ServiceCfg,
@@ -168,13 +168,6 @@ function DailyReview({
   const router = useRouter();
   const [clockIn, setClockIn] = useState(localTime(r.clockIn));
   const [clockOut, setClockOut] = useState(localTime(r.clockOut));
-  const [overnight, setOvernight] = useState(
-    !!r.clockOut &&
-      new Date(new Date(r.clockOut).getTime() + 7 * 3600000)
-        .toISOString()
-        .slice(0, 10) > date,
-  );
-  const [breaks, setBreaks] = useState(String(r.breakMinutes));
   const [attNotes, setAttNotes] = useState(r.attendanceNotes);
   const [mode, setMode] = useState(r.otMode);
   const [ot, setOt] = useState(String(r.otHours));
@@ -195,16 +188,16 @@ function DailyReview({
   const [reopen, setReopen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const paid = r.status === "PAID";
-  const endDay = overnight
-    ? new Date(Date.parse(date) + 86400000).toISOString().slice(0, 10)
-    : date;
   const start = clockIn ? `${date}T${clockIn}:00+07:00` : null;
-  const end = clockOut ? `${endDay}T${clockOut}:00+07:00` : null;
+  const end = clockOut ? `${date}T${clockOut}:00+07:00` : null;
   let minutes: number | null = null,
     timeError = "";
   try {
-    if (start && end) minutes = workMinutes(start, end, Number(breaks));
-    else if (start || end) timeError = "กรอกเวลาเข้าและออกให้ครบ";
+    // Saving with only clockIn (still on shift) is fine — minutes just stays
+    // unknown until clockOut is filled in. Only flag a real error the other
+    // way around (an exit time with no entry time).
+    if (start && end) minutes = workMinutes(start, end, 0);
+    else if (end && !start) timeError = "กรอกเวลาเข้าก่อนเวลาออก";
   } catch (e) {
     timeError = e instanceof Error ? e.message : "เวลาไม่ถูกต้อง";
   }
@@ -214,7 +207,7 @@ function DailyReview({
       ? Number(ot)
       : minutes == null
         ? 0
-        : overtimeMinutes(minutes, r.normalWorkMinutes) / 60;
+        : roundUpToHalfHour(overtimeMinutes(minutes, r.normalWorkMinutes) / 60);
   const otPay = paid ? r.otSatang : Math.round(effectiveHours * r.otRateSatang);
   const commissionPay = paid
     ? r.commissionSatang
@@ -249,7 +242,7 @@ function DailyReview({
           action,
           clockIn: start,
           clockOut: end,
-          breakMinutes: Number(breaks),
+          breakMinutes: 0,
           attendanceNotes: attNotes,
           otMode: mode,
           otHours: Number(ot),
@@ -334,30 +327,7 @@ function DailyReview({
               onChange={(e) => setClockOut(e.target.value)}
             />
           </label>
-          <label>
-            วันที่ออกงาน
-            <select
-              value={overnight ? "next" : "same"}
-              onChange={(e) => setOvernight(e.target.value === "next")}
-            >
-              <option value="same">วันเดียวกัน</option>
-              <option value="next">วันถัดไป</option>
-            </select>
-          </label>
-          <label>
-            พักที่ไม่นับเวลางาน (นาที)
-            <input
-              type="number"
-              min="0"
-              max="1440"
-              value={breaks}
-              onChange={(e) => setBreaks(e.target.value)}
-            />
-          </label>
         </div>
-        <p className={css.muted}>
-          ค่าเริ่มต้นนับช่วงเข้า–ออกทั้งหมด หากมีเวลาพักที่ไม่นับให้กรอกเพิ่ม
-        </p>
         <label>
           หมายเหตุ / เหตุผลแก้เวลา
           <input
@@ -379,10 +349,6 @@ function DailyReview({
       </p>
       {timeError && <p className={css.error}>{timeError}</p>}
       <h3>รายละเอียดงานและค่ามือ</h3>
-      <p className={css.muted}>
-        นับเฉพาะงานเสร็จของช่างหลัก
-        งานผู้ช่วยแสดงให้ตรวจสอบและไม่คิดค่ามือตามกติกาเดิม
-      </p>
       <div className={css.tableWrap}>
         <table className={css.table}>
           <thead>
