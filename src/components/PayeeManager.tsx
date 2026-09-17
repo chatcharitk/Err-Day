@@ -163,6 +163,7 @@ export default function PayeeManager({
           )}
           {form && (
             <div className={css.panel}>
+              <h3 style={{ marginTop: 0 }}>ข้อมูลทั่วไป</h3>
               <div className={css.fields}>
                 <label>
                   ประเภท
@@ -174,6 +175,13 @@ export default function PayeeManager({
                     <option value="PERSON">บุคคลทั่วไป</option>
                     <option value="EMPLOYEE">พนักงาน</option>
                   </select>
+                </label>
+                <label>
+                  ชื่อเรียก / ชื่อร้าน *
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
                 </label>
                 {form.type === "EMPLOYEE" && (
                   <label>
@@ -200,30 +208,87 @@ export default function PayeeManager({
                     </select>
                   </label>
                 )}
-                {(
-                  [
-                    ["name", "ชื่อเรียก / ชื่อร้าน *"],
-                    ["legalName", "ชื่อเต็มตามเอกสาร"],
-                    ["taxId", "เลขผู้เสียภาษี / เลขประชาชน"],
-                    ["taxBranch", "สำนักงานใหญ่ / รหัสสาขาภาษี"],
-                    ["address", "ที่อยู่ตามเอกสาร"],
-                    ["phone", "โทรศัพท์"],
-                    ["bankName", "ธนาคาร"],
-                    ["bankAccount", "เลขบัญชี"],
-                    ["bankAccountName", "ชื่อบัญชี"],
-                    ["notes", "หมายเหตุ"],
-                  ] as const
-                ).map(([k, label]) => (
-                  <label key={k}>
-                    {label}
-                    <input
-                      value={form[k] || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, [k]: e.target.value })
-                      }
-                    />
-                  </label>
-                ))}
+              </div>
+
+              <h3>ข้อมูลเอกสาร / ภาษี</h3>
+              <div className={css.fields}>
+                <label>
+                  ชื่อเต็มตามเอกสาร
+                  <input
+                    value={form.legalName || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, legalName: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  เลขผู้เสียภาษี / เลขประชาชน
+                  <input
+                    value={form.taxId || ""}
+                    onChange={(e) => setForm({ ...form, taxId: e.target.value })}
+                  />
+                </label>
+                <label>
+                  สำนักงานใหญ่ / รหัสสาขาภาษี
+                  <input
+                    value={form.taxBranch || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, taxBranch: e.target.value })
+                    }
+                  />
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  ที่อยู่ตามเอกสาร
+                  <textarea
+                    rows={2}
+                    value={form.address || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+
+              <h3>ช่องทางติดต่อ &amp; บัญชีธนาคาร</h3>
+              <div className={css.fields}>
+                <label>
+                  โทรศัพท์
+                  <input
+                    value={form.phone || ""}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  />
+                </label>
+                <label>
+                  ธนาคาร
+                  <input
+                    value={form.bankName || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, bankName: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  เลขบัญชี
+                  <input
+                    value={form.bankAccount || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, bankAccount: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  ชื่อบัญชี
+                  <input
+                    value={form.bankAccountName || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, bankAccountName: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+
+              <h3>อื่น ๆ</h3>
+              <div className={css.fields}>
                 <label>
                   หมวดรายจ่ายประจำ
                   <select
@@ -255,7 +320,16 @@ export default function PayeeManager({
                     <option value="inactive">ปิดใช้งาน</option>
                   </select>
                 </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  หมายเหตุ
+                  <textarea
+                    rows={2}
+                    value={form.notes || ""}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                </label>
               </div>
+
               <div className={css.toolbar}>
                 <button className={css.primary} disabled={busy} onClick={save}>
                   บันทึกผู้รับเงิน
