@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut, Sparkles,
+         ChevronDown, ChevronUp, Droplets, Wind, Hand, Layers, Flower2, Plus } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -107,6 +108,30 @@ const CAT_EN: Record<string, string> = {
   "ย้อมผม NIGAO": "NIGAO Color",
 };
 
+/**
+ * Categories whose services are the same treatment priced by hair length. They
+ * start collapsed: a wall of near-identical S/M/L/XL rows buries the handful of
+ * genuinely different services above them.
+ */
+const LENGTH_BASED_CATEGORIES = new Set(["Keratin Treatment", "ย้อมผม NIGAO"]);
+
+/**
+ * Add-ons carry no icon in the database, so match on their name and fall back
+ * to a neutral one — a newly added add-on gets a sensible icon without needing
+ * a schema change or an admin field.
+ */
+const ADDON_ICONS: { match: RegExp; Icon: typeof Droplets }[] = [
+  { match: /แชมพู|shampoo/i,                 Icon: Droplets },
+  { match: /หนีบ|ไดร์|straight|blow/i,        Icon: Wind },
+  { match: /นวด|massage/i,                   Icon: Hand },
+  { match: /ผมต่อ|extension/i,               Icon: Layers },
+  { match: /สครับ|scrub|detox/i,             Icon: Sparkles },
+  { match: /mask|ทรีทเม้นท์|treatment/i,      Icon: Flower2 },
+];
+function addonIcon(nameTh: string, name: string | null) {
+  return ADDON_ICONS.find((a) => a.match.test(`${nameTh} ${name ?? ""}`))?.Icon ?? Plus;
+}
+
 const UI = {
   th: {
     steps: ["บริการ", "บริการเสริม", "วันเวลา", "ข้อมูล", "ยืนยัน"],
@@ -116,6 +141,8 @@ const UI = {
     bookLabel: "จองคิว",
     chooseService: "เลือกบริการ", chooseServiceSub: "Choose a Service",
     chooseServiceHint: "เลือกบริการที่ต้องการ",
+    catLengthHint: (n: number) => `แตะเพื่อเลือกความยาวผม · ${n} แบบ`,
+    catViewHint:   (n: number) => `แตะเพื่อดูตัวเลือก · ${n} รายการ`,
     addons: "บริการเสริม", addonsSub: "Add-Ons",
     addonsHint: "เลือกบริการเสริมเพิ่มเติม (ไม่บังคับ)",
     noAddons: "ไม่ต้องการบริการเสริม",
@@ -158,6 +185,8 @@ const UI = {
     bookLabel: "Book",
     chooseService: "Select a Service", chooseServiceSub: "เลือกบริการ",
     chooseServiceHint: "Choose the service you want",
+    catLengthHint: (n: number) => `Tap to choose your hair length · ${n} options`,
+    catViewHint:   (n: number) => `Tap to view options · ${n} services`,
     addons: "Add-Ons", addonsSub: "บริการเสริม",
     addonsHint: "Optional extras for your appointment",
     noAddons: "No add-ons",
@@ -279,8 +308,11 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
     : branchServices;
   const categories = CATEGORY_ORDER.filter((c) => visibleBranchServices.some((bs) => bs.service.category === c));
 
-  // Collapsible categories — all open by default
-  const [openCats, setOpenCats] = useState<Set<string>>(() => new Set(CATEGORY_ORDER));
+  // Collapsible categories. Length-priced ones (keratin, colour) start closed so
+  // their S/M/L/XL variants don't bury the shorter service list above them.
+  const [openCats, setOpenCats] = useState<Set<string>>(
+    () => new Set(CATEGORY_ORDER.filter((c) => !LENGTH_BASED_CATEGORIES.has(c))),
+  );
   const toggleCat = useCallback((cat: string) => {
     setOpenCats(prev => {
       const next = new Set(prev);
@@ -594,29 +626,55 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             {categories.map((cat) => {
               const isOpen = openCats.has(cat);
               const catLabel = lang === "th" ? cat : (CAT_EN[cat] ?? cat);
-              const hasSelectedInCat = visibleBranchServices
-                .filter(bs => bs.service.category === cat)
-                .some(bs => selectedService?.id === bs.id);
+              const catServices = visibleBranchServices.filter((bs) => bs.service.category === cat);
+              const selectedInCat = catServices.find((bs) => selectedService?.id === bs.id);
+              const closedHint = selectedInCat
+                ? (lang === "th"
+                    ? selectedInCat.service.nameTh
+                    : (selectedInCat.service.name || selectedInCat.service.nameTh))
+                : LENGTH_BASED_CATEGORIES.has(cat)
+                  ? u.catLengthHint(catServices.length)
+                  : u.catViewHint(catServices.length);
               return (
                 <div key={cat} className="mb-4">
-                  {/* Collapsible header */}
-                  <button
-                    type="button"
-                    onClick={() => toggleCat(cat)}
-                    className="w-full flex items-center gap-2 mb-2 py-1"
-                  >
-                    <div className="h-px flex-1" style={{ backgroundColor: "#D8B4A3" }} />
-                    <p className="text-xs font-semibold uppercase tracking-widest px-2 flex items-center gap-1.5" style={{ color: "#B52F3A" }}>
-                      {catLabel}
-                      {hasSelectedInCat && !isOpen && (
-                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: "#B52F3A" }} />
-                      )}
-                    </p>
-                    <div className="h-px flex-1" style={{ backgroundColor: "#D8B4A3" }} />
-                    <span className="text-xs flex-shrink-0 ml-1" style={{ color: "#977A6F" }}>
-                      {isOpen ? "▲" : "▼"}
-                    </span>
-                  </button>
+                  {isOpen ? (
+                    /* Open: a quiet divider — the list underneath speaks for itself. */
+                    <button
+                      type="button"
+                      onClick={() => toggleCat(cat)}
+                      className="w-full flex items-center gap-2 mb-2 py-1"
+                    >
+                      <div className="h-px flex-1" style={{ backgroundColor: "#D8B4A3" }} />
+                      <p className="text-xs font-semibold uppercase tracking-widest px-2" style={{ color: "#B52F3A" }}>
+                        {catLabel}
+                      </p>
+                      <div className="h-px flex-1" style={{ backgroundColor: "#D8B4A3" }} />
+                      <ChevronUp className="w-4 h-4 flex-shrink-0 ml-1" style={{ color: "#977A6F" }} />
+                    </button>
+                  ) : (
+                    /* Closed: has to look like something you press. As a hairline
+                       divider it read as a heading, and the length options behind
+                       it went unfound. */
+                    <button
+                      type="button"
+                      onClick={() => toggleCat(cat)}
+                      className="w-full flex items-center justify-between gap-3 mb-2 p-4 rounded-xl border-2 transition-all text-left"
+                      style={selectedInCat
+                        ? { borderColor: "#B52F3A", backgroundColor: "#FFF3ED" }
+                        : { borderColor: "#D8B4A3", backgroundColor: "white" }}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#B52F3A" }}>
+                          {catLabel}
+                        </p>
+                        <p className="text-xs mt-1 truncate" style={{ color: selectedInCat ? "#45352F" : "#977A6F" }}>
+                          {selectedInCat && <Check className="w-3 h-3 inline-block mr-1" style={{ color: "#B52F3A" }} />}
+                          {closedHint}
+                        </p>
+                      </div>
+                      <ChevronDown className="w-5 h-5 flex-shrink-0" style={{ color: "#B52F3A" }} />
+                    </button>
+                  )}
 
                   {isOpen && (
                     <>
@@ -725,6 +783,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
               {addons.map((a) => {
                 const isChecked = selectedAddons.has(a.id);
+                const AddonIcon = addonIcon(a.nameTh, a.name);
                 return (
                   <button
                     key={a.id}
@@ -734,7 +793,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                       ? { borderColor: "#B52F3A", backgroundColor: "#FFF3ED" }
                       : { borderColor: "#EADDD4", backgroundColor: "white" }}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
                         className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2"
                         style={isChecked
@@ -743,11 +802,12 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                       >
                         {isChecked && <Check className="w-3 h-3 text-white" />}
                       </div>
+                      <AddonIcon className="w-4 h-4 flex-shrink-0" style={{ color: isChecked ? "#B52F3A" : "#977A6F" }} />
                       <p className="font-medium" style={{ color: "#45352F" }}>
                         {lang === "th" ? a.nameTh : (a.name || a.nameTh)}
                       </p>
                     </div>
-                    <p className="font-semibold" style={{ color: "#B52F3A" }}>+{formatPrice(a.price)}</p>
+                    <p className="font-semibold flex-shrink-0 whitespace-nowrap ml-2" style={{ color: "#B52F3A" }}>+{formatPrice(a.price)}</p>
                   </button>
                 );
               })}
