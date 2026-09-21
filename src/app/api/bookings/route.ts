@@ -6,6 +6,7 @@ import { getPromotionServicePrice } from "@/lib/promotions";
 import { hasActiveMembershipForBooking } from "@/lib/membership";
 import { issueReceiptForBookingTx } from "@/lib/receipts";
 import { requireAdmin } from "@/lib/admin-auth";
+import { BOOKING_TERMS_VERSION } from "@/lib/terms";
 
 export async function POST(request: Request) {
   try {
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
       isWalkin,                     // admin flag — skip customer info, use placeholder
       extraStaffIds,                // optional array of additional staff IDs
       commissionSatang,             // admin-only per-booking override
+      termsAccepted,                // customer ticked the late-arrival terms
     } = body;
 
     // Customer-facing callers must never be able to influence staff payroll.
@@ -163,6 +165,11 @@ export async function POST(request: Request) {
           // An admin recording an already-finished sale means it was paid too.
           ...(reqStatus === "COMPLETED"
             ? { completedAt: bookingDate, paidAt: bookingDate }
+            : {}),
+          // Only the customer-facing form sends this. Admin/POS/walk-in bookings
+          // leave it null rather than claiming a consent nobody gave.
+          ...(termsAccepted
+            ? { termsAcceptedAt: new Date(), termsVersion: BOOKING_TERMS_VERSION }
             : {}),
           ...(addonCreates.length > 0 ? { addons: { create: addonCreates } } : {}),
           ...(Array.isArray(extraStaffIds) && extraStaffIds.length > 0

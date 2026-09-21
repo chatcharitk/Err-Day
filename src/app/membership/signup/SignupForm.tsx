@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, User, Phone, Mail, Loader2, AlertCircle } from "lucide-react";
 import PdpaConsentBlock from "@/components/PdpaConsentBlock";
+import TermsConsentBlock from "@/components/TermsConsentBlock";
+import { ENTITLEMENT_TERMS_TH } from "@/lib/terms";
 
 const PRIMARY = "#B52F3A";
 const TEXT    = "#45352F";
@@ -21,6 +23,7 @@ export default function SignupForm() {
   const [gender,  setGender]  = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [pdpa,    setPdpa]    = useState(false);
+  const [terms,   setTerms]   = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
 
@@ -32,6 +35,7 @@ export default function SignupForm() {
     if (!phone.trim()) { setError("กรุณาระบุเบอร์โทร"); return; }
     if (!dateOfBirth)  { setError("กรุณาระบุวันเกิด"); return; }
     if (!pdpa)         { setError("กรุณายอมรับนโยบาย PDPA"); return; }
+    if (!terms)        { setError("กรุณายอมรับข้อตกลงสมาชิกและแพ็กเกจ"); return; }
 
     setLoading(true);
     try {
@@ -45,6 +49,7 @@ export default function SignupForm() {
           gender:      gender || undefined,
           dateOfBirth: dateOfBirth || undefined,
           pdpaConsent: pdpa,
+          termsAccepted: terms,
           source:      "signup",
         }),
       });
@@ -217,6 +222,15 @@ export default function SignupForm() {
 
           {/* PDPA */}
           <PdpaConsentBlock checked={pdpa} onChange={setPdpa} context="signup" />
+
+          {/* Membership & package terms */}
+          <TermsConsentBlock
+            checked={terms}
+            onChange={setTerms}
+            title="ข้อตกลงสมาชิกและแพ็กเกจ"
+            rules={ENTITLEMENT_TERMS_TH}
+            label="ฉันได้อ่านและยอมรับข้อตกลงนี้"
+          />
 
           {/* Error */}
           {error && (

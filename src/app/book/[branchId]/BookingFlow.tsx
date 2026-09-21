@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/components/LanguageProvider";
+import TermsConsentBlock from "@/components/TermsConsentBlock";
+import { BOOKING_TERMS_TH, BOOKING_TERMS_EN } from "@/lib/terms";
 import { DAVINES_SPA_PROMOTION, getPromotionServicePrice, isDavinesSpaPromotionDay } from "@/lib/promotions";
 import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
 
@@ -139,7 +141,9 @@ const UI = {
     minutes: "นาที", total: "ยอดรวม",
     submitBtn: "ยืนยันการจอง",
     submitting: "กำลังจอง...",
-    terms: "การจองถือว่าคุณยอมรับนโยบายการยกเลิกของเรา",
+    termsTitle: "ข้อตกลงการจอง",
+    termsLabel: "ฉันได้อ่านและยอมรับข้อตกลงการจอง",
+    termsError: "กรุณายอมรับข้อตกลงการจองก่อนยืนยัน",
     back: "ย้อนกลับ", next: "ถัดไป", review: "ตรวจสอบการจอง",
     memberPrice: "ราคาสมาชิก",
     nigaoTitle: "ราคาบริการทำสีผมอาจมีการเปลี่ยนแปลง โดยช่างจะประเมินจากความยาวและสภาพเส้นผมจริงที่หน้าร้านก่อนให้บริการ",
@@ -179,7 +183,9 @@ const UI = {
     minutes: "min", total: "Total",
     submitBtn: "Confirm Booking",
     submitting: "Booking...",
-    terms: "By booking you agree to our cancellation policy",
+    termsTitle: "Booking terms",
+    termsLabel: "I have read and accept the booking terms",
+    termsError: "Please accept the booking terms before confirming",
     back: "Back", next: "Next", review: "Review Booking",
     memberPrice: "Member price",
     nigaoTitle: "Hair color pricing may change — your stylist will assess your actual hair length and condition in-store before service.",
@@ -199,6 +205,9 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Deliberately not persisted to STORAGE_KEY — a restored draft should ask for
+  // the terms again rather than resurrect a tick the customer may not remember.
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const [selectedService, setSelectedService] = useState<BranchServiceWithService | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
@@ -345,6 +354,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
   const handleSubmit = async () => {
     if (!selectedService || !selectedDate || !selectedTime) return;
+    if (!termsAccepted) { setError(u.termsError); return; }
     setLoading(true);
     setError("");
 
@@ -388,6 +398,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
           lineUserId:       liff.profile?.userId      || null,
           linePictureUrl:   liff.profile?.pictureUrl  || null,
           lineDisplayName:  lineName || null,
+          termsAccepted:    true,
         }),
       });
 
@@ -930,19 +941,31 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
               </CardContent>
             </Card>
 
+            <div className="mb-4">
+              <TermsConsentBlock
+                checked={termsAccepted}
+                onChange={setTermsAccepted}
+                title={u.termsTitle}
+                rules={lang === "th" ? BOOKING_TERMS_TH : BOOKING_TERMS_EN}
+                label={u.termsLabel}
+              />
+            </div>
+
             {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !termsAccepted}
               className="w-full h-12 rounded-xl text-base font-medium text-white transition-opacity disabled:opacity-50"
               style={{ backgroundColor: "#B52F3A" }}
             >
               {loading ? u.submitting : u.submitBtn}
             </button>
-            <p className="text-center text-xs mt-3" style={{ color: "#977A6F" }}>
-              {u.terms}
-            </p>
+            {!termsAccepted && (
+              <p className="text-center text-xs mt-3" style={{ color: "#977A6F" }}>
+                {u.termsError}
+              </p>
+            )}
           </div>
         )}
 

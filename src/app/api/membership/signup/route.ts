@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDPA_VERSION } from "@/lib/pdpa";
+import { ENTITLEMENT_TERMS_VERSION } from "@/lib/terms";
 import { startOfTodayUTC } from "@/lib/utils";
 import { MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
 import { PACKAGE_SPECS, BUFFET_SKU, FIVE_PACK_SKU } from "@/lib/packages";
@@ -26,6 +27,9 @@ interface SignupBody {
   gender?:      string;
   dateOfBirth?: string; // ISO date string "YYYY-MM-DD"
   pdpaConsent:  boolean;
+  /** Entitlement terms ticked in the customer-facing forms. Absent on the
+   *  admin "new customer" flow (source "staff"), where terms are agreed in person. */
+  termsAccepted?: boolean;
   source?:      string; // e.g. "liff-membership" | "liff-buffet" | "liff-5pack" | "signup" | "staff"
   lineUserId?:  string; // provided when signing up via LIFF
   pictureUrl?:  string; // LINE profile picture
@@ -38,8 +42,11 @@ interface SignupBody {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as SignupBody;
-    const { name, nickname, phone, email, gender, dateOfBirth, pdpaConsent, lineUserId, pictureUrl } = body;
+    const { name, nickname, phone, email, gender, dateOfBirth, pdpaConsent, termsAccepted, lineUserId, pictureUrl } = body;
     const source = body.source ?? "signup";
+    const termsStamp = termsAccepted
+      ? { termsAcceptedAt: new Date(), termsVersion: ENTITLEMENT_TERMS_VERSION }
+      : {};
 
     // Validate
     if (!name?.trim()) {
@@ -121,8 +128,8 @@ export async function POST(request: Request) {
       if (!m?.pendingActivation) {
         await prisma.membership.upsert({
           where:  { customerId: customer.id },
-          update: { pendingActivation: true, expiresAt: null, usagesUsed: 0 },
-          create: { customerId: customer.id, pendingActivation: true, expiresAt: null, usagesUsed: 0 },
+          update: { pendingActivation: true, expiresAt: null, usagesUsed: 0, ...termsStamp },
+          create: { customerId: customer.id, pendingActivation: true, expiresAt: null, usagesUsed: 0, ...termsStamp },
         });
         newlyPending = true;
       }
@@ -148,6 +155,7 @@ export async function POST(request: Request) {
             usagesUsed:        0,
             usageLimit:        spec.usageLimit,
             paidAmount:        0,
+            ...termsStamp,
           },
         });
         newlyPending = true;

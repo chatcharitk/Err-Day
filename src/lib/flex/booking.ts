@@ -11,6 +11,7 @@
  * (customer.lineUserId) and dedup logging stay in notifications.ts.
  */
 import type { LineMessage } from "@/lib/line-messaging";
+import { BOOKING_TERMS_REMINDER_TH } from "@/lib/terms";
 
 const PRIMARY  = "#8B1D24";
 const TEXT     = "#3B2A24";
@@ -30,7 +31,7 @@ const MY_BOOKINGS_URL = LIFF_ID
   ? `https://liff.line.me/${LIFF_ID}/my-bookings`
   : `${APP_HOST}/my-bookings`;
 
-export type BookingFlexVariant = "created" | "confirmed" | "reminder" | "rescheduled";
+export type BookingFlexVariant = "created" | "confirmed" | "reminder" | "rescheduled" | "termsReminder";
 
 /** Minimal shape needed to render the card — matches the senders' Prisma includes. */
 export interface BookingFlexData {
@@ -56,6 +57,10 @@ const VARIANTS: Record<BookingFlexVariant, VariantStyle> = {
   confirmed:   { banner: "✅ ยืนยันการจองแล้ว",   color: "#166534", bg: "#F0FDF4", intro: "ทีมงานยืนยันการจองของคุณเรียบร้อยแล้วนะคะ 🎉 แล้วพบกันค่ะ" },
   reminder:    { banner: "🌸 ใกล้ถึงเวลานัดแล้ว", color: PRIMARY,   bg: "#FFF8F4", intro: "นัดของคุณกำลังจะมาถึงในอีกประมาณ 4 ชั่วโมงนะคะ" },
   rescheduled: { banner: "⏰ เปลี่ยนเวลานัดแล้ว", color: "#9A3412", bg: "#FFF7ED", intro: "ทีมงานได้ปรับเวลานัดของคุณใหม่แล้วนะคะ" },
+  // Fires shortly before the appointment. Deliberately says "อีกไม่นาน" rather
+  // than a fixed number of hours — the cron that sends it fires irregularly, so
+  // any specific figure would often be wrong by the time it lands.
+  termsReminder: { banner: "🌸 ใกล้ถึงเวลานัดแล้ว", color: PRIMARY, bg: "#FFF8F4", intro: "อีกไม่นานก็ถึงเวลานัดของคุณแล้วนะคะ เผื่อเวลาเดินทางสักนิด จะได้ผ่อนคลายกันเต็มที่ค่ะ 💛" },
 };
 
 /** Format a Date as "พ. 30 เม.ย. 2569" in Thai local time. */
@@ -83,6 +88,30 @@ function row(icon: string, value: string) {
       { type: "text", text: value, size: "sm", color: TEXT, wrap: true, flex: 1 },
     ],
   };
+}
+
+/** Friendly restatement of the late-arrival terms, for the pre-appointment card. */
+function termsBlock(): unknown[] {
+  return [
+    { type: "separator", margin: "lg", color: "#EADBCF" },
+    {
+      type: "box", layout: "vertical", spacing: "xs", margin: "lg",
+      contents: [
+        { type: "text", text: "เพื่อให้ทุกคิวได้เวลาเต็มที่ 🙏", size: "xs", weight: "bold", color: TEXT, wrap: true },
+        ...BOOKING_TERMS_REMINDER_TH.map((rule) => ({
+          type: "box", layout: "baseline", spacing: "sm", margin: "sm",
+          contents: [
+            { type: "text", text: "•", size: "xxs", flex: 0, color: PRIMARY },
+            { type: "text", text: rule, size: "xxs", color: MUTED, wrap: true, flex: 1 },
+          ],
+        })),
+        {
+          type: "text", text: "ถ้าคาดว่าจะมาไม่ทัน ทักมาบอกเราได้เลยนะคะ ยินดีช่วยดูเวลาให้ค่ะ",
+          size: "xxs", color: MUTED, wrap: true, margin: "md",
+        },
+      ],
+    },
+  ];
 }
 
 export function buildBookingFlex(
@@ -139,6 +168,7 @@ export function buildBookingFlex(
           { type: "separator", margin: "md", color: "#EADBCF" },
           { type: "box", layout: "vertical", spacing: "sm", margin: "md", contents: bodyRows },
           { type: "text", text: b.branch.address, size: "xxs", color: MUTED, wrap: true, margin: "md" },
+          ...(variant === "termsReminder" ? termsBlock() : []),
         ],
       },
       // ── Footer (2 buttons) ─────────────────────────────────────────────────

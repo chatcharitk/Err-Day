@@ -6,6 +6,8 @@
  *   1. Booking reminders (4 hours before): scan bookings whose
  *      [date + startTime] falls inside [now+3.5h, now+4.5h] window and have
  *      an active status.
+ *   1b. Pre-appointment card restating the late-arrival terms, for bookings
+ *      closer than that (see the terms window below).
  *   2. Membership expiry warnings (1 day before): scan memberships whose
  *      `expiresAt` is in [now+12h, now+36h].
  *   3. Package expiry warnings (1 day before): same window, on
@@ -24,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import {
   sendBookingReminder4h,
+  sendBookingTermsReminder,
   sendPackageExpiryWarning1d,
   sendBranchDailySummary,
   sendStaffShiftSummary,
@@ -107,6 +110,22 @@ export async function GET(request: Request) {
     return dt >= windowStart && dt <= windowEnd;
   });
 
+  // ── 1b) Pre-appointment terms reminder (the "~1h before" card) ───────────
+  // The window runs from 40 minutes out to just before the 4h reminder's window
+  // starts — far wider than the hour it nominally represents, because this cron
+  // actually fires only every ~2–3h (see the note above); a tight ±30min band
+  // would miss most bookings outright. The card says "อีกไม่นาน" instead of a
+  // fixed number of hours so the copy stays true anywhere in the window, and
+  // ending a minute short of windowStart means no booking gets both cards on
+  // the same tick.
+  const termsWindowStart = new Date(now.getTime() + 40 * 60 * 1000);
+  const termsWindowEnd   = new Date(windowStart.getTime() - 60 * 1000);
+
+  const dueTermsBookings = candidateBookings.filter((b) => {
+    const dt = bookingMomentUtc(b.date, b.startTime);
+    return dt >= termsWindowStart && dt <= termsWindowEnd;
+  });
+
   // ── Membership expiry warning: REMOVED ───────────────────────────────────
   // Customers found it spammy (repeated daily warnings), so the 1-day
   // membership-expiry notification was removed entirely per owner request.
@@ -131,6 +150,7 @@ export async function GET(request: Request) {
   const results: { kind: string; targetId: string; status: string; reason?: string }[] = [];
   const notificationJobs = [
     ...dueBookings.map((b) => () => sendBookingReminder4h(b.id)),
+    ...dueTermsBookings.map((b) => () => sendBookingTermsReminder(b.id)),
     ...duePackages.map((p) => () => sendPackageExpiryWarning1d(p.id)),
   ];
   const NOTIFICATION_CONCURRENCY = 4;
@@ -192,6 +212,7 @@ export async function GET(request: Request) {
 
   const stats = {
     bookings:    dueBookings.length,
+    termsCards:  dueTermsBookings.length,
     packages:    duePackages.length,
     sent:    results.filter((r) => r.status === "SENT" && r.reason !== "already").length,
     skipped: results.filter((r) => r.status === "SKIPPED").length,

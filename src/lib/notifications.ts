@@ -27,6 +27,7 @@ type Kind =
   | "BOOKING_CREATED"
   | "BOOKING_CONFIRMED"
   | "BOOKING_REMINDER_4H"
+  | "BOOKING_TERMS_REMINDER"
   | "MEMBERSHIP_ACTIVATED"
   | "MEMBERSHIP_EXPIRY_1D"
   | "PACKAGE_ACTIVATED"
@@ -703,6 +704,46 @@ export async function sendBookingReminder4h(bookingId: string): Promise<SendResu
   }
 
   const r = await pushLine(b.customer.lineUserId, [buildBookingFlex(b, "reminder")]);
+  if (r.ok) {
+    await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
+    return { kind, targetId: bookingId, status: "SENT" };
+  }
+  await recordLog({ kind, targetId: bookingId, status: "FAILED", recipient: b.customer.lineUserId, error: r.error });
+  return { kind, targetId: bookingId, status: "FAILED", reason: r.error };
+}
+
+// ── Pre-appointment reminder carrying the late-arrival terms ─────────────────
+
+/**
+ * Sent shortly before the appointment (see the cron's terms-reminder window).
+ * Restates the late-arrival rules the customer accepted at booking, in softer
+ * wording — this is a courtesy nudge, not an enforcement notice.
+ */
+export async function sendBookingTermsReminder(bookingId: string): Promise<SendResult> {
+  const kind: Kind = "BOOKING_TERMS_REMINDER";
+  if (await alreadySent(kind, bookingId)) return { kind, targetId: bookingId, status: "SENT", reason: "already" };
+
+  const b = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b) return { kind, targetId: bookingId, status: "FAILED", reason: "not_found" };
+
+  if (!b.customer.lineUserId) {
+    await recordLog({ kind, targetId: bookingId, status: "SKIPPED", error: "no_line_link" });
+    return { kind, targetId: bookingId, status: "SKIPPED", reason: "no_line_link" };
+  }
+  if (b.status === "CANCELLED" || b.status === "COMPLETED" || b.status === "NO_SHOW") {
+    await recordLog({ kind, targetId: bookingId, status: "SKIPPED", error: `status_${b.status}` });
+    return { kind, targetId: bookingId, status: "SKIPPED", reason: "non_active_status" };
+  }
+  // Already at the salon — a "don't be late" nudge would be absurd.
+  if (b.checkedInAt) {
+    await recordLog({ kind, targetId: bookingId, status: "SKIPPED", error: "already_checked_in" });
+    return { kind, targetId: bookingId, status: "SKIPPED", reason: "already_checked_in" };
+  }
+
+  const r = await pushLine(b.customer.lineUserId, [buildBookingFlex(b, "termsReminder")]);
   if (r.ok) {
     await recordLog({ kind, targetId: bookingId, status: "SENT", recipient: b.customer.lineUserId });
     return { kind, targetId: bookingId, status: "SENT" };

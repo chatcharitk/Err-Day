@@ -299,6 +299,10 @@ model Membership {
   /// true until payment/activation is confirmed by POS or an admin. Defaulting
   /// to pending prevents a bare Membership insert from granting benefits.
   pendingActivation Boolean           @default(true)
+  /// Membership terms the customer accepted when applying. null on rows created
+  /// at the counter, where the terms are agreed in person.
+  termsAcceptedAt   DateTime?
+  termsVersion      String?
   customer          Customer          @relation(fields: [customerId], references: [id])
   tier              MembershipTier?   @relation(fields: [tierId], references: [id])
   cycles            MembershipCycle[]
@@ -342,6 +346,10 @@ model CustomerPackage {
   closedAt          DateTime?
   notes             String?
   pendingActivation Boolean   @default(false)
+  /// Package terms the customer accepted when applying. null on rows created at
+  /// the counter, where the terms are agreed in person.
+  termsAcceptedAt   DateTime?
+  termsVersion      String?
   customer          Customer  @relation(fields: [customerId], references: [id])
 
   @@index([customerId, packageSku])
@@ -408,6 +416,11 @@ model Booking {
   /// the former auto-activation flow. New bookings leave this false because a
   /// booking alone is not proof of payment.
   activatesMembership Boolean      @default(false)
+  /// When the customer ticked the late-arrival terms at the last step of the
+  /// booking form, and which wording they saw. null on admin/POS/walk-in
+  /// bookings — staff take the booking, so there is no customer to ask.
+  termsAcceptedAt   DateTime?
+  termsVersion      String?
   branch            Branch         @relation(fields: [branchId], references: [id])
   customer          Customer       @relation(fields: [customerId], references: [id])
   service           Service        @relation(fields: [serviceId], references: [id])
@@ -804,6 +817,7 @@ enum NotificationKind {
   PACKAGE_EXPIRY_1D
   BOOKING_CREATED
   BOOKING_CONFIRMED
+  BOOKING_TERMS_REMINDER
 }
 
 enum NotificationStatus {

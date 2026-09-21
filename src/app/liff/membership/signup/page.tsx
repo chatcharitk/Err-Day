@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, Phone, Mail, Star, CalendarRange, Repeat } from "lucide-react";
 import PdpaConsentBlock from "@/components/PdpaConsentBlock";
+import TermsConsentBlock from "@/components/TermsConsentBlock";
+import { ENTITLEMENT_TERMS_TH } from "@/lib/terms";
 import { getLiff } from "@/lib/liff-client";
 
 type ProductKey = "membership" | "buffet" | "5pack";
@@ -74,6 +76,7 @@ export default function LiffMembershipSignupPage() {
   const [gender,      setGender]      = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [pdpa,        setPdpa]        = useState(false);
+  const [terms,       setTerms]       = useState(false);
   const [formErr,     setFormErr]     = useState("");
 
   const selectedProduct = PRODUCTS.find(p => p.key === product)!;
@@ -110,6 +113,7 @@ export default function LiffMembershipSignupPage() {
     if (!phone.trim()) { setFormErr("กรุณาระบุเบอร์โทร");  return; }
     if (!dateOfBirth)  { setFormErr("กรุณาระบุวันเกิด");   return; }
     if (!pdpa)         { setFormErr("กรุณายอมรับนโยบาย PDPA"); return; }
+    if (!terms)        { setFormErr("กรุณายอมรับข้อตกลงสมาชิกและแพ็กเกจ"); return; }
 
     // Nickname is required — fall back to first word of name if left blank
     const finalNickname = nickname.trim() || name.trim().split(/\s+/)[0];
@@ -127,6 +131,7 @@ export default function LiffMembershipSignupPage() {
           gender:      gender || undefined,
           dateOfBirth: dateOfBirth || undefined,
           pdpaConsent: pdpa,
+          termsAccepted: terms,
           source:      `liff-${product}`,
           lineUserId:  profile?.userId,
           pictureUrl:  profile?.pictureUrl,
@@ -147,7 +152,7 @@ export default function LiffMembershipSignupPage() {
       setFormErr("เกิดข้อผิดพลาด กรุณาลองใหม่");
       setStep("form");
     }
-  }, [name, nickname, phone, email, gender, dateOfBirth, pdpa, profile, product, router]);
+  }, [name, nickname, phone, email, gender, dateOfBirth, pdpa, terms, profile, product, router]);
 
   // ── Loading ──
   if (step === "loading") {
@@ -357,6 +362,15 @@ export default function LiffMembershipSignupPage() {
 
           {/* PDPA */}
           <PdpaConsentBlock checked={pdpa} onChange={setPdpa} context="liff" />
+
+          {/* Membership & package terms */}
+          <TermsConsentBlock
+            checked={terms}
+            onChange={setTerms}
+            title="ข้อตกลงสมาชิกและแพ็กเกจ"
+            rules={ENTITLEMENT_TERMS_TH}
+            label="ฉันได้อ่านและยอมรับข้อตกลงนี้"
+          />
 
           {/* Form error */}
           {formErr && (
