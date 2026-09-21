@@ -96,7 +96,10 @@ export default function LiffMembershipSignupPage() {
           displayName: p.displayName,
           pictureUrl:  p.pictureUrl ?? undefined,
         });
-        setName(p.displayName);
+        // The LINE display name is shown in the banner above but deliberately
+        // NOT copied into the name field — it is usually a handle or emoji, and
+        // pre-filling it meant members were registered under something that is
+        // not their real first and last name. Same rule as the booking form.
         setStep("form");
       })
       .catch(() => {
