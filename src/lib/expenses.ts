@@ -59,6 +59,7 @@ export const EXPENSE_CATEGORY_GROUPS = defineExpenseCategoryGroups([
       { value: "software",          label: "ระบบ / ซอฟต์แวร์" },
       { value: "professional",      label: "บัญชี / ที่ปรึกษา" },
       { value: "tax_fee",           label: "ภาษี / ค่าธรรมเนียม" },
+      { value: "laundry",           label: "ซักผ้า" },
       { value: "other",             label: "อื่นๆ" },
     ],
   },
