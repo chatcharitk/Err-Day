@@ -95,6 +95,11 @@ const STATUS_META: Record<Status, { label: string; bg: string; fg: string }> = {
 
 function formatPrice(satang: number) { return `฿${(satang / 100).toLocaleString()}`; }
 
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + minutes;
@@ -121,6 +126,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   });
 
   const [editStart, setEditStart] = useState(b.startTime);
+  const [editEnd, setEditEnd] = useState(b.endTime);
   const [notesDraft, setNotesDraft] = useState(b.notes ?? "");
   const [internalNotesDraft, setInternalNotesDraft] = useState(b.internalNotes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -280,16 +286,20 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     router.refresh();
   };
 
+  const editDuration = toMinutes(editEnd) - toMinutes(editStart);
+
+  // Moving the start carries the end along so the duration is kept; the end
+  // can then be adjusted on its own (e.g. a colour that ran long).
+  const changeEditStart = (next: string) => {
+    if (next && editDuration > 0) setEditEnd(addMinutes(next, editDuration));
+    setEditStart(next);
+  };
+
   const updateTime = async () => {
-    if (!editStart) return;
-    // duration = current end - current start; preserve duration
-    const [sh, sm] = b.startTime.split(":").map(Number);
-    const [eh, em] = b.endTime.split(":").map(Number);
-    const dur = (eh * 60 + em) - (sh * 60 + sm);
-    const newEnd = addMinutes(editStart, dur);
-    const updated = await patch({ startTime: editStart, endTime: newEnd });
+    if (!editStart || !editEnd || editDuration <= 0) return;
+    const updated = await patch({ startTime: editStart, endTime: editEnd });
     if (!updated) return;
-    setB((x) => ({ ...x, startTime: editStart, endTime: newEnd }));
+    setB((x) => ({ ...x, startTime: editStart, endTime: editEnd }));
     setShowTimeEditor(false);
   };
 
@@ -480,7 +490,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
 
           <Divider />
 
-          <Row label="เวลา" onClick={() => { setEditStart(b.startTime); setShowTimeEditor(true); }}>
+          <Row label="เวลา" onClick={() => { setEditStart(b.startTime); setEditEnd(b.endTime); setShowTimeEditor(true); }}>
             <div className="flex items-center justify-between flex-1">
               <p className="text-sm flex items-center gap-1.5" style={{ color: TEXT }}>
                 <Clock size={13} style={{ color: MUTED }} />
@@ -919,17 +929,36 @@ export default function BookingDetail({ booking: initial, branchServices, branch
       {showTimeEditor && (
         <BottomSheet title="เปลี่ยนเวลา" onClose={() => setShowTimeEditor(false)}>
           <div className="p-5">
-            <p className="text-xs mb-2" style={{ color: MUTED }}>เวลาเริ่ม (รักษาระยะเวลาเดิม)</p>
-            <input
-              type="time"
-              value={editStart}
-              onChange={(e) => setEditStart(e.target.value)}
-              className="w-full border rounded-xl px-4 py-3 text-base outline-none"
-              style={{ borderColor: BORDER, color: TEXT }}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="block text-xs mb-2" style={{ color: MUTED }}>เวลาเริ่ม</span>
+                <input
+                  type="time"
+                  value={editStart}
+                  onChange={(e) => changeEditStart(e.target.value)}
+                  className="w-full border rounded-xl px-3 py-3 text-base outline-none"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs mb-2" style={{ color: MUTED }}>เวลาเสร็จ</span>
+                <input
+                  type="time"
+                  value={editEnd}
+                  onChange={(e) => setEditEnd(e.target.value)}
+                  className="w-full border rounded-xl px-3 py-3 text-base outline-none"
+                  style={{ borderColor: editDuration > 0 ? BORDER : "#DC2626", color: TEXT }}
+                />
+              </label>
+            </div>
+            <p className="text-xs mt-2" style={{ color: editDuration > 0 ? MUTED : "#DC2626" }}>
+              {editDuration > 0
+                ? `ระยะเวลา ${editDuration} นาที · เลื่อนเวลาเริ่มแล้วเวลาเสร็จจะเลื่อนตาม`
+                : "เวลาเสร็จต้องหลังเวลาเริ่ม"}
+            </p>
             <button
               onClick={updateTime}
-              disabled={busy || !editStart}
+              disabled={busy || !editStart || !editEnd || editDuration <= 0}
               className="mt-4 w-full py-3 rounded-xl text-white font-semibold disabled:opacity-50"
               style={{ background: PRIMARY }}
             >
