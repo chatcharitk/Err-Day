@@ -86,6 +86,8 @@ export default async function MobileCustomerDetailPage({
       totalPrice: true,
       branch:     { select: { name: true } },
       service:    { select: { nameTh: true } },
+      staff:      { select: { name: true } },
+      extraStaff: { select: { staff: { select: { name: true } } } },
     },
   });
 
@@ -141,6 +143,12 @@ export default async function MobileCustomerDetailPage({
           totalPrice: b.totalPrice,
           branchName: b.branch.name,
           serviceName: b.service.nameTh,
+          // Primary stylist first, then anyone who worked the booking alongside
+          // them. Deduped: some bookings list the primary stylist in extraStaff
+          // too, which would otherwise render as "พร, พร".
+          staffNames: [...new Set(
+            [b.staff?.name, ...b.extraStaff.map(e => e.staff.name)].filter(Boolean) as string[],
+          )],
         })),
       }}
     />

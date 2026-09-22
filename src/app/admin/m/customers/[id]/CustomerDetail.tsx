@@ -66,6 +66,7 @@ interface BookingRow {
   totalPrice:  number;
   branchName:  string;
   serviceName: string;
+  staffNames:  string[];
 }
 
 interface MembershipCycle {
@@ -811,9 +812,13 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                     <ChevronRight size={14} style={{ color: MUTED }} />
                   </div>
                 </div>
-                <p className="text-[11px] flex items-center gap-2" style={{ color: MUTED }}>
+                <p className="text-[11px] flex items-center flex-wrap gap-x-2 gap-y-0.5" style={{ color: MUTED }}>
                   <span className="inline-flex items-center gap-1"><Clock size={10} />{fmtDate(b.date)} {b.startTime}</span>
                   <span className="inline-flex items-center gap-1"><MapPin size={10} />{b.branchName}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <User size={10} />
+                    {b.staffNames.length > 0 ? b.staffNames.join(", ") : "ไม่ได้ระบุช่าง"}
+                  </span>
                 </p>
                 <p className="text-xs mt-1" style={{ color: TEXT }}>{fmtPrice(b.totalPrice)}</p>
               </Link>
