@@ -61,7 +61,7 @@ export function HalloweenStrip() {
     <div className="hw-strip" role="note">
       <Bat className="hw-strip-bat" />
       <Pumpkin className="hw-strip-pumpkin" />
-      <span>{lang === "th" ? "Happy Halloween จาก err.day" : "Happy Halloween from err.day"}</span>
+      <span>{lang === "th" ? "Halloween Month ที่ err.day" : "Halloween Month at err.day"}</span>
       <Bat className="hw-strip-bat flip" />
     </div>
   );

@@ -251,7 +251,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
         {tab === "home" && <>
           <section className="welcome">
             {halloween && <><Cobweb className="hw-cobweb" /><Pumpkin className="hw-pumpkin" /></>}
-            <div className="welcome-copy"><p>{halloween ? "HAPPY HALLOWEEN" : "WELCOME BACK"}</p><h1>{u.hello} {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</div>
+            <div className="welcome-copy"><p>{halloween ? "HALLOWEEN MONTH" : "WELCOME BACK"}</p><h1>{u.hello} {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</div>
             {liff.profile.pictureUrl ? <Image src={liff.profile.pictureUrl} alt="" width={64} height={64} className="hub-avatar welcome-avatar" unoptimized /> : <span className="hub-avatar hub-initial welcome-avatar">{displayName[0]}</span>}
           </section>
           <div className="welcome-wave" />
