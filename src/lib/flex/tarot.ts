@@ -6,6 +6,7 @@
  */
 import type { LineMessage } from "@/lib/line-messaging";
 import type { TarotCard } from "./tarot-cards";
+import { seasonalThemeAt, tarotImagePath } from "@/lib/seasonal-theme";
 
 const PRIMARY  = "#8B1D24";
 const TEXT     = "#3B2A24";
@@ -23,7 +24,10 @@ const TAROT_ART_VERSION = "2";
 export function buildTarotFlex(card: TarotCard): LineMessage {
   // URL-encode the filename so spaces ("Wheel of Fortune.png") and other
   // characters work in LINE — which fetches the URL strictly.
-  const imageUrl = `${APP_HOST}/tarot/${encodeURIComponent(card.image)}?v=${TAROT_ART_VERSION}`;
+  // Halloween season swaps in the Halloween deck (see seasonal-theme.ts).
+  const artPath  = tarotImagePath(card.image, seasonalThemeAt(new Date()))
+    .split("/").map(encodeURIComponent).join("/");
+  const imageUrl = `${APP_HOST}${artPath}?v=${TAROT_ART_VERSION}`;
   const bookUrl  = `${APP_HOST}/book`;
 
   return {

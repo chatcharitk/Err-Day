@@ -10,6 +10,7 @@ import { useLang } from "@/components/LanguageProvider";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import { RescheduleModal, type ReschedulableBooking } from "@/app/my-bookings/MyBookingsClient";
 import { useSeasonalTheme } from "@/hooks/useSeasonalTheme";
+import { tarotImagePath } from "@/lib/seasonal-theme";
 import { Cobweb, HalloweenBats, Pumpkin } from "@/components/HalloweenDecor";
 
 type Tab = "home" | "book" | "history" | "tarot";
@@ -27,12 +28,12 @@ type Customer = { name: string; nickname?: string | null; phone: string; dateOfB
 type Reading = { love: string; career: string; finance: string };
 
 const DECK = [
-  { id: 74, name: "The Star", th: "ดาวแห่งความหวัง", image: "/tarot/The-Star.png" },
-  { id: 75, name: "The Moon", th: "จันทราแห่งสัญชาตญาณ", image: "/tarot/The-Moon.png" },
-  { id: 76, name: "The Sun", th: "สุริยะแห่งความสำเร็จ", image: "/tarot/The-Sun.png" },
-  { id: 63, name: "The Lovers", th: "คู่รักแห่งการเลือก", image: "/tarot/The-Lovers.png" },
-  { id: 67, name: "Wheel of Fortune", th: "วงล้อแห่งโชคชะตา", image: "/tarot/Wheel of Fortune.png" },
-  { id: 58, name: "The Magician", th: "นักมายาแห่งพลัง", image: "/tarot/The-Magician.png" },
+  { id: 74, name: "The Star", th: "ดาวแห่งความหวัง", image: "The-Star.png" },
+  { id: 75, name: "The Moon", th: "จันทราแห่งสัญชาตญาณ", image: "The-Moon.png" },
+  { id: 76, name: "The Sun", th: "สุริยะแห่งความสำเร็จ", image: "The-Sun.png" },
+  { id: 63, name: "The Lovers", th: "คู่รักแห่งการเลือก", image: "The-Lovers.png" },
+  { id: 67, name: "Wheel of Fortune", th: "วงล้อแห่งโชคชะตา", image: "Wheel of Fortune.png" },
+  { id: 58, name: "The Magician", th: "นักมายาแห่งพลัง", image: "The-Magician.png" },
 ] as const;
 
 const STATUS: Record<"th" | "en", Record<string, string>> = {
@@ -289,7 +290,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
 
         {tab === "tarot" && <section className="tarot-page"><div className="tarot-title"><span>✦ ERR.DAY TAROT ✦</span><h1>ดูดวงแบบละเอียด</h1><p>เลือกไพ่ตามความรู้สึก 3 ใบ สำหรับความรัก การงาน และการเงิน</p></div>
           {customer?.dateOfBirth && <div className="birthday"><span>วันเกิดของคุณ</span><strong>{displayDate(customer.dateOfBirth, lang)}</strong><small>บันทึกไว้จากโปรไฟล์สมาชิก</small></div>}
-          <div className="deck-box"><div className="step-title"><b>1</b><span>เลือกไพ่ 3 ใบ</span><em>{selected.length}/3</em></div><p>ลำดับที่เลือก: ความรัก · การงาน · การเงิน</p><div className="tarot-deck">{DECK.map(card => { const order = selected.indexOf(card.id); return <button type="button" key={card.id} onClick={() => toggleCard(card.id)} className={order >= 0 ? "selected" : ""} aria-label={`เลือกไพ่ ${card.name}`} aria-pressed={order >= 0}><span className="card-back">✦</span><span className="card-front"><Image src={card.image} alt={card.name} fill sizes="100px" /><i>{card.name}</i></span>{order >= 0 && <b>{order + 1}</b>}</button>})}</div></div>
+          <div className="deck-box"><div className="step-title"><b>1</b><span>เลือกไพ่ 3 ใบ</span><em>{selected.length}/3</em></div><p>ลำดับที่เลือก: ความรัก · การงาน · การเงิน</p><div className="tarot-deck">{DECK.map(card => { const order = selected.indexOf(card.id); return <button type="button" key={card.id} onClick={() => toggleCard(card.id)} className={order >= 0 ? "selected" : ""} aria-label={`เลือกไพ่ ${card.name}`} aria-pressed={order >= 0}><span className="card-back">✦</span><span className="card-front"><Image src={tarotImagePath(card.image, halloween ? "halloween" : null)} alt={card.name} fill sizes="100px" /><i>{card.name}</i></span>{order >= 0 && <b>{order + 1}</b>}</button>})}</div></div>
           <button className="reveal" disabled={selected.length !== 3 || readingBusy} onClick={reveal}><Sparkles /> {readingBusy ? "กำลังเปิดคำทำนาย..." : selected.length === 3 ? "เปิดคำทำนายแบบละเอียด" : `เลือกไพ่อีก ${3 - selected.length} ใบ`}</button>
           {readingError && <div className="reading-error" role="alert" aria-live="polite">{readingError}</div>}
           {reading && <div className="reading"><div className="reading-divider">YOUR READING</div>{[{ icon: "♡", title: "ความรัก", body: reading.love }, { icon: "✦", title: "การงาน", body: reading.career }, { icon: "฿", title: "การเงิน", body: reading.finance }].map(item => <article key={item.title}><span>{item.icon}</span><div><h2>{item.title}</h2><p>{item.body}</p></div></article>)}<p className="provider">คำทำนายโดย AstrologyAPI · ใช้เพื่อความบันเทิงและการสะท้อนตนเอง</p></div>}
