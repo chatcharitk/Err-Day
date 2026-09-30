@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/components/LanguageProvider";
+import { HalloweenStrip } from "@/components/HalloweenDecor";
 import TermsConsentBlock from "@/components/TermsConsentBlock";
 import { BOOKING_TERMS_TH, BOOKING_TERMS_EN } from "@/lib/terms";
 import { DAVINES_SPA_PROMOTION, getPromotionServicePrice, isDavinesSpaPromotionDay } from "@/lib/promotions";
@@ -541,6 +542,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
           </div>
         </div>
       )}
+
+      <HalloweenStrip />
 
       {/* Step indicator */}
       <div className="bg-white border-b" style={{ borderColor: "#F1E4DC" }}>

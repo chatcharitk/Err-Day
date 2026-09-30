@@ -245,3 +245,64 @@
 .hub-dialog-actions .dialog-danger { border-color:#b52f3a; background:#b52f3a; color:white; }
 .hub-dialog-actions .dialog-primary { border-color:#b52f3a; background:#b52f3a; color:white; }
 @media (min-width:421px) { .hub-dialog-backdrop { align-items:center; } }
+
+/* Seasonal: Halloween skin for the customer hub (through 31 Oct, see src/lib/seasonal-theme.ts).
+   Night-purple chrome with pumpkin accents; everything else inherits the normal hub. */
+@keyframes hw-drift { 0%,100% { transform:translate(0,0) rotate(-4deg); } 50% { transform:translate(6px,-4px) rotate(5deg); } }
+@keyframes hw-flap { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(.55); } }
+@keyframes hw-bob { 0%,100% { transform:translateY(0) rotate(-3deg); } 50% { transform:translateY(-3px) rotate(3deg); } }
+body:has(.customer-hub.theme-halloween) { background:#1d1229; }
+.customer-hub.theme-halloween {
+  --wine:#b8481a;
+  --line:#eeddd0;
+  background:#fdf7f1;
+  box-shadow:0 18px 70px #0d061866;
+}
+.theme-halloween .hub-header { background:linear-gradient(135deg,#2a1739,#3d2052); overflow:hidden; }
+.theme-halloween .hub-logo, .theme-halloween .hub-profile { position:relative; z-index:1; }
+.theme-halloween .hub-logo span { color:#f5923a; opacity:1; }
+.hw-bats { position:absolute; inset:0; pointer-events:none; color:#b99ad1; opacity:.85; }
+.hw-bat { position:absolute; animation:hw-drift 6s ease-in-out infinite; }
+.hw-bat path { transform-origin:center; animation:hw-flap .9s ease-in-out infinite; }
+.hw-bat-1 { width:30px; left:42%; top:8px; }
+.hw-bat-2 { width:22px; left:58%; top:28px; animation-delay:-2s; }
+.hw-bat-2 path { animation-delay:-.3s; }
+.hw-bat-3 { width:16px; left:33%; top:36px; animation-delay:-4s; opacity:.7; }
+.theme-halloween .welcome { position:relative; overflow:hidden; background:radial-gradient(circle at 82% 30%,#f5b25d55 0 30px,#f5923a1f 31px 58px,transparent 60px),linear-gradient(160deg,#3d2052,#2a1739); }
+.theme-halloween .welcome p { color:#f5a95a; }
+.theme-halloween .welcome-copy { position:relative; z-index:1; }
+.theme-halloween .welcome-avatar { border-color:#f5a95a; box-shadow:0 0 0 4px #f5923a33,0 8px 18px #0d0618aa; }
+.theme-halloween .welcome-wave { background:#2d183d; }
+.hw-cobweb { position:absolute; left:0; top:0; width:74px; color:#ffffff2a; pointer-events:none; }
+.hw-pumpkin { position:absolute; right:92px; bottom:6px; width:40px; filter:drop-shadow(0 4px 10px #f07c2466); animation:hw-bob 3.2s ease-in-out infinite; }
+.theme-halloween .member-card, .theme-halloween .empty-card { background:linear-gradient(140deg,#4a2763,#321a45 58%,#221230); box-shadow:0 16px 34px -20px #221230; }
+.theme-halloween .foil { background:linear-gradient(90deg,#d9601a,#ffd08a,#f07c24); }
+.theme-halloween .member-card small, .theme-halloween .empty-card small { color:#f5a95a; }
+.theme-halloween .card-stats { border-top-color:#f5a95a44; }
+.theme-halloween .card-stats>div:last-child span { color:#ffd08a; }
+.theme-halloween .empty-card a { background:#f5923a; color:#2a1739; }
+.theme-halloween .package-card { background:linear-gradient(140deg,#ffd9a8,#f5a54a); color:#4a2410; box-shadow:0 15px 30px -22px #b8481a; }
+.theme-halloween .package-card small { color:#4a2410aa; }
+.theme-halloween .booking-priority>button { background:linear-gradient(135deg,#e2701f,#b8481a); box-shadow:0 14px 30px -17px #8a3412; }
+.theme-halloween .booking-priority b { background:#2a1739; color:#ffd08a; }
+.theme-halloween .appointment-title span { background:#ffe8d2; color:#8a3412; }
+.theme-halloween .tarot-teaser { background:#f8efff; border-color:#e6d6f0; }
+.theme-halloween .tarot-teaser strong { color:#4a2763; }
+.theme-halloween .mini-card, .theme-halloween .card-back { background:linear-gradient(150deg,#4a2763,#221230); border-color:#f5a95a88; color:#f5a95a; }
+.theme-halloween .tarot-page { background:radial-gradient(circle at 0 0,#eadcf388 0 70px,transparent 71px),linear-gradient(#f8efff,#fdf7f1 420px); }
+.theme-halloween .tarot-title h1 { color:#4a2763; }
+.theme-halloween .reveal:not(:disabled), .theme-halloween .branch-list a, .theme-halloween .empty-appointment button, .theme-halloween .hub-error-state button { background:linear-gradient(135deg,#e2701f,#b8481a); }
+.theme-halloween .hub-tabs { background:#fffaf5; }
+.theme-halloween .hub-tabs button.booking-tab svg { background:linear-gradient(135deg,#e2701f,#b8481a); }
+.theme-halloween .history-list article>span { background:#ffe8d2; color:#8a3412; }
+
+/* Booking pages keep their colours; they just get this festive band. */
+.hw-strip { position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; gap:8px; padding:9px 16px; background:linear-gradient(135deg,#2a1739,#3d2052); color:#ffd08a; font-size:12px; font-weight:500; text-align:center; }
+.hw-strip span { min-width:0; }
+.hw-strip-pumpkin { width:22px; flex:none; animation:hw-bob 3.2s ease-in-out infinite; }
+.hw-strip-bat { width:22px; flex:none; color:#b99ad1; animation:hw-drift 6s ease-in-out infinite; }
+.hw-strip-bat.flip { transform:scaleX(-1); animation:none; }
+
+@media (prefers-reduced-motion:reduce) {
+  .hw-bat, .hw-bat path, .hw-pumpkin, .hw-strip-pumpkin, .hw-strip-bat { animation:none; }
+}

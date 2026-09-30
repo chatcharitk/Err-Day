@@ -9,6 +9,8 @@ import { useLiff } from "@/hooks/useLiff";
 import { useLang } from "@/components/LanguageProvider";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import { RescheduleModal, type ReschedulableBooking } from "@/app/my-bookings/MyBookingsClient";
+import { useSeasonalTheme } from "@/hooks/useSeasonalTheme";
+import { Cobweb, HalloweenBats, Pumpkin } from "@/components/HalloweenDecor";
 
 type Tab = "home" | "book" | "history" | "tarot";
 type Branch = { id: string; name: string; address: string; phone: string; bookingEnabled: boolean };
@@ -93,6 +95,8 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   const liff = useLiff();
   const { lang } = useLang();
   const u = HUB_UI[lang];
+  const halloween = useSeasonalTheme() === "halloween";
+  const hubClass = `customer-hub${halloween ? " theme-halloween" : ""}`;
   const [openedAt] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>(() => searchParams.get("tab") === "book" ? "book" : "home");
@@ -212,8 +216,8 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
 
   if (!liff.ready) return <div className="hub-loading"><span /><p>{u.preparing}</p></div>;
   if (!liff.isLoggedIn || !liff.profile) return (
-    <main className="customer-hub hub-login">
-      <header className="hub-header"><span className="hub-logo">err<span>·</span>day</span><LangSwitcher /></header>
+    <main className={`${hubClass} hub-login`}>
+      <header className="hub-header">{halloween && <HalloweenBats />}<span className="hub-logo">err<span>·</span>day</span><LangSwitcher /></header>
       <section>
         <span className="login-mark">LINE</span>
         <p>{u.loginIntro}</p>
@@ -225,15 +229,16 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   );
   if (dataLoading) return <div className="hub-loading"><span /><p>{u.loading}</p></div>;
   if (dataError) return (
-    <main className="customer-hub hub-error-state">
+    <main className={`${hubClass} hub-error-state`}>
       <span>!</span><h1>{u.loadFailed}</h1><p>{dataError}</p>
       <button type="button" onClick={() => void loadCustomerData()}>{u.retry}</button>
     </main>
   );
 
   return (
-    <main className="customer-hub">
+    <main className={hubClass}>
       <header className="hub-header">
+        {halloween && <HalloweenBats />}
         <span className="hub-logo">err<span>·</span>day</span>
         <div className="hub-profile">
           <LangSwitcher />
@@ -244,7 +249,8 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
       <div className="hub-scroll" ref={scrollRef}>
         {tab === "home" && <>
           <section className="welcome">
-            <div className="welcome-copy"><p>WELCOME BACK</p><h1>{u.hello} {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</div>
+            {halloween && <><Cobweb className="hw-cobweb" /><Pumpkin className="hw-pumpkin" /></>}
+            <div className="welcome-copy"><p>{halloween ? "HAPPY HALLOWEEN" : "WELCOME BACK"}</p><h1>{u.hello} {displayName}</h1>{customer?.phone && <span>{customer.phone}</span>}</div>
             {liff.profile.pictureUrl ? <Image src={liff.profile.pictureUrl} alt="" width={64} height={64} className="hub-avatar welcome-avatar" unoptimized /> : <span className="hub-avatar hub-initial welcome-avatar">{displayName[0]}</span>}
           </section>
           <div className="welcome-wave" />
