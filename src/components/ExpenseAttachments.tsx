@@ -10,7 +10,7 @@
  * user gets per-file progress/error feedback instead of one opaque wait at
  * the very end.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Paperclip, X, FileText, Loader2 } from "lucide-react";
 
 export interface Attachment {
@@ -37,6 +37,9 @@ export default function ExpenseAttachments({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<string[]>([]); // local temp names being uploaded
   const [error, setError] = useState("");
+  // Latest list, so several files uploaded in one pick don't overwrite each other.
+  const latest = useRef(attachments);
+  useEffect(() => { latest.current = attachments; }, [attachments]);
 
   async function handleFiles(files: FileList) {
     setError("");
@@ -54,7 +57,8 @@ export default function ExpenseAttachments({
         const res = await fetch(`/api/upload?kind=receipt&ref=${ref}`, { method: "POST", body: form });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "upload failed");
-        onChange([...attachments, { url: data.url, filename: file.name, fileType: file.type }]);
+        latest.current = [...latest.current, { url: data.url, filename: file.name, fileType: file.type }];
+        onChange(latest.current);
       } catch (e) {
         setError(e instanceof Error ? e.message : `อัปโหลด ${file.name} ไม่สำเร็จ`);
       } finally {
@@ -64,7 +68,8 @@ export default function ExpenseAttachments({
   }
 
   function remove(idx: number) {
-    onChange(attachments.filter((_, i) => i !== idx));
+    latest.current = latest.current.filter((_, i) => i !== idx);
+    onChange(latest.current);
   }
 
   const isImage = (fileType: string) => fileType.startsWith("image/");
@@ -79,13 +84,15 @@ export default function ExpenseAttachments({
         {attachments.map((a, idx) => (
           <div key={a.url + idx} className="relative group">
             {isImage(a.fileType) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={a.url} alt={a.filename} className="w-16 h-16 rounded-lg object-cover"
-                style={{ border: `1px solid ${borderColor}` }} />
+              <a href={a.url} target="_blank" rel="noreferrer" title={a.filename} style={{ display: "block" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={a.url} alt={a.filename} className="w-16 h-16 rounded-lg object-cover"
+                  style={{ width: 64, height: 64, border: `1px solid ${borderColor}` }} />
+              </a>
             ) : (
               <a href={a.url} target="_blank" rel="noreferrer"
                 className="w-16 h-16 rounded-lg flex flex-col items-center justify-center gap-1"
-                style={{ border: `1px solid ${borderColor}` }}>
+                style={{ width: 64, height: 64, border: `1px solid ${borderColor}` }}>
                 <FileText size={20} style={{ color: primaryColor }} />
                 <span className="text-[8px] px-1 truncate w-full text-center" style={{ color: mutedColor }}>
                   {a.filename.slice(0, 10)}
@@ -95,8 +102,11 @@ export default function ExpenseAttachments({
             <button
               type="button"
               onClick={() => remove(idx)}
-              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-white shadow"
-              style={{ border: `1px solid ${borderColor}` }}
+              className="absolute -top-1.5 -right-1.5 rounded-full flex items-center justify-center bg-white shadow"
+              style={{
+                width: 20, height: 20, minWidth: 0, minHeight: 0, padding: 0,
+                border: `1px solid ${borderColor}`,
+              }}
               title="ลบไฟล์แนบ"
             >
               <X size={11} style={{ color: "#B91C1C" }} />
@@ -117,6 +127,7 @@ export default function ExpenseAttachments({
         accept={ACCEPT}
         multiple
         className="hidden"
+        style={{ display: "none" }}
         onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ""; }}
       />
       <button
