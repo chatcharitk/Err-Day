@@ -35,6 +35,22 @@ const empty: Payee = {
   notes: null,
   isActive: true,
 };
+type ActiveFilter = "all" | "active" | "inactive";
+type DocFilter = "all" | "complete" | "incomplete";
+
+/** Document details an accountant needs for a payee; empty list = complete. */
+function missingDocFields(v: Payee): string[] {
+  const out: string[] = [];
+  if (!v.legalName?.trim()) out.push("ชื่อเต็ม");
+  if (!v.address?.trim()) out.push("ที่อยู่");
+  if (!v.taxId?.trim()) out.push("เลขภาษี");
+  return out;
+}
+
+const BADGE_OK   = { background: "#e3f4ea", color: "#1e6242" };
+const BADGE_OFF  = { background: "#ececec", color: "#6b6b6b" };
+const BADGE_WARN = { background: "#fff5db", color: "#775014" };
+
 export default function PayeeManager({
   onSaved,
 }: {
@@ -46,6 +62,8 @@ export default function PayeeManager({
     >([]),
     [form, setForm] = useState<Payee | null>(null),
     [q, setQ] = useState(""),
+    [activeFilter, setActiveFilter] = useState<ActiveFilter>("all"),
+    [docFilter, setDocFilter] = useState<DocFilter>("all"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true);
@@ -118,11 +136,38 @@ export default function PayeeManager({
             </button>
           </div>
           {!form && (
+            <div className={css.toolbar} style={{ marginTop: 0 }}>
+              <span className={css.muted}>สถานะ</span>
+              {([
+                ["all", "ทั้งหมด", vendors.length],
+                ["active", "ใช้งาน", vendors.filter((v) => v.isActive).length],
+                ["inactive", "ปิดใช้งาน", vendors.filter((v) => !v.isActive).length],
+              ] as [ActiveFilter, string, number][]).map(([k, label, n]) => (
+                <button key={k} aria-pressed={activeFilter === k}
+                  onClick={() => setActiveFilter(k)}>
+                  {label} ({n})
+                </button>
+              ))}
+              <span className={css.muted} style={{ marginLeft: 8 }}>ข้อมูลเอกสาร</span>
+              {([
+                ["all", "ทั้งหมด", vendors.length],
+                ["complete", "ครบ", vendors.filter((v) => missingDocFields(v).length === 0).length],
+                ["incomplete", "ยังไม่ครบ", vendors.filter((v) => missingDocFields(v).length > 0).length],
+              ] as [DocFilter, string, number][]).map(([k, label, n]) => (
+                <button key={k} aria-pressed={docFilter === k}
+                  onClick={() => setDocFilter(k)}>
+                  {label} ({n})
+                </button>
+              ))}
+            </div>
+          )}
+          {!form && (
             <div className={css.tableWrap}>
               <table className={css.table}>
                 <thead>
                   <tr>
                     <th>ผู้รับเงิน</th>
+                    <th>สถานะ</th>
                     <th>ข้อมูลเอกสาร</th>
                     <th>จัดการ</th>
                   </tr>
@@ -134,6 +179,14 @@ export default function PayeeManager({
                         q,
                       ),
                     )
+                    .filter((v) =>
+                      activeFilter === "all" ||
+                      (activeFilter === "active") === v.isActive,
+                    )
+                    .filter((v) => {
+                      if (docFilter === "all") return true;
+                      return (missingDocFields(v).length === 0) === (docFilter === "complete");
+                    })
                     .map((v) => (
                       <tr key={v.id}>
                         <td>
@@ -144,13 +197,27 @@ export default function PayeeManager({
                               : v.type === "PERSON"
                                 ? "บุคคล"
                                 : "ร้านค้า / บริษัท"}
-                            {!v.isActive && " · ปิดใช้งาน"}
                           </p>
                         </td>
                         <td>
-                          {v.legalName && v.taxId && v.address
-                            ? "ชื่อ ที่อยู่ เลขภาษีครบ"
-                            : "ยังขาดชื่อเต็ม ที่อยู่ หรือเลขภาษี"}
+                          <span className={css.badge} style={v.isActive ? BADGE_OK : BADGE_OFF}>
+                            {v.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
+                          </span>
+                        </td>
+                        <td>
+                          {(() => {
+                            const missing = missingDocFields(v);
+                            return missing.length === 0 ? (
+                              <span className={css.badge} style={BADGE_OK}>ข้อมูลครบ</span>
+                            ) : (
+                              <>
+                                <span className={css.badge} style={BADGE_WARN}>ยังไม่ครบ</span>
+                                <p className={css.muted} style={{ margin: "4px 0 0" }}>
+                                  ขาด: {missing.join(", ")}
+                                </p>
+                              </>
+                            );
+                          })()}
                         </td>
                         <td>
                           <button onClick={() => setForm(v)}>แก้ข้อมูล</button>
