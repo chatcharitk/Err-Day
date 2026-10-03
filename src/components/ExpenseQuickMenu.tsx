@@ -6,8 +6,6 @@ import {
   Droplets,
   FlaskConical,
   Megaphone,
-  Paintbrush,
-  Sparkles,
   UsersRound,
   Zap,
 } from "lucide-react";
@@ -26,9 +24,7 @@ const ICONS = {
   rent: Building2,
   electricity: Zap,
   water: Droplets,
-  shampoo: FlaskConical,
-  colour: Paintbrush,
-  treatment: Sparkles,
+  hair_products: FlaskConical,
   salary: UsersRound,
   marketing: Megaphone,
 } as const;
@@ -37,9 +33,7 @@ const TINTS: Record<(typeof EXPENSE_QUICK_CATEGORIES)[number], string> = {
   rent: "#F7EEE7",
   electricity: "#FFF7D6",
   water: "#EAF6FF",
-  shampoo: "#EEF8F2",
-  colour: "#FCEEF3",
-  treatment: "#F5EEFC",
+  hair_products: "#EEF8F2",
   salary: "#EEF1F8",
   marketing: "#FFF0E8",
 };

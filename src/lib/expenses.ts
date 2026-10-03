@@ -37,9 +37,8 @@ export const EXPENSE_CATEGORY_GROUPS = defineExpenseCategoryGroups([
   {
     label: "ผลิตภัณฑ์และวัสดุสิ้นเปลือง",
     categories: [
-      { value: "shampoo",           label: "แชมพู / ครีมนวด" },
-      { value: "colour",            label: "สีผม / น้ำยาฟอก" },
-      { value: "treatment",         label: "ทรีตเมนต์" },
+      // Merged 2026-10 from shampoo / colour / treatment (see LEGACY_CATEGORY_ALIASES).
+      { value: "hair_products",     label: "ผลิตภัณฑ์ผม (แชมพู / สี / ทรีตเมนต์)" },
       { value: "consumable_other",  label: "วัสดุสิ้นเปลืองอื่นๆ" },
     ],
   },
@@ -81,14 +80,27 @@ export const EXPENSE_CATEGORIES: readonly ExpenseCategoryDefinition[] =
     (group): readonly ExpenseCategoryDefinition[] => group.categories,
   );
 
-/** The eight most-used buttons on the expense landing page. */
+/**
+ * Categories that were merged into another. Existing rows were rewritten, but
+ * an old browser tab or script may still send the old value — treat it as the
+ * new one instead of rejecting the save.
+ */
+const LEGACY_CATEGORY_ALIASES: Record<string, string> = {
+  shampoo:   "hair_products",
+  colour:    "hair_products",
+  treatment: "hair_products",
+};
+
+export function normalizeExpenseCategory(value: string): string {
+  return LEGACY_CATEGORY_ALIASES[value] ?? value;
+}
+
+/** The most-used buttons on the expense landing page. */
 export const EXPENSE_QUICK_CATEGORIES = [
   "rent",
   "electricity",
   "water",
-  "shampoo",
-  "colour",
-  "treatment",
+  "hair_products",
   "salary",
   "marketing",
 ] as const;

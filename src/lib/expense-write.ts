@@ -5,7 +5,7 @@ import {
   type ExpenseLine,
   type VatMode,
 } from "./finance-math";
-import { isExpenseCategory, PAYMENT_METHODS } from "./expenses";
+import { isExpenseCategory, normalizeExpenseCategory, PAYMENT_METHODS } from "./expenses";
 import { jsonSnapshot } from "./finance-audit";
 export function attachmentData(value: unknown) {
   if (!Array.isArray(value) || value.length > 30)
@@ -25,7 +25,8 @@ export async function expenseData(
   b: Record<string, unknown>,
   legacyAllowed = false,
 ) {
-  if (!isExpenseCategory(String(b.category)))
+  const category = normalizeExpenseCategory(String(b.category));
+  if (!isExpenseCategory(category))
     throw new Error("กรุณาเลือกหมวดรายจ่าย");
   if (!validDay(String(b.date))) throw new Error("วันที่ไม่ถูกต้อง");
   if (b.documentDate && !validDay(String(b.documentDate)))
@@ -73,14 +74,14 @@ export async function expenseData(
         where: { name: { equals: name, mode: "insensitive" }, isActive: true },
       })) ??
       (await tx.vendor.create({
-        data: { name, category: String(b.category) },
+        data: { name, category },
       }));
   }
   if (b.status === "CONFIRMED" && !vendor)
     throw new Error("กรุณาเลือกหรือระบุผู้รับเงินก่อนยืนยัน");
   const data = {
     branchId: b.branchId ? String(b.branchId) : null,
-    category: String(b.category),
+    category,
     vendor: vendor?.legalName || vendor?.name || null,
     vendorId: vendor?.id ?? null,
     ...(vendor ? { payeeSnapshot: jsonSnapshot(vendor) } : {}),
