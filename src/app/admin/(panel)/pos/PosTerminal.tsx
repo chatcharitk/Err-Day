@@ -98,7 +98,7 @@ function getServicePrices(bs: BS, isMember: boolean) {
 // Categories rendered BEFORE add-ons (Membership shown first as a highlighted CTA)
 const CATS_BEFORE_ADDONS = ["Membership", "บริการทั่วไป", "แพ็กเกจ"];
 // Categories rendered AFTER add-ons
-const CATS_AFTER_ADDONS  = ["Davines Spa", "PJOLI Treatment", "ย้อมผม NIGAO"];
+const CATS_AFTER_ADDONS  = ["PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO"];
 
 export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku }: Props) {
   const [cart, setCart] = useState<CartItem[]>(() => {

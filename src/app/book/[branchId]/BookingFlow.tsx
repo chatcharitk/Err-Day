@@ -17,7 +17,7 @@ import { useLang } from "@/components/LanguageProvider";
 import { HalloweenStrip } from "@/components/HalloweenDecor";
 import TermsConsentBlock from "@/components/TermsConsentBlock";
 import { BOOKING_TERMS_TH, BOOKING_TERMS_EN } from "@/lib/terms";
-import { DAVINES_SPA_PROMOTION, getCurrentOrUpcomingPromotion, getPromotionServicePrice, getServicePromotion } from "@/lib/promotions";
+import { DAVINES_SPA_PROMOTION, PJOLI_TREATMENT_SERVICE_ID, getCurrentOrUpcomingPromotion, getPromotionServicePrice, getServicePromotion } from "@/lib/promotions";
 import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
 
 type BranchServiceWithService = BranchService & { service: Service };
@@ -100,7 +100,10 @@ function addMinutes(time: string, minutes: number): string {
  * distinct Service.category) but stays INVISIBLE to customers until it is added
  * here. Adding a group is therefore not yet a pure data change.
  */
-const CATEGORY_ORDER = ["บริการทั่วไป", "Davines Spa", "PJOLI Treatment", "Keratin Treatment", "ย้อมผม NIGAO"];
+const CATEGORY_ORDER = ["บริการทั่วไป", "PJOLI Treatment", "Davines Spa", "Keratin Treatment", "ย้อมผม NIGAO"];
+
+/** Services shown with a twinkling "New!" badge. Remove an id once it stops being new. */
+const NEW_SERVICE_IDS = new Set<string>([PJOLI_TREATMENT_SERVICE_ID]);
 
 const CAT_EN: Record<string, string> = {
   "บริการทั่วไป":  "General Services",
@@ -704,14 +707,23 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                               <button
                                 key={bs.id}
                                 onClick={() => setSelectedService(bs)}
-                                className="w-full text-left p-4 rounded-xl border-2 transition-all"
+                                className="relative w-full text-left p-4 rounded-xl border-2 transition-all"
                                 style={isSelected
                                   ? { borderColor: "#B52F3A", backgroundColor: "#B52F3A", color: "white" }
                                   : { borderColor: "#EADDD4", backgroundColor: "white", color: "#45352F" }}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1">
-                                    <p className="font-medium">{svcName}</p>
+                                    <p className="font-medium flex flex-wrap items-center gap-x-2 gap-y-1">
+                                      {svcName}
+                                      {NEW_SERVICE_IDS.has(bs.serviceId) && (
+                                        <span className="new-badge">
+                                          <Star className="new-star" aria-hidden="true" />
+                                          New!
+                                          <Star className="new-star" aria-hidden="true" />
+                                        </span>
+                                      )}
+                                    </p>
                                     {svcDesc && (
                                       <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#977A6F" }}>
                                         {svcDesc}

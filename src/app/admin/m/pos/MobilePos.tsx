@@ -94,7 +94,7 @@ const TEXT    = "#3B2A24";
 const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 
-const CAT_ORDER = ["Membership", "บริการทั่วไป", "แพ็กเกจ", "Davines Spa", "PJOLI Treatment", "ย้อมผม NIGAO"];
+const CAT_ORDER = ["Membership", "บริการทั่วไป", "แพ็กเกจ", "PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO"];
 
 function formatPrice(satang: number) {
   return `฿${(satang / 100).toLocaleString()}`;
