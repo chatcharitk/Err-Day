@@ -94,3 +94,22 @@ export function getPromotionServicePrice(
 export function isDavinesSpaPromotionDay(appointmentDate: Date | string): boolean {
   return getPromotionServicePrice(DAVINES_SPA_PROMOTION.serviceId, appointmentDate, false) != null;
 }
+
+/**
+ * Price (satang) of one service on an appointment day — the single rule every
+ * pricing path should use: a running promotion wins, else the member price for
+ * members (never above list), else list price. `memberPrice` is the service's
+ * resolved member rate (fixed or % discount), or null when it has none.
+ */
+export function resolveServicePrice(opts: {
+  serviceId: string;
+  appointmentDate: Date | string;
+  listPrice: number;
+  memberPrice: number | null;
+  isMember: boolean;
+}): number {
+  const promo = getPromotionServicePrice(opts.serviceId, opts.appointmentDate, opts.isMember);
+  if (promo != null) return promo;
+  if (opts.isMember && opts.memberPrice != null) return Math.min(opts.listPrice, opts.memberPrice);
+  return opts.listPrice;
+}

@@ -5,6 +5,7 @@ import { addMinutes, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokNowHm, bangkokTodayYmd, bookingDateForYmd } from "@/lib/desk";
 import { findActivePackages } from "@/lib/packages";
 import { hasActiveMembershipForBooking } from "@/lib/membership";
+import { resolveServicePrice } from "@/lib/promotions";
 
 // Walk-ins are always "wash & blow" (สระไดร์) — staff don't pick a service at
 // the counter. A serviceId in the body still overrides this if ever needed.
@@ -73,21 +74,13 @@ export async function POST(request: Request) {
   // A booking is not payment evidence, so pending signups remain pending.
   const booking = await prisma.$transaction(async (tx) => {
     let bookingCustomerId: string;
-    let totalPrice = bs!.price;
+    let isMemberPricing = false;
     if (customerId) {
       bookingCustomerId = customerId;
 
       const isActiveMember = await hasActiveMembershipForBooking(tx, customerId);
       const hasActivePackage = (await findActivePackages(customerId)).length > 0;
-      if (isActiveMember || hasActivePackage) {
-        let memberPrice = bs!.price;
-        if (bs!.service.memberPrice != null) {
-          memberPrice = bs!.service.memberPrice;
-        } else if (bs!.service.memberDiscountPercent > 0) {
-          memberPrice = Math.round(bs!.price * (1 - bs!.service.memberDiscountPercent / 100));
-        }
-        totalPrice = Math.min(bs!.price, memberPrice);
-      }
+      isMemberPricing = isActiveMember || hasActivePackage;
     } else {
       const customer = await tx.customer.create({
         data: { name: "Walk-in", phone: `walkin-${now.getTime()}` },
@@ -95,6 +88,18 @@ export async function POST(request: Request) {
       });
       bookingCustomerId = customer.id;
     }
+
+    // Promotion first, then member price, then list — same rule as every other
+    // booking path (see resolveServicePrice).
+    const memberRate = bs!.service.memberPrice != null
+      ? bs!.service.memberPrice
+      : bs!.service.memberDiscountPercent > 0
+        ? Math.round(bs!.price * (1 - bs!.service.memberDiscountPercent / 100))
+        : null;
+    const totalPrice = resolveServicePrice({
+      serviceId, appointmentDate: bangkokTodayYmd(),
+      listPrice: bs!.price, memberPrice: memberRate, isMember: isMemberPricing,
+    });
 
     return tx.booking.create({
       data: {

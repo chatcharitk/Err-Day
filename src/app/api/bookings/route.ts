@@ -22,6 +22,9 @@ export async function POST(request: Request) {
       termsAccepted,                // customer ticked the late-arrival terms
     } = body;
 
+    // Verified server-side — never trust the client's skipConflictCheck flag.
+    const isAdminCaller = await requireAdmin().then(() => true, () => false);
+
     // Customer-facing callers must never be able to influence staff payroll.
     // Supplying a manual commission therefore requires an admin session.
     if (commissionSatang !== undefined) {
@@ -138,7 +141,13 @@ export async function POST(request: Request) {
       const isActiveMember = await hasActiveMembershipForBooking(tx, customer.id);
       const promotionalServicePrice = getPromotionServicePrice(serviceId, date, isActiveMember);
       if (promotionalServicePrice != null) {
-        finalTotalPrice = promotionalServicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
+        const promoTotal = promotionalServicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
+        // Customers always get exactly the promo price. A signed-in admin may
+        // have deliberately entered a LOWER total (a manual discount on top of
+        // the promo) — keep that instead of silently discarding it.
+        finalTotalPrice = isAdminCaller && finalTotalPrice > 0
+          ? Math.min(finalTotalPrice, promoTotal)
+          : promoTotal;
       }
 
       const created = await tx.booking.create({

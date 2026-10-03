@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
+import { resolveServicePrice } from "@/lib/promotions";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -241,7 +242,10 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     const newEnd = addMinutes(b.startTime, svc.duration);
     // Recompute price = effective service price (member price if applicable) + addons
     const addonsTotal   = b.addons.reduce((s, a) => s + a.price, 0);
-    const effectiveSvcPrice = b.isMember ? (computeMemberPrice(svc) ?? svc.price) : svc.price;
+    const effectiveSvcPrice = resolveServicePrice({
+      serviceId: svc.id, appointmentDate: b.date,
+      listPrice: svc.price, memberPrice: computeMemberPrice(svc), isMember: b.isMember,
+    });
     const newTotal      = effectiveSvcPrice + addonsTotal;
     const updated = await patch({
       serviceId: svcId,

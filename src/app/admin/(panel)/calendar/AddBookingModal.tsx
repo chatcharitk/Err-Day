@@ -6,6 +6,7 @@ import {
   Modal, addMinutes, formatPrice,
   type StaffItem, type BranchServiceItem, type AddonItem,
 } from "./_shared";
+import { resolveServicePrice } from "@/lib/promotions";
 
 export default function AddBookingModal({
   defaultDate, branchId, staff, branchServices, addons, onClose, onSaved,
@@ -96,7 +97,10 @@ export default function AddBookingModal({
 
   const selectedSvc    = branchServices.find(s => s.id === serviceId);
   const effectiveSvcPx = selectedSvc
-    ? (isMember ? (computeMemberPrice(selectedSvc) ?? selectedSvc.price) : selectedSvc.price)
+    ? resolveServicePrice({
+        serviceId: selectedSvc.id, appointmentDate: date,
+        listPrice: selectedSvc.price, memberPrice: computeMemberPrice(selectedSvc), isMember,
+      })
     : 0;
   const addonTotal     = selectedAddonIds.reduce((sum, id) => sum + (addons.find(a => a.id === id)?.price ?? 0), 0);
   const discountSatang = Math.round(discountBaht * 100);
@@ -207,7 +211,10 @@ export default function AddBookingModal({
                     <div className="grid grid-cols-2 gap-2">
                       {items.map(s => {
                         const selected = s.id === serviceId;
-                        const mPrice   = computeMemberPrice(s);
+                        const shown    = resolveServicePrice({
+                          serviceId: s.id, appointmentDate: date,
+                          listPrice: s.price, memberPrice: computeMemberPrice(s), isMember,
+                        });
                         return (
                           <button key={s.id} type="button" onClick={() => setServiceId(s.id)}
                             className="rounded-xl p-3 text-left transition-all"
@@ -217,10 +224,10 @@ export default function AddBookingModal({
                             }}>
                             <p className="text-xs font-medium leading-tight text-[#3B2A24]">{s.nameTh}</p>
                             <p className="text-[10px] mt-1 text-[#A08070]">{s.duration} นาที</p>
-                            {isMember && mPrice !== null && mPrice < s.price ? (
+                            {shown < s.price ? (
                               <div className="mt-1 flex items-baseline gap-1">
                                 <span className="text-[10px] line-through text-[#A08070]">{formatPrice(s.price)}</span>
-                                <span className="text-sm font-bold text-green-600">{formatPrice(mPrice)}</span>
+                                <span className="text-sm font-bold text-green-600">{formatPrice(shown)}</span>
                               </div>
                             ) : (
                               <p className="text-sm font-bold mt-1 text-[#8B1D24]">{formatPrice(s.price)}</p>

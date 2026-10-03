@@ -6,6 +6,7 @@ import {
   ArrowLeft, ChevronDown, ChevronRight, Search, Phone, User, Loader2,
   AlertCircle, Check, X, Clock,
 } from "lucide-react";
+import { resolveServicePrice } from "@/lib/promotions";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -212,9 +213,12 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
   }, 0);
 
   const isMember = matched?.isMember ?? false;
-  const effectiveServicePrice = service
-    ? (isMember ? (computeMemberPrice(service) ?? service.price) : service.price)
-    : 0;
+  // Promotion, then member price, then list — resolved for the appointment date.
+  const priceFor = (svc: Service, member: boolean) => resolveServicePrice({
+    serviceId: svc.id, appointmentDate: date,
+    listPrice: svc.price, memberPrice: computeMemberPrice(svc), isMember: member,
+  });
+  const effectiveServicePrice = service ? priceFor(service, isMember) : 0;
 
   const discountSatang = Math.round(discountBaht * 100);
   const finalPrice = service ? Math.max(0, effectiveServicePrice + addonTotal - discountSatang) : 0;
@@ -483,7 +487,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
         {primaryService && (() => {
           const s = primaryService;
           const selected = s.id === serviceId;
-          const memberPrice = computeMemberPrice(s);
+          const shown = priceFor(s, isMember);
           return (
             <button
               onClick={() => setServiceId(s.id)}
@@ -501,10 +505,10 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                     <Clock size={10} />{s.duration} นาที
                   </p>
                 </div>
-                {isMember && memberPrice !== null && memberPrice < s.price ? (
+                {shown < s.price ? (
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-xs line-through" style={{ color: MUTED }}>{formatPrice(s.price)}</span>
-                    <span className="text-base font-bold" style={{ color: "#16a34a" }}>{formatPrice(memberPrice)}</span>
+                    <span className="text-base font-bold" style={{ color: "#16a34a" }}>{formatPrice(shown)}</span>
                   </div>
                 ) : (
                   <p className="text-base font-bold" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>
@@ -535,7 +539,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                 <div className="grid grid-cols-2 gap-2">
                   {items.map((s) => {
                     const selected = s.id === serviceId;
-                    const memberPrice = computeMemberPrice(s);
+                    const shown = priceFor(s, isMember);
                     return (
                       <button
                         key={s.id}
@@ -551,10 +555,10 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                         <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: MUTED }}>
                           <Clock size={9} />{s.duration} นาที
                         </p>
-                        {isMember && memberPrice !== null && memberPrice < s.price ? (
+                        {shown < s.price ? (
                           <div className="mt-1 flex items-baseline gap-1">
                             <span className="text-[10px] line-through" style={{ color: MUTED }}>{formatPrice(s.price)}</span>
-                            <span className="text-sm font-bold" style={{ color: "#16a34a" }}>{formatPrice(memberPrice)}</span>
+                            <span className="text-sm font-bold" style={{ color: "#16a34a" }}>{formatPrice(shown)}</span>
                           </div>
                         ) : (
                           <p className="text-sm font-bold mt-1" style={{ color: PRIMARY }}>{formatPrice(s.price)}</p>

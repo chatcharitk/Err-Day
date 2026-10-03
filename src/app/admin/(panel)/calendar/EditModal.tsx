@@ -10,16 +10,17 @@ import {
   type BookingItem, type StaffItem, type ServiceOption,
 } from "./_shared";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
+import { resolveServicePrice } from "@/lib/promotions";
 
 /** List price, or the member price when isMember — mirrors the same formula
  * used by the kiosk walk-in routes and the mobile booking-detail page. */
-function priceForService(svc: ServiceOption, isMember: boolean): number {
-  if (!isMember) return svc.price;
-  if (svc.service.memberPrice != null) return Math.min(svc.price, svc.service.memberPrice);
-  if (svc.service.memberDiscountPercent > 0) {
-    return Math.min(svc.price, Math.round(svc.price * (1 - svc.service.memberDiscountPercent / 100)));
-  }
-  return svc.price;
+function priceForService(svc: ServiceOption, isMember: boolean, appointmentDate: string): number {
+  const memberPrice = svc.service.memberPrice != null
+    ? svc.service.memberPrice
+    : svc.service.memberDiscountPercent > 0
+      ? Math.round(svc.price * (1 - svc.service.memberDiscountPercent / 100))
+      : null;
+  return resolveServicePrice({ serviceId: svc.service.id, appointmentDate, listPrice: svc.price, memberPrice, isMember });
 }
 
 export default function EditModal({
@@ -78,7 +79,7 @@ export default function EditModal({
           // package redemption, or manual adjustment that the plain list
           // price would silently clobber.
           if (selectedBranch !== branchId) {
-            setPrice(priceForService(match, !!selectedCustomer.isMember));
+            setPrice(priceForService(match, !!selectedCustomer.isMember, booking.date));
           }
         } else if (data.length > 0) {
           setBsId(data[0].id);
@@ -92,7 +93,7 @@ export default function EditModal({
     const svc = services.find(s => s.id === id);
     if (svc) {
       setEndTime(addMinutes(startTime, svc.duration));
-      setPrice(priceForService(svc, !!selectedCustomer.isMember));
+      setPrice(priceForService(svc, !!selectedCustomer.isMember, booking.date));
     }
   }
 
@@ -103,7 +104,7 @@ export default function EditModal({
     setSelectedCustomer(v);
     if (v.id === booking.customer.id) return; // no actual reassignment — leave price alone
     const svc = services.find(s => s.id === bsId);
-    if (svc) setPrice(priceForService(svc, !!v.isMember));
+    if (svc) setPrice(priceForService(svc, !!v.isMember, booking.date));
   }
 
   function handleStartChange(t: string) {
