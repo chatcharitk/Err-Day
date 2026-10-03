@@ -712,6 +712,38 @@ export async function sendBookingReminder4h(bookingId: string): Promise<SendResu
   return { kind, targetId: bookingId, status: "FAILED", reason: r.error };
 }
 
+// ── Staff-triggered "appointment tomorrow" reminder ──────────────────────────
+
+/**
+ * One-off "see you tomorrow" card for a single booking, sent on request (it is
+ * not part of the cron). Logged under the existing BOOKING_REMINDER_4H kind with
+ * a `daybefore:` target id — the cron already uses synthetic target ids this
+ * way — so no schema change is needed and it cannot be sent twice.
+ */
+export async function sendBookingReminderDayBefore(bookingId: string): Promise<SendResult> {
+  const kind: Kind = "BOOKING_REMINDER_4H";
+  const targetId = `daybefore:${bookingId}`;
+  if (await alreadySent(kind, targetId)) return { kind, targetId, status: "SENT", reason: "already" };
+
+  const b = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { customer: true, branch: true, service: true, staff: true },
+  });
+  if (!b) return { kind, targetId, status: "FAILED", reason: "not_found" };
+  if (!b.customer.lineUserId) return { kind, targetId, status: "SKIPPED", reason: "no_line_link" };
+  if (b.status === "CANCELLED" || b.status === "COMPLETED" || b.status === "NO_SHOW") {
+    return { kind, targetId, status: "SKIPPED", reason: "non_active_status" };
+  }
+
+  const r = await pushLine(b.customer.lineUserId, [buildBookingFlex(b, "dayBefore")]);
+  if (r.ok) {
+    await recordLog({ kind, targetId, status: "SENT", recipient: b.customer.lineUserId });
+    return { kind, targetId, status: "SENT" };
+  }
+  await recordLog({ kind, targetId, status: "FAILED", recipient: b.customer.lineUserId, error: r.error });
+  return { kind, targetId, status: "FAILED", reason: r.error };
+}
+
 // ── Pre-appointment reminder carrying the late-arrival terms ─────────────────
 
 /**

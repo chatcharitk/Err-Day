@@ -31,7 +31,7 @@ const MY_BOOKINGS_URL = LIFF_ID
   ? `https://liff.line.me/${LIFF_ID}/my-bookings`
   : `${APP_HOST}/my-bookings`;
 
-export type BookingFlexVariant = "created" | "confirmed" | "reminder" | "rescheduled" | "termsReminder";
+export type BookingFlexVariant = "created" | "confirmed" | "reminder" | "rescheduled" | "termsReminder" | "dayBefore";
 
 /** Minimal shape needed to render the card — matches the senders' Prisma includes. */
 export interface BookingFlexData {
@@ -61,6 +61,8 @@ const VARIANTS: Record<BookingFlexVariant, VariantStyle> = {
   // than a fixed number of hours — the cron that sends it fires irregularly, so
   // any specific figure would often be wrong by the time it lands.
   termsReminder: { banner: "🌸 ใกล้ถึงเวลานัดแล้ว", color: PRIMARY, bg: "#FFF8F4", intro: "อีกไม่นานก็ถึงเวลานัดของคุณแล้วนะคะ เผื่อเวลาเดินทางสักนิด จะได้ผ่อนคลายกันเต็มที่ค่ะ 💛" },
+  // Staff-triggered "see you tomorrow" card (not part of the automatic cron).
+  dayBefore:   { banner: "🌸 พรุ่งนี้มีนัดที่ err·day", color: PRIMARY, bg: "#FFF8F4", intro: "พรุ่งนี้คุณมีนัดกับเราแล้วนะคะ เผื่อเวลาเดินทางสักนิด แล้วพบกันค่ะ 💛" },
 };
 
 /** Format a Date as "พ. 30 เม.ย. 2569" in Thai local time. */
