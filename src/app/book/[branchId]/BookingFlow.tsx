@@ -17,7 +17,7 @@ import { useLang } from "@/components/LanguageProvider";
 import { HalloweenStrip } from "@/components/HalloweenDecor";
 import TermsConsentBlock from "@/components/TermsConsentBlock";
 import { BOOKING_TERMS_TH, BOOKING_TERMS_EN } from "@/lib/terms";
-import { DAVINES_SPA_PROMOTION, getPromotionServicePrice, isDavinesSpaPromotionDay } from "@/lib/promotions";
+import { DAVINES_SPA_PROMOTION, getCurrentOrUpcomingPromotion, getPromotionServicePrice, getServicePromotion } from "@/lib/promotions";
 import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
 
 type BranchServiceWithService = BranchService & { service: Service };
@@ -100,11 +100,12 @@ function addMinutes(time: string, minutes: number): string {
  * distinct Service.category) but stays INVISIBLE to customers until it is added
  * here. Adding a group is therefore not yet a pure data change.
  */
-const CATEGORY_ORDER = ["บริการทั่วไป", "Davines Spa", "Keratin Treatment", "ย้อมผม NIGAO"];
+const CATEGORY_ORDER = ["บริการทั่วไป", "Davines Spa", "PJOLI Treatment", "Keratin Treatment", "ย้อมผม NIGAO"];
 
 const CAT_EN: Record<string, string> = {
   "บริการทั่วไป":  "General Services",
   "Davines Spa":   "Davines Spa",
+  "PJOLI Treatment": "PJOLI Treatment",
   "Keratin Treatment": "Keratin Treatment",
   "ย้อมผม NIGAO": "NIGAO Color",
 };
@@ -725,7 +726,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                       under-advertised rather than mischarged).
                                     */}
                                     {(() => {
-                                      const memberPrice = computeMemberPrice(bs.service, bs.price);
+                                      const promo = getCurrentOrUpcomingPromotion(bs.serviceId, todayKey);
+                                      const memberPrice = promo ? promo.memberPrice : computeMemberPrice(bs.service, bs.price);
                                       if (memberPrice == null || memberPrice >= bs.price) return null;
                                       return (
                                         <p className="text-xs mt-1 flex items-center gap-1" style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#B52F3A" }}>
@@ -734,12 +736,21 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                         </p>
                                       );
                                     })()}
+                                    {(() => {
+                                      const promo = getCurrentOrUpcomingPromotion(bs.serviceId, todayKey);
+                                      if (!promo) return null;
+                                      return (
+                                        <p className="text-xs mt-1 font-medium" style={{ color: isSelected ? "#FFE08A" : "#B52F3A" }}>
+                                          {lang === "th" ? promo.labelTh : promo.labelEn}
+                                        </p>
+                                      );
+                                    })()}
                                   </div>
                                   <div className="flex-shrink-0 text-right">
-                                    {bs.serviceId === DAVINES_SPA_PROMOTION.serviceId && showPromotion ? (
+                                    {getCurrentOrUpcomingPromotion(bs.serviceId, todayKey) ? (
                                       <>
                                         <p className="text-xs line-through" style={{ color: isSelected ? "rgba(255,255,255,0.65)" : "#977A6F" }}>{formatPrice(bs.price)}</p>
-                                        <p className="font-semibold text-lg">฿788</p>
+                                        <p className="font-semibold text-lg">{formatPrice(getCurrentOrUpcomingPromotion(bs.serviceId, todayKey)!.regularPrice)}</p>
                                       </>
                                     ) : (
                                       <p className="font-semibold text-lg">{formatPrice(bs.price)}</p>
@@ -970,12 +981,18 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                   </div>
                 ))}
 
-                {isDavinesSpaPromotionDay(selectedDate) && selectedService.serviceId === DAVINES_SPA_PROMOTION.serviceId && (
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm" style={{ color: "#977A6F" }}>ราคาโปรโมชัน</span>
-                    <span className="text-sm font-medium text-right" style={{ color: "#B52F3A" }}>฿788 · สมาชิก ฿688</span>
-                  </div>
-                )}
+                {(() => {
+                  const promo = getServicePromotion(selectedService.serviceId, selectedDate);
+                  if (!promo) return null;
+                  return (
+                    <div className="flex justify-between items-start">
+                      <span className="text-sm" style={{ color: "#977A6F" }}>{lang === "th" ? "ราคาโปรโมชัน" : "Promotion price"}</span>
+                      <span className="text-sm font-medium text-right" style={{ color: "#B52F3A" }}>
+                        {formatPrice(promo.regularPrice)} · {u.memberPrice} {formatPrice(promo.memberPrice)}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {selectedAddonItems.length > 0 && (
                   <>
