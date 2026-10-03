@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import ExpensesList from "./ExpensesList";
 
 export const dynamic    = "force-dynamic";
@@ -15,6 +16,27 @@ function bangkokToday(): string {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+const SORT_KEYS = ["date", "category", "vendor", "branch", "paymentMethod", "amount", "attachments"] as const;
+type SortKey = typeof SORT_KEYS[number];
+
+/** Sorting happens in the database (not the browser) because the list is capped
+ *  at 500 rows — sorting only the loaded rows would hide the true top/bottom. */
+function orderByFor(key: SortKey, dir: "asc" | "desc"): Prisma.ExpenseOrderByWithRelationInput[] {
+  const nullsLast = { sort: dir, nulls: "last" as const };
+  const primary: Prisma.ExpenseOrderByWithRelationInput =
+      key === "category"      ? { category: dir }
+    : key === "vendor"        ? { vendor: nullsLast }
+    : key === "branch"        ? { branch: { name: dir } }
+    : key === "paymentMethod" ? { paymentMethod: nullsLast }
+    : key === "amount"        ? { totalAmount: dir }
+    : key === "attachments"   ? { attachments: { _count: dir } }
+    :                           { date: dir };
+  // Stable tie-break: newest first, so equal values keep a predictable order.
+  return key === "date"
+    ? [primary, { createdAt: dir }]
+    : [primary, { date: "desc" }, { createdAt: "desc" }];
+}
+
 /** Default range: current month, 1 → today. */
 function defaultRange(): { from: string; to: string } {
   const to = bangkokToday();
@@ -24,7 +46,7 @@ function defaultRange(): { from: string; to: string } {
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; category?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ branchId?: string; category?: string; from?: string; to?: string; sort?: string; dir?: string }>;
 }) {
   const sp = await searchParams;
   const def = defaultRange();
@@ -32,6 +54,8 @@ export default async function ExpensesPage({
   const to   = sp.to   ?? def.to;
   const branchFilter = sp.branchId ?? "all";
   const categoryFilter = sp.category ?? "all";
+  const sortKey: SortKey = (SORT_KEYS as readonly string[]).includes(sp.sort ?? "") ? (sp.sort as SortKey) : "date";
+  const sortDir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
 
   const where: Record<string, unknown> = {
     status: { not: "VOIDED" },
@@ -54,7 +78,7 @@ export default async function ExpensesPage({
         branch: { select: { id: true, name: true } },
         _count: { select: { attachments: true } },
       },
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      orderBy: orderByFor(sortKey, sortDir),
       take: 500,
     }),
     prisma.branch.findMany({
@@ -92,6 +116,7 @@ export default async function ExpensesPage({
       }))}
       branches={branches}
       filters={{ branchId: branchFilter, category: categoryFilter, from, to }}
+      sort={{ key: sortKey, dir: sortDir }}
       summary={{
         totalAmount: total._sum.totalAmount ?? 0,
         count:       total._count,

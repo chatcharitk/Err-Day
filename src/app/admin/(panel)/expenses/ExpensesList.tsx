@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Receipt, Paperclip } from "lucide-react";
+import { Plus, Receipt, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/expenses";
 import ExpenseQuickMenu from "@/components/ExpenseQuickMenu";
 
@@ -26,10 +26,12 @@ interface ExpenseRow {
   status:        string;
 }
 interface Branch { id: string; name: string }
+type SortKey = "date" | "category" | "vendor" | "branch" | "paymentMethod" | "amount" | "attachments";
 interface Props {
   expenses: ExpenseRow[];
   branches: Branch[];
   filters:  { branchId: string; category: string; from: string; to: string };
+  sort:     { key: SortKey; dir: "asc" | "desc" };
   summary:  { totalAmount: number; count: number };
   categoryTotals: Record<string, number>;
 }
@@ -49,9 +51,14 @@ function localYmd(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export default function ExpensesList({ expenses, branches, filters, summary, categoryTotals }: Props) {
+export default function ExpensesList({ expenses, branches, filters, sort, summary, categoryTotals }: Props) {
   const router = useRouter();
   const exportQuery = new URLSearchParams(filters).toString();
+
+  /** Keep the active sort when filters or the date range change. */
+  function addSort(params: URLSearchParams, s: { key: SortKey; dir: "asc" | "desc" } = sort) {
+    if (s.key !== "date" || s.dir !== "desc") { params.set("sort", s.key); params.set("dir", s.dir); }
+  }
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams();
@@ -60,7 +67,37 @@ export default function ExpensesList({ expenses, branches, filters, summary, cat
     if (next.category && next.category !== "all") params.set("category", next.category);
     if (next.from) params.set("from", next.from);
     if (next.to)   params.set("to",   next.to);
+    addSort(params);
     router.push(`/admin/expenses?${params.toString()}`);
+  }
+
+  /** First click sorts ascending; clicking the active column flips the direction. */
+  function toggleSort(key: SortKey) {
+    const params = new URLSearchParams();
+    if (filters.branchId !== "all") params.set("branchId", filters.branchId);
+    if (filters.category !== "all") params.set("category", filters.category);
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to)   params.set("to",   filters.to);
+    addSort(params, { key, dir: sort.key === key && sort.dir === "asc" ? "desc" : "asc" });
+    router.push(`/admin/expenses?${params.toString()}`);
+  }
+
+  function sortHeader(k: SortKey, label: string, align?: "right" | "center") {
+    const active = sort.key === k;
+    const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+    const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+    return (
+      <th className={`px-4 py-3 font-medium ${align === "right" ? "text-right" : align === "center" ? "text-center" : ""}`}
+        aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+        <button type="button" onClick={() => toggleSort(k)}
+          className={`inline-flex w-full items-center gap-1 uppercase tracking-widest ${justify} hover:opacity-80`}
+          style={{ color: active ? PRIMARY : MUTED }}
+          title={active ? (sort.dir === "asc" ? "เรียงน้อย→มาก (คลิกเพื่อเรียงมาก→น้อย)" : "เรียงมาก→น้อย (คลิกเพื่อเรียงน้อย→มาก)") : "คลิกเพื่อเรียงลำดับ"}>
+          {label}
+          <Icon size={12} className={active ? "" : "opacity-50"} />
+        </button>
+      </th>
+    );
   }
 
   function applyPreset(preset: "month" | "lastMonth" | "year") {
@@ -80,6 +117,7 @@ export default function ExpensesList({ expenses, branches, filters, summary, cat
     if (filters.category !== "all") params.set("category", filters.category);
     params.set("from", localYmd(from));
     params.set("to", localYmd(to));
+    addSort(params);
     router.push(`/admin/expenses?${params.toString()}`);
   }
 
@@ -173,13 +211,13 @@ export default function ExpensesList({ expenses, branches, filters, summary, cat
           <table className="w-full text-sm">
             <thead style={{ background: "#FAFAFA", color: MUTED }}>
               <tr className="text-left text-[10px] uppercase tracking-widest">
-                <th className="px-4 py-3 font-medium">วันที่</th>
-                <th className="px-4 py-3 font-medium">หมวด</th>
-                <th className="px-4 py-3 font-medium">ผู้ขาย</th>
-                <th className="px-4 py-3 font-medium">สาขา</th>
-                <th className="px-4 py-3 font-medium">วิธีจ่าย</th>
-                <th className="px-4 py-3 font-medium text-right">จำนวนเงิน</th>
-                <th className="px-4 py-3 font-medium text-center">ใบเสร็จ</th>
+                {sortHeader("date", "วันที่")}
+                {sortHeader("category", "หมวด")}
+                {sortHeader("vendor", "ผู้ขาย")}
+                {sortHeader("branch", "สาขา")}
+                {sortHeader("paymentMethod", "วิธีจ่าย")}
+                {sortHeader("amount", "จำนวนเงิน", "right")}
+                {sortHeader("attachments", "ใบเสร็จ", "center")}
               </tr>
             </thead>
             <tbody>
