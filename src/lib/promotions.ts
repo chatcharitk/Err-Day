@@ -43,8 +43,8 @@ export const PJOLI_TREATMENT_PROMOTION = {
   endsOn: "2026-10-31",
   regularPrice: 79_000,
   memberPrice: 69_000,
-  labelTh: "โปรโมชันสำหรับนัดหมายวันที่ 3–31 ต.ค. 2569",
-  labelEn: "Promotion for appointments 3–31 Oct 2026",
+  labelTh: "โปรโมชันสำหรับนัดหมายถึง 31 ต.ค. 2569",
+  labelEn: "Promotion for appointments until 31 Oct 2026",
 } as const satisfies ServicePromotion;
 
 export const PROMOTIONS: readonly ServicePromotion[] = [
