@@ -57,12 +57,14 @@ async function save(request: Request, update: boolean) {
       throw new Error("ประเภทผู้รับเงินไม่ถูกต้อง");
     if (b.taxId && !/^\d{13}$/.test(b.taxId))
       throw new Error("เลขผู้เสียภาษี / เลขประชาชนต้องมี 13 หลัก");
-    if (b.type === "EMPLOYEE" && !b.staffId)
+    // A NEW employee payee must be linked to a staff row. An existing one that
+    // was never linked (older duplicates of a staff member) may stay unlinked.
+    if (b.type === "EMPLOYEE" && !b.staffId && !update)
       throw new Error("กรุณาเชื่อมกับพนักงาน");
     const data = {
       name: b.name.trim(),
       type: b.type,
-      staffId: b.type === "EMPLOYEE" ? String(b.staffId) : null,
+      staffId: b.type === "EMPLOYEE" && b.staffId ? String(b.staffId) : null,
       isActive: b.isActive !== false,
       ...Object.fromEntries(
         [

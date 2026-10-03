@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { EXPENSE_CATEGORIES } from "@/lib/expenses";
 import css from "./Finance.module.css";
 interface Payee {
@@ -35,6 +36,8 @@ const empty: Payee = {
   notes: null,
   isActive: true,
 };
+type SortKey = "name" | "type" | "status" | "doc";
+const TYPE_LABEL: Record<string, string> = { EMPLOYEE: "พนักงาน", PERSON: "บุคคล", BUSINESS: "ร้านค้า / บริษัท" };
 type ActiveFilter = "all" | "active" | "inactive";
 type DocFilter = "all" | "complete" | "incomplete";
 
@@ -64,6 +67,7 @@ export default function PayeeManager({
     [q, setQ] = useState(""),
     [activeFilter, setActiveFilter] = useState<ActiveFilter>("all"),
     [docFilter, setDocFilter] = useState<DocFilter>("all"),
+    [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" }),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true);
@@ -107,6 +111,42 @@ export default function PayeeManager({
       setBusy(false);
     }
   }
+  // Everything is already loaded in the browser (up to 1000 payees), so filter
+  // and sort here rather than round-tripping to the server.
+  const visible = useMemo(() => {
+    const rows = vendors
+      .filter((v) => (v.name + (v.legalName || "") + (v.taxId || "")).includes(q))
+      .filter((v) => activeFilter === "all" || (activeFilter === "active") === v.isActive)
+      .filter((v) => docFilter === "all" || (missingDocFields(v).length === 0) === (docFilter === "complete"));
+    const sign = sort.dir === "asc" ? 1 : -1;
+    const byName = (a: Payee, b: Payee) => a.name.localeCompare(b.name, "en");
+    const primary = (a: Payee, b: Payee) =>
+        sort.key === "type"   ? (TYPE_LABEL[a.type] ?? a.type).localeCompare(TYPE_LABEL[b.type] ?? b.type, "en")
+      : sort.key === "status" ? Number(b.isActive) - Number(a.isActive)            // active first when ascending
+      : sort.key === "doc"    ? missingDocFields(a).length - missingDocFields(b).length // complete first when ascending
+      :                         byName(a, b);
+    return [...rows].sort((a, b) => sign * primary(a, b) || byName(a, b));
+  }, [vendors, q, activeFilter, docFilter, sort]);
+
+  /** First click sorts ascending; clicking the active column flips the direction. */
+  function toggleSort(key: SortKey) {
+    setSort((s) => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" }));
+  }
+  function sortHeader(key: SortKey, label: string) {
+    const active = sort.key === key;
+    const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+    return (
+      <th aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+        <button type="button" onClick={() => toggleSort(key)}
+          style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, color: active ? "#8b1d24" : undefined, fontWeight: "inherit" }}
+          title={active ? (sort.dir === "asc" ? "เรียง ก→ฮ / น้อย→มาก (คลิกเพื่อกลับด้าน)" : "เรียง ฮ→ก / มาก→น้อย (คลิกเพื่อกลับด้าน)") : "คลิกเพื่อเรียงลำดับ"}>
+          {label}
+          <Icon size={13} style={{ opacity: active ? 1 : 0.5 }} />
+        </button>
+      </th>
+    );
+  }
+
   return (
     <section>
       <h2>ผู้รับเงิน / ร้านค้า / พนักงาน</h2>
@@ -166,39 +206,19 @@ export default function PayeeManager({
               <table className={css.table}>
                 <thead>
                   <tr>
-                    <th>ผู้รับเงิน</th>
-                    <th>สถานะ</th>
-                    <th>ข้อมูลเอกสาร</th>
+                    {sortHeader("name", "ผู้รับเงิน")}
+                    {sortHeader("type", "ประเภท")}
+                    {sortHeader("status", "สถานะ")}
+                    {sortHeader("doc", "ข้อมูลเอกสาร")}
                     <th>จัดการ</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {vendors
-                    .filter((v) =>
-                      (v.name + (v.legalName || "") + (v.taxId || "")).includes(
-                        q,
-                      ),
-                    )
-                    .filter((v) =>
-                      activeFilter === "all" ||
-                      (activeFilter === "active") === v.isActive,
-                    )
-                    .filter((v) => {
-                      if (docFilter === "all") return true;
-                      return (missingDocFields(v).length === 0) === (docFilter === "complete");
-                    })
+                  {visible
                     .map((v) => (
                       <tr key={v.id}>
-                        <td>
-                          {v.name}
-                          <p className={css.muted}>
-                            {v.type === "EMPLOYEE"
-                              ? "พนักงาน"
-                              : v.type === "PERSON"
-                                ? "บุคคล"
-                                : "ร้านค้า / บริษัท"}
-                          </p>
-                        </td>
+                        <td>{v.name}</td>
+                        <td>{TYPE_LABEL[v.type] ?? v.type}</td>
                         <td>
                           <span className={css.badge} style={v.isActive ? BADGE_OK : BADGE_OFF}>
                             {v.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
