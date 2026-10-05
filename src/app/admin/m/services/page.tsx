@@ -33,6 +33,7 @@ export default async function MobileServicesPage() {
         memberPrice:            s.memberPrice,
         memberDiscountPercent:  s.memberDiscountPercent,
         isActive:               s.isActive,
+        isPublic:               s.isPublic,
         branches: s.branches.map(bs => ({
           id:        bs.id,
           branchId:  bs.branchId,

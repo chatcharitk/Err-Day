@@ -28,6 +28,7 @@ interface Service {
   memberPrice:            number | null;
   memberDiscountPercent:  number;
   isActive:               boolean;
+  isPublic:               boolean;
   branches:               BranchPrice[];
 }
 interface Branch { id: string; name: string }
@@ -128,6 +129,11 @@ export default function MobileServices({ services, branches }: Props) {
                                       (ปิดใช้งาน)
                                     </span>
                                   )}
+                                  {!s.isPublic && (
+                                    <span className="text-[10px] font-normal ml-1.5" style={{ color: "#4338CA" }}>
+                                      (ภายในร้านเท่านั้น)
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-[11px] truncate" style={{ color: MUTED }}>
                                   {s.branches.length} สาขา
@@ -187,6 +193,7 @@ function ServiceEditor({
   const [memberPriceBaht,        setMemberPriceBaht]        = useState<number | "">(service.memberPrice != null ? satangToBaht(service.memberPrice) : "");
   const [memberDiscountPercent,  setMemberDiscountPercent]  = useState<number>(service.memberDiscountPercent);
   const [isActive,               setIsActive]               = useState(service.isActive);
+  const [isPublic,               setIsPublic]               = useState(service.isPublic);
 
   // Per-branch rows — merge existing prices with branches that don't have one yet
   const [rows, setRows] = useState<EditableBranchRow[]>(() => {
@@ -227,6 +234,7 @@ function ServiceEditor({
           memberPrice:            memberPriceBaht === "" ? null : Number(memberPriceBaht),
           memberDiscountPercent:  Number(memberDiscountPercent) || 0,
           isActive,
+          isPublic,
         }),
       });
       if (!r1.ok) throw new Error("update service failed");
@@ -295,6 +303,15 @@ function ServiceEditor({
           </div>
           <input type="checkbox" checked={advanceBookingRequired}
             onChange={e => setAdvanceBookingRequired(e.target.checked)}
+            className="w-5 h-5 accent-[#8B1D24]" />
+        </label>
+
+        <label className="flex items-center justify-between gap-3 cursor-pointer pt-2 border-t" style={{ borderColor: BORDER }}>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>แสดงให้ลูกค้าจองเอง</p>
+            <p className="text-xs mt-0.5" style={{ color: MUTED }}>ปิด = ใช้ภายในร้านเท่านั้น (พนักงานเลือกได้ ลูกค้าไม่เห็น)</p>
+          </div>
+          <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)}
             className="w-5 h-5 accent-[#8B1D24]" />
         </label>
 

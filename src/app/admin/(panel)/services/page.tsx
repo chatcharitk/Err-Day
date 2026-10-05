@@ -47,6 +47,7 @@ export default async function ServicesPage() {
         memberPrice: s.memberPrice,
         memberDiscountPercent: s.memberDiscountPercent,
         isActive: s.isActive,
+        isPublic: s.isPublic,
         branches: s.branches.map(bs => ({
           id: bs.id,
           branchId: bs.branchId,

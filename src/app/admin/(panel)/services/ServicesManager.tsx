@@ -30,6 +30,7 @@ interface ServiceItem {
   memberPrice: number | null;
   memberDiscountPercent: number;
   isActive: boolean;
+  isPublic: boolean;
   branches: BranchServiceRow[];
 }
 
@@ -162,6 +163,7 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
     initial?.category && !categoryOptions.includes(initial.category) ? initial.category : "",
   );
   const [advance, setAdvance]   = useState(initial?.advanceBookingRequired ?? false);
+  const [isPublic, setIsPublic] = useState(initial?.isPublic ?? true);
 
   // Member discount: two modes — percent OR net fixed price
   const [memberMode, setMemberMode] = useState<"percent" | "net">(
@@ -230,6 +232,7 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
             advanceBookingRequired: advance,
+            isPublic,
             memberDiscountPercent: memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
             memberPrice: memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
           }),
@@ -255,6 +258,7 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
             advanceBookingRequired: advance,
+            isPublic,
             memberDiscountPercent: memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
             memberPrice: memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
             branchPricing: pricingRows,
@@ -360,7 +364,21 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
                 />
                 <span className="text-sm" style={{ color: TEXT }}>ต้องจองล่วงหน้า</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={e => setIsPublic(e.target.checked)}
+                  className="w-4 h-4 accent-red-800"
+                />
+                <span className="text-sm" style={{ color: TEXT }}>แสดงให้ลูกค้าจองเอง</span>
+              </label>
             </div>
+            {!isPublic && (
+              <p className="text-xs -mt-2" style={{ color: MUTED }}>
+                บริการภายในร้าน — ลูกค้าไม่เห็นในหน้าจอง แต่พนักงานเลือกได้ในปฏิทิน / POS
+              </p>
+            )}
 
             {/* Member discount */}
             <div>
@@ -591,6 +609,11 @@ function ServiceCard({
             {service.memberPrice == null && service.memberDiscountPercent > 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F0FFF4", color: "#166534" }}>
                 สมาชิกลด {service.memberDiscountPercent}%
+              </span>
+            )}
+            {!service.isPublic && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#4338CA" }}>
+                ภายในร้านเท่านั้น
               </span>
             )}
             {!service.isActive && (

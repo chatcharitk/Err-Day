@@ -16,7 +16,7 @@ export async function PATCH(
     const body = await request.json();
     const {
       name, nameTh, category, description, descriptionTh,
-      advanceBookingRequired, memberPrice, memberDiscountPercent, isActive,
+      advanceBookingRequired, memberPrice, memberDiscountPercent, isActive, isPublic,
       commissionBaht,
     } = body;
 
@@ -34,6 +34,7 @@ export async function PATCH(
           : {}),
         ...(memberDiscountPercent !== undefined ? { memberDiscountPercent: Number(memberDiscountPercent) } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
+        ...(isPublic !== undefined ? { isPublic: !!isPublic } : {}),
         // Per-service commission (ค่ามือ) entered in baht → stored as satang.
         ...(commissionBaht !== undefined
           ? { commissionSatang: Math.max(0, Math.round(Number(commissionBaht) * 100)) }

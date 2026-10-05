@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 
   // Active packages grant the same service-price discounts as membership.
   const services = (visibleMembership || packagesPayload.length > 0) ? await prisma.service.findMany({
-    where: { isActive: true, memberDiscountPercent: { gt: 0 } },
+    where: { isActive: true, isPublic: true, memberDiscountPercent: { gt: 0 } },
     select: {
       id: true,
       nameTh: true,

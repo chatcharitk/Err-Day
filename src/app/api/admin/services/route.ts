@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       name, nameTh, category, description, descriptionTh,
-      advanceBookingRequired, memberPrice, memberDiscountPercent,
+      advanceBookingRequired, memberPrice, memberDiscountPercent, isPublic,
       branchPricing, // [{ branchId, price, duration, isActive }]
     } = body;
 
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
         memberPrice:             memberPrice ? Math.round(Number(memberPrice) * 100) : null,
         memberDiscountPercent:   memberDiscountPercent ? Number(memberDiscountPercent) : 0,
         isActive: true,
+        isPublic: isPublic ?? true,
         ...(Array.isArray(branchPricing) && branchPricing.length > 0
           ? {
               branches: {

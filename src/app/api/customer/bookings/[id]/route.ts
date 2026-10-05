@@ -81,6 +81,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "This service is not offered at the selected branch" }, { status: 400 });
     }
 
+    // A customer can't switch onto an internal-only service (a booking staff made
+    // for one may still be moved in time — the service itself is unchanged).
+    if (newServiceId !== booking.serviceId && !bs.service.isPublic) {
+      return NextResponse.json({ error: "This service is not available for online booking" }, { status: 403 });
+    }
+
     const newEndTime = addMinutes(newStartTime, bs.duration);
 
     const result = await checkCapacity({

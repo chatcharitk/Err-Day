@@ -73,6 +73,10 @@ model Service {
   imageUrl               String?
   category               String
   isActive               Boolean         @default(true)
+  /// false = internal-only: staff can book / ring it up (calendar, POS, mobile
+  /// new-booking) but customers never see or book it online. Toggle in
+  /// admin → services. Existing services default to public.
+  isPublic               Boolean         @default(true)
   advanceBookingRequired Boolean         @default(false)
   availableFrom          String?
   availableTo            String?
