@@ -2,8 +2,8 @@ import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendNewBookingNotifications } from "@/lib/notifications";
-import { getPromotionServicePrice } from "@/lib/promotions";
-import { hasActiveMembershipForBooking } from "@/lib/membership";
+import { resolveServicePrice } from "@/lib/promotions";
+import { hasMemberPricingOnDate, serviceMemberRate } from "@/lib/member-pricing";
 import { issueReceiptForBookingTx } from "@/lib/receipts";
 import { requireAdmin } from "@/lib/admin-auth";
 import { BOOKING_TERMS_VERSION } from "@/lib/terms";
@@ -131,23 +131,32 @@ export async function POST(request: Request) {
         },
       });
 
-      // The client displays the promotion, but price is also resolved here so
-      // a crafted request cannot receive it outside the advertised dates.
-      // Membership eligibility mirrors the booking page: active, paid, not
-      // expired, and not exhausted. Creating a booking never activates an
-      // unpaid/pending signup.
+      // Price is resolved here, for the APPOINTMENT date: promotion first, then
+      // the member rate when the customer holds an active membership/package ON
+      // that day (not merely today — a membership expiring before the visit
+      // gives no discount, one starting before it does), else list price.
+      // Customers always get exactly this price; a client-supplied total is not
+      // trusted. A signed-in admin may have deliberately entered a LOWER total
+      // (a manual discount) — keep that, but never let it exceed the resolved
+      // price, and leave a deliberate ฿0 (comp) alone.
       let finalTotalPrice = Number(totalPrice) || 0;
       const bookingDate = new Date(date + "T12:00:00");
-      const isActiveMember = await hasActiveMembershipForBooking(tx, customer.id);
-      const promotionalServicePrice = getPromotionServicePrice(serviceId, date, isActiveMember);
-      if (promotionalServicePrice != null) {
-        const promoTotal = promotionalServicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
-        // Customers always get exactly the promo price. A signed-in admin may
-        // have deliberately entered a LOWER total (a manual discount on top of
-        // the promo) — keep that instead of silently discarding it.
-        finalTotalPrice = isAdminCaller && finalTotalPrice > 0
-          ? Math.min(finalTotalPrice, promoTotal)
-          : promoTotal;
+      const branchService = await tx.branchService.findUnique({
+        where: { branchId_serviceId: { branchId, serviceId } },
+        select: { price: true, service: { select: { memberPrice: true, memberDiscountPercent: true } } },
+      });
+      if (branchService) {
+        const isMember = await hasMemberPricingOnDate(tx, customer.id, date);
+        const servicePrice = resolveServicePrice({
+          serviceId, appointmentDate: date,
+          listPrice: branchService.price,
+          memberPrice: serviceMemberRate({ price: branchService.price, ...branchService.service }),
+          isMember,
+        });
+        const resolvedTotal = servicePrice + addonCreates.reduce((sum, addon) => sum + addon.price, 0);
+        finalTotalPrice = isAdminCaller
+          ? (finalTotalPrice > 0 ? Math.min(finalTotalPrice, resolvedTotal) : finalTotalPrice)
+          : resolvedTotal;
       }
 
       const created = await tx.booking.create({

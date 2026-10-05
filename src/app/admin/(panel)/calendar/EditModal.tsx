@@ -64,6 +64,26 @@ export default function EditModal({
 
   const c = STATUS_COLOR[currentStatus] ?? STATUS_COLOR.PENDING;
 
+  // Member pricing for THIS booking's appointment day (not today). The search
+  // hit's isMember only says "member today", and is absent for the booking's
+  // existing customer — which used to price a member's service change at the
+  // non-member rate.
+  const [memberOnDate, setMemberOnDate] = useState(false);
+  async function fetchMemberOnDate(phone: string): Promise<boolean> {
+    if (!phone) return false;
+    try {
+      const r = await fetch(`/api/membership?phone=${encodeURIComponent(phone)}&date=${booking.date}`);
+      if (!r.ok) return false;
+      return (await r.json())?.hasMemberPricing === true;
+    } catch { return false; }
+  }
+  useEffect(() => {
+    let cancelled = false;
+    fetchMemberOnDate(selectedCustomer.phone).then(v => { if (!cancelled) setMemberOnDate(v); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomer.phone, booking.date]);
+
   useEffect(() => {
     fetch(`/api/services?branchId=${selectedBranch}`)
       .then(r => r.json())
@@ -79,7 +99,7 @@ export default function EditModal({
           // package redemption, or manual adjustment that the plain list
           // price would silently clobber.
           if (selectedBranch !== branchId) {
-            setPrice(priceForService(match, !!selectedCustomer.isMember, booking.date));
+            setPrice(priceForService(match, memberOnDate, booking.date));
           }
         } else if (data.length > 0) {
           setBsId(data[0].id);
@@ -93,7 +113,7 @@ export default function EditModal({
     const svc = services.find(s => s.id === id);
     if (svc) {
       setEndTime(addMinutes(startTime, svc.duration));
-      setPrice(priceForService(svc, !!selectedCustomer.isMember, booking.date));
+      setPrice(priceForService(svc, memberOnDate, booking.date));
     }
   }
 
@@ -104,7 +124,7 @@ export default function EditModal({
     setSelectedCustomer(v);
     if (v.id === booking.customer.id) return; // no actual reassignment — leave price alone
     const svc = services.find(s => s.id === bsId);
-    if (svc) setPrice(priceForService(svc, !!v.isMember, booking.date));
+    if (svc) fetchMemberOnDate(v.phone).then(m => setPrice(priceForService(svc, m, booking.date)));
   }
 
   function handleStartChange(t: string) {

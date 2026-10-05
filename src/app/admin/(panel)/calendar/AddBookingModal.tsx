@@ -44,7 +44,7 @@ export default function AddBookingModal({
     if (!customer.id || !customer.phone) { setIsMember(false); setMemberLoading(false); return; }
     let cancelled = false;
     setMemberLoading(true);
-    fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}`)
+    fetch(`/api/membership?phone=${encodeURIComponent(customer.phone)}&date=${date}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled) return;
@@ -53,7 +53,7 @@ export default function AddBookingModal({
       .catch(() => { if (!cancelled) setIsMember(false); })
       .finally(() => { if (!cancelled) setMemberLoading(false); });
     return () => { cancelled = true; };
-  }, [customer.id, customer.phone]);
+  }, [customer.id, customer.phone, date]);
 
   function computeMemberPrice(svc: BranchServiceItem): number | null {
     if (svc.memberPrice != null && svc.memberPrice > 0) return svc.memberPrice;

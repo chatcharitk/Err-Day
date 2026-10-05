@@ -69,12 +69,13 @@ function computeMemberPrice(
   return null;
 }
 
-/** Whether a phone has member pricing via an active membership or package. */
-async function fetchIsMember(phone: string): Promise<boolean> {
+/** Whether a phone has member pricing (active membership or package) ON the
+ *  appointment day — not merely today. `date` is "YYYY-MM-DD". */
+async function fetchIsMember(phone: string, date: string): Promise<boolean> {
   const p = phone.trim();
   if (p.length < 8) return false;
   try {
-    const r = await fetch(`/api/membership?phone=${encodeURIComponent(p)}`);
+    const r = await fetch(`/api/membership?phone=${encodeURIComponent(p)}&date=${date}`);
     if (!r.ok) return false;
     const data = await r.json();
     return data?.hasMemberPricing === true;
@@ -402,7 +403,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
       // the stored totalPrice) reports the wrong amount. Checked at submit so it's
       // race-free regardless of when the phone was entered.
       const memberPrice = computeMemberPrice(selectedService.service, selectedService.price);
-      const isMember = await fetchIsMember(form.phone);
+      const appointmentYmd = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,"0")}-${String(selectedDate.getDate()).padStart(2,"0")}`;
+      const isMember = await fetchIsMember(form.phone, appointmentYmd);
       const promotionalPrice = getPromotionServicePrice(
         selectedService.serviceId,
         selectedDate,

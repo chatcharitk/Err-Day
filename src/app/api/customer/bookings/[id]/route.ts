@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
-import { findActivePackages } from "@/lib/packages";
+import { hasMemberPricingOnDate } from "@/lib/member-pricing";
 import { getPromotionServicePrice } from "@/lib/promotions";
 
 const CANCELLATION_CUTOFF_MS = 30 * 60 * 1000;
@@ -114,15 +114,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "One or more add-ons are unavailable" }, { status: 400 });
     }
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const membership = booking.customer.membership;
-    const hasActiveMembership = !!membership
-      && !membership.pendingActivation
-      && (!membership.expiresAt || membership.expiresAt >= today)
-      && (membership.usagesAllowed === 0 || membership.usagesUsed < membership.usagesAllowed);
-    const hasActivePackage = (await findActivePackages(booking.customerId)).length > 0;
-    const hasMemberPricing = hasActiveMembership || hasActivePackage;
+    // Member pricing is judged on the (new) appointment date, not today.
+    const hasMemberPricing = await hasMemberPricingOnDate(prisma, booking.customerId, newDate);
     const configuredMemberPrice = bs.service.memberPrice != null && bs.service.memberPrice > 0
       ? bs.service.memberPrice
       : bs.service.memberDiscountPercent > 0

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
 import { findActivePackages } from "@/lib/packages";
+import { hasMemberPricingOnDate } from "@/lib/member-pricing";
 import MobilePos from "./MobilePos";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,6 @@ export default async function MobilePosPage({
   } | null = null;
 
   if (bookingId) {
-    const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
     const b = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
@@ -48,14 +48,8 @@ export default async function MobilePosPage({
       },
     });
     if (b) {
-      // Determine live membership validity
-      let isMember = false;
-      if (b.customer.membership) {
-        const m = b.customer.membership;
-        const expired = m.expiresAt != null && new Date(m.expiresAt) < todayUTC;
-        const usedUp  = m.usagesAllowed > 0 && m.usagesUsed >= m.usagesAllowed;
-        isMember = !expired && !usedUp && !m.pendingActivation;
-      }
+      // Member pricing as of the booking's own date (not merely today).
+      const isMember = await hasMemberPricingOnDate(prisma, b.customerId, b.date);
       prefillBooking = {
         id:          b.id,
         branchId:    b.branchId,

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCachedBranchServices, getCachedBranchStaff, getCachedAddons } from "@/lib/branches-cache";
-import { findActivePackages } from "@/lib/packages";
+import { bangkokYmdOf, hasMemberPricingOnDate, serviceMemberRate } from "@/lib/member-pricing";
+import { resolveServicePrice } from "@/lib/promotions";
 import BookingDetail from "./BookingDetail";
 
 export const revalidate = 30;
@@ -62,15 +63,11 @@ export default async function MobileBookingDetailPage({
   });
   if (!booking) notFound();
 
-  // Resolve membership validity server-side
-  const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
-  const mem = booking.customer.membership;
-  const hasActiveMembership = !!mem
-    && !mem.pendingActivation
-    && !(mem.expiresAt != null && new Date(mem.expiresAt) < todayUTC)
-    && !(mem.usagesAllowed > 0 && mem.usagesUsed >= mem.usagesAllowed);
-  const hasActivePackage = (await findActivePackages(booking.customerId)).length > 0;
-  const isMember = hasActiveMembership || hasActivePackage;
+  // Member pricing is judged on the booking's own date — a membership/package
+  // that expires before the visit gives no discount, one that starts before it
+  // does — so it is correct whenever the booking is made or viewed.
+  const bookingYmd = bangkokYmdOf(booking.date);
+  const isMember = await hasMemberPricingOnDate(prisma, booking.customerId, bookingYmd);
 
   const [branchServices, branchStaff, allAddons, branches] = await Promise.all([
     getCachedBranchServices(booking.branchId),
@@ -79,31 +76,33 @@ export default async function MobileBookingDetailPage({
     prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
-  // Auto-apply the member discount to the saved totalPrice when:
-  //   1) the customer is currently a valid member, AND
-  //   2) the booking's totalPrice is HIGHER than the member-adjusted total.
-  // This keeps overview, detail, and POS in sync without staff having to click
-  // "ใช้" on the green banner. Bookings that already have a manual lower price
-  // (e.g. comp / extra discount) are preserved — Math.min() takes the smaller.
+  // Keep the saved price in step with the customer's status ON the booking date,
+  // so overview, detail and POS agree without staff clicking anything. Only unpaid
+  // bookings are touched (a finished-but-unpaid one included — COMPLETED ≠ paid), and a manual price is never overridden:
+  //   - eligible on the date and saved higher than the member total → lower it;
+  //   - NOT eligible but the saved price is exactly the member total (a stale
+  //     member price, e.g. the membership expired before the visit) → restore
+  //     the regular total.
   let effectiveTotalPrice = booking.totalPrice;
-  if (isMember && booking.status !== "COMPLETED") {
+  if ((booking.status === "PENDING" || booking.status === "CONFIRMED" || booking.status === "COMPLETED") && !booking.paidAt) {
     const bs = branchServices.find((s) => s.id === booking.serviceId);
     if (bs) {
-      let memberServicePrice = bs.price;
-      if (bs.memberPrice != null) {
-        memberServicePrice = bs.memberPrice;
-      } else if ((bs.memberDiscountPercent ?? 0) > 0) {
-        memberServicePrice = Math.round(bs.price * (1 - (bs.memberDiscountPercent ?? 0) / 100));
-      }
-      const addonsTotal         = booking.addons.reduce((s, a) => s + a.price, 0);
-      const memberAdjustedTotal = memberServicePrice + addonsTotal;
-      if (memberAdjustedTotal < booking.totalPrice) {
-        // Persist the discount so the saved value matches what the customer actually pays.
-        await prisma.booking.update({
-          where: { id: booking.id },
-          data:  { totalPrice: memberAdjustedTotal },
-        });
-        effectiveTotalPrice = memberAdjustedTotal;
+      const rate = serviceMemberRate({
+        price: bs.price, memberPrice: bs.memberPrice ?? null, memberDiscountPercent: bs.memberDiscountPercent ?? 0,
+      });
+      const addonsTotal = booking.addons.reduce((s, a) => s + a.price, 0);
+      const priceFor = (member: boolean) => resolveServicePrice({
+        serviceId: booking.serviceId, appointmentDate: bookingYmd,
+        listPrice: bs.price, memberPrice: rate, isMember: member,
+      }) + addonsTotal;
+      const memberTotal  = priceFor(true);
+      const regularTotal = priceFor(false);
+      let corrected: number | null = null;
+      if (isMember && memberTotal < booking.totalPrice) corrected = memberTotal;
+      else if (!isMember && memberTotal < regularTotal && booking.totalPrice === memberTotal) corrected = regularTotal;
+      if (corrected != null) {
+        await prisma.booking.update({ where: { id: booking.id }, data: { totalPrice: corrected } });
+        effectiveTotalPrice = corrected;
       }
     }
   }

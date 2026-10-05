@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findActivePackages } from "@/lib/packages";
+import { hasMemberPricingOnDate } from "@/lib/member-pricing";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const phone = searchParams.get("phone");
+  // Appointment day the caller is pricing for ("YYYY-MM-DD"). Member pricing is
+  // judged on that day, not on whenever the booking happens to be made.
+  const dateParam = searchParams.get("date");
+  const priceDate = dateParam && /^\d{4}-\d{2}-\d{2}/.test(dateParam) ? dateParam.slice(0, 10) : null;
 
   if (!phone) return NextResponse.json({ error: "phone required" }, { status: 400 });
 
@@ -35,7 +40,9 @@ export async function GET(request: Request) {
     ...customer,
     // Active packages receive the same service pricing as the ฿990 membership,
     // even when the selected service is not redeemed from the package.
-    hasMemberPricing: hasActiveMembership || activePackages.length > 0,
+    hasMemberPricing: priceDate
+      ? await hasMemberPricingOnDate(prisma, customer.id, priceDate)
+      : hasActiveMembership || activePackages.length > 0,
     packages: activePackages.map(p => ({
       id:               p.id,
       sku:              p.packageSku,

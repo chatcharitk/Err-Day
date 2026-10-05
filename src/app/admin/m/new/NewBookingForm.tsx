@@ -212,7 +212,22 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
     return sum + (a?.price ?? 0);
   }, 0);
 
-  const isMember = matched?.isMember ?? false;
+  // Member pricing is judged on the appointment date, not today: re-check
+  // whenever the customer or the date changes. Until it answers, fall back to
+  // the "member today" flag from the search hit.
+  const memberKey = matched?.phone ? `${matched.phone}|${date}` : null;
+  const [memberResult, setMemberResult] = useState<{ key: string; value: boolean } | null>(null);
+  useEffect(() => {
+    if (!memberKey || !matched?.phone) return;
+    let cancelled = false;
+    fetch(`/api/membership?phone=${encodeURIComponent(matched.phone)}&date=${date}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled) setMemberResult({ key: memberKey, value: d?.hasMemberPricing === true }); })
+      .catch(() => { if (!cancelled) setMemberResult({ key: memberKey, value: matched.isMember ?? false }); });
+    return () => { cancelled = true; };
+  }, [memberKey, matched, date]);
+  const memberOnDate = memberResult && memberResult.key === memberKey ? memberResult.value : null;
+  const isMember = memberOnDate ?? matched?.isMember ?? false;
   // Promotion, then member price, then list — resolved for the appointment date.
   const priceFor = (svc: Service, member: boolean) => resolveServicePrice({
     serviceId: svc.id, appointmentDate: date,
