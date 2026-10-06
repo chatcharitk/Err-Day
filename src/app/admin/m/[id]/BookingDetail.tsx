@@ -36,6 +36,7 @@ interface Booking {
   status:        Status;
   totalPrice:    number;
   commissionSatang: number | null;
+  tipSatang: number;
   notes:         string | null;
   internalNotes: string | null;
   receiptUrl:    string | null;
@@ -137,6 +138,10 @@ export default function BookingDetail({ booking: initial, branchServices, branch
     initial.commissionSatang == null ? "" : String(initial.commissionSatang / 100),
   );
   const [savingCommission, setSavingCommission] = useState(false);
+  const [tipBaht, setTipBaht] = useState(
+    initial.tipSatang ? String(initial.tipSatang / 100) : "",
+  );
+  const [savingTip, setSavingTip] = useState(false);
 
   const meta = STATUS_META[b.status];
   const isClosed = b.status === "COMPLETED" || b.status === "CANCELLED" || b.status === "NO_SHOW";
@@ -219,13 +224,25 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   const saveCommission = async () => {
     const satang = commissionBaht === "" ? null : Math.round(Number(commissionBaht) * 100);
     if (satang !== null && (!Number.isFinite(satang) || satang < 0)) {
-      setErr("กรุณากรอกค่าทิปเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      setErr("กรุณากรอกค่าคอมเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
       return;
     }
     setSavingCommission(true);
     const updated = await patch({ commissionSatang: satang });
     if (updated) setB((x) => ({ ...x, commissionSatang: satang }));
     setSavingCommission(false);
+  };
+
+  const saveTip = async () => {
+    const satang = tipBaht === "" ? 0 : Math.round(Number(tipBaht) * 100);
+    if (!Number.isFinite(satang) || satang < 0) {
+      setErr("กรุณากรอกค่าทิปเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      return;
+    }
+    setSavingTip(true);
+    const updated = await patch({ tipSatang: satang });
+    if (updated) setB((x) => ({ ...x, tipSatang: satang }));
+    setSavingTip(false);
   };
 
   const setStaff = async (staffId: string | null) => {
@@ -658,7 +675,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
           </div>
         </div>
         <div className="rounded-xl px-3 py-2 bg-white" style={{ border: `1px solid ${BORDER}` }}>
-          <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>ค่าทิป</p>
+          <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>ค่าคอม / ค่ามือ</p>
           <div className="flex items-center gap-2">
             <span className="text-sm" style={{ color: MUTED }}>฿</span>
             <input
@@ -682,7 +699,34 @@ export default function BookingDetail({ booking: initial, branchServices, branch
               </button>
             )}
           </div>
-          <p className="text-[10px] mt-1" style={{ color: MUTED }}>ใช้คำนวณค่าทิปเมื่อคิวเสร็จสิ้น</p>
+          <p className="text-[10px] mt-1" style={{ color: MUTED }}>เว้นว่างเพื่อใช้ค่ามือของบริการ — กรอกเมื่อต้องการกำหนดค่าคอมเอง</p>
+        </div>
+        <div className="rounded-xl px-3 py-2 bg-white mt-2" style={{ border: `1px solid ${BORDER}` }}>
+          <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: MUTED }}>ค่าทิป</p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm" style={{ color: MUTED }}>฿</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={tipBaht}
+              onChange={e => setTipBaht(e.target.value)}
+              placeholder="0"
+              className="flex-1 min-w-0 text-sm outline-none bg-transparent"
+              style={{ color: TEXT }}
+            />
+            {Math.round(Number(tipBaht || 0) * 100) !== b.tipSatang && (
+              <button
+                onClick={saveTip}
+                disabled={savingTip}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                style={{ background: PRIMARY }}
+              >
+                {savingTip ? <Loader2 size={12} className="animate-spin" /> : "บันทึก"}
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: MUTED }}>ทิปจากลูกค้า แยกจากค่าคอม — นับให้ช่างหลักในค่าตอบแทนวันที่คิวเสร็จสิ้น</p>
         </div>
       </section>
 

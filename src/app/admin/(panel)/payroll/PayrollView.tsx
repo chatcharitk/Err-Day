@@ -178,6 +178,7 @@ function DailyReview({
     String(r.commissionSatang / 100),
   );
   const [tip, setTip] = useState(String(r.tipSatang / 100));
+  const [travel, setTravel] = useState(String(r.travelSatang / 100));
   const [adjustment, setAdjustment] = useState(
     String(r.adjustmentSatang / 100),
   );
@@ -215,10 +216,12 @@ function DailyReview({
       ? Math.round(Number(commission) * 100)
       : r.calculatedCommissionSatang;
   const tipPay = paid ? r.tipSatang : Math.round(Number(tip) * 100);
+  const travelPay = paid ? r.travelSatang : Math.round(Number(travel) * 100);
   const adjPay = paid
     ? r.adjustmentSatang
     : Math.round(Number(adjustment) * 100);
-  const total = commissionPay + otPay + tipPay + adjPay;
+  const total =
+    commissionPay + otPay + r.bookingTipSatang + tipPay + travelPay + adjPay;
   const invalid =
     !Number.isFinite(total) ||
     total < 0 ||
@@ -226,6 +229,7 @@ function DailyReview({
     effectiveHours > 24 ||
     commissionPay < 0 ||
     tipPay < 0 ||
+    travelPay < 0 ||
     !!timeError;
   async function submit(action: "save" | "settle" | "reopen") {
     if (busy) return;
@@ -251,6 +255,7 @@ function DailyReview({
               ? Math.round(Number(commission) * 100)
               : null,
           tipSatang: Math.round(Number(tip) * 100),
+          travelSatang: Math.round(Number(travel) * 100),
           adjustmentSatang: Math.round(Number(adjustment) * 100),
           adjustmentReason: reason,
           paymentMethod: payment,
@@ -355,7 +360,7 @@ function DailyReview({
             <tr>
               <th>เวลา / งาน</th>
               <th>สถานะ / ที่มาค่ามือ</th>
-              <th>ค่ามือ</th>
+              <th>ค่ามือ / ทิป</th>
             </tr>
           </thead>
           <tbody>
@@ -382,7 +387,12 @@ function DailyReview({
                     {b.primary ? b.source : "ผู้ช่วย — ไม่คิดค่ามือ"}
                   </p>
                 </td>
-                <td>{money(b.commissionSatang)}</td>
+                <td>
+                  {money(b.commissionSatang)}
+                  {b.tipSatang > 0 && (
+                    <p className={css.muted}>ทิป {money(b.tipSatang)}</p>
+                  )}
+                </td>
               </tr>
             ))}
             {!r.bookings.length && (
@@ -442,13 +452,23 @@ function DailyReview({
             </label>
           )}
           <label>
-            ทิป (฿)
+            ทิปเพิ่มเติม (฿)
             <input
               type="number"
               min="0"
               step="0.01"
               value={tip}
               onChange={(e) => setTip(e.target.value)}
+            />
+          </label>
+          <label>
+            ค่าเดินทาง (฿)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={travel}
+              onChange={(e) => setTravel(e.target.value)}
             />
           </label>
           <label>
@@ -492,9 +512,19 @@ function DailyReview({
               </td>
               <td>{money(otPay)}</td>
             </tr>
+            {r.bookingTipSatang > 0 && (
+              <tr>
+                <td>ทิปจากบุ๊กกิ้ง</td>
+                <td>{money(r.bookingTipSatang)}</td>
+              </tr>
+            )}
             <tr>
-              <td>ทิป</td>
+              <td>ทิปเพิ่มเติม</td>
               <td>{money(tipPay)}</td>
+            </tr>
+            <tr>
+              <td>ค่าเดินทาง</td>
+              <td>{money(travelPay)}</td>
             </tr>
             <tr>
               <td>ปรับเพิ่ม / ลด</td>

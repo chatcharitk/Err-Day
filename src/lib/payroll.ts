@@ -54,6 +54,8 @@ export interface PayrollBooking {
   status: string;
   primary: boolean;
   commissionSatang: number;
+  /** Tip entered on the booking (primary stylist, completed jobs only). */
+  tipSatang: number;
   source: string;
 }
 export interface PayrollCalculation {
@@ -69,7 +71,12 @@ export interface PayrollCalculation {
   otRateSatang: number;
   otSatang: number;
   commissionSatang: number;
+  /** Sum of the day's booking tips. Older snapshots lack it (treat as 0). */
+  bookingTipSatang: number;
+  /** Extra tip entered on the payroll review (outside any booking). */
   tipSatang: number;
+  /** ค่าเดินทาง. Older snapshots lack it (treat as 0). */
+  travelSatang: number;
   adjustmentSatang: number;
   adjustmentReason: string;
   totalSatang: number;
@@ -198,6 +205,7 @@ export async function computeBranchDailyPayout(
                 b.service.commissionSatang +
                   b.addons.reduce((v, a) => v + a.addon.commissionSatang, 0))
               : 0,
+          tipSatang: b.status === "COMPLETED" && primary ? b.tipSatang : 0,
           source:
             b.commissionSatang == null
               ? "เรตบริการเดิม"
@@ -220,6 +228,7 @@ export async function computeBranchDailyPayout(
     );
     const commissionOverridden =
       payout?.status !== "PAID" && payout?.commissionSatang != null;
+    const bookingTipSatang = details.reduce((v, b) => v + b.tipSatang, 0);
     const live: PayrollCalculation = {
       bookings: details,
       normalWorkMinutes: s.normalWorkMinutes,
@@ -233,7 +242,9 @@ export async function computeBranchDailyPayout(
       otRateSatang: otRatePerHourSatang(s),
       otSatang: otPaySatang(s, hours),
       commissionSatang: payout?.commissionSatang ?? calculatedCommissionSatang,
+      bookingTipSatang,
       tipSatang: payout?.tipSatang ?? 0,
+      travelSatang: payout?.travelSatang ?? 0,
       adjustmentSatang: payout?.adjustmentSatang ?? 0,
       adjustmentReason: payout?.adjustmentReason ?? "",
       totalSatang: 0,
@@ -241,22 +252,33 @@ export async function computeBranchDailyPayout(
     live.totalSatang =
       live.commissionSatang +
       live.otSatang +
+      live.bookingTipSatang +
       live.tipSatang +
+      live.travelSatang +
       live.adjustmentSatang;
     const paid = payout?.status === "PAID";
     const snapshot =
       payout?.calculation as unknown as PayrollCalculation | null;
-    const calc = paid
-      ? (snapshot ?? {
+    const calc: PayrollCalculation = paid
+      ? snapshot
+        ? {
+            ...snapshot,
+            bookingTipSatang: snapshot.bookingTipSatang ?? 0,
+            travelSatang: snapshot.travelSatang ?? 0,
+          }
+        : {
           ...live,
           commissionSatang: payout.commissionSatang ?? 0,
           otSatang: payout.otSatang ?? 0,
+          bookingTipSatang: payout.bookingTipSatang ?? 0,
           totalSatang:
             (payout.commissionSatang ?? 0) +
             (payout.otSatang ?? 0) +
+            (payout.bookingTipSatang ?? 0) +
             payout.tipSatang +
+            payout.travelSatang +
             payout.adjustmentSatang,
-        })
+        }
       : live;
     const linkedExpense = linkedExpenses.find(
       (e) => e.id === payout?.expenseId,
@@ -326,7 +348,11 @@ export async function computeBranchDailyPayout(
       changedSincePaid: !!(
         paid &&
         snapshot &&
-        !isDeepStrictEqual(snapshot.bookings, details)
+        // Snapshots taken before booking tips existed lack tipSatang.
+        !isDeepStrictEqual(
+          snapshot.bookings.map((b) => ({ ...b, tipSatang: b.tipSatang ?? 0 })),
+          details,
+        )
       ),
       warnings,
     };
@@ -373,7 +399,13 @@ export async function computeBranchMonthlyPayout(
     const days = payouts.filter((p) => p.staffId === s.id);
     const paid = days.filter((p) => p.status === "PAID");
     const sum = (
-      key: "commissionSatang" | "otSatang" | "tipSatang" | "adjustmentSatang",
+      key:
+        | "commissionSatang"
+        | "otSatang"
+        | "bookingTipSatang"
+        | "tipSatang"
+        | "travelSatang"
+        | "adjustmentSatang",
     ) => paid.reduce((v, p) => v + (p[key] ?? 0), 0);
     return {
       staffId: s.id,
@@ -389,12 +421,15 @@ export async function computeBranchMonthlyPayout(
         ),
       commissionSatang: sum("commissionSatang"),
       otSatang: sum("otSatang"),
-      tipSatang: sum("tipSatang"),
+      tipSatang: sum("tipSatang") + sum("bookingTipSatang"),
+      travelSatang: sum("travelSatang"),
       adjustmentSatang: sum("adjustmentSatang"),
       totalSatang:
         sum("commissionSatang") +
         sum("otSatang") +
+        sum("bookingTipSatang") +
         sum("tipSatang") +
+        sum("travelSatang") +
         sum("adjustmentSatang"),
       missingExpenseCount: paid.filter((p) => !p.expenseId).length,
     };

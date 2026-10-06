@@ -29,6 +29,7 @@ export default function AddBookingModal({
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [discountBaht,     setDiscountBaht]     = useState(0);
   const [commissionBaht,   setCommissionBaht]   = useState("");
+  const [tipBaht,          setTipBaht]          = useState("");
   const [notesVal,         setNotesVal]         = useState("");
   const [saving,           setSaving]           = useState(false);
   const [error,            setError]            = useState("");
@@ -116,6 +117,10 @@ export default function AddBookingModal({
       return;
     }
     if (commissionBaht !== "" && (!Number.isFinite(Number(commissionBaht)) || Number(commissionBaht) < 0)) {
+      setError("กรุณากรอกค่าคอมเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
+      return;
+    }
+    if (tipBaht !== "" && (!Number.isFinite(Number(tipBaht)) || Number(tipBaht) < 0)) {
       setError("กรุณากรอกค่าทิปเป็นจำนวนตั้งแต่ 0 ขึ้นไป");
       return;
     }
@@ -137,6 +142,7 @@ export default function AddBookingModal({
         ...(commissionBaht !== ""
           ? { commissionSatang: Math.round(Number(commissionBaht) * 100) }
           : {}),
+        ...(tipBaht !== "" ? { tipSatang: Math.round(Number(tipBaht) * 100) } : {}),
         name:              customer.name.trim()  || undefined,
         phone:             customer.phone.trim() || undefined,
         notes:             notesVal || null,
@@ -338,7 +344,7 @@ export default function AddBookingModal({
             )}
             <div>
               <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">
-                ค่าทิป (บาท)
+                ค่าคอม / ค่ามือ (บาท)
               </label>
               <div className="flex items-center gap-2 border border-[#E8D8CC] rounded-xl px-3 py-2.5">
                 <span className="text-sm text-[#A08070]">฿</span>
@@ -348,7 +354,22 @@ export default function AddBookingModal({
                   className="flex-1 text-sm outline-none bg-transparent text-[#3B2A24]" />
               </div>
               <p className="text-[11px] mt-1 text-[#A08070]">
-                เว้นว่างเพื่อใช้ค่ามือของบริการและบริการเสริมอัตโนมัติ
+                เว้นว่างเพื่อใช้ค่ามือของบริการและบริการเสริมอัตโนมัติ กรอกเมื่อต้องการกำหนดค่าคอมเอง
+              </p>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">
+                ค่าทิป (บาท)
+              </label>
+              <div className="flex items-center gap-2 border border-[#E8D8CC] rounded-xl px-3 py-2.5">
+                <span className="text-sm text-[#A08070]">฿</span>
+                <input type="number" min={0} step="0.01" value={tipBaht}
+                  onChange={e => setTipBaht(e.target.value)}
+                  placeholder="0"
+                  className="flex-1 text-sm outline-none bg-transparent text-[#3B2A24]" />
+              </div>
+              <p className="text-[11px] mt-1 text-[#A08070]">
+                ทิปจากลูกค้า แยกจากค่าคอม — นับให้ช่างหลักในค่าตอบแทนวันที่คิวเสร็จสิ้น
               </p>
             </div>
             <div>

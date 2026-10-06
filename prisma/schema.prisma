@@ -162,6 +162,10 @@ model StaffDailyPayout {
   /// Snapshots taken when marked PAID (satang). Null while pending → compute live.
   commissionSatang Int?
   otSatang         Int?
+  /// Tips entered on the day's bookings, snapshotted when marked PAID (null while pending).
+  bookingTipSatang Int?
+  /// Travel allowance (ค่าเดินทาง) for the day, satang — entered on the payroll review.
+  travelSatang     Int          @default(0)
   paidAt           DateTime?
   paidBy           String?
   /// Set once this day's payout has been recorded as an Expense (review/edit step in the UI).
@@ -403,6 +407,9 @@ model Booking {
   /// New bookings snapshot the current service + add-on commission here;
   /// admins may override it. null keeps legacy bookings on the old live lookup.
   commissionSatang  Int?
+  /// Customer tip for this booking, in satang — separate from the commission
+  /// above. Goes to the primary stylist's payroll tip on the day it completes.
+  tipSatang         Int            @default(0)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   completedAt       DateTime?

@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       isWalkin,                     // admin flag — skip customer info, use placeholder
       extraStaffIds,                // optional array of additional staff IDs
       commissionSatang,             // admin-only per-booking override
+      tipSatang,                    // admin-only customer tip for this booking
       termsAccepted,                // customer ticked the late-arrival terms
     } = body;
 
@@ -32,6 +33,15 @@ export async function POST(request: Request) {
       if (gate instanceof Response) return gate;
       if (commissionSatang === null || !Number.isFinite(Number(commissionSatang)) || Number(commissionSatang) < 0) {
         return NextResponse.json({ error: "Invalid commission" }, { status: 400 });
+      }
+    }
+
+    // A tip, like a manual commission, is staff-entered pay data.
+    if (tipSatang !== undefined) {
+      const gate = await requireAdmin().catch((e: unknown) => e as Response);
+      if (gate instanceof Response) return gate;
+      if (tipSatang === null || !Number.isFinite(Number(tipSatang)) || Number(tipSatang) < 0) {
+        return NextResponse.json({ error: "Invalid tip" }, { status: 400 });
       }
     }
 
@@ -179,6 +189,7 @@ export async function POST(request: Request) {
           endTime,
           totalPrice: finalTotalPrice,
           commissionSatang: savedCommissionSatang,
+          ...(tipSatang !== undefined ? { tipSatang: Math.round(Number(tipSatang)) } : {}),
           notes: notes || null,
           // Admin flows (e.g. the mobile "new booking" form) pass internalNotes
           // explicitly and never notes — a staff note must not leak to the

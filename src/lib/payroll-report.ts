@@ -119,6 +119,8 @@ export async function payrollReport(sp: URLSearchParams) {
                   b.service.commissionSatang +
                     b.addons.reduce((v, a) => v + a.addon.commissionSatang, 0))
                 : 0,
+            tipSatang:
+              b.status === "COMPLETED" && b.staffId === s.id ? b.tipSatang : 0,
             source:
               b.commissionSatang == null ? "เรตบริการเดิม" : "ค่ามือบุ๊กกิ้ง",
           }));
@@ -127,7 +129,14 @@ export async function payrollReport(sp: URLSearchParams) {
         ? (p.commissionSatang ?? 0)
         : details.reduce((v, b) => v + b.commissionSatang, 0);
       const ot = paid ? (p.otSatang ?? 0) : 0,
-        tip = p?.tipSatang ?? 0,
+        // Tips: the extra tip entered on the review, plus the day's booking tips
+        // (frozen at payment; live from the bookings while still pending).
+        tip =
+          (p?.tipSatang ?? 0) +
+          (paid
+            ? (p.bookingTipSatang ?? 0)
+            : details.reduce((v, b) => v + (b.tipSatang ?? 0), 0)),
+        travel = p?.travelSatang ?? 0,
         adjustment = p?.adjustmentSatang ?? 0;
       const clockIn = snapshot?.clockIn ?? a?.clockIn.toISOString() ?? null,
         clockOut = snapshot?.clockOut ?? a?.clockOut.toISOString() ?? null,
@@ -146,9 +155,10 @@ export async function payrollReport(sp: URLSearchParams) {
         commissionSatang: commission,
         otSatang: ot,
         tipSatang: tip,
+        travelSatang: travel,
         adjustmentSatang: adjustment,
         reason: p?.adjustmentReason || "",
-        totalSatang: paid ? commission + ot + tip + adjustment : 0,
+        totalSatang: paid ? commission + ot + tip + travel + adjustment : 0,
         paidAt: p?.paidAt?.toISOString() ?? null,
         expenseId: p?.expenseId ?? null,
         legacy: !!(paid && !snapshot),

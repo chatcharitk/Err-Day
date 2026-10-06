@@ -116,6 +116,7 @@ export async function PATCH(request: Request) {
               expenseId: null,
               commissionSatang: null,
               otSatang: null,
+              bookingTipSatang: null,
               calculation: undefined,
               paidAt: null,
               paidBy: null,
@@ -142,7 +143,13 @@ export async function PATCH(request: Request) {
           const otMode = body.otMode;
           if (otMode !== "AUTO" && otMode !== "MANUAL")
             throw new Error("กรุณาเลือกวิธีคิด OT");
-          const tipSatang = numberIn(body.tipSatang, "ทิป", 0, 5_000_000);
+          const tipSatang = numberIn(body.tipSatang, "ทิปเพิ่มเติม", 0, 5_000_000);
+          const travelSatang = numberIn(
+            body.travelSatang ?? 0,
+            "ค่าเดินทาง",
+            0,
+            5_000_000,
+          );
           const commissionSatang =
             body.commissionSatang == null
               ? null
@@ -230,6 +237,7 @@ export async function PATCH(request: Request) {
               otHours,
               commissionSatang,
               tipSatang,
+              travelSatang,
               adjustmentSatang,
               adjustmentReason,
             },
@@ -238,6 +246,7 @@ export async function PATCH(request: Request) {
               otHours,
               commissionSatang,
               tipSatang,
+              travelSatang,
               adjustmentSatang,
               adjustmentReason,
               revision: { increment: 1 },
@@ -280,7 +289,9 @@ export async function PATCH(request: Request) {
             otRateSatang: current.otRateSatang,
             otSatang: current.otSatang,
             commissionSatang: current.commissionSatang,
+            bookingTipSatang: current.bookingTipSatang,
             tipSatang: current.tipSatang,
+            travelSatang: current.travelSatang,
             adjustmentSatang: current.adjustmentSatang,
             adjustmentReason: current.adjustmentReason,
             totalSatang: current.totalSatang,
@@ -288,7 +299,8 @@ export async function PATCH(request: Request) {
           const components = [
             ["COMMISSION", "ค่าคอมมิชชั่น", calc.commissionSatang],
             ["OT", "ค่า OT", calc.otSatang],
-            ["TIP", "ทิป", calc.tipSatang],
+            ["TIP", "ทิป", calc.bookingTipSatang + calc.tipSatang],
+            ["TRAVEL", "ค่าเดินทาง", calc.travelSatang],
             [
               "ADJUSTMENT",
               "ปรับเพิ่ม/ลด: " + calc.adjustmentReason,
@@ -343,6 +355,7 @@ export async function PATCH(request: Request) {
               otHours: calc.otHours,
               commissionSatang: calc.commissionSatang,
               otSatang: calc.otSatang,
+              bookingTipSatang: calc.bookingTipSatang,
               calculation:
                 existing?.status === "PAID" && !existing.calculation
                   ? undefined

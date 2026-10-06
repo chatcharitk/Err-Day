@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await request.json();
     const {
-      status, staffId, notes, internalNotes, startTime, endTime, totalPrice, commissionSatang, serviceId, date,
+      status, staffId, notes, internalNotes, startTime, endTime, totalPrice, commissionSatang, tipSatang, serviceId, date,
       completedAt, receiptUrl, paidAt,
       extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
@@ -44,6 +44,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (commissionSatang !== undefined && commissionSatang !== null
       && (!Number.isFinite(Number(commissionSatang)) || Number(commissionSatang) < 0)) {
       return NextResponse.json({ error: "Invalid commission" }, { status: 400 });
+    }
+
+    if (tipSatang !== undefined
+      && (tipSatang === null || !Number.isFinite(Number(tipSatang)) || Number(tipSatang) < 0)) {
+      return NextResponse.json({ error: "Invalid tip" }, { status: 400 });
     }
 
     // Capture previous fields we need to compare after the update (paidAt so a
@@ -80,6 +85,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               ? null
               : Math.max(0, Math.round(Number(commissionSatang))) }
           : {}),
+        ...(tipSatang      !== undefined ? { tipSatang: Math.round(Number(tipSatang)) } : {}),
         ...(serviceId      !== undefined ? { serviceId }                             : {}),
         ...(date           !== undefined ? { date: new Date(date + "T12:00:00") }   : {}),
         ...(newBranchId    !== undefined ? { branchId: newBranchId }                : {}),

@@ -66,7 +66,7 @@ export default async function ReportPage({
                   <th>งาน / ชั่วโมงจริง</th>
                   <th>ค่ามือ</th>
                   <th>OT</th>
-                  <th>ทิป / ปรับ</th>
+                  <th>ทิป / เดินทาง / ปรับ</th>
                   <th>จ่ายจริง / สถานะ</th>
                 </tr>
               </thead>
@@ -101,6 +101,8 @@ export default async function ReportPage({
                     </td>
                     <td>
                       {money(d.tipSatang)}
+                      <br />
+                      {money(d.travelSatang)}
                       <br />
                       {money(d.adjustmentSatang)}
                       <p className={css.muted}>{d.reason}</p>

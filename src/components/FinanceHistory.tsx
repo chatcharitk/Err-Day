@@ -25,7 +25,9 @@ function amount(s: Entry["before"]): number | null {
     return (
       s.commissionSatang +
       Number(s.otSatang || 0) +
+      Number(s.bookingTipSatang || 0) +
       Number(s.tipSatang || 0) +
+      Number(s.travelSatang || 0) +
       Number(s.adjustmentSatang || 0)
     );
   return null;
