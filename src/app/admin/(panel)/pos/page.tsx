@@ -1,3 +1,4 @@
+import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import PosTerminal from "./PosTerminal";
@@ -56,7 +57,7 @@ export default async function PosPage({
         })
       : Promise.resolve([]),
     prisma.serviceAddon.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...addonsOfferedWhere() },
       orderBy: { price: "asc" },
     }),
   ]);

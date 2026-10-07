@@ -18,7 +18,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { name, nameTh, price, isActive, commissionBaht } = body;
+  const { name, nameTh, price, isActive, commissionBaht, availableUntil } = body;
 
   try {
     const addon = await prisma.serviceAddon.update({
@@ -28,6 +28,9 @@ export async function PATCH(
         ...(nameTh   !== undefined ? { nameTh:   String(nameTh).trim() } : {}),
         ...(price    !== undefined ? { price:    Math.round(Number(price) * 100) } : {}),
         ...(isActive !== undefined ? { isActive: Boolean(isActive)     } : {}),
+        ...(availableUntil !== undefined
+          ? { availableUntil: availableUntil && /^\d{4}-\d{2}-\d{2}$/.test(String(availableUntil)) ? String(availableUntil) : null }
+          : {}),
         ...(commissionBaht !== undefined
           ? { commissionSatang: Math.max(0, Math.round(Number(commissionBaht) * 100)) }
           : {}),

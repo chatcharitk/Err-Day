@@ -1,3 +1,4 @@
+import { addonOfferedOn } from "@/lib/addon-availability";
 import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
@@ -87,9 +88,13 @@ export async function POST(request: Request) {
     const addonRows = Array.isArray(addonIds) && addonIds.length > 0
       ? await prisma.serviceAddon.findMany({
           where: { id: { in: addonIds } },
-          select: { id: true, price: true, commissionSatang: true },
+          select: { id: true, price: true, commissionSatang: true, availableUntil: true },
         })
       : [];
+    // An add-on past its last day can't be booked online (staff may still record one).
+    if (!isAdminCaller && addonRows.some((a) => !addonOfferedOn(a, String(date)))) {
+      return NextResponse.json({ error: "บริการเสริมนี้ไม่เปิดให้บริการในวันที่เลือก" }, { status: 400 });
+    }
     const addonCreates = addonRows.map((a) => ({ addonId: a.id, price: a.price }));
 
     // Snapshot today's configured commission for every new booking. A manual

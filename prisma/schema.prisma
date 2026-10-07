@@ -370,6 +370,10 @@ model ServiceAddon {
   nameTh        String
   price         Int
   isActive      Boolean        @default(true)
+  /// Last Bangkok day ("YYYY-MM-DD", inclusive) this add-on is offered, by
+  /// APPOINTMENT date. null = no end date. Past it the add-on drops out of every
+  /// picker without anyone switching it off.
+  availableUntil String?
   /// Fixed commission (ค่ามือ) in satang the stylist earns each time this add-on
   /// is included on a completed booking. 0 = no commission.
   commissionSatang Int         @default(0)

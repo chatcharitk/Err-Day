@@ -15,6 +15,7 @@ interface Addon {
   nameTh:   string;
   price:    number;  // satang
   isActive: boolean;
+  availableUntil?: string | null;
 }
 
 interface Props {
@@ -36,7 +37,7 @@ export default function AddonsManager({ initial }: Props) {
   const [error,     setError]     = useState("");
 
   // ── Per-row edit ──────────────────────────────────────────────────────────
-  const [editing, setEditing] = useState<Record<string, { nameTh: string; price: string }>>({});
+  const [editing, setEditing] = useState<Record<string, { nameTh: string; price: string; until: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
   async function createAddon() {
@@ -84,7 +85,7 @@ export default function AddonsManager({ initial }: Props) {
   async function saveEdit(id: string) {
     const e = editing[id];
     if (!e) return;
-    const ok = await patchAddon(id, { nameTh: e.nameTh, price: Number(e.price) });
+    const ok = await patchAddon(id, { nameTh: e.nameTh, price: Number(e.price), availableUntil: e.until || null });
     if (ok) setEditing(prev => { const n = { ...prev }; delete n[id]; return n; });
   }
 
@@ -183,6 +184,13 @@ export default function AddonsManager({ initial }: Props) {
                         <input type="number" inputMode="decimal" min="0" step="50" value={e.price}
                           onChange={ev => setEditing(prev => ({ ...prev, [a.id]: { ...e, price: ev.target.value } }))}
                           className="border rounded px-2 py-1 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
+                        <label className="col-span-2 text-xs flex items-center gap-2" style={{ color: MUTED }}>
+                          เปิดให้นัดหมายถึงวันที่ (รวมวันนี้)
+                          <input type="date" value={e.until}
+                            onChange={ev => setEditing(prev => ({ ...prev, [a.id]: { ...e, until: ev.target.value } }))}
+                            className="border rounded px-2 py-1 text-sm" style={{ borderColor: BORDER, color: TEXT }} />
+                          <span>เว้นว่าง = ไม่มีวันสิ้นสุด</span>
+                        </label>
                       </div>
                       <button onClick={() => saveEdit(a.id)} disabled={savingId === a.id}
                         className="text-sm px-3 py-1 rounded-lg text-white disabled:opacity-50" style={{ background: PRIMARY }}>
@@ -201,13 +209,18 @@ export default function AddonsManager({ initial }: Props) {
                           {a.name && a.name !== a.nameTh && (
                             <span className="ml-2 font-normal" style={{ color: MUTED }}>· {a.name}</span>
                           )}
+                          {a.availableUntil && (
+                            <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded" style={{ background: "#FFF3E0", color: "#E67E22" }}>
+                              นัดหมายถึง {new Date(a.availableUntil + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <p className="text-sm font-semibold w-20 text-right" style={{ color: PRIMARY }}>
                         +{fmt(a.price)}
                       </p>
                       <button
-                        onClick={() => setEditing(prev => ({ ...prev, [a.id]: { nameTh: a.nameTh, price: String(a.price / 100) } }))}
+                        onClick={() => setEditing(prev => ({ ...prev, [a.id]: { nameTh: a.nameTh, price: String(a.price / 100), until: a.availableUntil ?? "" } }))}
                         className="text-xs px-2.5 py-1 rounded-md"
                         style={{ color: TEXT, border: `1px solid ${BORDER}` }}>
                         แก้ไข

@@ -1,3 +1,4 @@
+import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import NewBookingForm from "./NewBookingForm";
@@ -40,7 +41,7 @@ export default async function NewBookingPage({
         })
       : Promise.resolve([]),
     prisma.serviceAddon.findMany({
-      where:   { isActive: true },
+      where:   { isActive: true, ...addonsOfferedWhere() },
       orderBy: { nameTh: "asc" },
       select:  { id: true, nameTh: true, price: true },
     }),

@@ -1,5 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { addonOfferedOn } from "@/lib/addon-availability";
+import { bangkokTodayKey } from "@/lib/member-pricing";
 
 /**
  * Cached lists of slow-changing reference data: branches, branch services,
@@ -63,14 +65,21 @@ export function getCachedBranchStaff(branchId: string) {
   )();
 }
 
-export const getCachedAddons = unstable_cache(
+const getCachedAddonsRaw = unstable_cache(
   async () => {
     return prisma.serviceAddon.findMany({
       where:   { isActive: true },
       orderBy: { price: "asc" },
-      select:  { id: true, nameTh: true, price: true },
+      select:  { id: true, nameTh: true, price: true, availableUntil: true },
     });
   },
-  ["active-addons-slim"],
+  ["active-addons-slim-v2"],
   { revalidate: 3600, tags: ["addons"] },
 );
+
+/** Active add-ons still offered today. The date cut-off is applied after the
+ *  1-hour cache so an expired add-on disappears at midnight, not an hour later. */
+export async function getCachedAddons() {
+  const today = bangkokTodayKey();
+  return (await getCachedAddonsRaw()).filter((a) => addonOfferedOn(a, today));
+}

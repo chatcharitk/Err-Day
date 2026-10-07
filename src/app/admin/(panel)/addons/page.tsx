@@ -7,7 +7,7 @@ export const metadata   = { title: "บริการเสริม — err.da
 export default async function AddonsPage() {
   const addons = await prisma.serviceAddon.findMany({
     orderBy: [{ isActive: "desc" }, { nameTh: "asc" }],
-    select:  { id: true, name: true, nameTh: true, price: true, isActive: true },
+    select:  { id: true, name: true, nameTh: true, price: true, isActive: true, availableUntil: true },
   });
 
   return (
@@ -18,6 +18,7 @@ export default async function AddonsPage() {
         nameTh:   a.nameTh,
         price:    a.price,         // satang
         isActive: a.isActive,
+        availableUntil: a.availableUntil,
       }))}
     />
   );

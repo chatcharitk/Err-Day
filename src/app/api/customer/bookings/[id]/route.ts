@@ -1,3 +1,4 @@
+import { addonOfferedOn } from "@/lib/addon-availability";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
@@ -110,14 +111,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const addonOptions = requestedAddonIds
       ? await prisma.serviceAddon.findMany({
           where: { id: { in: requestedAddonIds }, isActive: true },
-          select: { id: true, price: true },
+          select: { id: true, price: true, availableUntil: true },
         })
       : await prisma.bookingAddon.findMany({
           where: { bookingId: id },
           select: { addonId: true, price: true },
-        }).then(rows => rows.map(row => ({ id: row.addonId, price: row.price })));
+        }).then(rows => rows.map(row => ({ id: row.addonId, price: row.price, availableUntil: null as string | null })));
     if (requestedAddonIds && addonOptions.length !== requestedAddonIds.length) {
       return NextResponse.json({ error: "One or more add-ons are unavailable" }, { status: 400 });
+    }
+    // Only add-ons being newly chosen are checked against the date; one already
+    // on the booking (no requestedAddonIds) keeps its snapshot price.
+    if (requestedAddonIds && addonOptions.some((a) => !addonOfferedOn(a, newDate))) {
+      return NextResponse.json({ error: "One or more add-ons are not offered on that date" }, { status: 400 });
     }
 
     // Member pricing is judged on the (new) appointment date, not today.

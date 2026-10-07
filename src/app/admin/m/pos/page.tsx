@@ -1,3 +1,4 @@
+import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
@@ -117,7 +118,7 @@ export default async function MobilePosPage({
         })
       : Promise.resolve([]),
     prisma.serviceAddon.findMany({
-      where:  { isActive: true },
+      where:  { isActive: true, ...addonsOfferedWhere() },
       select: { id: true, nameTh: true, price: true },
       orderBy: { price: "asc" },
     }),

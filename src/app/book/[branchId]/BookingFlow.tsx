@@ -19,6 +19,7 @@ import TermsConsentBlock from "@/components/TermsConsentBlock";
 import { BOOKING_TERMS_TH, BOOKING_TERMS_EN } from "@/lib/terms";
 import { DAVINES_SPA_PROMOTION, PJOLI_TREATMENT_SERVICE_ID, getCurrentOrUpcomingPromotion, getPromotionServicePrice, getServicePromotion } from "@/lib/promotions";
 import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
+import { addonOfferedOn } from "@/lib/addon-availability";
 
 type BranchServiceWithService = BranchService & { service: Service };
 
@@ -381,6 +382,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   };
 
   const selectedAddonItems = addons.filter((a) => selectedAddons.has(a.id));
+  // Latest bookable day imposed by the chosen add-ons' end dates ("YYYY-MM-DD"),
+  // judged on the appointment date. null = no limit.
+  const addonLastDay = selectedAddonItems.reduce<string | null>(
+    (min, a) => (a.availableUntil && (!min || a.availableUntil < min) ? a.availableUntil : min), null);
   const addonsTotal = selectedAddonItems.reduce((sum, a) => sum + a.price, 0);
 
   const canProceed = () => {
@@ -835,7 +840,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                         {lang === "th" ? a.nameTh : (a.name || a.nameTh)}
                       </p>
                     </div>
-                    <p className="font-semibold flex-shrink-0 whitespace-nowrap ml-2" style={{ color: "#B52F3A" }}>+{formatPrice(a.price)}</p>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <p className="font-semibold whitespace-nowrap" style={{ color: "#B52F3A" }}>+{formatPrice(a.price)}</p>
+                      {a.availableUntil && (
+                        <p className="text-[11px] whitespace-nowrap" style={{ color: "#977A6F" }}>
+                          {lang === "th" ? "นัดหมายถึง " : "Appointments until "}
+                          {new Date(a.availableUntil + "T12:00:00").toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -873,7 +886,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 mode="single"
                 selected={selectedDate}
                 onSelect={(d) => { setSelectedDate(d); setSelectedTime(""); }}
-                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                disabled={(date) =>
+                  date < new Date(new Date().setHours(0, 0, 0, 0)) ||
+                  (addonLastDay !== null &&
+                    !addonOfferedOn({ availableUntil: addonLastDay }, `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`))}
                 className="rounded-md"
               />
             </div>

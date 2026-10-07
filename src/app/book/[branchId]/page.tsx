@@ -1,3 +1,4 @@
+import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import BookingFlow from "./BookingFlow";
@@ -38,7 +39,9 @@ export default async function BookPage({ params }: { params: Promise<{ branchId:
       orderBy: { service: { category: "asc" } },
     }),
     prisma.serviceAddon.findMany({
-      where: { isActive: true },
+      // Already-ended add-ons are dropped here; ones with a future end date are
+      // filtered per appointment date in the booking flow.
+      where: { isActive: true, ...addonsOfferedWhere() },
       orderBy: { price: "asc" },
     }),
   ]);
