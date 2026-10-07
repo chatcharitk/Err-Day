@@ -740,10 +740,27 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                           <Star className="new-star" aria-hidden="true" />
                                         </span>
                                       )}
+                                      {/* Time-limited menu item (Service.availableTo) */}
+                                      {bs.service.availableTo && (
+                                        <span className="new-badge">
+                                          <Star className="new-star" aria-hidden="true" />
+                                          Promotion
+                                          <Star className="new-star" aria-hidden="true" />
+                                        </span>
+                                      )}
                                     </p>
                                     {svcDesc && (
                                       <p className="text-sm mt-1" style={{ color: isSelected ? "rgba(255,255,255,0.75)" : "#977A6F" }}>
                                         {svcDesc}
+                                      </p>
+                                    )}
+                                    {bs.service.availableTo && (
+                                      <p className="text-xs mt-1 font-medium" style={{ color: isSelected ? "#FFE08A" : "#B52F3A" }}>
+                                        {lang === "th" ? "หมดอายุวันที่ " : "Expires "}
+                                        {new Date(bs.service.availableTo + "T12:00:00").toLocaleDateString(
+                                          lang === "th" ? "th-TH" : "en-GB",
+                                          { day: "numeric", month: "long", year: "numeric" },
+                                        )}
                                       </p>
                                     )}
                                     {/*
