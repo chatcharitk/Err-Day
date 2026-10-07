@@ -1,4 +1,4 @@
-import { addonOfferedOn } from "@/lib/addon-availability";
+import { addonOfferedOn, serviceOfferedOn } from "@/lib/addon-availability";
 import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
@@ -74,9 +74,13 @@ export async function POST(request: Request) {
     // Internal-only services (e.g. cutting) are not offered to customers — only
     // a signed-in admin may book them. Verified server-side, same as above.
     if (!isAdminCaller) {
-      const svc = await prisma.service.findUnique({ where: { id: serviceId }, select: { isPublic: true } });
+      const svc = await prisma.service.findUnique({ where: { id: serviceId }, select: { isPublic: true, availableTo: true } });
       if (svc && !svc.isPublic) {
         return NextResponse.json({ error: "บริการนี้ไม่เปิดให้จองออนไลน์" }, { status: 403 });
+      }
+      // Time-limited menu item: not bookable for an appointment after its last day.
+      if (svc && !serviceOfferedOn(svc, String(date))) {
+        return NextResponse.json({ error: "บริการนี้ไม่เปิดให้นัดหมายในวันที่เลือก" }, { status: 400 });
       }
     }
 

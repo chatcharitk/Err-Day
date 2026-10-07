@@ -1,3 +1,4 @@
+import { servicesOfferedWhere } from "@/lib/addon-availability";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   const isAdmin = await requireAdmin().then(() => true, () => false);
 
   const branchServices = await prisma.branchService.findMany({
-    where:   { branchId, isActive: true, ...(isAdmin ? {} : { service: { isPublic: true } }) },
+    where:   { branchId, isActive: true, ...(isAdmin ? {} : { service: { isPublic: true, ...servicesOfferedWhere() } }) },
     select: {
       id: true,
       price: true,

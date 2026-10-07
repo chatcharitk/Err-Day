@@ -1,3 +1,4 @@
+import { servicesOfferedWhere, serviceOfferedOn } from "@/lib/addon-availability";
 import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
@@ -96,7 +97,7 @@ export default async function MobilePosPage({
   const [branchServices, addons] = await Promise.all([
     activeBranchId
       ? prisma.branchService.findMany({
-          where:   { branchId: activeBranchId, isActive: true },
+          where:   { branchId: activeBranchId, isActive: true, service: servicesOfferedWhere() },
           select: {
             id:        true,
             branchId:  true,

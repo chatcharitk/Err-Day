@@ -1,4 +1,4 @@
-import { addonOfferedOn } from "@/lib/addon-availability";
+import { addonOfferedOn, serviceOfferedOn } from "@/lib/addon-availability";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
@@ -84,6 +84,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // A customer can't switch onto an internal-only service (a booking staff made
     // for one may still be moved in time — the service itself is unchanged).
+    if (!serviceOfferedOn(bs.service, newDate) && (newServiceId !== booking.serviceId || newDate !== booking.date.toISOString().slice(0, 10))) {
+      return NextResponse.json({ error: "This service is not offered on that date" }, { status: 400 });
+    }
     if (newServiceId !== booking.serviceId && !bs.service.isPublic) {
       return NextResponse.json({ error: "This service is not available for online booking" }, { status: 403 });
     }

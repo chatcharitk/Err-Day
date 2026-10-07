@@ -104,6 +104,13 @@ function addMinutes(time: string, minutes: number): string {
  */
 const CATEGORY_ORDER = ["บริการทั่วไป", "PJOLI Treatment", "Davines Spa", "Keratin Treatment", "ย้อมผม NIGAO"];
 
+/** Pinned to the top of the menu (in this order), above the rest of their category. */
+const FEATURED_FIRST = ["svc-rainy-detox-combo"];
+const featuredRank = (id: string) => {
+  const i = FEATURED_FIRST.indexOf(id);
+  return i === -1 ? FEATURED_FIRST.length : i;
+};
+
 /** Services shown with a twinkling "New!" badge. Remove an id once it stops being new. */
 const NEW_SERVICE_IDS = new Set<string>([PJOLI_TREATMENT_SERVICE_ID]);
 
@@ -385,7 +392,9 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   // Latest bookable day imposed by the chosen add-ons' end dates ("YYYY-MM-DD"),
   // judged on the appointment date. null = no limit.
   const addonLastDay = selectedAddonItems.reduce<string | null>(
-    (min, a) => (a.availableUntil && (!min || a.availableUntil < min) ? a.availableUntil : min), null);
+    (min, a) => (a.availableUntil && (!min || a.availableUntil < min) ? a.availableUntil : min),
+    // A time-limited service (Service.availableTo) caps the date the same way.
+    selectedService?.service.availableTo ?? null);
   const addonsTotal = selectedAddonItems.reduce((sum, a) => sum + a.price, 0);
 
   const canProceed = () => {
@@ -704,6 +713,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                       <div className="grid gap-3 mb-4">
                         {visibleBranchServices
                           .filter((bs) => bs.service.category === cat)
+                          .sort((a, b) => featuredRank(a.serviceId) - featuredRank(b.serviceId))
                           .map((bs) => {
                             const isSelected = selectedService?.id === bs.id;
                             const svcName = lang === "th" ? bs.service.nameTh : (bs.service.name || bs.service.nameTh);

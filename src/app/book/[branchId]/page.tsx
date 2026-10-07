@@ -1,3 +1,4 @@
+import { servicesOfferedWhere, serviceOfferedOn } from "@/lib/addon-availability";
 import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -34,7 +35,7 @@ export default async function BookPage({ params }: { params: Promise<{ branchId:
       // whose BranchService row was left active must not show to customers.
       // isPublic=false services are internal-only (staff book them from the admin
       // screens) and must never reach the customer booking flow.
-      where: { branchId, isActive: true, service: { isActive: true, isPublic: true } },
+      where: { branchId, isActive: true, service: { isActive: true, isPublic: true, ...servicesOfferedWhere() } },
       include: { service: true },
       orderBy: { service: { category: "asc" } },
     }),
