@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     // Internal-only services (e.g. cutting) are not offered to customers — only
     // a signed-in admin may book them. Verified server-side, same as above.
     if (!isAdminCaller) {
-      const svc = await prisma.service.findUnique({ where: { id: serviceId }, select: { isPublic: true, availableTo: true } });
+      const svc = await prisma.service.findUnique({ where: { id: serviceId }, select: { isPublic: true, endsOn: true } });
       if (svc && !svc.isPublic) {
         return NextResponse.json({ error: "บริการนี้ไม่เปิดให้จองออนไลน์" }, { status: 403 });
       }

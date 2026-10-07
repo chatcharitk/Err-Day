@@ -80,6 +80,10 @@ model Service {
   advanceBookingRequired Boolean         @default(false)
   availableFrom          String?
   availableTo            String?
+  /// Last Bangkok day ("YYYY-MM-DD", inclusive) this service is offered, by
+  /// APPOINTMENT date (time-limited menu items). null = no end date. Distinct
+  /// from availableFrom/To above, which hold time-of-day windows ("11:00").
+  endsOn                 String?
   descriptionTh          String?
   memberPrice            Int?
   nameTh                 String          @default("")

@@ -393,8 +393,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   // judged on the appointment date. null = no limit.
   const addonLastDay = selectedAddonItems.reduce<string | null>(
     (min, a) => (a.availableUntil && (!min || a.availableUntil < min) ? a.availableUntil : min),
-    // A time-limited service (Service.availableTo) caps the date the same way.
-    selectedService?.service.availableTo ?? null);
+    // A time-limited service (Service.endsOn) caps the date the same way.
+    selectedService?.service.endsOn ?? null);
   const addonsTotal = selectedAddonItems.reduce((sum, a) => sum + a.price, 0);
 
   const canProceed = () => {
@@ -740,8 +740,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                           <Star className="new-star" aria-hidden="true" />
                                         </span>
                                       )}
-                                      {/* Time-limited menu item (Service.availableTo) */}
-                                      {bs.service.availableTo && (
+                                      {/* Time-limited menu item (Service.endsOn) */}
+                                      {bs.service.endsOn && (
                                         <span className="new-badge">
                                           <Star className="new-star" aria-hidden="true" />
                                           Promotion
@@ -754,10 +754,10 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                                         {svcDesc}
                                       </p>
                                     )}
-                                    {bs.service.availableTo && (
+                                    {bs.service.endsOn && (
                                       <p className="text-xs mt-1 font-medium" style={{ color: isSelected ? "#FFE08A" : "#B52F3A" }}>
                                         {lang === "th" ? "หมดอายุวันที่ " : "Expires "}
-                                        {new Date(bs.service.availableTo + "T12:00:00").toLocaleDateString(
+                                        {new Date(bs.service.endsOn + "T12:00:00").toLocaleDateString(
                                           lang === "th" ? "th-TH" : "en-GB",
                                           { day: "numeric", month: "long", year: "numeric" },
                                         )}
