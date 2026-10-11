@@ -369,13 +369,13 @@ function DailyReview({
                 <td>
                   {b.time}
                   <br />
-                  {b.customer} · {b.service}
-                  {b.addons && <p className={css.muted}>+ {b.addons}</p>}
+                  {/* The booking name is the link — no separate "open" label. */}
                   <Link
                     href={`/admin/calendar?date=${date}&branchId=${encodeURIComponent(branchId)}&bookingId=${encodeURIComponent(b.id)}`}
                   >
-                    เปิดบุ๊กกิ้ง
+                    {b.customer} · {b.service}
                   </Link>
+                  {b.addons && <p className={css.muted}>+ {b.addons}</p>}
                 </td>
                 <td>
                   {b.status === "COMPLETED"
