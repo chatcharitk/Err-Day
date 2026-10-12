@@ -48,6 +48,8 @@ export const EXPENSE_CATEGORY_GROUPS = defineExpenseCategoryGroups([
       { value: "salary",            label: "เงินเดือน" },
       { value: "commission_bonus",  label: "คอมมิชชั่น / โบนัส" },
       { value: "freelance",         label: "ค่าจ้างชั่วคราว / ฟรีแลนซ์" },
+      // Employer + employee shares both paid by the shop, remitted to สปส. by the 15th.
+      { value: "social_security",   label: "ประกันสังคม" },
     ],
   },
   {
