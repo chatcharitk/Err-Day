@@ -25,6 +25,7 @@ import {
   Sparkles,
   Wallet,
   Activity,
+  Vote,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -43,6 +44,7 @@ const MENU = [
   { href: "/admin/capacity",   labelTh: "ความจุการจอง",   label: "Capacity",     icon: Gauge,                                      ownerOnly: false },
   { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors,                                   ownerOnly: false },
   { href: "/admin/addons",     labelTh: "บริการเสริม",     label: "Add-ons",      icon: Sparkles,                                   ownerOnly: false },
+  { href: "/admin/votes",      labelTh: "โหวตพนักงาน",    label: "Staff Vote",   icon: Vote,                                       ownerOnly: false },
   { href: "/admin/settings",   labelTh: "ตั้งค่าร้าน",    label: "Shop Settings",icon: Settings,                                   ownerOnly: false },
   { href: "/admin/notifications", labelTh: "การแจ้งเตือน",   label: "Notifications", icon: Bell,                                   ownerOnly: false },
   { href: "/admin/users",      labelTh: "จัดการผู้ใช้",   label: "Users",        icon: ShieldCheck,                                ownerOnly: true  },

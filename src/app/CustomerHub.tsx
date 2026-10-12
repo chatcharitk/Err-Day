@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CalendarDays, Clock3, CreditCard, MapPin, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertCircle, CalendarDays, Check, Clock3, CreditCard, MapPin, Sparkles, Star, Trash2, Vote, X } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { useLang } from "@/components/LanguageProvider";
 import { LangSwitcher } from "@/components/LangSwitcher";
@@ -12,8 +12,11 @@ import { RescheduleModal, type ReschedulableBooking } from "@/app/my-bookings/My
 import { useSeasonalTheme } from "@/hooks/useSeasonalTheme";
 import { tarotImagePath } from "@/lib/seasonal-theme";
 import { Cobweb, HalloweenBats, Pumpkin } from "@/components/HalloweenDecor";
+import { VOTE_EVENT, votePhaseAt } from "@/lib/staff-vote";
 
-type Tab = "home" | "book" | "history" | "tarot";
+type Tab = "home" | "book" | "history" | "tarot" | "vote";
+type VoteCandidate = { id: string; name: string; photoUrl: string | null };
+type VoteState = { event: { phase: "upcoming" | "open" | "closed" }; candidates: VoteCandidate[]; canVote: boolean; myVote: { candidateId: string } | null };
 type Branch = { id: string; name: string; address: string; phone: string; bookingEnabled: boolean };
 type Booking = ReschedulableBooking & {
   status: string;
@@ -76,6 +79,21 @@ const HUB_UI = {
   },
 } as const;
 
+const VOTE_UI = {
+  th: {
+    tab: "โหวต", banner: "Halloween Staff Challenge", bannerOpen: "ร่วมโหวตพนักงานที่แต่งตัวสุดปัง", bannerSoon: "เปิดโหวต 18 ต.ค. 2569", bannerVoted: "คุณโหวตแล้ว ขอบคุณค่ะ",
+    title: "โหวตพนักงานสุดปัง", sub: "เลือกลุคฮาโลวีนที่คุณชอบที่สุด · ลูกค้าโหวตได้ 1 ครั้งเท่านั้น", soon: "เปิดโหวต 18 ต.ค. 2569", closed: "ปิดโหวตแล้ว ขอบคุณที่ร่วมสนุกค่ะ",
+    vote: "โหวตคนนี้", confirmTitle: "ยืนยันการโหวต?", confirmText: "โหวตได้เพียง 1 ครั้ง และเปลี่ยนไม่ได้", confirm: "ยืนยันโหวต", cancel: "ยกเลิก", sending: "กำลังโหวต...",
+    thanks: "ขอบคุณที่โหวตค่ะ 💛", yours: "โหวตของคุณ", notLinked: "กรุณาจองคิวหรือสมัครสมาชิกเพื่อเชื่อมบัญชี LINE ก่อนโหวต", none: "ยังไม่มีรายชื่อ", failed: "โหวตไม่สำเร็จ กรุณาลองใหม่",
+  },
+  en: {
+    tab: "Vote", banner: "Halloween Staff Challenge", bannerOpen: "Vote for your favourite Halloween look", bannerSoon: "Voting opens 18 Oct 2026", bannerVoted: "You've voted — thank you!",
+    title: "Vote for your favourite", sub: "Pick the Halloween look you love most · one vote per customer", soon: "Voting opens 18 Oct 2026", closed: "Voting has closed. Thanks for joining in!",
+    vote: "Vote", confirmTitle: "Confirm your vote?", confirmText: "You can only vote once, and it can't be changed.", confirm: "Confirm vote", cancel: "Cancel", sending: "Voting...",
+    thanks: "Thank you for voting 💛", yours: "Your vote", notLinked: "Please book or join as a member to link your LINE account before voting.", none: "No candidates yet", failed: "Couldn't submit your vote. Please try again.",
+  },
+} as const;
+
 function displayDate(value: string, lang: "th" | "en") {
   return new Intl.DateTimeFormat(lang === "th" ? "th-TH" : "en-GB", { dateStyle: "long" }).format(new Date(value));
 }
@@ -115,6 +133,40 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   const [cancelError, setCancelError] = useState("");
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
+  const vu = VOTE_UI[lang];
+  const votePhase = votePhaseAt();
+  const [voteState, setVoteState] = useState<VoteState | null>(null);
+  const [voteTarget, setVoteTarget] = useState<VoteCandidate | null>(null);
+  const [voteBusy, setVoteBusy] = useState(false);
+  const [voteError, setVoteError] = useState("");
+
+  const callVote = useCallback(async (candidateId?: string) => {
+    if (!liff.accessToken) return null;
+    const res = await fetch("/api/vote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lineAccessToken: liff.accessToken, ...(candidateId ? { candidateId } : {}) }),
+    });
+    return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
+  }, [liff.accessToken]);
+
+  useEffect(() => {
+    if (votePhase === "closed" || !liff.accessToken) return;
+    let alive = true;
+    void callVote().then(r => { if (alive && r?.ok) setVoteState(r.data as VoteState); }).catch(() => {});
+    return () => { alive = false; };
+  }, [callVote, votePhase, liff.accessToken]);
+
+  async function castVote() {
+    if (!voteTarget || voteBusy) return;
+    setVoteBusy(true); setVoteError("");
+    try {
+      const r = await callVote(voteTarget.id);
+      if (r?.ok || r?.data?.myVote) setVoteState(r.data as VoteState);
+      else setVoteError(r?.data?.message || vu.failed);
+      if (r?.ok || r?.status === 409) setVoteTarget(null);
+    } catch { setVoteError(vu.failed); } finally { setVoteBusy(false); }
+  }
 
   const loadCustomerData = useCallback(async () => {
     if (!liff.accessToken) return;
@@ -272,6 +324,14 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
             </button>
           </section>
 
+          {votePhase !== "closed" && <section className="hub-section vote-banner-wrap">
+            <button type="button" className="vote-banner" onClick={() => setTab("vote")}>
+              <span className="vote-banner-icon"><Pumpkin /></span>
+              <span><small>🎃 {vu.banner}</small><strong>{voteState?.myVote ? vu.bannerVoted : votePhase === "open" ? vu.bannerOpen : vu.bannerSoon}</strong></span>
+              <b>›</b>
+            </button>
+          </section>}
+
           <section className="hub-section"><div className="section-heading"><div><h2>{u.next}</h2><p>Next appointment</p></div><button onClick={() => setTab("history")}>{u.viewAll}</button></div>
             {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{lang === "th" ? upcoming.service.nameTh || upcoming.service.name : upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[lang][upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {displayDate(upcoming.date, lang)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(upcoming)}>{u.manage}</button><button type="button" onClick={() => requestCancellation(upcoming)}><Trash2 />{u.cancel}</button></div></article> : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}
           </section>
@@ -286,6 +346,28 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
           <div className="manage-upcoming-list">{upcomingBookings.length ? upcomingBookings.map(b => <article className="appointment" key={b.id}><div className="appointment-title"><div><h3>{lang === "th" ? b.service.nameTh || b.service.name : b.service.name}</h3><p>{b.service.category}</p></div><span>{STATUS[lang][b.status] || b.status}</span></div><p><MapPin /> {b.branch.name}</p><p><CalendarDays /> {displayDate(b.date, lang)}</p><p><Clock3 /> {b.startTime} — {b.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(b)}>{u.manage}</button><button type="button" onClick={() => requestCancellation(b)}><Trash2 />{u.cancel}</button></div></article>) : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}</div>
           <h2 className="manage-section-title history-heading">{u.historySection}</h2>
           <div className="history-list">{historicalBookings.length ? historicalBookings.map(b => <article key={b.id}><div><h2>{lang === "th" ? b.service.nameTh || b.service.name : b.service.name}</h2><p>{b.branch.name}</p><p>{displayDate(b.date, lang)} · {b.startTime} {lang === "th" ? "น." : ""}</p></div><span>{STATUS[lang][b.status] || b.status}</span></article>) : <div className="empty-appointment"><Clock3 /><p>{u.noHistory}</p></div>}</div>
+        </section>}
+
+        {tab === "vote" && <section className="vote-page">
+          <div className="vote-title"><span>🎃 {VOTE_EVENT.titleTh.toUpperCase()}</span><h1>{vu.title}</h1><p>{vu.sub}</p></div>
+          {votePhase === "closed" && <p className="vote-note">{vu.closed}</p>}
+          {votePhase === "upcoming" && <p className="vote-note">{vu.soon}</p>}
+          {voteState && !voteState.canVote && votePhase === "open" && <p className="vote-note">{vu.notLinked}</p>}
+          {voteState?.myVote && <p className="vote-thanks"><Check /> {vu.thanks}</p>}
+          {voteError && <p className="reading-error" role="alert">{voteError}</p>}
+          <div className="vote-grid">{(voteState?.candidates ?? []).map(c => {
+            const mine = voteState?.myVote?.candidateId === c.id;
+            const locked = votePhase !== "open" || !voteState?.canVote || !!voteState?.myVote;
+            return <article key={c.id} className={mine ? "vote-card mine" : "vote-card"}>
+              <div className="vote-photo">{c.photoUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={c.photoUrl} alt={c.name} loading="lazy" />
+                : <span>{c.name[0]}</span>}{mine && <i><Check /></i>}</div>
+              <h3>{c.name}</h3>
+              {mine ? <em>{vu.yours}</em> : <button type="button" disabled={locked} onClick={() => { setVoteError(""); setVoteTarget(c); }}>{vu.vote}</button>}
+            </article>;
+          })}</div>
+          {voteState && voteState.candidates.length === 0 && <p className="vote-note">{vu.none}</p>}
         </section>}
 
         {tab === "tarot" && <section className="tarot-page"><div className="tarot-title"><span>✦ ERR.DAY TAROT ✦</span><h1>ดูดวงแบบละเอียด</h1><p>เลือกไพ่ตามความรู้สึก 3 ใบ สำหรับความรัก การงาน และการเงิน</p></div>
@@ -326,8 +408,22 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
         </section>
       </div>}
 
-      <nav className="hub-tabs" aria-label={lang === "th" ? "เมนูลูกค้า" : "Customer menu"}>{[
+      {voteTarget && <div className="hub-dialog-backdrop" role="presentation" onClick={() => { if (!voteBusy) setVoteTarget(null); }}>
+        <section className="hub-dialog" role="dialog" aria-modal="true" aria-labelledby="vote-dialog-title" onClick={(event) => event.stopPropagation()}>
+          <button className="hub-dialog-close" type="button" aria-label={u.close} onClick={() => setVoteTarget(null)} disabled={voteBusy}><X /></button>
+          <span className="hub-dialog-icon contact"><Vote /></span>
+          <h2 id="vote-dialog-title">{vu.confirmTitle}</h2>
+          <p><b>{voteTarget.name}</b><br />{vu.confirmText}</p>
+          <div className="hub-dialog-actions split">
+            <button type="button" onClick={() => setVoteTarget(null)} disabled={voteBusy}>{vu.cancel}</button>
+            <button className="dialog-primary" type="button" onClick={() => void castVote()} disabled={voteBusy}>{voteBusy ? vu.sending : vu.confirm}</button>
+          </div>
+        </section>
+      </div>}
+
+      <nav className={`hub-tabs${votePhase !== "closed" ? " five" : ""}`} aria-label={lang === "th" ? "เมนูลูกค้า" : "Customer menu"}>{[
         ["home", CreditCard, u.memberTab], ["book", CalendarDays, u.bookTab], ["history", Clock3, u.historyTab], ["tarot", Sparkles, u.tarotTab],
+        ...(votePhase !== "closed" ? [["vote", Vote, vu.tab]] : []),
       ].map(([id, Icon, label]) => {
         const disabled = id === "tarot" && !tarotEnabled;
         return <button type="button" key={String(id)} disabled={disabled} onClick={() => setTab(id as Tab)} className={`${tab === id ? "active " : ""}${id === "book" ? "booking-tab" : ""}`} aria-current={tab === id ? "page" : undefined} aria-label={disabled ? u.comingSoon : String(label)}><Icon /><span>{String(label)}</span></button>;

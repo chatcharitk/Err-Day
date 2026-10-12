@@ -266,6 +266,7 @@ model Customer {
   packages         CustomerPackage[]
   membership       Membership?
   membershipCycles MembershipCycle[]
+  staffVotes       StaffVote[]
 
   @@index([name(ops: raw("gin_trgm_ops"))], map: "Customer_name_trgm_idx", type: Gin)
   @@index([nickname(ops: raw("gin_trgm_ops"))], map: "Customer_nickname_trgm_idx", type: Gin)
@@ -858,4 +859,41 @@ enum PayCadence {
 enum PayoutStatus {
   PENDING
   PAID
+}
+
+/// *
+///  * A staff member customers can vote for in a staff-vote event (first use:
+///  * Halloween Staff Challenge 2026). `eventKey` ties the row to one event so
+///  * the next campaign reuses these tables. name/photo are display copies, so
+///  * the event keeps working if a Staff row is renamed or deactivated.
+model VoteCandidate {
+  id        String      @id @default(cuid())
+  eventKey  String
+  name      String
+  staffId   String?
+  photoUrl  String?
+  sortOrder Int         @default(0)
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  votes     StaffVote[]
+
+  @@index([eventKey, sortOrder])
+}
+
+/// *
+///  * One customer's vote. The unique (eventKey, customerId) is the "one vote
+///  * per customer" guarantee — enforced by the database, not just the API.
+///  * Rows are never edited or deleted: the table is the voting record.
+model StaffVote {
+  id          String        @id @default(cuid())
+  eventKey    String
+  candidateId String
+  customerId  String
+  lineUserId  String?
+  createdAt   DateTime      @default(now())
+  candidate   VoteCandidate @relation(fields: [candidateId], references: [id])
+  customer    Customer      @relation(fields: [customerId], references: [id])
+
+  @@unique([eventKey, customerId])
+  @@index([eventKey, candidateId])
 }
