@@ -12,7 +12,7 @@ import { RescheduleModal, type ReschedulableBooking } from "@/app/my-bookings/My
 import { useSeasonalTheme } from "@/hooks/useSeasonalTheme";
 import { tarotImagePath } from "@/lib/seasonal-theme";
 import { Cobweb, HalloweenBats, Pumpkin } from "@/components/HalloweenDecor";
-import { VOTE_EVENT, votePhaseAt } from "@/lib/staff-vote";
+import { VOTE_EVENT, candidateInitial, votePhaseAt } from "@/lib/staff-vote";
 
 type Tab = "home" | "book" | "history" | "tarot" | "vote";
 type VoteCandidate = { id: string; name: string; photoUrl: string | null };
@@ -362,7 +362,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
               <div className="vote-photo">{c.photoUrl
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={c.photoUrl} alt={c.name} loading="lazy" />
-                : <span>{c.name[0]}</span>}{mine && <i><Check /></i>}</div>
+                : <span>{candidateInitial(c.name)}</span>}{mine && <i><Check /></i>}</div>
               <h3>{c.name}</h3>
               {mine ? <em>{vu.yours}</em> : <button type="button" disabled={locked} onClick={() => { setVoteError(""); setVoteTarget(c); }}>{vu.vote}</button>}
             </article>;

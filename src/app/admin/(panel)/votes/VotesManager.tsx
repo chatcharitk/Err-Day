@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Eye, EyeOff, Check } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
-import { PARTICIPATION_BONUS, PARTICIPATION_MIN_VOTES, VOTE_PRIZES } from "@/lib/staff-vote";
+import { PARTICIPATION_BONUS, PARTICIPATION_MIN_VOTES, VOTE_PRIZES, candidateInitial } from "@/lib/staff-vote";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -81,7 +81,7 @@ export default function VotesManager({ event, candidates: initial, log }: Props)
                 {c.photoUrl
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={c.photoUrl} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-                  : <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: "#F9F0E8", color: PRIMARY }}>{c.name[0]}</span>}
+                  : <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: "#F9F0E8", color: PRIMARY }}>{candidateInitial(c.name)}</span>}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 text-sm" style={{ color: TEXT }}>
                     <span className="font-medium truncate">{c.name}</span>

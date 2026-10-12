@@ -27,3 +27,9 @@ export function votePhaseAt(now: Date = new Date()): VotePhase {
   if (today > VOTE_EVENT.to) return "closed";
   return "open";
 }
+
+/** Placeholder letter for a candidate with no photo — skips Thai leading vowels (เ แ โ ใ ไ) so "เบญ" shows บ, not a lone vowel. */
+export function candidateInitial(name: string): string {
+  const stripped = name.trim().replace(/^[เแโใไ]+/, "");
+  return Array.from(stripped || name.trim())[0] ?? "?";
+}
