@@ -1,8 +1,9 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Phone, Clock, Sparkles, FileText } from "lucide-react";
+import { maskPhone } from "@/lib/staff-person";
 import { prisma } from "@/lib/prisma";
-import { getCurrentStaff } from "@/lib/staff-auth";
+import { getCurrentStaffPerson } from "@/lib/staff-auth";
 
 export const dynamic  = "force-dynamic";
 export const metadata = { title: "รายละเอียดการจอง — err.day" };
@@ -31,7 +32,7 @@ export default async function StaffBookingDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const me = await getCurrentStaff();
+  const me = await getCurrentStaffPerson();
   if (!me) redirect("/staff/login");
 
   const { id } = await params;
@@ -54,10 +55,11 @@ export default async function StaffBookingDetailPage({
     },
   });
 
-  // Branch-scoped: staff can view any booking at their branch (so they can
-  // assist coverage, prep, etc.). 404 on bookings outside their branch to
-  // avoid leaking existence of bookings at other branches.
-  if (!b || b.branchId !== me.branchId) notFound();
+  // Branch-scoped: staff can view any booking at the branch(es) they work at
+  // (so they can assist coverage, prep, etc.). 404 elsewhere to avoid leaking
+  // the existence of bookings at other branches.
+  if (!b || !me.person.branchIds.includes(b.branchId)) notFound();
+  const isMine = !!b.staffId && me.person.staffIds.includes(b.staffId);
 
   const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;
   const duration = timeToMins(b.endTime) - timeToMins(b.startTime);
@@ -95,7 +97,7 @@ export default async function StaffBookingDetailPage({
             {/* Assignment badge — who's the appointment for? */}
             <div className="text-right flex-shrink-0">
               <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>ช่าง</p>
-              {b.staffId === me.id ? (
+              {isMine ? (
                 <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full mt-1"
                   style={{ background: PRIMARY, color: "white" }}>
                   ของฉัน
@@ -107,12 +109,14 @@ export default async function StaffBookingDetailPage({
               )}
             </div>
           </div>
-          <a href={`tel:${b.customer.phone}`}
-            className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
-            style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #BBF7D0" }}>
-            <Phone size={14} />
-            {b.customer.phone}
-          </a>
+          {/* Masked on purpose (PDPA) — staff contact customers through the front desk. */}
+          {maskPhone(b.customer.phone) && (
+            <p className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
+              style={{ background: "#F9F3EE", color: MUTED, border: `1px solid ${BORDER}` }}>
+              <Phone size={14} />
+              {maskPhone(b.customer.phone)}
+            </p>
+          )}
         </section>
 
         {/* Time + service card */}

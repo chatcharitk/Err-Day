@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { phoneDigits } from "@/lib/staff-person";
 import {
   verifyPin, signSession, STAFF_COOKIE,
   isLocked, recordFailedAttempt, clearFailedAttempts,
@@ -24,13 +25,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const staff = await prisma.staff.findFirst({
-    where:  { phone: cleanPhone, isActive: true },
-    select: { id: true, passcodeHash: true },
-  });
+  // Match on digits so "082-562-2962" and "0825622962" are the same number, and
+  // try every active row of that person (one per branch) — the PIN may have
+  // been set on either row.
+  const digits = phoneDigits(cleanPhone);
+  const rows = digits.length < 9 ? [] : (await prisma.staff.findMany({
+    where:  { isActive: true, phone: { not: null } },
+    select: { id: true, phone: true, passcodeHash: true },
+  })).filter(r => phoneDigits(r.phone) === digits && r.passcodeHash);
+  let staff: { id: string } | null = null;
+  for (const r of rows) {
+    if (await verifyPin(pin, r.passcodeHash!)) { staff = r; break; }
+  }
 
   // Generic message for both "not found" and "wrong PIN" — don't leak which.
-  if (!staff || !staff.passcodeHash || !(await verifyPin(pin, staff.passcodeHash))) {
+  if (!staff) {
     recordFailedAttempt(cleanPhone);
     return NextResponse.json({ error: "เบอร์โทรหรือ PIN ไม่ถูกต้อง" }, { status: 401 });
   }

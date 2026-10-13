@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Calendar as CalendarIcon, Clock, Sparkles } from "lucide-react";
+import { LogOut, Calendar as CalendarIcon, CalendarRange, Clock, Sparkles } from "lucide-react";
+import StaffNav from "./StaffNav";
 import type { CurrentStaff } from "@/lib/staff-auth";
 
 const PRIMARY = "#8B1D24";
@@ -27,8 +28,10 @@ interface Booking {
   customerName:     string;
   customerPhone:    string;
   customerNickname: string | null;
+  /** Set only for people who work at more than one branch. */
+  branchName:       string | null;
 }
-interface Shift { date: string; startTime: string; endTime: string }
+interface Shift { date: string; startTime: string; endTime: string; branchName: string | null }
 interface WeekData {
   todayStr: string;
   bookings: Booking[];
@@ -69,13 +72,14 @@ function thaiDayShort(d: Date): string {
 
 export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: WeekData }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"today" | "week">("today");
+  const [tab, setTab] = useState<"today" | "week" | "next">("today");
 
   const today = parseYmd(week.todayStr);
   const monday = mondayOf(today);
+  const weekOffset = tab === "next" ? 7 : 0;
   const weekDays = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(monday, i)),
-    [monday.getTime()],  // eslint-disable-line react-hooks/exhaustive-deps
+    () => Array.from({ length: 7 }, (_, i) => addDays(monday, i + weekOffset)),
+    [monday.getTime(), weekOffset],  // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const todayBookings = useMemo(
@@ -88,7 +92,8 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
     [week.bookings, tomorrowStr],
   );
 
-  const todayShift   = week.shifts.find(s => s.date === week.todayStr);
+  // A multi-branch person can have two shifts in one day (one per branch).
+  const todayShifts  = week.shifts.filter(s => s.date === week.todayStr);
   const bookingsByDay = useMemo(() => {
     const map = new Map<string, Booking[]>();
     for (const b of week.bookings) {
@@ -123,6 +128,8 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
         </div>
       </header>
 
+      <StaffNav active="schedule" />
+
       {/* Tabs */}
       <div className="px-4 pt-4 mb-3 max-w-2xl mx-auto flex gap-2">
         <TabButton active={tab === "today"} onClick={() => setTab("today")} icon={<Clock size={14} />}>
@@ -130,6 +137,9 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
         </TabButton>
         <TabButton active={tab === "week"} onClick={() => setTab("week")} icon={<CalendarIcon size={14} />}>
           สัปดาห์นี้
+        </TabButton>
+        <TabButton active={tab === "next"} onClick={() => setTab("next")} icon={<CalendarRange size={14} />}>
+          สัปดาห์หน้า
         </TabButton>
       </div>
 
@@ -140,11 +150,12 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
             {/* Today's shift card */}
             <div className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${BORDER}` }}>
               <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>กะวันนี้</p>
-              {todayShift ? (
-                <p className="text-lg font-bold mt-1" style={{ color: TEXT }}>
-                  {todayShift.startTime} – {todayShift.endTime}
+              {todayShifts.length > 0 ? todayShifts.map(s => (
+                <p key={s.startTime} className="text-lg font-bold mt-1" style={{ color: TEXT }}>
+                  {s.startTime} – {s.endTime}
+                  {s.branchName && <span className="ml-2 text-xs font-medium" style={{ color: MUTED }}>{s.branchName}</span>}
                 </p>
-              ) : (
+              )) : (
                 <p className="text-sm mt-1 italic" style={{ color: MUTED }}>วันหยุด · ไม่มีกะ</p>
               )}
             </div>
@@ -182,11 +193,11 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
           </>
         )}
 
-        {tab === "week" && (
+        {(tab === "week" || tab === "next") && (
           <div className="space-y-3">
             {weekDays.map(d => {
               const ds = ymd(d);
-              const shift = week.shifts.find(s => s.date === ds);
+              const dayShifts = week.shifts.filter(s => s.date === ds);
               const bookings = bookingsByDay.get(ds) ?? [];
               const isToday  = ds === week.todayStr;
               return (
@@ -199,11 +210,12 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
                         <span className="text-sm font-bold leading-none mt-0.5">{d.getDate()}</span>
                       </div>
                       <div>
-                        {shift ? (
-                          <p className="text-xs font-semibold" style={{ color: TEXT }}>
+                        {dayShifts.length > 0 ? dayShifts.map(shift => (
+                          <p key={shift.startTime} className="text-xs font-semibold" style={{ color: TEXT }}>
                             {shift.startTime} – {shift.endTime}
+                            {shift.branchName && <span className="ml-1.5 font-normal" style={{ color: MUTED }}>· {shift.branchName}</span>}
                           </p>
-                        ) : (
+                        )) : (
                           <p className="text-xs italic" style={{ color: MUTED }}>วันหยุด</p>
                         )}
                         <p className="text-[10px]" style={{ color: MUTED }}>
@@ -278,6 +290,7 @@ function BookingRow({ b, dim = false, compact = false }: { b: Booking; dim?: boo
           {b.serviceName}
           {b.staffName && <span className="ml-1.5" style={{ color: b.isMine ? PRIMARY : MUTED }}>· {b.staffName}</span>}
           {!b.staffName && <span className="ml-1.5 italic" style={{ color: MUTED }}>· ไม่ระบุช่าง</span>}
+          {b.branchName && <span className="ml-1.5" style={{ color: MUTED }}>· {b.branchName}</span>}
         </p>
       </div>
       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"

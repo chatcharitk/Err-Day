@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getCurrentStaff } from "@/lib/staff-auth";
+import { getCurrentStaffPerson } from "@/lib/staff-auth";
+import { maskPhone } from "@/lib/staff-person";
 import StaffDashboard from "./StaffDashboard";
 
 export const dynamic  = "force-dynamic"; // cookie-dependent
@@ -20,12 +21,13 @@ function mondayOf(d: Date): Date {
 }
 
 export default async function StaffHome() {
-  const me = await getCurrentStaff();
+  const me = await getCurrentStaffPerson();
   if (!me) redirect("/staff/login");
 
   const now    = new Date();
   const monday = mondayOf(now);
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23, 59, 59, 999);
+  // This week and next, so staff can see their upcoming shifts too.
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 13); sunday.setHours(23, 59, 59, 999);
 
   // Branch-wide bookings — staff can see every appointment at their branch
   // so they know who is coming in (greeting, prep, coverage). The "ของฉัน"
@@ -33,7 +35,7 @@ export default async function StaffHome() {
   const [weekBookings, shifts] = await Promise.all([
     prisma.booking.findMany({
       where: {
-        branchId:  me.branchId,
+        branchId:  { in: me.person.branchIds },
         date:      { gte: monday, lte: sunday },
         status:    { notIn: ["CANCELLED"] },
         serviceId: { notIn: SALE_ONLY_SKUS },
@@ -50,12 +52,13 @@ export default async function StaffHome() {
         service:    { select: { name: true, nameTh: true } },
         customer:   { select: { name: true, phone: true, nickname: true } },
         staff:      { select: { id: true, name: true } },
+        branch:     { select: { name: true } },
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     prisma.staffShift.findMany({
-      where: { staffId: me.id, date: { gte: monday, lte: sunday } },
-      select: { date: true, startTime: true, endTime: true },
+      where: { staffId: { in: me.person.staffIds }, date: { gte: monday, lte: sunday } },
+      select: { date: true, startTime: true, endTime: true, staff: { select: { branch: { select: { name: true } } } } },
       orderBy: { date: "asc" },
     }),
   ]);
@@ -73,16 +76,18 @@ export default async function StaffHome() {
       notes:            b.internalNotes,
       staffId:          b.staffId,
       staffName:        b.staff?.name ?? null,
-      isMine:           b.staffId === me.id,
+      isMine:           !!b.staffId && me.person.staffIds.includes(b.staffId),
       serviceName:      b.service.nameTh || b.service.name,
       customerName:     b.customer.name,
-      customerPhone:    b.customer.phone,
+      customerPhone:    maskPhone(b.customer.phone),
       customerNickname: b.customer.nickname,
+      branchName:       me.person.branchIds.length > 1 ? b.branch.name.replace("err.day ", "") : null,
     })),
     shifts: shifts.map(s => ({
       date:      ymd(s.date),
       startTime: s.startTime,
       endTime:   s.endTime,
+      branchName: me.person.branchIds.length > 1 ? s.staff.branch.name.replace("err.day ", "") : null,
     })),
   };
 

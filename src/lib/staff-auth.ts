@@ -23,6 +23,7 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { personForStaff, type StaffPerson } from "@/lib/staff-person";
 
 const COOKIE_NAME = "staff_session";
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
@@ -137,6 +138,14 @@ export async function getCurrentStaff(): Promise<CurrentStaff | null> {
     avatarUrl:      staff.avatarUrl,
     commissionRate: staff.commissionRate,
   };
+}
+
+/** The signed-in staff member plus every Staff row of the same person (multi-branch). */
+export async function getCurrentStaffPerson(): Promise<(CurrentStaff & { person: StaffPerson }) | null> {
+  const me = await getCurrentStaff();
+  if (!me) return null;
+  const person = await personForStaff(me.id);
+  return person ? { ...me, person } : null;
 }
 
 // ── Rate limiting (in-memory, per phone) ─────────────────────────────────────

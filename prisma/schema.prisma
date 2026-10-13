@@ -897,3 +897,41 @@ model StaffVote {
   @@unique([eventKey, customerId])
   @@index([eventKey, candidateId])
 }
+
+/// *
+///  * Monthly pay slip for one PERSON. A person can own several Staff rows (one
+///  * per branch, e.g. วัน / เอิร์น), so the slip keys on `personKey` (the phone's
+///  * digits, or the staff id when there is no phone) and lists every row it
+///  * covers in `staffIds`. Built as a DRAFT from payroll data, edited by the
+///  * owner, then ISSUED — only issued slips are visible to the employee, and an
+///  * issued slip is a frozen snapshot (lines + totals) that later payroll edits
+///  * never change. Reopening returns it to DRAFT and bumps `revision`.
+model Payslip {
+  id              String    @id @default(cuid())
+  personKey       String
+  staffIds        String[]
+  /// "YYYY-MM" (Bangkok calendar month).
+  month           String
+  /// Snapshots printed on the slip.
+  name            String
+  legalName       String?
+  taxId           String?
+  /// DRAFT | ISSUED
+  status          String    @default("DRAFT")
+  /// [{ kind, label, amountSatang }] — kind "DEDUCTION" subtracts, all others add.
+  lines           Json
+  grossSatang     Int
+  deductionSatang Int
+  netSatang       Int
+  /// Part of the gross already paid out day by day (confirmed daily payroll).
+  paidDailySatang Int       @default(0)
+  notes           String?
+  revision        Int       @default(0)
+  issuedAt        DateTime?
+  issuedBy        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([personKey, month])
+  @@index([month])
+}
