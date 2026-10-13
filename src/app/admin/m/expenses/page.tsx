@@ -1,3 +1,4 @@
+import { expenseBranchOptions } from "@/lib/branch-label";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -60,9 +61,11 @@ export default async function MobileExpensesPage({
       take: 200,
     }),
     prisma.branch.findMany({
-      where:   { isActive: true },
+      // Includes not-yet-open branches (isActive=false) so set-up costs can be
+      // booked against them before launch; they're labelled below.
+      where:   {},
       orderBy: { name: "asc" },
-      select:  { id: true, name: true },
+      select:  { id: true, name: true, isActive: true },
     }),
     prisma.expense.aggregate({ where: { ...where, status: "CONFIRMED" }, _sum: { totalAmount: true }, _count: true }),
     prisma.expense.groupBy({
@@ -85,7 +88,7 @@ export default async function MobileExpensesPage({
         paymentMethod: e.paymentMethod,
         attachmentCount: e._count.attachments,
       }))}
-      branches={branches}
+      branches={expenseBranchOptions(branches)}
       filters={{ branchId: branchFilter, category: categoryFilter, from, to }}
       summary={{ totalAmount: total._sum.totalAmount ?? 0, count: total._count }}
       categoryTotals={Object.fromEntries(

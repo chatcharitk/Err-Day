@@ -1,3 +1,4 @@
+import { expenseBranchOptions } from "@/lib/branch-label";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import ExpenseForm from "../ExpenseForm";
@@ -21,9 +22,11 @@ export default async function EditExpensePage({
       },
     }),
     prisma.branch.findMany({
-      where:   { isActive: true },
+      // Includes not-yet-open branches (isActive=false) so set-up costs can be
+      // booked against them before launch; they're labelled below.
+      where:   {},
       orderBy: { name: "asc" },
-      select:  { id: true, name: true },
+      select:  { id: true, name: true, isActive: true },
     }),
   ]);
 
@@ -33,7 +36,7 @@ export default async function EditExpensePage({
   return (
     <ExpenseForm
       mode="edit"
-      branches={branches}
+      branches={expenseBranchOptions(branches)}
       initial={{
         id:            expense.id,
         vendorId: expense.vendorId, vatMode: expense.vatMode, vatRate: expense.vatRate,

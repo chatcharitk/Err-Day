@@ -1,3 +1,4 @@
+import { expenseBranchOptions } from "@/lib/branch-label";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import ExpensesList from "./ExpensesList";
@@ -82,9 +83,11 @@ export default async function ExpensesPage({
       take: 500,
     }),
     prisma.branch.findMany({
-      where:   { isActive: true },
+      // Includes not-yet-open branches (isActive=false) so set-up costs can be
+      // booked against them before launch; they're labelled below.
+      where:   {},
       orderBy: { name: "asc" },
-      select:  { id: true, name: true },
+      select:  { id: true, name: true, isActive: true },
     }),
     prisma.expense.aggregate({
       where: { ...where, status: "CONFIRMED" },
@@ -114,7 +117,7 @@ export default async function ExpensesPage({
         notes:         e.notes,
         status:        e.status,
       }))}
-      branches={branches}
+      branches={expenseBranchOptions(branches)}
       filters={{ branchId: branchFilter, category: categoryFilter, from, to }}
       sort={{ key: sortKey, dir: sortDir }}
       summary={{
