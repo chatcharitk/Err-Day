@@ -135,6 +135,22 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   const [editing, setEditing] = useState<Booking | null>(null);
   const vu = VOTE_UI[lang];
   const votePhase = votePhaseAt();
+  // Hidden from customers until voting opens (18 Oct). The team can preview early
+  // with `?vote=preview` on the hub URL (sticks for the browser tab); voting itself
+  // stays refused by the API until the window opens.
+  const [votePreview, setVotePreview] = useState(false);
+  useEffect(() => {
+    let on = false;
+    try {
+      const param = new URLSearchParams(window.location.search).get("vote");
+      if (param === "preview") sessionStorage.setItem("errday-vote-preview", "1");
+      else if (param === "off") sessionStorage.removeItem("errday-vote-preview");
+      on = sessionStorage.getItem("errday-vote-preview") === "1";
+    } catch { /* storage blocked — no preview */ }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only URL read
+    setVotePreview(on);
+  }, []);
+  const showVote = votePhase === "open" || votePreview;
   const [voteState, setVoteState] = useState<VoteState | null>(null);
   const [voteTarget, setVoteTarget] = useState<VoteCandidate | null>(null);
   const [voteBusy, setVoteBusy] = useState(false);
@@ -145,17 +161,17 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
     const res = await fetch("/api/vote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lineAccessToken: liff.accessToken, ...(candidateId ? { candidateId } : {}) }),
+      body: JSON.stringify({ lineAccessToken: liff.accessToken, ...(votePreview ? { preview: true } : {}), ...(candidateId ? { candidateId } : {}) }),
     });
     return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
-  }, [liff.accessToken]);
+  }, [liff.accessToken, votePreview]);
 
   useEffect(() => {
-    if (votePhase === "closed" || !liff.accessToken) return;
+    if (!showVote || !liff.accessToken) return;
     let alive = true;
     void callVote().then(r => { if (alive && r?.ok) setVoteState(r.data as VoteState); }).catch(() => {});
     return () => { alive = false; };
-  }, [callVote, votePhase, liff.accessToken]);
+  }, [callVote, showVote, liff.accessToken]);
 
   async function castVote() {
     if (!voteTarget || voteBusy) return;
@@ -324,7 +340,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
             </button>
           </section>
 
-          {votePhase !== "closed" && <section className="hub-section vote-banner-wrap">
+          {showVote && <section className="hub-section vote-banner-wrap">
             <button type="button" className="vote-banner" onClick={() => setTab("vote")}>
               <span className="vote-banner-icon"><Pumpkin /></span>
               <span><small>🎃 {vu.banner}</small><strong>{voteState?.myVote ? vu.bannerVoted : votePhase === "open" ? vu.bannerOpen : vu.bannerSoon}</strong></span>
@@ -351,7 +367,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
         {tab === "vote" && <section className="vote-page">
           <div className="vote-title"><span>🎃 {VOTE_EVENT.titleTh.toUpperCase()}</span><h1>{vu.title}</h1><p>{vu.sub}</p></div>
           {votePhase === "closed" && <p className="vote-note">{vu.closed}</p>}
-          {votePhase === "upcoming" && <p className="vote-note">{vu.soon}</p>}
+          {votePreview && votePhase !== "open" && <p className="vote-note">🔒 โหมดทดลองสำหรับทีมงาน — ลูกค้ายังไม่เห็นหน้านี้ · {vu.soon}</p>}
           {voteState && !voteState.canVote && votePhase === "open" && <p className="vote-note">{vu.notLinked}</p>}
           {voteState?.myVote && <p className="vote-thanks"><Check /> {vu.thanks}</p>}
           {voteError && <p className="reading-error" role="alert">{voteError}</p>}
@@ -421,9 +437,9 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
         </section>
       </div>}
 
-      <nav className={`hub-tabs${votePhase !== "closed" ? " five" : ""}`} aria-label={lang === "th" ? "เมนูลูกค้า" : "Customer menu"}>{[
+      <nav className={`hub-tabs${showVote ? " five" : ""}`} aria-label={lang === "th" ? "เมนูลูกค้า" : "Customer menu"}>{[
         ["home", CreditCard, u.memberTab], ["book", CalendarDays, u.bookTab], ["history", Clock3, u.historyTab], ["tarot", Sparkles, u.tarotTab],
-        ...(votePhase !== "closed" ? [["vote", Vote, vu.tab]] : []),
+        ...(showVote ? [["vote", Vote, vu.tab]] : []),
       ].map(([id, Icon, label]) => {
         const disabled = id === "tarot" && !tarotEnabled;
         return <button type="button" key={String(id)} disabled={disabled} onClick={() => setTab(id as Tab)} className={`${tab === id ? "active " : ""}${id === "book" ? "booking-tab" : ""}`} aria-current={tab === id ? "page" : undefined} aria-label={disabled ? u.comingSoon : String(label)}><Icon /><span>{String(label)}</span></button>;

@@ -12,7 +12,7 @@ import { VOTE_EVENT, votePhaseAt } from "@/lib/staff-vote";
  * database unique key is the real guard, the pre-check just gives a clean answer.
  */
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as { lineAccessToken?: unknown; candidateId?: unknown } | null;
+  const body = await request.json().catch(() => null) as { lineAccessToken?: unknown; candidateId?: unknown; preview?: unknown } | null;
   const lineProfile = await verifyLineAccessToken(body?.lineAccessToken);
   if (!lineProfile) {
     return NextResponse.json({ error: "invalid_line_session" }, { status: 401 });
@@ -23,7 +23,10 @@ export async function POST(request: Request) {
     select: { id: true },
   });
   const phase = votePhaseAt();
-  const candidates = await prisma.voteCandidate.findMany({
+  // Before voting opens the roster stays private — only the team's preview
+  // (`preview: true`) gets it. Casting a vote is refused until "open" regardless.
+  const showRoster = phase === "open" || body?.preview === true;
+  const candidates = !showRoster ? [] : await prisma.voteCandidate.findMany({
     where: { eventKey: VOTE_EVENT.key, isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: { id: true, name: true, photoUrl: true },
