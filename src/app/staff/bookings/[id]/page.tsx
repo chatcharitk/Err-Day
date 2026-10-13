@@ -55,10 +55,8 @@ export default async function StaffBookingDetailPage({
     },
   });
 
-  // Branch-scoped: staff can view any booking at the branch(es) they work at
-  // (so they can assist coverage, prep, etc.). 404 elsewhere to avoid leaking
-  // the existence of bookings at other branches.
-  if (!b || !me.person.branchIds.includes(b.branchId)) notFound();
+  // Staff can open any booking at any branch (the list shows every branch).
+  if (!b) notFound();
   const isMine = !!b.staffId && me.person.staffIds.includes(b.staffId);
 
   const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;

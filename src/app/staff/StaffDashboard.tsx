@@ -28,8 +28,8 @@ interface Booking {
   customerName:     string;
   customerPhone:    string;
   customerNickname: string | null;
-  /** Set only for people who work at more than one branch. */
-  branchName:       string | null;
+  branchId:         string;
+  branchName:       string;
 }
 interface Shift { date: string; startTime: string; endTime: string; branchName: string | null }
 interface WeekData {
@@ -70,7 +70,18 @@ function thaiDayShort(d: Date): string {
   return DOW_TH_SHORT[di];
 }
 
-export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: WeekData }) {
+export default function StaffDashboard({ me, week: allWeek, branches, myBranchIds }: {
+  me: CurrentStaff; week: WeekData; branches: { id: string; name: string }[]; myBranchIds: string[];
+}) {
+  // Bookings from every branch are loaded; this picks which ones to show.
+  // "mine" = the branch(es) this person works at (the default).
+  const [branchView, setBranchView] = useState<string>("mine");
+  const week = useMemo(() => ({
+    ...allWeek,
+    bookings: allWeek.bookings.filter(b =>
+      branchView === "all" ? true : branchView === "mine" ? myBranchIds.includes(b.branchId) : b.branchId === branchView),
+  }), [allWeek, branchView, myBranchIds]);
+  const showBranch = branchView === "all" || (branchView === "mine" && myBranchIds.length > 1);
   const router = useRouter();
   const [tab, setTab] = useState<"today" | "week" | "next">("today");
 
@@ -143,6 +154,18 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
         </TabButton>
       </div>
 
+      {/* Which branch's bookings to show */}
+      <div className="px-4 mb-3 max-w-2xl mx-auto flex gap-2 overflow-x-auto">
+        {[{ id: "mine", name: myBranchIds.length > 1 ? "สาขาที่ฉันทำ" : "สาขาของฉัน" }, ...branches.filter(b => myBranchIds.length > 1 || !myBranchIds.includes(b.id)), { id: "all", name: "ทุกสาขา" }]
+          .map(b => (
+            <button key={b.id} type="button" onClick={() => setBranchView(b.id)}
+              className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium"
+              style={branchView === b.id ? { background: TEXT, color: "white" } : { background: "white", color: TEXT, border: `1px solid ${BORDER}` }}>
+              {b.name}
+            </button>
+          ))}
+      </div>
+
       {/* Body */}
       <section className="px-4 space-y-3 max-w-2xl mx-auto">
         {tab === "today" && (
@@ -173,7 +196,7 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
                 </div>
               ) : (
                 <ul className="space-y-2">
-                  {todayBookings.map(b => <BookingRow key={b.id} b={b} />)}
+                  {todayBookings.map(b => <BookingRow key={b.id} b={b} showBranch={showBranch} />)}
                 </ul>
               )}
             </div>
@@ -186,7 +209,7 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
                   <span className="text-xs" style={{ color: MUTED }}>{tomorrowBookings.length} รายการ</span>
                 </div>
                 <ul className="space-y-2 opacity-90">
-                  {tomorrowBookings.map(b => <BookingRow key={b.id} b={b} dim />)}
+                  {tomorrowBookings.map(b => <BookingRow key={b.id} b={b} dim showBranch={showBranch} />)}
                 </ul>
               </div>
             )}
@@ -228,7 +251,7 @@ export default function StaffDashboard({ me, week }: { me: CurrentStaff; week: W
                     <ul className="divide-y" style={{ borderColor: BORDER }}>
                       {bookings.map(b => (
                         <li key={b.id}>
-                          <BookingRow b={b} compact />
+                          <BookingRow b={b} compact showBranch={showBranch} />
                         </li>
                       ))}
                     </ul>
@@ -260,7 +283,7 @@ function TabButton({ active, onClick, icon, children }: {
   );
 }
 
-function BookingRow({ b, dim = false, compact = false }: { b: Booking; dim?: boolean; compact?: boolean }) {
+function BookingRow({ b, dim = false, compact = false, showBranch = false }: { b: Booking; dim?: boolean; compact?: boolean; showBranch?: boolean }) {
   const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;
   return (
     <Link href={`/staff/bookings/${b.id}`}
@@ -290,7 +313,7 @@ function BookingRow({ b, dim = false, compact = false }: { b: Booking; dim?: boo
           {b.serviceName}
           {b.staffName && <span className="ml-1.5" style={{ color: b.isMine ? PRIMARY : MUTED }}>· {b.staffName}</span>}
           {!b.staffName && <span className="ml-1.5 italic" style={{ color: MUTED }}>· ไม่ระบุช่าง</span>}
-          {b.branchName && <span className="ml-1.5" style={{ color: MUTED }}>· {b.branchName}</span>}
+          {showBranch && <span className="ml-1.5" style={{ color: MUTED }}>· {b.branchName}</span>}
         </p>
       </div>
       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"

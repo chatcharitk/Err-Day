@@ -29,13 +29,13 @@ export default async function StaffHome() {
   // This week and next, so staff can see their upcoming shifts too.
   const sunday = new Date(monday); sunday.setDate(monday.getDate() + 13); sunday.setHours(23, 59, 59, 999);
 
-  // Branch-wide bookings — staff can see every appointment at their branch
-  // so they know who is coming in (greeting, prep, coverage). The "ของฉัน"
-  // pill on each row still highlights which ones they're assigned to.
+  // Bookings at EVERY branch — staff can see who is coming in anywhere (cover,
+  // prep, swaps); the page defaults to their own branch with a switcher. The
+  // "ของฉัน" pill on each row still highlights the ones assigned to them.
   const [weekBookings, shifts] = await Promise.all([
     prisma.booking.findMany({
       where: {
-        branchId:  { in: me.person.branchIds },
+        branch:    { isActive: true },
         date:      { gte: monday, lte: sunday },
         status:    { notIn: ["CANCELLED"] },
         serviceId: { notIn: SALE_ONLY_SKUS },
@@ -52,6 +52,7 @@ export default async function StaffHome() {
         service:    { select: { name: true, nameTh: true } },
         customer:   { select: { name: true, phone: true, nickname: true } },
         staff:      { select: { id: true, name: true } },
+        branchId:   true,
         branch:     { select: { name: true } },
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
@@ -81,7 +82,8 @@ export default async function StaffHome() {
       customerName:     b.customer.name,
       customerPhone:    maskPhone(b.customer.phone),
       customerNickname: b.customer.nickname,
-      branchName:       me.person.branchIds.length > 1 ? b.branch.name.replace("err.day ", "") : null,
+      branchId:         b.branchId,
+      branchName:       b.branch.name.replace("err.day ", ""),
     })),
     shifts: shifts.map(s => ({
       date:      ymd(s.date),
@@ -91,5 +93,13 @@ export default async function StaffHome() {
     })),
   };
 
-  return <StaffDashboard me={me} week={weekData} />;
+  const branches = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  return (
+    <StaffDashboard
+      me={me}
+      week={weekData}
+      branches={branches.map(b => ({ id: b.id, name: b.name.replace("err.day ", "") }))}
+      myBranchIds={me.person.branchIds}
+    />
+  );
 }
