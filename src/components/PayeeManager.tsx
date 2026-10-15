@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { EXPENSE_CATEGORIES } from "@/lib/expenses";
 import css from "./Finance.module.css";
+import PayeeExpenses from "./PayeeExpenses";
 interface Payee {
   id?: string;
   name: string;
@@ -19,6 +20,9 @@ interface Payee {
   category: string | null;
   notes: string | null;
   isActive: boolean;
+  /** From the manage list: non-void expenses linked to this payee. */
+  expenseCount?: number;
+  expenseTotal?: number;
 }
 const empty: Payee = {
   name: "",
@@ -36,7 +40,7 @@ const empty: Payee = {
   notes: null,
   isActive: true,
 };
-type SortKey = "name" | "type" | "status" | "doc";
+type SortKey = "name" | "type" | "status" | "doc" | "total";
 const TYPE_LABEL: Record<string, string> = { EMPLOYEE: "พนักงาน", PERSON: "บุคคล", BUSINESS: "ร้านค้า / บริษัท" };
 type ActiveFilter = "all" | "active" | "inactive";
 type DocFilter = "all" | "complete" | "incomplete";
@@ -70,7 +74,8 @@ export default function PayeeManager({
     [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" }),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [syncExpenses, setSyncExpenses] = useState(true);
   async function load() {
     setLoading(true);
     try {
@@ -98,7 +103,7 @@ export default function PayeeManager({
       const r = await fetch("/api/admin/vendors", {
         method: form.id ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, syncExpenses: !!form.id && syncExpenses }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
@@ -124,6 +129,7 @@ export default function PayeeManager({
         sort.key === "type"   ? (TYPE_LABEL[a.type] ?? a.type).localeCompare(TYPE_LABEL[b.type] ?? b.type, "en")
       : sort.key === "status" ? Number(b.isActive) - Number(a.isActive)            // active first when ascending
       : sort.key === "doc"    ? missingDocFields(a).length - missingDocFields(b).length // complete first when ascending
+      : sort.key === "total"  ? (a.expenseTotal ?? 0) - (b.expenseTotal ?? 0)
       :                         byName(a, b);
     return [...rows].sort((a, b) => sign * primary(a, b) || byName(a, b));
   }, [vendors, q, activeFilter, docFilter, sort]);
@@ -210,6 +216,7 @@ export default function PayeeManager({
                     {sortHeader("type", "ประเภท")}
                     {sortHeader("status", "สถานะ")}
                     {sortHeader("doc", "ข้อมูลเอกสาร")}
+                    {sortHeader("total", "รายจ่าย")}
                     <th>จัดการ</th>
                   </tr>
                 </thead>
@@ -217,7 +224,14 @@ export default function PayeeManager({
                   {visible
                     .map((v) => (
                       <tr key={v.id}>
-                        <td>{v.name}</td>
+                        <td>
+                          <button type="button" onClick={() => { setForm(v); setSyncExpenses(true); }}
+                            style={{ all: "unset", cursor: "pointer", color: "#8b1d24", fontWeight: 600 }}
+                            title="ดูรายจ่ายและแก้ข้อมูล">
+                            {v.name}
+                          </button>
+                          {v.legalName && v.legalName !== v.name && <p className={css.muted} style={{ margin: "2px 0 0" }}>{v.legalName}</p>}
+                        </td>
                         <td>{TYPE_LABEL[v.type] ?? v.type}</td>
                         <td>
                           <span className={css.badge} style={v.isActive ? BADGE_OK : BADGE_OFF}>
@@ -239,8 +253,13 @@ export default function PayeeManager({
                             );
                           })()}
                         </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          {(v.expenseCount ?? 0) > 0
+                            ? <>฿{((v.expenseTotal ?? 0) / 100).toLocaleString("th-TH", { maximumFractionDigits: 2 })}<p className={css.muted} style={{ margin: "2px 0 0" }}>{v.expenseCount} รายการ</p></>
+                            : <span className={css.muted}>—</span>}
+                        </td>
                         <td>
-                          <button onClick={() => setForm(v)}>แก้ข้อมูล</button>
+                          <button onClick={() => { setForm(v); setSyncExpenses(true); }}>ดู / แก้ข้อมูล</button>
                         </td>
                       </tr>
                     ))}
@@ -250,6 +269,12 @@ export default function PayeeManager({
           )}
           {form && (
             <div className={css.panel}>
+              {form.id && (
+                <h2 style={{ marginTop: 0 }}>
+                  {form.name}
+                  {form.legalName && form.legalName !== form.name && <span className={css.muted} style={{ fontSize: 14, fontWeight: 400, marginLeft: 8 }}>{form.legalName}</span>}
+                </h2>
+              )}
               <h3 style={{ marginTop: 0 }}>ข้อมูลทั่วไป</h3>
               <div className={css.fields}>
                 <label>
@@ -417,14 +442,27 @@ export default function PayeeManager({
                 </label>
               </div>
 
+              {form.id && (form.expenseCount ?? 0) > 0 && (
+                <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, fontWeight: 400 }}>
+                  <input type="checkbox" checked={syncExpenses} onChange={(e) => setSyncExpenses(e.target.checked)}
+                    style={{ width: 18, minHeight: 18, margin: 0, flex: "none" }} />
+                  อัปเดตชื่อและข้อมูลภาษีในรายจ่ายเดิมของผู้รับเงินนี้ด้วย ({form.expenseCount} รายการ)
+                </label>
+              )}
               <div className={css.toolbar}>
                 <button className={css.primary} disabled={busy} onClick={save}>
                   บันทึกผู้รับเงิน
                 </button>
                 <button disabled={busy} onClick={() => setForm(null)}>
-                  ยกเลิก
+                  {form.id ? "กลับไปรายชื่อ" : "ยกเลิก"}
                 </button>
               </div>
+              {form.id && (
+                <>
+                  <h3>รายจ่ายของผู้รับเงินนี้</h3>
+                  <PayeeExpenses vendorId={form.id} />
+                </>
+              )}
             </div>
           )}
         </>

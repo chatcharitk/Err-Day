@@ -32,7 +32,20 @@ export async function GET(request: Request) {
       select: { id: true, name: true, branch: { select: { name: true } } },
       orderBy: { name: "asc" },
     });
-    return Response.json({ vendors, staff });
+    const stats = await prisma.expense.groupBy({
+      by: ["vendorId"],
+      where: { vendorId: { not: null }, status: { not: "VOID" } },
+      _count: { _all: true },
+      _sum: { totalAmount: true },
+      _max: { date: true },
+    });
+    return Response.json({
+      vendors: vendors.map((v) => {
+        const s = stats.find((x) => x.vendorId === v.id);
+        return { ...v, expenseCount: s?._count._all ?? 0, expenseTotal: s?._sum.totalAmount ?? 0, lastExpense: s?._max.date ?? null };
+      }),
+      staff,
+    });
   }
   return Response.json({
     vendors: vendors.map((v) => ({
@@ -95,6 +108,30 @@ async function save(request: Request, update: boolean) {
       const v = update
         ? await tx.vendor.update({ where: { id: String(b.id) }, data })
         : await tx.vendor.create({ data });
+      // Optionally carry the corrected name/tax details onto this payee's
+      // existing expenses (vendor text + the payee snapshot the CSV export reads).
+      if (update && b.syncExpenses === true) {
+        const linked = await tx.expense.findMany({
+          where: { vendorId: v.id, status: { not: "VOID" } },
+          select: { id: true, vendor: true },
+        });
+        const vendorText = v.legalName || v.name;
+        await tx.expense.updateMany({
+          where: { id: { in: linked.map((e) => e.id) } },
+          data: { vendor: vendorText, payeeSnapshot: jsonSnapshot(v) },
+        });
+        if (linked.length)
+          await tx.financeAudit.create({
+            data: {
+              entity: "PAYEE",
+              recordId: v.id,
+              action: "SYNC_EXPENSES",
+              actor: gate.username,
+              before: jsonSnapshot({ expenses: linked }),
+              after: jsonSnapshot({ vendor: vendorText, count: linked.length }),
+            },
+          });
+      }
       await tx.financeAudit.create({
         data: {
           entity: "PAYEE",
