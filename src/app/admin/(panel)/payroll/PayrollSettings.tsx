@@ -192,7 +192,7 @@ function StaffPayRow({ staff }: { staff: StaffCfg }) {
         value={payType}
         onChange={(e) => setPayType(e.target.value as PayType)}
         className="text-sm px-2 py-1.5 rounded-lg border bg-white"
-        style={{ borderColor: BORDER, color: TEXT }}
+        style={{ borderColor: BORDER, color: TEXT, width: "auto", minHeight: 36 }}
       >
         <option value="MONTHLY_SALARY">เงินเดือน</option>
         <option value="DAILY_WAGE">รายวัน</option>
@@ -206,8 +206,8 @@ function StaffPayRow({ staff }: { staff: StaffCfg }) {
           min="0"
           value={baseBaht}
           onChange={(e) => setBaseBaht(e.target.value)}
-          className="w-24 px-2 py-1.5 text-sm rounded-lg border text-right"
-          style={{ borderColor: BORDER, color: TEXT }}
+          className="px-2 py-1.5 text-sm rounded-lg border text-right"
+          style={{ borderColor: BORDER, color: TEXT, width: 112, minHeight: 36, flex: "none" }}
         />
         <span className="text-[11px]" style={{ color: MUTED }}>
           {payType === "DAILY_WAGE" ? "/วัน" : "/เดือน"}
@@ -217,7 +217,7 @@ function StaffPayRow({ staff }: { staff: StaffCfg }) {
         value={cadence}
         onChange={(e) => setCadence(e.target.value as Cadence)}
         className="text-sm px-2 py-1.5 rounded-lg border bg-white"
-        style={{ borderColor: BORDER, color: TEXT }}
+        style={{ borderColor: BORDER, color: TEXT, width: "auto", minHeight: 36 }}
       >
         <option value="MONTHLY">จ่ายรายเดือน</option>
         <option value="WEEKLY">จ่ายรายสัปดาห์</option>
@@ -321,8 +321,10 @@ function ServiceCommissionRow({ service }: { service: ServiceCfg }) {
         min="0"
         value={val}
         onChange={(e) => setVal(e.target.value)}
-        className="w-20 px-2 py-1.5 text-sm rounded-lg border text-right"
-        style={{ borderColor: BORDER, color: TEXT }}
+        className="px-2 py-1.5 text-sm rounded-lg border text-right"
+        // Inline width: the payroll page's CSS module styles every input as
+        // width:100%, which out-ranks Tailwind's w-* and squeezed the name column.
+        style={{ borderColor: BORDER, color: TEXT, width: 96, minHeight: 36, flex: "none" }}
       />
       {error && (
         <p role="alert" className="text-red-600">
@@ -403,8 +405,10 @@ function AddonCommissionRow({ addon }: { addon: AddonCfg }) {
         min="0"
         value={val}
         onChange={(e) => setVal(e.target.value)}
-        className="w-20 px-2 py-1.5 text-sm rounded-lg border text-right"
-        style={{ borderColor: BORDER, color: TEXT }}
+        className="px-2 py-1.5 text-sm rounded-lg border text-right"
+        // Inline width: the payroll page's CSS module styles every input as
+        // width:100%, which out-ranks Tailwind's w-* and squeezed the name column.
+        style={{ borderColor: BORDER, color: TEXT, width: 96, minHeight: 36, flex: "none" }}
       />
       {error && (
         <p role="alert" className="text-red-600">
