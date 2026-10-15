@@ -32,6 +32,7 @@ export const EXPENSE_CATEGORY_GROUPS = defineExpenseCategoryGroups([
       { value: "water",             label: "ค่าน้ำ" },
       { value: "internet_phone",    label: "ค่าอินเทอร์เน็ต / โทรศัพท์" },
       { value: "maintenance",       label: "ค่าซ่อมแซม / บำรุงรักษา" },
+      { value: "decoration",        label: "ค่าตกแต่ง" },
     ],
   },
   {
@@ -105,6 +106,7 @@ export const EXPENSE_QUICK_CATEGORIES = [
   "hair_products",
   "salary",
   "marketing",
+  "decoration",
 ] as const;
 
 export function isExpenseCategory(value: string | undefined): value is ExpenseCategoryValue {

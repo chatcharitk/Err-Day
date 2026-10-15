@@ -6,6 +6,7 @@ import {
   Droplets,
   FlaskConical,
   Megaphone,
+  Paintbrush,
   UsersRound,
   Zap,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const ICONS = {
   hair_products: FlaskConical,
   salary: UsersRound,
   marketing: Megaphone,
+  decoration: Paintbrush,
 } as const;
 
 const TINTS: Record<(typeof EXPENSE_QUICK_CATEGORIES)[number], string> = {
@@ -36,6 +38,7 @@ const TINTS: Record<(typeof EXPENSE_QUICK_CATEGORIES)[number], string> = {
   hair_products: "#EEF8F2",
   salary: "#EEF1F8",
   marketing: "#FFF0E8",
+  decoration: "#F5EEFB",
 };
 
 function fmt(satang: number) {
