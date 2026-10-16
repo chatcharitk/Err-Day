@@ -17,7 +17,7 @@ export async function PATCH(
     const {
       name, nameTh, category, description, descriptionTh,
       advanceBookingRequired, memberPrice, memberDiscountPercent, isActive, isPublic,
-      commissionBaht,
+      commissionBaht, cheerBaht,
     } = body;
 
     const service = await prisma.service.update({
@@ -38,6 +38,9 @@ export async function PATCH(
         // Per-service commission (ค่ามือ) entered in baht → stored as satang.
         ...(commissionBaht !== undefined
           ? { commissionSatang: Math.max(0, Math.round(Number(commissionBaht) * 100)) }
+          : {}),
+        ...(cheerBaht !== undefined
+          ? { cheerSatang: Math.max(0, Math.round(Number(cheerBaht) * 100)) }
           : {}),
       },
       include: {

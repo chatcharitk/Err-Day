@@ -119,7 +119,7 @@ export default async function StaffPayPage({ searchParams }: { searchParams: Pro
                     <summary className="p-3 flex items-center justify-between cursor-pointer list-none">
                       <div>
                         <p className="text-sm font-semibold" style={{ color: TEXT }}>{dayLabel(r.date)}</p>
-                        <p className="text-[11px]" style={{ color: MUTED }}>{r.jobs.filter(j => j.primary && j.status === "COMPLETED").length} งาน · แตะเพื่อดูรายละเอียด</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>{r.jobs.filter(j => j.primary && !j.cheer && j.status === "COMPLETED").length} งาน{r.jobs.some(j => j.cheer) ? ` · เชียร์ ${r.jobs.filter(j => j.cheer).length}` : ""} · แตะเพื่อดูรายละเอียด</p>
                       </div>
                       <div className="text-right">
                         <p className="text-base font-bold" style={{ color: TEXT }}>{money(payDayTotal(r))}</p>

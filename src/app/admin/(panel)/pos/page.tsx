@@ -1,6 +1,7 @@
-import { servicesOfferedWhere, serviceOfferedOn } from "@/lib/addon-availability";
+import { servicesOfferedWhere } from "@/lib/addon-availability";
 import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { prisma } from "@/lib/prisma";
+import { getCachedBranchStaff } from "@/lib/branches-cache";
 import { defaultBranchId } from "@/lib/utils";
 import PosTerminal from "./PosTerminal";
 
@@ -84,6 +85,7 @@ export default async function PosPage({
       prefillBooking={prefillBooking}
       prefillCustomer={prefillCustomer}
       addSku={addSku ?? null}
+      staff={activeBranchId ? await getCachedBranchStaff(activeBranchId) : []}
     />
   );
 }

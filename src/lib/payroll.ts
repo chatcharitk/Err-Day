@@ -101,6 +101,40 @@ export interface StaffPayoutRow extends PayrollCalculation {
   changedSincePaid: boolean;
   warnings: string[];
 }
+/** Payroll source label of a ค่าเชียร์ line — excluded from job counts. */
+export const CHEER_SOURCE = "ค่าเชียร์";
+
+type CheerBooking = {
+  id: string; startTime: string; endTime: string; status: string;
+  customer: { name: string };
+  cheers: { staffId: string; quantity: number; amountSatang: number; service: { name: string; nameTh: string } }[];
+};
+/** ค่าเชียร์ lines a staff member earns from these bookings (completed sales only). */
+export function cheerLines(bookings: CheerBooking[], staffId: string): PayrollBooking[] {
+  return bookings.flatMap((b) =>
+    b.status !== "COMPLETED"
+      ? []
+      : b.cheers
+          .filter((c) => c.staffId === staffId)
+          .map((c, i) => ({
+            id: `${b.id}:cheer:${i}`,
+            time: `${b.startTime}–${b.endTime}`,
+            customer: b.customer.name,
+            service: `เชียร์ ${c.service.nameTh || c.service.name}${c.quantity > 1 ? ` ×${c.quantity}` : ""}`,
+            addons: "",
+            status: b.status,
+            primary: true,
+            commissionSatang: c.amountSatang,
+            tipSatang: 0,
+            source: CHEER_SOURCE,
+          })),
+  );
+}
+
+const CHEERS_INCLUDE = {
+  select: { staffId: true, quantity: true, amountSatang: true, service: { select: { name: true, nameTh: true } } },
+} as const;
+
 export async function computeBranchDailyPayout(
   branchId: string,
   dateStr: string,
@@ -118,6 +152,7 @@ export async function computeBranchDailyPayout(
             },
           },
           { bookings: { some: { branchId, date: { gte: start, lte: end } } } },
+          { cheers: { some: { booking: { branchId, date: { gte: start, lte: end } } } } },
           {
             bookingStaff: {
               some: { booking: { branchId, date: { gte: start, lte: end } } },
@@ -134,6 +169,7 @@ export async function computeBranchDailyPayout(
         customer: { select: { name: true } },
         addons: { include: { addon: true } },
         extraStaff: true,
+        cheers: CHEERS_INCLUDE,
       },
       orderBy: [{ startTime: "asc" }, { id: "asc" }],
     }),
@@ -187,7 +223,7 @@ export async function computeBranchDailyPayout(
         (b) =>
           b.staffId === s.id || b.extraStaff.some((e) => e.staffId === s.id),
       )
-      .map((b) => {
+      .map((b): PayrollBooking => {
         const primary = b.staffId === s.id;
         return {
           id: b.id,
@@ -211,7 +247,8 @@ export async function computeBranchDailyPayout(
               ? "เรตบริการเดิม"
               : "ค่ามือที่บันทึกในบุ๊กกิ้ง",
         };
-      });
+      })
+      .concat(cheerLines(bookings, s.id));
     const minutes = att
       ? workMinutes(att.clockIn, att.clockOut, att.breakMinutes)
       : null;
@@ -331,7 +368,7 @@ export async function computeBranchDailyPayout(
       baseSatang: s.baseSatang,
       payCadence: s.payCadence,
       completedCount: calc.bookings.filter(
-        (b) => b.status === "COMPLETED" && b.primary,
+        (b) => b.status === "COMPLETED" && b.primary && b.source !== CHEER_SOURCE,
       ).length,
       calculatedCommissionSatang,
       commissionOverridden,

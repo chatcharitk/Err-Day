@@ -1,3 +1,4 @@
+import { cheerLines } from "./payroll";
 import { prisma } from "./prisma";
 import { validDay, workMinutes } from "./finance-math";
 import type { PayrollCalculation, PayrollBooking } from "./payroll";
@@ -61,7 +62,7 @@ export async function payrollReport(sp: URLSearchParams) {
         branchId,
         date: dayWhere,
         ...(staffId
-          ? { OR: [{ staffId }, { extraStaff: { some: { staffId } } }] }
+          ? { OR: [{ staffId }, { extraStaff: { some: { staffId } } }, { cheers: { some: { staffId } } }] }
           : {}),
       },
       include: {
@@ -69,6 +70,7 @@ export async function payrollReport(sp: URLSearchParams) {
         addons: { include: { addon: true } },
         customer: { select: { name: true } },
         extraStaff: true,
+        cheers: { select: { staffId: true, quantity: true, amountSatang: true, service: { select: { name: true, nameTh: true } } } },
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
@@ -82,7 +84,7 @@ export async function payrollReport(sp: URLSearchParams) {
       ats = attendance.filter((a) => a.staffId === s.id),
       bs = bookings.filter(
         (b) =>
-          b.staffId === s.id || b.extraStaff.some((e) => e.staffId === s.id),
+          b.staffId === s.id || b.extraStaff.some((e) => e.staffId === s.id) || b.cheers.some((c) => c.staffId === s.id),
       );
     const day = (d: Date) => d.toISOString().slice(0, 10);
     const dates = [
@@ -102,8 +104,8 @@ export async function payrollReport(sp: URLSearchParams) {
       const details: PayrollBooking[] =
         snapshot?.bookings ??
         bs
-          .filter((b) => day(b.date) === date)
-          .map((b) => ({
+          .filter((b) => day(b.date) === date && (b.staffId === s.id || b.extraStaff.some((e) => e.staffId === s.id)))
+          .map((b): PayrollBooking => ({
             id: b.id,
             time: `${b.startTime}–${b.endTime}`,
             customer: b.customer.name,
@@ -123,7 +125,8 @@ export async function payrollReport(sp: URLSearchParams) {
               b.status === "COMPLETED" && b.staffId === s.id ? b.tipSatang : 0,
             source:
               b.commissionSatang == null ? "เรตบริการเดิม" : "ค่ามือบุ๊กกิ้ง",
-          }));
+          }))
+          .concat(cheerLines(bs.filter((b) => day(b.date) === date), s.id));
       const paid = p?.status === "PAID";
       const commission = paid
         ? (p.commissionSatang ?? 0)

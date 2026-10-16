@@ -1,5 +1,6 @@
 "use client";
 
+import CheerPicker, { cheersPayload, type CheerLine } from "@/components/CheerPicker";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,8 @@ interface SlimService {
   category:              string;
   memberPrice:           number | null;
   memberDiscountPercent: number;
+  /** ค่าเชียร์ per unit (satang); 0 = none. */
+  cheerSatang?: number;
 }
 
 interface BS {
@@ -88,6 +91,8 @@ interface Props {
   prefillBooking?:        PrefillBooking | null;
   /** Server-preloaded packages for the prefill customer — eliminates the useEffect race */
   initialActivePackages?: ActivePackage[];
+  /** Branch staff, for picking who earns ค่าเชียร์. */
+  staff?: { id: string; name: string }[];
 }
 
 const PRIMARY = "#8B1D24";
@@ -120,8 +125,9 @@ function getServicePrices(bs: BS, isMember: boolean) {
   };
 }
 
-export default function MobilePos({ branches, activeBranchId, branchServices, addons, prefillBooking, initialActivePackages }: Props) {
+export default function MobilePos({ branches, activeBranchId, branchServices, addons, prefillBooking, initialActivePackages, staff = [] }: Props) {
   const router = useRouter();
+  const [cheerBy, setCheerBy] = useState<Record<string, string>>({});
   const [customer, setCustomer] = useState<CustomerValue>(() => {
     if (prefillBooking) {
       return { id: prefillBooking.customer.id, name: prefillBooking.customer.name, phone: prefillBooking.customer.phone };
@@ -429,6 +435,12 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     return s + raw - disc;
   }, 0);
   const discountSatang = Math.min(subtotal, Math.round(discountBaht * 100));
+  // Cart lines whose service pays ค่าเชียร์ (Davines Spa, PJOLI…).
+  const cheerLines: CheerLine[] = cart.flatMap(i => {
+    const bs = branchServices.find(b => b.id === i.id.split("__")[0]);
+    const rate = bs?.service.cheerSatang ?? 0;
+    return bs && rate > 0 ? [{ key: i.id, branchServiceId: bs.id, name: i.name, qty: i.qty, cheerSatang: rate }] : [];
+  });
   const total      = Math.max(0, subtotal - discountSatang);
   const cartCount  = cart.reduce((s, i) => s + i.qty, 0);
 
@@ -480,6 +492,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           customerPhone: customer.phone.trim() || undefined,
           items,
           paymentMethod,
+          cheers: cheersPayload(cheerLines, cheerBy),
           ...(fromBookingId ? { fromBookingId } : {}),
           ...(cartHasMembership && holdMembership ? { holdMembership: true } : {}),
         }),
@@ -838,6 +851,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
                   <AlertCircle size={14} /> {error}
                 </div>
               )}
+              <CheerPicker lines={cheerLines} staff={staff} value={cheerBy} onChange={setCheerBy} />
               {/* Bill-level discount input */}
               <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2" style={{ border: `1px solid ${BORDER}` }}>
                 <span className="text-xs" style={{ color: MUTED }}>ส่วนลดทั้งบิล</span>

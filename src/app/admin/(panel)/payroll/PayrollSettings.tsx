@@ -27,6 +27,8 @@ export interface ServiceCfg {
   nameTh: string;
   category: string;
   commissionSatang: number;
+  /** ค่าเชียร์ — paid to whoever upsold this service at checkout. */
+  cheerSatang: number;
 }
 export interface AddonCfg {
   id: string;
@@ -86,7 +88,7 @@ export default function SettingsTab({
         </h2>
         <p className="text-[11px] mb-3" style={{ color: MUTED }}>
           จำนวนเงิน (บาท) ที่ช่างได้ต่อ 1 ครั้งที่ทำบริการนี้ —
-          ไม่ขึ้นกับส่วนลดสมาชิก/แพ็กเกจ
+          ไม่ขึ้นกับส่วนลดสมาชิก/แพ็กเกจ · &quot;เชียร์&quot; = ค่าเชียร์ให้คนที่ชวนลูกค้าซื้อ (เลือกตอนเช็คเอาท์ที่ POS)
         </p>
         <div className="space-y-2">
           {services.map((s) => (
@@ -269,11 +271,13 @@ function StaffPayRow({ staff }: { staff: StaffCfg }) {
 function ServiceCommissionRow({ service }: { service: ServiceCfg }) {
   const router = useRouter();
   const [val, setVal] = useState(String(service.commissionSatang / 100));
+  const [cheer, setCheer] = useState(String(service.cheerSatang / 100));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const satang = Math.round((parseFloat(val) || 0) * 100);
-  const dirty = satang !== service.commissionSatang;
+  const cheerSatang = Math.round((parseFloat(cheer) || 0) * 100);
+  const dirty = satang !== service.commissionSatang || cheerSatang !== service.cheerSatang;
 
   async function save() {
     setSaving(true);
@@ -283,7 +287,7 @@ function ServiceCommissionRow({ service }: { service: ServiceCfg }) {
       const res = await fetch(`/api/admin/services/${service.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commissionBaht: parseFloat(val) || 0 }),
+        body: JSON.stringify({ commissionBaht: parseFloat(val) || 0, cheerBaht: parseFloat(cheer) || 0 }),
       });
       if (res.ok) {
         setSaved(true);
@@ -325,6 +329,18 @@ function ServiceCommissionRow({ service }: { service: ServiceCfg }) {
         // Inline width: the payroll page's CSS module styles every input as
         // width:100%, which out-ranks Tailwind's w-* and squeezed the name column.
         style={{ borderColor: BORDER, color: TEXT, width: 96, minHeight: 36, flex: "none" }}
+      />
+      <span className="text-xs whitespace-nowrap" style={{ color: MUTED }} title="ค่าเชียร์ — ให้คนที่เชียร์ลูกค้าให้ซื้อบริการนี้ เลือกตอนเช็คเอาท์ที่ POS">
+        เชียร์ ฿
+      </span>
+      <input
+        type="number"
+        min="0"
+        value={cheer}
+        onChange={(e) => setCheer(e.target.value)}
+        className="px-2 py-1.5 text-sm rounded-lg border text-right"
+        style={{ borderColor: BORDER, color: TEXT, width: 80, minHeight: 36, flex: "none" }}
+        aria-label="ค่าเชียร์ (บาท)"
       />
       {error && (
         <p role="alert" className="text-red-600">

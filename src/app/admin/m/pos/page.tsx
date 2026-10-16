@@ -2,7 +2,7 @@ import { servicesOfferedWhere, serviceOfferedOn } from "@/lib/addon-availability
 import { addonsOfferedWhere } from "@/lib/addon-availability";
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
-import { getCachedBranches } from "@/lib/branches-cache";
+import { getCachedBranches, getCachedBranchStaff } from "@/lib/branches-cache";
 import { findActivePackages } from "@/lib/packages";
 import { hasMemberPricingOnDate } from "@/lib/member-pricing";
 import MobilePos from "./MobilePos";
@@ -112,6 +112,7 @@ export default async function MobilePosPage({
                 category:              true,
                 memberPrice:           true,
                 memberDiscountPercent: true,
+                cheerSatang:           true,
               },
             },
           },
@@ -133,6 +134,7 @@ export default async function MobilePosPage({
       addons={addons}
       prefillBooking={prefillBooking}
       initialActivePackages={initialActivePackages}
+      staff={activeBranchId ? await getCachedBranchStaff(activeBranchId) : []}
     />
   );
 }

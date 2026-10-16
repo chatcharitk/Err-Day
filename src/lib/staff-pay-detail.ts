@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { bangkokMonthRange, otRatePerHourSatang, type PayrollCalculation } from "@/lib/payroll";
+import { bangkokMonthRange, CHEER_SOURCE, otRatePerHourSatang, type PayrollCalculation } from "@/lib/payroll";
 
 /**
  * Per-day pay breakdown for the staff portal — every job with its ค่ามือ and
@@ -16,6 +16,8 @@ export interface PayJob {
   status: string;
   commissionSatang: number;
   tipSatang: number;
+  /** A ค่าเชียร์ line (upsell), not a job the person performed. */
+  cheer?: boolean;
 }
 
 export interface PayDay {
@@ -64,6 +66,14 @@ export async function staffPayDays(staffIds: string[], month: string): Promise<P
     }),
     prisma.staffAttendance.findMany({ where: { staffId: { in: staffIds }, date: range } }),
   ]);
+  const cheers = await prisma.bookingCheer.findMany({
+    where: { staffId: { in: staffIds }, booking: { date: range, status: "COMPLETED" } },
+    select: {
+      quantity: true, amountSatang: true,
+      service: { select: { name: true, nameTh: true } },
+      booking: { select: { date: true, startTime: true, endTime: true, status: true, branchId: true, customer: { select: { name: true, nickname: true } } } },
+    },
+  });
 
   const days = new Map<string, PayDay>();
   const get = (date: string) => {
@@ -87,7 +97,7 @@ export async function staffPayDays(staffIds: string[], month: string): Promise<P
     if (calc?.bookings) {
       snapshotDays.add(date);
       for (const b of calc.bookings) {
-        d.jobs.push({ time: b.time, customer: b.customer, service: b.service, addons: b.addons, primary: b.primary, status: b.status, commissionSatang: b.commissionSatang, tipSatang: b.tipSatang ?? 0 });
+        d.jobs.push({ time: b.time, customer: b.customer, service: b.service, addons: b.addons, primary: b.primary, status: b.status, commissionSatang: b.commissionSatang, tipSatang: b.tipSatang ?? 0, cheer: b.source === CHEER_SOURCE });
       }
       d.otRateSatang = calc.otRateSatang;
       d.clockIn = hm(calc.clockIn); d.clockOut = hm(calc.clockOut);
@@ -125,6 +135,20 @@ export async function staffPayDays(staffIds: string[], month: string): Promise<P
       primary, status: b.status, commissionSatang: commission, tipSatang: tip,
     });
     if (!d.confirmed) { d.commissionSatang += commission; d.tipSatang += tip; }
+  }
+  // ค่าเชียร์ on days without a payment snapshot (snapshots already contain them).
+  for (const c of cheers) {
+    const date = ymd(c.booking.date);
+    if (snapshotDays.has(date)) continue;
+    const d = get(date);
+    if (!d.branchIds.includes(c.booking.branchId)) d.branchIds.push(c.booking.branchId);
+    d.jobs.push({
+      time: `${c.booking.startTime}–${c.booking.endTime}`,
+      customer: c.booking.customer.nickname || c.booking.customer.name,
+      service: `เชียร์ ${c.service.nameTh || c.service.name}${c.quantity > 1 ? ` ×${c.quantity}` : ""}`,
+      addons: "", primary: true, status: c.booking.status, commissionSatang: c.amountSatang, tipSatang: 0, cheer: true,
+    });
+    if (!d.confirmed) d.commissionSatang += c.amountSatang;
   }
   for (const p of payouts.filter(p => p.status !== "PAID")) {
     const d = get(ymd(p.date));

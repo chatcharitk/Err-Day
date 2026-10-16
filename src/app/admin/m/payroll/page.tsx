@@ -35,7 +35,7 @@ export default async function MobilePayrollPage({
     prisma.service.findMany({
       where: { isActive: true },
       orderBy: [{ category: "asc" }, { nameTh: "asc" }],
-      select: { id: true, nameTh: true, name: true, category: true, commissionSatang: true },
+      select: { id: true, nameTh: true, name: true, category: true, commissionSatang: true, cheerSatang: true },
     }),
     prisma.serviceAddon.findMany({
       where: { isActive: true },
@@ -61,7 +61,7 @@ export default async function MobilePayrollPage({
           id: s.id, name: s.name, branchId: s.branchId,
           payType: s.payType, baseSatang: s.baseSatang, payCadence: s.payCadence, otRateSatang: s.otRateSatang, normalWorkMinutes: s.normalWorkMinutes,
         }))}
-        services={services.map(s => ({ id: s.id, nameTh: s.nameTh || s.name, category: s.category, commissionSatang: s.commissionSatang }))}
+        services={services.map(s => ({ id: s.id, nameTh: s.nameTh || s.name, category: s.category, commissionSatang: s.commissionSatang, cheerSatang: s.cheerSatang }))}
         addons={addons.map(a => ({ id: a.id, nameTh: a.nameTh || a.name, commissionSatang: a.commissionSatang }))}
       />
     </div>

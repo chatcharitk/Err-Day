@@ -1,5 +1,6 @@
 "use client";
 
+import CheerPicker, { cheersPayload, type CheerLine } from "@/components/CheerPicker";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon, ReceiptText } from "lucide-react";
@@ -67,6 +68,8 @@ interface Props {
   prefillCustomer?: PrefillCustomer | null;
   /** If provided, auto-add the BranchService whose service.id equals this SKU when the terminal loads. */
   addSku?: string | null;
+  /** Branch staff, for picking who earns ค่าเชียร์. */
+  staff?: { id: string; name: string }[];
 }
 
 function formatPrice(satang: number) {
@@ -101,7 +104,8 @@ const CATS_BEFORE_ADDONS = ["Membership", "บริการทั่วไป"
 // Categories rendered AFTER add-ons
 const CATS_AFTER_ADDONS  = ["PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO", "สินค้า"];
 
-export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku }: Props) {
+export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku, staff = [] }: Props) {
+  const [cheerBy, setCheerBy] = useState<Record<string, string>>({});
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (prefillBooking) {
       // Find the real BranchService so member re-pricing can work
@@ -251,6 +255,13 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   );
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  // Cart lines whose service pays ค่าเชียร์ (Davines Spa, PJOLI…).
+  const cheerLines: CheerLine[] = cart.flatMap(i => {
+    const bs = branchServices.find(b => b.id === i.id.split("__")[0]);
+    return bs && bs.service.cheerSatang > 0
+      ? [{ key: i.id, branchServiceId: bs.id, name: i.name, qty: i.qty, cheerSatang: bs.service.cheerSatang }]
+      : [];
+  });
   const discountSatang = Math.min(subtotal, Math.round(discountBaht * 100));
   const total = Math.max(0, subtotal - discountSatang);
   const memberActive = hasMemberPricing;
@@ -360,6 +371,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           branchId: activeBranchId,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim() || undefined,
+          cheers: cheersPayload(cheerLines, cheerBy),
           items: [
             // One line per cart row carrying its own qty — the receipt needs
             // "2 x ฿250", not the same line twice.
@@ -724,6 +736,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 </>
               );
             })()}
+            <CheerPicker lines={cheerLines} staff={staff} value={cheerBy} onChange={setCheerBy} />
             {/* Manual discount */}
             <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2" style={{ border: "1px solid #D6BCAE", background: "white" }}>
               <span className="text-xs" style={{ color: "#A08070" }}>ส่วนลด</span>

@@ -53,6 +53,34 @@ function unitsOf(item: SaleItem): number {
   return Number.isFinite(q) && q > 0 ? q : 1;
 }
 
+/**
+ * Record ค่าเชียร์ for this sale: which staff member talked the customer into a
+ * cheer-eligible service. Amount comes from the service's configured rate (never
+ * the client), × quantity, and is snapshotted on BookingCheer. Re-checkout of the
+ * same booking replaces its earlier cheers.
+ */
+async function recordCheers(bookingId: string, cheers: unknown) {
+  const list = Array.isArray(cheers) ? cheers as { branchServiceId?: unknown; staffId?: unknown; qty?: unknown }[] : [];
+  const valid = list.filter(c => typeof c.branchServiceId === "string" && typeof c.staffId === "string" && c.staffId);
+  await prisma.bookingCheer.deleteMany({ where: { bookingId } });
+  if (valid.length === 0) return;
+  const [bsRows, staffRows] = await Promise.all([
+    prisma.branchService.findMany({
+      where: { id: { in: valid.map(c => c.branchServiceId as string) } },
+      select: { id: true, serviceId: true, service: { select: { cheerSatang: true } } },
+    }),
+    prisma.staff.findMany({ where: { id: { in: valid.map(c => c.staffId as string) }, isActive: true }, select: { id: true, branchId: true } }),
+  ]);
+  const data = valid.flatMap(c => {
+    const bs = bsRows.find(b => b.id === c.branchServiceId);
+    const staff = staffRows.find(s => s.id === c.staffId);
+    const qty = Math.max(1, Math.min(20, Math.round(Number(c.qty) || 1)));
+    if (!bs || !staff || bs.service.cheerSatang <= 0) return [];
+    return [{ bookingId, staffId: staff.id, serviceId: bs.serviceId, quantity: qty, amountSatang: bs.service.cheerSatang * qty }];
+  });
+  if (data.length) await prisma.bookingCheer.createMany({ data });
+}
+
 export async function POST(request: Request) {
   const gate = await requireAdmin().catch((e: unknown) => e as Response);
   if (gate instanceof Response) return gate;
@@ -60,7 +88,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { branchId, customerName, customerPhone, items, notes, fromBookingId, holdMembership, paymentMethod } = body as {
+    const { branchId, customerName, customerPhone, items, notes, fromBookingId, holdMembership, paymentMethod, cheers } = body as {
+      /** ค่าเชียร์ picks: [{ branchServiceId, staffId, qty }]. */
+      cheers?: unknown;
       branchId:       string;
       customerName:   string;
       customerPhone?: string;
@@ -233,6 +263,7 @@ export async function POST(request: Request) {
         await redeemPackage(rid);
       }
 
+      await recordCheers(booking.id, cheers);
       const receipt = await attachReceipt(booking.id, {
         items:           receiptLines,
         paymentMethod:   payMethod,
@@ -347,6 +378,7 @@ export async function POST(request: Request) {
       await redeemPackage(rid);
     }
 
+    await recordCheers(booking.id, cheers);
     const receipt = await attachReceipt(booking.id, {
       items:           receiptLines,
       paymentMethod:   payMethod,
