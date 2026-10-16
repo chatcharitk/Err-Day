@@ -15,15 +15,13 @@ interface WalletState { canClaim: boolean; coupons: MyCoupon[]; available: Campa
 const UI = {
   th: {
     title: "คูปองของฉัน", sub: "แสดงหน้านี้กับพนักงานตอนชำระเงิน", claim: "รับคูปอง", claiming: "กำลังรับ...",
-    until: "ใช้ได้ถึง", from: "เริ่มใช้", minSpend: "ขั้นต่ำ", only: "เฉพาะ", haveCode: "มีโค้ดส่วนลด?", codePh: "กรอกโค้ด",
-    use: "ใช้โค้ด", got: "ได้รับคูปองแล้ว 🎉", already: "คุณมีคูปองนี้อยู่แล้ว", notLinked: "จองคิวหรือสมัครสมาชิกก่อน เพื่อเก็บคูปองไว้ในบัญชี LINE",
+    until: "ใช้ได้ถึง", from: "เริ่มใช้", minSpend: "ขั้นต่ำ", only: "เฉพาะ", got: "ได้รับคูปองแล้ว 🎉", already: "คุณมีคูปองนี้อยู่แล้ว", notLinked: "จองคิวหรือสมัครสมาชิกก่อน เพื่อเก็บคูปองไว้ในบัญชี LINE",
     used: "ใช้แล้ว", expired: "หมดอายุ", failed: "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง", newOne: "คูปองใหม่", pastToggle: "คูปองที่ใช้แล้ว / หมดอายุ",
     off: (label: string) => label,
   },
   en: {
     title: "My coupons", sub: "Show this to our staff when you pay", claim: "Get coupon", claiming: "Getting...",
-    until: "Valid until", from: "Starts", minSpend: "Min. spend", only: "Only for", haveCode: "Have a promo code?", codePh: "Enter code",
-    use: "Apply", got: "Coupon added 🎉", already: "You already have this coupon", notLinked: "Book or join as a member first to keep coupons in your LINE account",
+    until: "Valid until", from: "Starts", minSpend: "Min. spend", only: "Only for", got: "Coupon added 🎉", already: "You already have this coupon", notLinked: "Book or join as a member first to keep coupons in your LINE account",
     used: "Used", expired: "Expired", failed: "Something went wrong. Please try again.", newOne: "New coupon", pastToggle: "Used / expired coupons",
     off: (label: string) => label.replace("ลด", "").replace("สูงสุด", "max").trim() + " off",
   },
@@ -38,12 +36,11 @@ function day(value: string, lang: "th" | "en") {
   });
 }
 
-/** Customer LINE hub: coupons held, coupons to claim, and a code box. */
+/** Customer LINE hub: coupons held and coupons to claim. Codes are taken at the counter (POS), not here. */
 export default function CouponWallet({ accessToken, lang }: { accessToken: string | null; lang: "th" | "en" }) {
   const t = UI[lang];
   const [state, setState] = useState<WalletState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [code, setCode] = useState("");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [showPast, setShowPast] = useState(false);
 
@@ -69,7 +66,6 @@ export default function CouponWallet({ accessToken, lang }: { accessToken: strin
       if (r.ok) {
         setState(r.data as WalletState);
         setNote({ ok: true, text: r.data.created ? t.got : t.already });
-        setCode("");
       } else {
         setNote({ ok: false, text: r.data.message || t.failed });
       }
@@ -80,6 +76,7 @@ export default function CouponWallet({ accessToken, lang }: { accessToken: strin
   const live = state.coupons.filter(c => c.status === "usable" || c.status === "upcoming");
   const past = state.coupons.filter(c => c.status === "used" || c.status === "expired");
   const hasAnything = live.length > 0 || state.available.length > 0;
+  if (!hasAnything && past.length === 0) return null;
 
   const terms = (c: CampaignView) => [
     c.minSpendSatang > 0 ? `${t.minSpend} ${baht(c.minSpendSatang)}` : null,
@@ -117,15 +114,6 @@ export default function CouponWallet({ accessToken, lang }: { accessToken: strin
         </article>
       ))}
 
-      {state.canClaim && (
-        <div className="coupon-code">
-          <span>{t.haveCode}</span>
-          <div>
-            <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder={t.codePh} autoCapitalize="characters" />
-            <button type="button" disabled={!code.trim() || !!busy} onClick={() => void claim({ code }, "code")}>{busy === "code" ? "…" : t.use}</button>
-          </div>
-        </div>
-      )}
       {note && <p className={`coupon-msg${note.ok ? " ok" : ""}`} role="status">{note.text}</p>}
 
       {past.length > 0 && <>

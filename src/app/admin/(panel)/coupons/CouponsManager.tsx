@@ -55,7 +55,7 @@ export default function CouponsManager({ today, categories, campaigns, selected 
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Coupons</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>คูปองส่วนลด</h1>
           <p className="text-xs mt-1" style={{ color: MUTED }}>
-            สร้างคูปองต่อกิจกรรม · ลูกค้าเห็นใน LINE (หน้าสมาชิก) · ใช้ที่ POS ตอนคิดเงิน · ลูกค้า 1 คนได้ 1 ใบต่อกิจกรรม
+            สร้างคูปองต่อกิจกรรม · ลูกค้าเห็นคูปองที่ได้รับใน LINE (หน้าสมาชิก) · ใช้ที่ POS ตอนคิดเงิน · ลูกค้า 1 คนได้ 1 ใบต่อกิจกรรม
           </p>
         </div>
         <button onClick={() => setEditing("new")}
@@ -367,7 +367,7 @@ function CampaignForm({ initial, today, categories, onClose, onSaved }: {
                   <b>{CLAIM_MODE_LABEL[m]}</b>
                   <span className="block text-xs" style={{ color: MUTED }}>
                     {m === "OPEN" && "ปุ่ม “รับคูปอง” โชว์ในหน้า LINE ของลูกค้าทุกคน"}
-                    {m === "CODE" && "ลูกค้ากรอกโค้ดในหน้า LINE หรือบอกโค้ดที่เคาน์เตอร์"}
+                    {m === "CODE" && "ลูกค้าบอกโค้ดที่เคาน์เตอร์ แล้วพนักงานกรอกที่ POS"}
                     {m === "ISSUED" && "แจกเฉพาะคนที่แอดมินเลือก / แจกเป็นกลุ่ม (เช่น คนที่โหวต)"}
                   </span>
                 </button>

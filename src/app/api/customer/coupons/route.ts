@@ -2,17 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyLineAccessToken } from "@/lib/line-auth";
 import { CouponError, customerCoupons, issueCoupon, openCampaignsFor } from "@/lib/coupons";
-import { normalizeCode } from "@/lib/coupon-rules";
 
 /**
- * POST /api/customer/coupons  { lineAccessToken, claimCampaignId?, code? }
+ * POST /api/customer/coupons  { lineAccessToken, claimCampaignId? }
  *
  * No action: this customer's coupons + OPEN campaigns they can still claim.
- * claimCampaignId: tap "รับคูปอง" on an OPEN campaign.
- * code: type a campaign code (works for OPEN and CODE campaigns, never ISSUED).
+ * claimCampaignId: tap "รับคูปอง" on an OPEN campaign. (Codes are entered by
+ * staff at the POS, not by customers.)
  */
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as { lineAccessToken?: unknown; claimCampaignId?: unknown; code?: unknown } | null;
+  const body = await request.json().catch(() => null) as { lineAccessToken?: unknown; claimCampaignId?: unknown } | null;
   const lineProfile = await verifyLineAccessToken(body?.lineAccessToken);
   if (!lineProfile) return NextResponse.json({ error: "invalid_line_session" }, { status: 401 });
 
@@ -24,8 +23,7 @@ export async function POST(request: Request) {
   });
 
   const claimId = typeof body?.claimCampaignId === "string" ? body.claimCampaignId : null;
-  const code = normalizeCode(body?.code);
-  if (!claimId && !code) return NextResponse.json(await state());
+  if (!claimId) return NextResponse.json(await state());
 
   if (!customer) {
     return NextResponse.json(
@@ -33,14 +31,12 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-  const campaign = claimId
-    ? await prisma.couponCampaign.findUnique({ where: { id: claimId } })
-    : await prisma.couponCampaign.findUnique({ where: { code } });
-  if (!campaign || (claimId && campaign.claimMode !== "OPEN") || (!claimId && campaign.claimMode === "ISSUED")) {
-    return NextResponse.json({ error: "not_found", message: code ? "ไม่พบโค้ดนี้" : "ไม่พบคูปอง" }, { status: 404 });
+  const campaign = await prisma.couponCampaign.findUnique({ where: { id: claimId } });
+  if (!campaign || campaign.claimMode !== "OPEN") {
+    return NextResponse.json({ error: "not_found", message: "ไม่พบคูปอง" }, { status: 404 });
   }
   try {
-    const { created } = await issueCoupon(campaign, customer.id, claimId ? "CLAIM" : "CODE");
+    const { created } = await issueCoupon(campaign, customer.id, "CLAIM");
     return NextResponse.json({ ...(await state()), claimed: campaign.id, created }, { status: created ? 201 : 200 });
   } catch (e) {
     if (e instanceof CouponError) return NextResponse.json({ error: "cannot_claim", message: e.message }, { status: e.status });

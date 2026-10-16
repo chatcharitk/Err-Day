@@ -369,12 +369,6 @@ body:has(.customer-hub.theme-halloween) { background:#1d1229; }
 .coupon-ticket.past { opacity:.55; min-height:64px; }
 .coupon-ticket.past .coupon-value { background:#a8a29e; }
 .coupon-note { font-size:11px; color:var(--muted); }
-.coupon-code { display:flex; flex-direction:column; gap:6px; padding:10px 12px; border-radius:14px; background:#fff; border:1px solid var(--line, #eeddd0); }
-.coupon-code>span { font-size:12px; color:var(--muted); }
-.coupon-code>div { display:flex; gap:6px; }
-.coupon-code input { flex:1; min-width:0; border:1px solid var(--line, #eeddd0); border-radius:10px; padding:9px 11px; font-size:14px; text-transform:uppercase; background:#fffdfb; color:var(--ink); }
-.coupon-code button { flex:none; border:0; border-radius:10px; padding:0 16px; background:var(--wine); color:#fff; font-size:13px; font-weight:600; }
-.coupon-code button:disabled { opacity:.45; }
 .coupon-msg { margin:0; font-size:12px; color:#b91c1c; }
 .coupon-msg.ok { color:#166534; }
 .coupon-past-toggle { justify-self:start; border:0; background:none; padding:2px 0; font-size:12px; color:var(--muted); }

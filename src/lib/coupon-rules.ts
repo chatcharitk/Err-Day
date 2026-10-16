@@ -8,7 +8,7 @@ export type ClaimMode = "OPEN" | "CODE" | "ISSUED";
 
 export const CLAIM_MODE_LABEL: Record<ClaimMode, string> = {
   OPEN:   "ลูกค้ากดรับเองใน LINE",
-  CODE:   "ต้องกรอกโค้ด",
+  CODE:   "บอกโค้ดที่เคาน์เตอร์",
   ISSUED: "แอดมินแจกเท่านั้น",
 };
 
