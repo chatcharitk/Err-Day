@@ -79,7 +79,10 @@ export interface DeskBooking {
    *  they do not currently have one. Displayed prominently on the desk. */
   fiveVisitPackageUsesLeft: number | null;
   serviceName:      string;
+  serviceId:        string;
   notes:            string | null;
+  /** ค่าเชียร์ already recorded on this booking. */
+  cheers:           { id: string; serviceName: string; staffName: string; amountSatang: number }[];
 }
 
 /** Membership status for a customer's membership row (inclusive expiry). */
@@ -105,6 +108,8 @@ export interface DeskBoardData {
   branchId: string;
   todayYmd: string;
   staff:    { id: string; name: string }[];
+  /** Services that pay ค่าเชียร์ (Davines Spa, PJOLI…) — the board's cheer picker. */
+  cheerServices: { id: string; name: string; cheerSatang: number }[];
   bookings: DeskBooking[];
   load:     StaffLoad[];
 }
@@ -172,7 +177,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
   const { gte, lt } = dayRange(ymd);
   const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
 
-  const [staff, rows] = await Promise.all([
+  const [staff, rows, cheerServices] = await Promise.all([
     prisma.staff.findMany({
       where:   { branchId, isActive: true },
       orderBy: { name: "asc" },
@@ -208,7 +213,14 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
           },
         },
         staff:    { select: { id: true, name: true } },
+        serviceId: true,
+        cheers:   { select: { id: true, amountSatang: true, service: { select: { name: true, nameTh: true } }, staff: { select: { name: true } } } },
       },
+    }),
+    prisma.service.findMany({
+      where:   { cheerSatang: { gt: 0 }, isActive: true },
+      select:  { id: true, name: true, nameTh: true, cheerSatang: true },
+      orderBy: { cheerSatang: "desc" },
     }),
   ]);
 
@@ -236,9 +248,15 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       memberStatus:     walkin ? "none" : fiveVisitPackage ? "active" : membershipStatus,
       fiveVisitPackageUsesLeft: walkin ? null : fiveVisitPackageUsesLeft,
       serviceName:      b.service.nameTh || b.service.name,
+      serviceId:        b.serviceId,
       notes:            b.internalNotes,
+      cheers:           b.cheers.map(c => ({ id: c.id, serviceName: c.service.nameTh || c.service.name, staffName: c.staff.name, amountSatang: c.amountSatang })),
     };
   });
 
-  return { branchId, todayYmd: ymd, staff, bookings, load: computeLoad(staff, bookings) };
+  return {
+    branchId, todayYmd: ymd, staff,
+    cheerServices: cheerServices.map(s => ({ id: s.id, name: s.nameTh || s.name, cheerSatang: s.cheerSatang })),
+    bookings, load: computeLoad(staff, bookings),
+  };
 }

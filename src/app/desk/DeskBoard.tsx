@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserPlus, RefreshCw, Settings, Check, Clock, Undo2, X, Loader2, CircleAlert,
-  Sparkles, ArrowLeft, Search,
+  Sparkles, ArrowLeft, Search, PartyPopper,
 } from "lucide-react";
 import type { DeskBooking } from "@/lib/desk";
 
@@ -17,7 +17,11 @@ const GREEN   = "#166534";
 const GREENBG = "#F0FDF4";
 
 interface StaffItem { id: string; name: string }
-interface BoardState { branchId: string; todayYmd: string; staff: StaffItem[]; bookings: DeskBooking[] }
+interface CheerService { id: string; name: string; cheerSatang: number }
+interface BoardState {
+  branchId: string; todayYmd: string; staff: StaffItem[]; bookings: DeskBooking[];
+  cheerServices: CheerService[];
+}
 
 /**
  * Branches run 08:00–21:00 (10:00 on Sunday). The in-store iPads are left
@@ -47,6 +51,7 @@ export default function DeskBoard({
   const [now, setNow]       = useState(() => Date.now());
   const [walkinOpen, setWalkinOpen] = useState(false);
   const [memberOpen, setMemberOpen] = useState(false);
+  const [cheerForId, setCheerForId] = useState<string | null>(null);
   const [busy, setBusy]     = useState<Set<string>>(new Set());
   const [error, setError]   = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -80,7 +85,10 @@ export default function DeskBoard({
       }
       if (typeof data.etag === "string") etagRef.current = data.etag;
       if (data.unchanged) return; // board fingerprint matched — keep current state
-      setBoard({ branchId: data.branchId, todayYmd: data.todayYmd, staff: data.staff, bookings: data.bookings });
+      setBoard({
+        branchId: data.branchId, todayYmd: data.todayYmd, staff: data.staff, bookings: data.bookings,
+        cheerServices: data.cheerServices ?? [],
+      });
     } catch { /* keep last good state */ }
     finally { setSyncing(false); }
   }, [router]);
@@ -167,6 +175,30 @@ export default function DeskBoard({
     act(b.id, optimistic, "/api/kiosk/undo", { bookingId: b.id }, "ย้อนกลับไม่สำเร็จ");
   }
 
+  // ค่าเชียร์ — add/replace or remove a cheer pick; refresh reconciles.
+  async function cheerAct(bookingId: string, method: "POST" | "DELETE", body: object) {
+    pendingRef.current += 1;
+    setBusy(s => new Set(s).add(bookingId));
+    try {
+      const res = await fetch("/api/kiosk/cheer", {
+        method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "บันทึกค่าเชียร์ไม่สำเร็จ");
+      }
+    } catch {
+      setError("บันทึกค่าเชียร์ไม่สำเร็จ");
+    } finally {
+      pendingRef.current -= 1;
+      setBusy(s => { const n = new Set(s); n.delete(bookingId); return n; });
+      refresh({ force: true });
+    }
+  }
+
+  const canCheer = board.cheerServices.length > 0;
+  const cheerFor = cheerForId ? board.bookings.find(b => b.id === cheerForId) ?? null : null;
+
   const waiting   = board.bookings.filter(b => b.deskStatus === "WAITING");
   const inService = board.bookings.filter(b => b.deskStatus === "IN_SERVICE");
   const done      = board.bookings.filter(b => b.deskStatus === "DONE");
@@ -228,7 +260,8 @@ export default function DeskBoard({
             ) : (
               <div className="space-y-3">
                 {inService.map(b => (
-                  <InServiceCard key={b.id} b={b} now={now} busy={busy.has(b.id)} onFinish={finish} onUndo={undo} />
+                  <InServiceCard key={b.id} b={b} now={now} busy={busy.has(b.id)} onFinish={finish} onUndo={undo}
+                    onCheer={canCheer ? () => setCheerForId(b.id) : undefined} />
                 ))}
               </div>
             )}
@@ -241,7 +274,8 @@ export default function DeskBoard({
             ) : (
               <div className="space-y-2">
                 {done.map(b => (
-                  <DoneCard key={b.id} b={b} busy={busy.has(b.id)} onUndo={undo} />
+                  <DoneCard key={b.id} b={b} busy={busy.has(b.id)} onUndo={undo}
+                    onCheer={canCheer ? () => setCheerForId(b.id) : undefined} />
                 ))}
               </div>
             )}
@@ -285,6 +319,14 @@ export default function DeskBoard({
           onClose={() => setWalkinOpen(false)}
           onDone={() => { setWalkinOpen(false); refresh(); }}
           onError={setError} />
+      )}
+
+      {cheerFor && (
+        <CheerModal key={cheerFor.id} b={cheerFor} staff={board.staff} services={board.cheerServices}
+          busy={busy.has(cheerFor.id)}
+          onAdd={(serviceId, staffId) => cheerAct(cheerFor.id, "POST", { bookingId: cheerFor.id, serviceId, staffId })}
+          onRemove={cheerId => cheerAct(cheerFor.id, "DELETE", { cheerId })}
+          onClose={() => setCheerForId(null)} />
       )}
 
       {memberOpen && (
@@ -394,8 +436,9 @@ function WaitingCard({ b, staff, busy, onCheckin }: {
   );
 }
 
-function InServiceCard({ b, now, busy, onFinish, onUndo }: {
+function InServiceCard({ b, now, busy, onFinish, onUndo, onCheer }: {
   b: DeskBooking; now: number; busy: boolean; onFinish: (b: DeskBooking) => void; onUndo: (b: DeskBooking) => void;
+  onCheer?: () => void;
 }) {
   const mins = b.checkedInAt ? Math.max(0, Math.floor((now - Date.parse(b.checkedInAt)) / 60000)) : 0;
   return (
@@ -412,9 +455,17 @@ function InServiceCard({ b, now, busy, onFinish, onUndo }: {
               <Clock size={12} /> {mins} นาที
             </span>
           </div>
+          <CheerChips b={b} />
         </div>
       </div>
       <div className="flex items-center gap-2 mt-3">
+        {onCheer && (
+          <button disabled={busy} onClick={onCheer}
+            className="flex items-center gap-1.5 px-4 py-3 rounded-xl text-base font-bold active:scale-95 transition-transform disabled:opacity-50"
+            style={{ background: "#FFF7ED", color: "#C2410C", border: "1.5px solid #FDBA74" }}>
+            <PartyPopper size={18} /> เชียร์
+          </button>
+        )}
         <button disabled={busy} onClick={() => onFinish(b)}
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-base font-bold active:scale-[0.98] transition-transform disabled:opacity-50"
           style={{ background: GREEN, color: "white" }}>
@@ -430,7 +481,9 @@ function InServiceCard({ b, now, busy, onFinish, onUndo }: {
   );
 }
 
-function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: (b: DeskBooking) => void }) {
+function DoneCard({ b, busy, onUndo, onCheer }: {
+  b: DeskBooking; busy: boolean; onUndo: (b: DeskBooking) => void; onCheer?: () => void;
+}) {
   return (
     <div className="rounded-xl px-3.5 py-2.5 flex items-center gap-3" style={{ background: GREENBG, border: "1px solid #BBF7D0", opacity: busy ? 0.6 : 1 }}>
       <Check size={18} style={{ color: GREEN }} className="flex-shrink-0" />
@@ -445,7 +498,15 @@ function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: 
             แพ็กเกจ 5 ครั้ง · เหลือ {b.fiveVisitPackageUsesLeft} ครั้ง
           </p>
         )}
+        <CheerChips b={b} small />
       </div>
+      {onCheer && (
+        <button disabled={busy} onClick={onCheer} title="เชียร์"
+          className="text-xs font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-lg flex-shrink-0 active:scale-95 transition-transform disabled:opacity-50"
+          style={{ background: "#FFF7ED", color: "#C2410C", border: "1px solid #FDBA74" }}>
+          <PartyPopper size={14} /> เชียร์
+        </button>
+      )}
       {/* Read-only payment badge — only admin flows can mark a booking paid. */}
       {!b.paidAt && (
         <span className="text-[11px] font-semibold px-2 py-1 rounded-lg flex-shrink-0"
@@ -458,6 +519,111 @@ function DoneCard({ b, busy, onUndo }: { b: DeskBooking; busy: boolean; onUndo: 
         style={{ color: MUTED }}>
         <Undo2 size={14} /> ย้อนกลับ
       </button>
+    </div>
+  );
+}
+
+// ── ค่าเชียร์ ─────────────────────────────────────────────────────────────────────
+
+const baht = (satang: number) => `฿${(satang / 100).toLocaleString("th-TH")}`;
+
+function CheerChips({ b, small }: { b: DeskBooking; small?: boolean }) {
+  if (b.cheers.length === 0) return null;
+  return (
+    <div className={`flex flex-wrap gap-1.5 ${small ? "mt-1" : "mt-2"}`}>
+      {b.cheers.map(c => (
+        <span key={c.id} className={`${small ? "text-[11px]" : "text-xs"} font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1`}
+          style={{ background: "#FFF7ED", color: "#C2410C", border: "1px solid #FDBA74" }}>
+          🎉 {c.serviceName} · {c.staffName} · {baht(c.amountSatang)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Who sold the customer a treatment upgrade? Pick the treatment (defaults to the
+// booking's own service when it carries a cheer rate — walk-ins are always
+// สระไดร์, so the upsold treatment is usually picked here), then tap the staff.
+function CheerModal({ b, staff, services, busy, onAdd, onRemove, onClose }: {
+  b: DeskBooking; staff: StaffItem[]; services: CheerService[]; busy: boolean;
+  onAdd: (serviceId: string, staffId: string) => void;
+  onRemove: (cheerId: string) => void;
+  onClose: () => void;
+}) {
+  const [serviceId, setServiceId] = useState<string>(() =>
+    services.find(s => s.id === b.serviceId)?.id ?? services[0]?.id ?? "");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={onClose}>
+      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: TEXT }}>
+              <PartyPopper size={20} style={{ color: "#C2410C" }} /> ค่าเชียร์
+            </h2>
+            <p className="text-sm mt-0.5 truncate" style={{ color: MUTED }}>{b.customerName} · {b.serviceName}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl" style={{ color: MUTED }}><X size={22} /></button>
+        </div>
+
+        {b.cheers.length > 0 && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs font-semibold" style={{ color: MUTED }}>บันทึกแล้ว</p>
+            {b.cheers.map(c => (
+              <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                style={{ background: "#FFF7ED", border: "1px solid #FDBA74" }}>
+                <span className="flex-1 text-sm font-semibold" style={{ color: "#9A3412" }}>
+                  🎉 {c.serviceName} · {c.staffName} · {baht(c.amountSatang)}
+                </span>
+                <button disabled={busy} onClick={() => onRemove(c.id)} title="ลบ"
+                  className="p-1.5 rounded-lg active:scale-95 disabled:opacity-50" style={{ color: "#9A3412" }}>
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs font-semibold mt-4 mb-1.5" style={{ color: MUTED }}>1. ทรีตเมนต์ที่เชียร์</p>
+        <div className="flex flex-wrap gap-2">
+          {services.map(s => {
+            const on = s.id === serviceId;
+            return (
+              <button key={s.id} onClick={() => setServiceId(s.id)}
+                className="px-3.5 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-transform"
+                style={on
+                  ? { background: "#C2410C", color: "white", border: "1.5px solid #C2410C" }
+                  : { background: "white", color: TEXT, border: `1.5px solid ${BORDER}` }}>
+                {s.name} <span className={on ? "text-white/80" : ""} style={on ? undefined : { color: MUTED }}>+{baht(s.cheerSatang)}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="text-xs font-semibold mt-4 mb-1.5" style={{ color: MUTED }}>2. แตะชื่อพนักงานที่เชียร์</p>
+        <div className="flex flex-wrap gap-2">
+          {staff.length === 0 && <span className="text-xs" style={{ color: MUTED }}>ยังไม่มีพนักงาน</span>}
+          {staff.map(s => (
+            <button key={s.id} disabled={busy || !serviceId}
+              onClick={() => onAdd(serviceId, s.id)}
+              className="px-4 py-3 rounded-xl text-base font-bold active:scale-95 transition-transform disabled:opacity-50"
+              style={s.id === b.staffId
+                ? { background: PRIMARY, color: "white", border: `2px solid ${PRIMARY}` }
+                : { background: "white", color: PRIMARY, border: `2px solid ${PRIMARY}` }}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] mt-3" style={{ color: MUTED }}>
+          เลือกทรีตเมนต์เดิมซ้ำ = เปลี่ยนคนเชียร์ · ค่าเชียร์จะเข้าค่าตอบแทนรายวันของพนักงาน
+        </p>
+        <button onClick={onClose}
+          className="w-full mt-4 py-3.5 rounded-2xl text-base font-bold active:scale-[0.98] transition-transform"
+          style={{ background: GREEN, color: "white" }}>
+          {busy ? <Loader2 size={18} className="animate-spin inline" /> : "เสร็จ"}
+        </button>
+      </div>
     </div>
   );
 }

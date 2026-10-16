@@ -56,13 +56,12 @@ function unitsOf(item: SaleItem): number {
 /**
  * Record ค่าเชียร์ for this sale: which staff member talked the customer into a
  * cheer-eligible service. Amount comes from the service's configured rate (never
- * the client), × quantity, and is snapshotted on BookingCheer. Re-checkout of the
- * same booking replaces its earlier cheers.
+ * the client), × quantity, and is snapshotted on BookingCheer.
  */
 async function recordCheers(bookingId: string, cheers: unknown) {
   const list = Array.isArray(cheers) ? cheers as { branchServiceId?: unknown; staffId?: unknown; qty?: unknown }[] : [];
   const valid = list.filter(c => typeof c.branchServiceId === "string" && typeof c.staffId === "string" && c.staffId);
-  await prisma.bookingCheer.deleteMany({ where: { bookingId } });
+  // No picks at the till keeps whatever the front desk already recorded.
   if (valid.length === 0) return;
   const [bsRows, staffRows] = await Promise.all([
     prisma.branchService.findMany({
@@ -78,7 +77,10 @@ async function recordCheers(bookingId: string, cheers: unknown) {
     if (!bs || !staff || bs.service.cheerSatang <= 0) return [];
     return [{ bookingId, staffId: staff.id, serviceId: bs.serviceId, quantity: qty, amountSatang: bs.service.cheerSatang * qty }];
   });
-  if (data.length) await prisma.bookingCheer.createMany({ data });
+  if (data.length === 0) return;
+  // A till pick replaces any desk pick for the same treatment (no double pay).
+  await prisma.bookingCheer.deleteMany({ where: { bookingId, serviceId: { in: data.map(d => d.serviceId) } } });
+  await prisma.bookingCheer.createMany({ data });
 }
 
 export async function POST(request: Request) {
