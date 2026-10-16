@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { hashPin } from "@/lib/staff-auth";
+import { encryptPin, hashPin } from "@/lib/staff-auth";
 
 /** PUT /api/admin/staff/[id]/passcode — set or reset a staff member's 4-digit PIN */
 export async function PUT(
@@ -20,7 +20,7 @@ export async function PUT(
 
   try {
     const hash = await hashPin(pin);
-    await prisma.staff.update({ where: { id }, data: { passcodeHash: hash } });
+    await prisma.staff.update({ where: { id }, data: { passcodeHash: hash, passcodeEnc: encryptPin(pin) } });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[staff passcode]", e);
@@ -37,6 +37,6 @@ export async function DELETE(
   if (_gate instanceof Response) return _gate;
 
   const { id } = await params;
-  await prisma.staff.update({ where: { id }, data: { passcodeHash: null } });
+  await prisma.staff.update({ where: { id }, data: { passcodeHash: null, passcodeEnc: null } });
   return NextResponse.json({ ok: true });
 }

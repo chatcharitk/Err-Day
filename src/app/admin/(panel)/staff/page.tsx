@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { decryptPin } from "@/lib/staff-auth";
 import StaffManager from "./StaffManager";
 
 export const revalidate = 30;
@@ -33,6 +34,7 @@ export default async function StaffPage({
         isActive:       true,
         branchId:       true,
         passcodeHash:   true,   // selected here so we can derive hasPasscode, stripped below
+        passcodeEnc:    true,   // decrypted below so admins can read the PIN to the staff member
         lastLoginAt:    true,
         branch:         { select: { id: true, name: true } },
       },
@@ -60,10 +62,11 @@ export default async function StaffPage({
   const staffWithStats = allStaff.map(s => {
     const revenue = revenueByStaff.get(s.id) ?? 0;
     // Strip the hash before sending to the client; just expose a boolean.
-    const { passcodeHash, ...safe } = s;
+    const { passcodeHash, passcodeEnc, ...safe } = s;
     return {
       ...safe,
       hasPasscode:       !!passcodeHash,
+      pin:               passcodeHash ? decryptPin(passcodeEnc) : null,
       lastLoginAt:       s.lastLoginAt ? s.lastLoginAt.toISOString() : null,
       monthlyRevenue:    revenue,
       monthlyCommission: Math.round((revenue * s.commissionRate) / 100),

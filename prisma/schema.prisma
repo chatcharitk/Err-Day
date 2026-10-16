@@ -118,6 +118,9 @@ model Staff {
   commissionRate Float          @default(0)
   phone          String?
   passcodeHash   String?
+  /// The same PIN, encrypted (AES-256-GCM, key from STAFF_SESSION_SECRET) so
+  /// admins can look it up for a staff member. Login still checks the hash.
+  passcodeEnc    String?
   lastLoginAt    DateTime?
   /// ── Payroll config ──────────────────────────────────────────────────────
   /// How base pay is defined. MONTHLY_SALARY → baseSatang is a monthly salary;

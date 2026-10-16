@@ -20,7 +20,7 @@
  */
 
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { personForStaff, type StaffPerson } from "@/lib/staff-person";
@@ -40,6 +40,32 @@ function getSecret(): string {
 export async function hashPin(pin: string): Promise<string> {
   if (!/^\d{4}$/.test(pin)) throw new Error("PIN must be exactly 4 digits");
   return bcrypt.hash(pin, BCRYPT_ROUNDS);
+}
+
+/**
+ * Reversible copy of a PIN so admins can tell a staff member their PIN.
+ * AES-256-GCM with a key derived from the session secret; "v1:iv:tag:data" (base64url).
+ */
+function pinKey(): Buffer {
+  return createHash("sha256").update("staff-pin:" + getSecret()).digest();
+}
+export function encryptPin(pin: string): string {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", pinKey(), iv);
+  const data = Buffer.concat([c.update(pin, "utf8"), c.final()]);
+  return ["v1", iv, c.getAuthTag(), data].map(x => typeof x === "string" ? x : b64urlEncode(x)).join(":");
+}
+export function decryptPin(enc: string | null | undefined): string | null {
+  if (!enc) return null;
+  try {
+    const [v, iv, tag, data] = enc.split(":");
+    if (v !== "v1") return null;
+    const d = createDecipheriv("aes-256-gcm", pinKey(), b64urlDecode(iv));
+    d.setAuthTag(b64urlDecode(tag));
+    return Buffer.concat([d.update(b64urlDecode(data)), d.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
 }
 
 export async function verifyPin(pin: string, hash: string): Promise<boolean> {

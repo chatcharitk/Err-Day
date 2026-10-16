@@ -18,6 +18,8 @@ type StaffWithStats = {
   isActive:          boolean;
   branchId:          string;
   hasPasscode:       boolean;
+  /** The PIN itself (admin-only page); null when set before PINs were stored readably. */
+  pin:               string | null;
   lastLoginAt:       string | null;
   branch:            { id: string; name: string };
   monthlyRevenue:    number;
@@ -405,6 +407,12 @@ export default function StaffManager({ staff, branches, monthLabel, currentMonth
                                         className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
                                         style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #BBF7D0" }}>
                                         <KeyRound className="w-2.5 h-2.5" /> พอร์ทัล
+                                      </span>
+                                    )}
+                                    {s.hasPasscode && (
+                                      <span className="text-[11px] font-mono px-1.5 py-0.5 rounded" style={{ background: "#F9F3EE", color: "#3B2A24" }}
+                                        title={s.pin ? "PIN สำหรับเข้าพอร์ทัลพนักงาน" : "ตั้งไว้ก่อนระบบเก็บ PIN — กดเปลี่ยน PIN เพื่อดู"}>
+                                        PIN {s.pin ?? "••••"}
                                       </span>
                                     )}
                                   </div>
