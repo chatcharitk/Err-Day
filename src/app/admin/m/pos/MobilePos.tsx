@@ -2,6 +2,8 @@
 
 import CheerPicker, { cheersPayload, type CheerLine } from "@/components/CheerPicker";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
+import CouponPicker, { couponDiscount, couponSaleLine, type PosCoupon } from "@/components/CouponPicker";
+import type { CouponLine } from "@/lib/coupon-rules";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -128,6 +130,7 @@ function getServicePrices(bs: BS, isMember: boolean) {
 export default function MobilePos({ branches, activeBranchId, branchServices, addons, prefillBooking, initialActivePackages, staff = [] }: Props) {
   const router = useRouter();
   const [cheerBy, setCheerBy] = useState<Record<string, string>>({});
+  const [coupon, setCoupon] = useState<PosCoupon | null>(null);
   const [customer, setCustomer] = useState<CustomerValue>(() => {
     if (prefillBooking) {
       return { id: prefillBooking.customer.id, name: prefillBooking.customer.name, phone: prefillBooking.customer.phone };
@@ -441,7 +444,13 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     const rate = bs?.service.cheerSatang ?? 0;
     return bs && rate > 0 ? [{ key: i.id, branchServiceId: bs.id, name: i.name, qty: i.qty, cheerSatang: rate }] : [];
   });
-  const total      = Math.max(0, subtotal - discountSatang);
+  // Coupons price off each row's own price (before manual discounts), same as the server.
+  const couponLines: CouponLine[] = cart.map(i => {
+    const bs = branchServices.find(b => b.id === i.id.split("__")[0]);
+    return { serviceId: bs?.serviceId ?? null, category: bs?.service.category ?? null, amountSatang: i.price * i.qty };
+  });
+  const couponSatang = Math.min(couponDiscount(coupon, couponLines)?.discountSatang ?? 0, Math.max(0, subtotal - discountSatang));
+  const total      = Math.max(0, subtotal - discountSatang - couponSatang);
   const cartCount  = cart.reduce((s, i) => s + i.qty, 0);
 
   const switchBranch = (id: string) => {
@@ -483,6 +492,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       if (discountSatang > 0) {
         items.push({ name: `ส่วนลดทั้งบิล`, price: -discountSatang, qty: 1, branchServiceId: undefined, redeemPackageId: undefined });
       }
+      const couponItems = couponSaleLine(coupon, couponSatang);
       const res = await fetch("/api/pos/sale", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -490,7 +500,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           branchId:      activeBranchId,
           customerName:  customer.name.trim(),
           customerPhone: customer.phone.trim() || undefined,
-          items,
+          items: [...items, ...couponItems],
           paymentMethod,
           cheers: cheersPayload(cheerLines, cheerBy),
           ...(fromBookingId ? { fromBookingId } : {}),
@@ -525,6 +535,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       setReceipt(null);
       setCart([]);
       setCustomer({ id: null, name: "", phone: "" });
+      setCoupon(null);
       setShowCart(false);
       setSubmitting(false);
       router.refresh();
@@ -595,7 +606,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       {/* Customer card */}
       <section className="px-4 py-3">
         <p className="text-xs mb-2 font-medium" style={{ color: MUTED }}>ลูกค้า</p>
-        <CustomerSearch value={customer} onChange={setCustomer} />
+        <CustomerSearch value={customer} onChange={c => { if (c.phone !== customer.phone) setCoupon(null); setCustomer(c); }} />
         {/* Existing-member badge */}
         {memberInfo && (
           <div
@@ -866,6 +877,15 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
                   <button onClick={() => setDiscountBaht(0)} className="text-xs" style={{ color: MUTED }}>ล้าง</button>
                 )}
               </div>
+              <div className="mb-3">
+                <CouponPicker phone={customer.id ? customer.phone : ""} lines={couponLines} value={coupon} onChange={setCoupon} />
+              </div>
+              {couponSatang > 0 && (
+                <div className="flex items-center justify-between mb-1 text-xs" style={{ color: "#C2410C" }}>
+                  <span>คูปอง {coupon?.campaign.name}</span>
+                  <span>-{formatPrice(couponSatang)}</span>
+                </div>
+              )}
               {/* Pay-now / activate-later toggle — only when a membership is in the cart */}
               {cartHasMembership && (
                 <button

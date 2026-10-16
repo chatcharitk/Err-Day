@@ -275,6 +275,7 @@ model Customer {
   membership       Membership?
   membershipCycles MembershipCycle[]
   staffVotes       StaffVote[]
+  coupons          Coupon[]
 
   @@index([name(ops: raw("gin_trgm_ops"))], map: "Customer_name_trgm_idx", type: Gin)
   @@index([nickname(ops: raw("gin_trgm_ops"))], map: "Customer_nickname_trgm_idx", type: Gin)
@@ -459,6 +460,7 @@ model Booking {
   /// row in place (voided, not deleted) alongside its replacement.
   receipts          Receipt[]
   cheers            BookingCheer[]
+  couponRedemptions CouponRedemption[]
 
   @@index([branchId, date])
   @@index([customerId])
@@ -964,4 +966,75 @@ model BookingCheer {
 
   @@index([bookingId])
   @@index([staffId])
+}
+
+/// A coupon campaign — one per event or promotion (e.g. Halloween 10%).
+/// Customers hold a `Coupon` issued from it; the discount itself is applied at
+/// POS checkout, where the server re-checks validity and recomputes the amount.
+model CouponCampaign {
+  id                String   @id @default(cuid())
+  /// Code customers type (LINE hub or at the counter) to get the coupon. Upper-case.
+  code              String   @unique
+  name              String
+  description       String?
+  /// "PERCENT" (discountValue = 1–100) or "AMOUNT" (discountValue = satang).
+  discountType      String   @default("PERCENT")
+  discountValue     Int
+  /// Cap on a PERCENT discount, satang. Null = no cap.
+  maxDiscountSatang Int?
+  /// Eligible spend (see `categories`) must reach this, satang.
+  minSpendSatang    Int      @default(0)
+  /// Service categories the discount covers. Empty = every service except
+  /// membership / package purchases.
+  categories        String[] @default([])
+  /// Bangkok calendar days, stored at UTC noon. Both ends inclusive.
+  validFrom         DateTime
+  validUntil        DateTime
+  /// "OPEN" (anyone can tap รับคูปอง in LINE), "CODE" (must type the code),
+  /// "ISSUED" (only admin hands it out).
+  claimMode         String   @default("CODE")
+  usesPerCoupon     Int      @default(1)
+  /// Most coupons this campaign may hand out in total. Null = unlimited.
+  maxClaims         Int?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  coupons           Coupon[]
+}
+
+/// One customer's coupon from a campaign — at most one per campaign.
+model Coupon {
+  id          String    @id @default(cuid())
+  campaignId  String
+  customerId  String
+  /// How they got it: "CLAIM" (LINE button), "CODE" (typed code), "ADMIN", "BULK".
+  source      String
+  usesAllowed Int       @default(1)
+  usesUsed    Int       @default(0)
+  voidedAt    DateTime?
+  issuedById  String?
+  createdAt   DateTime  @default(now())
+  campaign    CouponCampaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer    Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  redemptions CouponRedemption[]
+
+  @@unique([campaignId, customerId])
+  @@index([customerId])
+}
+
+/// A coupon used on a sale. Reversing (refund / mistake) keeps the row and
+/// gives the use back.
+model CouponRedemption {
+  id             String    @id @default(cuid())
+  couponId       String
+  bookingId      String
+  discountSatang Int
+  adminId        String?
+  createdAt      DateTime  @default(now())
+  reversedAt     DateTime?
+  coupon         Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([couponId])
+  @@index([bookingId])
 }

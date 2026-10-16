@@ -2,6 +2,8 @@
 
 import CheerPicker, { cheersPayload, type CheerLine } from "@/components/CheerPicker";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
+import CouponPicker, { couponDiscount, couponSaleLine, type PosCoupon } from "@/components/CouponPicker";
+import type { CouponLine } from "@/lib/coupon-rules";
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon, ReceiptText } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
@@ -106,6 +108,7 @@ const CATS_AFTER_ADDONS  = ["PJOLI Treatment", "Davines Spa", "ย้อมผ�
 
 export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku, staff = [] }: Props) {
   const [cheerBy, setCheerBy] = useState<Record<string, string>>({});
+  const [coupon, setCoupon] = useState<PosCoupon | null>(null);
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (prefillBooking) {
       // Find the real BranchService so member re-pricing can work
@@ -178,6 +181,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const customerName  = customer.name;
   const customerPhone = customer.phone;
   const clearCustomer = () => {
+    setCoupon(null);
     setCustomer({ id: null, name: "", phone: "" });
     setMemberInfo(null);
     setActivePackages([]);
@@ -263,7 +267,13 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
       : [];
   });
   const discountSatang = Math.min(subtotal, Math.round(discountBaht * 100));
-  const total = Math.max(0, subtotal - discountSatang);
+  // What a coupon can see of each cart row (service + category decide eligibility).
+  const couponLines: CouponLine[] = cart.map(i => {
+    const bs = branchServices.find(b => b.id === i.id.split("__")[0]);
+    return { serviceId: bs?.serviceId ?? null, category: bs?.service.category ?? null, amountSatang: i.price * i.qty };
+  });
+  const couponSatang = Math.min(couponDiscount(coupon, couponLines)?.discountSatang ?? 0, Math.max(0, subtotal - discountSatang));
+  const total = Math.max(0, subtotal - discountSatang - couponSatang);
   const memberActive = hasMemberPricing;
 
   /**
@@ -392,13 +402,17 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
               };
             }),
             ...(discountSatang > 0 ? [{ name: "ส่วนลด", price: -discountSatang, qty: 1, branchServiceId: undefined, redeemPackageId: undefined }] : []),
+            ...couponSaleLine(coupon, couponSatang),
           ],
           paymentMethod,
           ...(fromBookingId ? { fromBookingId } : {}),
           ...(cartHasMembership && holdMembership ? { holdMembership: true } : {}),
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(typeof d.error === "string" ? d.error : "");
+      }
       // Keep the receipt link so the cashier can print or hand over the QR.
       const sale = await res.json().catch(() => null);
       setReceipt(sale?.receipt ?? null);
@@ -413,8 +427,8 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         clearCustomer();
         setLastCustomerPhone(null);
       }, 6000);
-    } catch {
-      setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } catch (e) {
+      setError((e instanceof Error && e.message) || "เกิดข้อผิดพลาด กรุณาลองใหม่");
     } finally {
       setLoading(false);
     }
@@ -610,7 +624,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           {/* Customer */}
           <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid #F0E4D8" }}>
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#8B1D24" }}>ลูกค้า</p>
-            <CustomerSearch value={customer} onChange={c => { setCustomer(c); if (!c.id) setMemberInfo(null); }} />
+            <CustomerSearch value={customer} onChange={c => { if (c.phone !== customer.phone) setCoupon(null); setCustomer(c); if (!c.id) setMemberInfo(null); }} />
 
             {/* Member badge */}
             {memberInfo && (
@@ -755,6 +769,15 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
               <div className="flex justify-between text-xs mb-1.5" style={{ color: "#16a34a" }}>
                 <span>ส่วนลดที่กรอก</span>
                 <span>-{formatPrice(discountSatang)}</span>
+              </div>
+            )}
+            <div className="mb-3">
+              <CouponPicker phone={customer.id ? customerPhone : ""} lines={couponLines} value={coupon} onChange={setCoupon} />
+            </div>
+            {couponSatang > 0 && (
+              <div className="flex justify-between text-xs mb-1.5" style={{ color: "#C2410C" }}>
+                <span>คูปอง {coupon?.campaign.name}</span>
+                <span>-{formatPrice(couponSatang)}</span>
               </div>
             )}
             {/* Pay-now / activate-later toggle — only when a membership is in the cart */}

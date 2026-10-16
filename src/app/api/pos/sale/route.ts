@@ -6,6 +6,8 @@ import { MEMBERSHIP_SKU, activateOrRenewMembership, holdMembershipPrepaid } from
 import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
 import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
 import { issueReceiptForBooking, receiptUrl, type ReceiptLineInput } from "@/lib/receipts";
+import { couponStatus } from "@/lib/coupons";
+import { quoteCoupon, couponValueLabel } from "@/lib/coupon-rules";
 
 /**
  * Issue the receipt for a completed sale.
@@ -45,6 +47,56 @@ interface SaleItem {
   branchServiceId?: string; // for service items, the BranchService row id
   /** When set, this item was redeemed against an active package and was free. */
   redeemPackageId?: string;
+  /** Coupon discount line. Its price is recomputed here, never trusted. */
+  couponId?:        string;
+}
+
+/**
+ * Validate the cart's coupon line, recompute its discount from the other lines
+ * and claim one use. Returns null when the cart has no coupon. The claim is a
+ * compare-and-set on usesUsed, so two tills can't spend the last use twice.
+ */
+async function claimCoupon(items: SaleItem[], customer: { id?: string; phone?: string }):
+  Promise<{ couponId: string; discount: number } | { error: string } | null> {
+  const line = items.find(i => typeof i.couponId === "string" && i.couponId);
+  if (!line) return null;
+  const coupon = await prisma.coupon.findUnique({
+    where: { id: line.couponId! }, include: { campaign: true, customer: { select: { id: true, phone: true } } },
+  });
+  if (!coupon) return { error: "ไม่พบคูปอง" };
+  const owner = customer.id ? coupon.customerId === customer.id : !!customer.phone && coupon.customer.phone === customer.phone;
+  if (!owner) return { error: "คูปองนี้ไม่ใช่ของลูกค้าคนนี้" };
+  const status = couponStatus(coupon, coupon.campaign);
+  if (status !== "usable") {
+    return { error: status === "used" ? "คูปองนี้ใช้ไปแล้ว" : status === "expired" ? "คูปองหมดอายุแล้ว" : status === "upcoming" ? "คูปองยังไม่เริ่มใช้" : "คูปองนี้ใช้ไม่ได้" };
+  }
+
+  const others = items.filter(i => i !== line);
+  const bsIds = others.map(i => i.branchServiceId).filter((x): x is string => !!x);
+  const bsRows = bsIds.length ? await prisma.branchService.findMany({
+    where: { id: { in: bsIds } }, select: { id: true, serviceId: true, service: { select: { category: true } } },
+  }) : [];
+  const bsById = new Map(bsRows.map(r => [r.id, r]));
+  const quote = quoteCoupon(coupon.campaign, others.map(i => {
+    const bs = i.branchServiceId ? bsById.get(i.branchServiceId) : undefined;
+    return { serviceId: bs?.serviceId ?? null, category: bs?.service.category ?? null, amountSatang: i.price * unitsOf(i) };
+  }));
+  // Never push the bill below zero alongside manual discounts.
+  const billBefore = others.reduce((sum, i) => sum + i.price * unitsOf(i), 0);
+  const discountSatang = Math.min(quote.discountSatang, Math.max(0, billBefore));
+  if (discountSatang <= 0) return { error: `ใช้คูปองไม่ได้: ${quote.problem ?? "ไม่มีส่วนลด"}` };
+
+  const claimed = await prisma.coupon.updateMany({
+    where: { id: coupon.id, usesUsed: coupon.usesUsed, voidedAt: null },
+    data:  { usesUsed: { increment: 1 } },
+  });
+  if (claimed.count !== 1) return { error: "คูปองนี้เพิ่งถูกใช้ไป กรุณาลองใหม่" };
+
+  // The authoritative amount and label replace whatever the till sent.
+  line.price = -discountSatang;
+  line.qty = 1;
+  line.name = `คูปอง ${coupon.campaign.name} (${couponValueLabel(coupon.campaign)})`;
+  return { couponId: coupon.id, discount: discountSatang };
 }
 
 /** Units on a line, tolerating older clients that omit `qty` entirely. */
@@ -87,6 +139,20 @@ export async function POST(request: Request) {
   const gate = await requireAdmin().catch((e: unknown) => e as Response);
   if (gate instanceof Response) return gate;
   const admin = gate;
+  // A coupon use claimed below; handed back if the sale then fails.
+  let claimedCoupon: { couponId: string; discount: number } | null = null;
+  const recordCoupon = async (bookingId: string) => {
+    if (!claimedCoupon) return;
+    await prisma.couponRedemption.create({
+      data: { couponId: claimedCoupon.couponId, bookingId, discountSatang: claimedCoupon.discount, adminId: admin.id },
+    });
+    claimedCoupon = null;
+  };
+  const releaseCoupon = async () => {
+    const c = claimedCoupon;
+    claimedCoupon = null;
+    if (c) await prisma.coupon.update({ where: { id: c.couponId }, data: { usesUsed: { decrement: 1 } } }).catch(() => {});
+  };
 
   try {
     const body = await request.json();
@@ -109,6 +175,17 @@ export async function POST(request: Request) {
     if (!branchId || !customerName || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    // Coupon first: it rewrites its own line, which the totals below read.
+    let couponOwnerId: string | undefined;
+    if (fromBookingId) {
+      couponOwnerId = (await prisma.booking.findUnique({ where: { id: fromBookingId }, select: { customerId: true } }))?.customerId;
+    }
+    const couponClaim = await claimCoupon(items, { id: couponOwnerId, phone: customerPhone?.trim() || undefined });
+    if (couponClaim && "error" in couponClaim) {
+      return NextResponse.json({ error: couponClaim.error }, { status: 400 });
+    }
+    claimedCoupon = couponClaim;
 
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -200,6 +277,7 @@ export async function POST(request: Request) {
     if (fromBookingId) {
       const existing = await prisma.booking.findUnique({ where: { id: fromBookingId } });
       if (!existing) {
+        await releaseCoupon();
         return NextResponse.json({ error: "Booking not found" }, { status: 404 });
       }
       const booking = await prisma.booking.update({
@@ -265,6 +343,7 @@ export async function POST(request: Request) {
         await redeemPackage(rid);
       }
 
+      await recordCoupon(booking.id);
       await recordCheers(booking.id, cheers);
       const receipt = await attachReceipt(booking.id, {
         items:           receiptLines,
@@ -280,6 +359,7 @@ export async function POST(request: Request) {
       where: { branchId, serviceId: "svc-walkin", isActive: true },
     });
     if (!walkinBs) {
+      await releaseCoupon();
       return NextResponse.json({ error: "Branch not configured" }, { status: 400 });
     }
 
@@ -380,6 +460,7 @@ export async function POST(request: Request) {
       await redeemPackage(rid);
     }
 
+    await recordCoupon(booking.id);
     await recordCheers(booking.id, cheers);
     const receipt = await attachReceipt(booking.id, {
       items:           receiptLines,
@@ -390,6 +471,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...booking, receipt }, { status: 201 });
   } catch (error) {
     console.error("POS sale error:", error);
+    await releaseCoupon();
     return NextResponse.json({ error: "Failed to create sale" }, { status: 500 });
   }
 }

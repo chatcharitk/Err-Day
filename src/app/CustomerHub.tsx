@@ -13,6 +13,7 @@ import { useSeasonalTheme } from "@/hooks/useSeasonalTheme";
 import { tarotImagePath } from "@/lib/seasonal-theme";
 import { Cobweb, HalloweenBats, Pumpkin } from "@/components/HalloweenDecor";
 import { VOTE_EVENT, candidateInitial, votePhaseAt } from "@/lib/staff-vote";
+import CouponWallet from "@/components/CouponWallet";
 
 type Tab = "home" | "book" | "history" | "tarot" | "vote";
 type VoteCandidate = { id: string; name: string; photoUrl: string | null };
@@ -347,6 +348,8 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
               <b>›</b>
             </button>
           </section>}
+
+          <CouponWallet accessToken={liff.accessToken} lang={lang} />
 
           <section className="hub-section"><div className="section-heading"><div><h2>{u.next}</h2><p>Next appointment</p></div><button onClick={() => setTab("history")}>{u.viewAll}</button></div>
             {upcoming ? <article className="appointment"><div className="appointment-title"><div><h3>{lang === "th" ? upcoming.service.nameTh || upcoming.service.name : upcoming.service.name}</h3><p>{upcoming.service.category}</p></div><span>{STATUS[lang][upcoming.status] || upcoming.status}</span></div><p><MapPin /> {upcoming.branch.name}</p><p><CalendarDays /> {displayDate(upcoming.date, lang)}</p><p><Clock3 /> {upcoming.startTime} — {upcoming.endTime} {lang === "th" ? "น." : ""}</p><div className="appointment-actions"><button className="manage-appointment" type="button" onClick={() => setEditing(upcoming)}>{u.manage}</button><button type="button" onClick={() => requestCancellation(upcoming)}><Trash2 />{u.cancel}</button></div></article> : <div className="empty-appointment"><CalendarDays /><p>{u.noUpcoming}</p><button onClick={() => setTab("book")}>{u.bookNow}</button></div>}
