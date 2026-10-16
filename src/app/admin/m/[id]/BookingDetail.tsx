@@ -1,5 +1,6 @@
 "use client";
 
+import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -640,14 +641,12 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         {/* Discount input row */}
         {!isClosed && (
           <div className="rounded-xl px-3 py-2 flex items-center gap-2 bg-white" style={{ border: `1px solid ${BORDER}` }}>
-            <span className="text-xs flex-shrink-0" style={{ color: MUTED }}>ส่วนลด ฿</span>
-            <input
-              type="number"
-              min={0}
-              value={discountBaht || ""}
-              onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
-              placeholder="0"
-              className="flex-1 text-sm outline-none bg-transparent"
+            <span className="text-xs flex-shrink-0" style={{ color: MUTED }}>ส่วนลด</span>
+            <DiscountAmountInput
+              baseSatang={b.totalPrice}
+              valueBaht={discountBaht}
+              onChange={setDiscountBaht}
+              className="flex-1 min-w-0 text-sm outline-none bg-transparent"
               style={{ color: TEXT }}
             />
             {discountBaht > 0 && (

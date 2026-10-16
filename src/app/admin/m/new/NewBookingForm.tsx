@@ -1,5 +1,6 @@
 "use client";
 
+import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -114,7 +115,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
   // Group bookable services by category — exclude membership/package/hair/wellness/skin
   // Note: "บริการทั่วไป" (สระไดร์) is intentionally kept.
   const groupedEntries = useMemo(() => {
-    const SKIP_CATS = ["hair", "wellness", "skin", "membership", "package", "สมาชิก", "แพ็กเกจ", "member"];
+    const SKIP_CATS = ["hair", "wellness", "skin", "membership", "package", "สมาชิก", "แพ็กเกจ", "member", "สินค้า"];
     const SKIP_IDS  = ["svc-membership-30d", "svc-buffet", "svc-pkg5",
                        "svc-member-monthly", "svc-member-pkg"];
 
@@ -723,14 +724,11 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
         <section className="px-4 pt-5">
           <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: MUTED }}>ส่วนลด</p>
           <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
-            <span className="text-sm" style={{ color: MUTED }}>฿</span>
-            <input
-              type="number"
-              min={0}
-              value={discountBaht || ""}
-              onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
-              placeholder="0"
-              className="flex-1 text-sm outline-none bg-transparent"
+            <DiscountAmountInput
+              baseSatang={effectiveServicePrice + addonTotal}
+              valueBaht={discountBaht}
+              onChange={setDiscountBaht}
+              className="flex-1 min-w-0 text-sm outline-none bg-transparent"
               style={{ color: TEXT }}
             />
             {discountBaht > 0 && (

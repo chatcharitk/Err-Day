@@ -1,5 +1,6 @@
 "use client";
 
+import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -94,7 +95,7 @@ const TEXT    = "#3B2A24";
 const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 
-const CAT_ORDER = ["Membership", "บริการทั่วไป", "แพ็กเกจ", "PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO"];
+const CAT_ORDER = ["Membership", "บริการทั่วไป", "แพ็กเกจ", "PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO", "สินค้า"];
 
 function formatPrice(satang: number) {
   return `฿${(satang / 100).toLocaleString()}`;
@@ -800,17 +801,14 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
                           className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2"
                           style={{ background: "#FFFBF5", border: `1px solid ${BORDER}` }}
                         >
-                          <span className="text-xs" style={{ color: MUTED }}>ส่วนลด ฿</span>
-                          <input
-                            type="number"
-                            min={0}
-                            // eslint-disable-next-line jsx-a11y/no-autofocus
+                          <span className="text-xs" style={{ color: MUTED }}>ส่วนลด</span>
+                          <DiscountAmountInput
+                            baseSatang={item.price * item.qty}
+                            valueBaht={item.itemDiscountBaht ?? 0}
+                            onChange={baht => setItemDiscount(item.id, baht)}
                             autoFocus
-                            value={item.itemDiscountBaht || ""}
-                            onChange={e => setItemDiscount(item.id, Math.max(0, Number(e.target.value)))}
                             onKeyDown={e => e.key === "Enter" && setDiscountingItemId(null)}
-                            placeholder="0"
-                            className="flex-1 text-sm outline-none bg-transparent"
+                            className="flex-1 min-w-0 text-sm outline-none bg-transparent"
                             style={{ color: TEXT }}
                           />
                           {(item.itemDiscountBaht ?? 0) > 0 && (
@@ -842,13 +840,12 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
               )}
               {/* Bill-level discount input */}
               <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2" style={{ border: `1px solid ${BORDER}` }}>
-                <span className="text-xs" style={{ color: MUTED }}>ส่วนลดทั้งบิล ฿</span>
-                <input
-                  type="number" min={0}
-                  value={discountBaht || ""}
-                  onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
-                  placeholder="0"
-                  className="flex-1 text-sm outline-none bg-transparent"
+                <span className="text-xs" style={{ color: MUTED }}>ส่วนลดทั้งบิล</span>
+                <DiscountAmountInput
+                  baseSatang={subtotal}
+                  valueBaht={discountBaht}
+                  onChange={setDiscountBaht}
+                  className="flex-1 min-w-0 text-sm outline-none bg-transparent"
                   style={{ color: TEXT }}
                 />
                 {discountBaht > 0 && (

@@ -1,5 +1,6 @@
 "use client";
 
+import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon, ReceiptText } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
@@ -98,7 +99,7 @@ function getServicePrices(bs: BS, isMember: boolean) {
 // Categories rendered BEFORE add-ons (Membership shown first as a highlighted CTA)
 const CATS_BEFORE_ADDONS = ["Membership", "บริการทั่วไป", "แพ็กเกจ"];
 // Categories rendered AFTER add-ons
-const CATS_AFTER_ADDONS  = ["PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO"];
+const CATS_AFTER_ADDONS  = ["PJOLI Treatment", "Davines Spa", "ย้อมผม NIGAO", "สินค้า"];
 
 export default function PosTerminal({ branches, activeBranchId, branchServices, addons, prefillBooking, prefillCustomer, addSku }: Props) {
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -725,13 +726,12 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
             })()}
             {/* Manual discount */}
             <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2" style={{ border: "1px solid #D6BCAE", background: "white" }}>
-              <span className="text-xs" style={{ color: "#A08070" }}>ส่วนลด ฿</span>
-              <input
-                type="number" min={0}
-                value={discountBaht || ""}
-                onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
-                placeholder="0"
-                className="flex-1 text-sm outline-none bg-transparent"
+              <span className="text-xs" style={{ color: "#A08070" }}>ส่วนลด</span>
+              <DiscountAmountInput
+                baseSatang={subtotal}
+                valueBaht={discountBaht}
+                onChange={setDiscountBaht}
+                className="flex-1 min-w-0 text-sm outline-none bg-transparent"
                 style={{ color: "#3B2A24" }}
               />
               {discountBaht > 0 && (

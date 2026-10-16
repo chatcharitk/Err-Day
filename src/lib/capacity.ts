@@ -34,7 +34,15 @@ type Db = Prisma.TransactionClient;
  * stylist. They shouldn't consume a chair / staff slot — exclude them from
  * the capacity snapshot.
  */
-export const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU];
+export const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU, "svc-retail"];
+
+/**
+ * Retail products (shampoo, treatment, cookies…) are Services in this category,
+ * sold at POS only. A cart of only products (and/or membership/package) is
+ * recorded against RETAIL_SKU — a sale-only placeholder, never an appointment.
+ */
+export const RETAIL_CATEGORY = "สินค้า";
+export const RETAIL_SKU = "svc-retail";
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 

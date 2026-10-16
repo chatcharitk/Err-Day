@@ -42,7 +42,7 @@ export default async function MobileHomePage({
   const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
   // Sale-only SKUs (membership/package purchases) are stored as bookings so
   // they appear in sales history, but excluded from booking lists.
-  const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5"];
+  const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-retail"];
 
   const [bookings, branchServiceList, blockedSlotRows] = activeBranchId
     ? await Promise.all([

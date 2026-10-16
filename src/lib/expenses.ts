@@ -41,6 +41,8 @@ export const EXPENSE_CATEGORY_GROUPS = defineExpenseCategoryGroups([
       // Merged 2026-10 from shampoo / colour / treatment (see LEGACY_CATEGORY_ALIASES).
       { value: "hair_products",     label: "ผลิตภัณฑ์ผม (แชมพู / สี / ทรีตเมนต์)" },
       { value: "consumable_other",  label: "วัสดุสิ้นเปลืองอื่นๆ" },
+      // Stock bought to resell at the counter (cost of the retail products).
+      { value: "retail_stock",      label: "สินค้าเพื่อขาย (ซื้อมาขายต่อ)" },
     ],
   },
   {

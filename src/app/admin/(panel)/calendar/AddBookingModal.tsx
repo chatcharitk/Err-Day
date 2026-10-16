@@ -1,5 +1,6 @@
 "use client";
 
+import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useEffect, useMemo } from "react";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import {
@@ -63,7 +64,7 @@ export default function AddBookingModal({
   }
 
   const groupedEntries = useMemo(() => {
-    const SKIP_CATS = ["hair", "wellness", "skin", "membership", "package", "สมาชิก", "แพ็กเกจ", "member"];
+    const SKIP_CATS = ["hair", "wellness", "skin", "membership", "package", "สมาชิก", "แพ็กเกจ", "member", "สินค้า"];
     const SKIP_IDS  = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-member-monthly", "svc-member-pkg"];
     const out: Record<string, BranchServiceItem[]> = {};
     for (const s of branchServices) {
@@ -329,13 +330,13 @@ export default function AddBookingModal({
             </div>
             {selectedSvc && (
               <div>
-                <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ส่วนลด (บาท)</label>
+                <label className="text-[10px] uppercase tracking-widest text-[#A08070] block mb-1.5">ส่วนลด (บาท หรือ %)</label>
                 <div className="flex items-center gap-2 border border-[#E8D8CC] rounded-xl px-3 py-2.5">
-                  <span className="text-sm text-[#A08070]">฿</span>
-                  <input type="number" min={0} value={discountBaht || ""}
-                    onChange={e => setDiscountBaht(Math.max(0, Number(e.target.value)))}
-                    placeholder="0"
-                    className="flex-1 text-sm outline-none bg-transparent text-[#3B2A24]" />
+                  <DiscountAmountInput
+                    baseSatang={effectiveSvcPx + addonTotal}
+                    valueBaht={discountBaht}
+                    onChange={setDiscountBaht}
+                    className="flex-1 min-w-0 text-sm outline-none bg-transparent text-[#3B2A24]" />
                   {discountBaht > 0 && (
                     <span className="text-xs font-medium text-green-600">รวม {formatPrice(finalPrice)}</span>
                   )}
