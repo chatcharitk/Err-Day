@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyLineAccessToken } from "@/lib/line-auth";
-import { VOTE_EVENT, votePhaseAt } from "@/lib/staff-vote";
+import { VOTE_EVENT, voteDayAt, votePhaseAt } from "@/lib/staff-vote";
 
 /**
  * POST /api/vote  { lineAccessToken, candidateId? }
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     select: { id: true },
   });
   const phase = votePhaseAt();
+  const voteDay = voteDayAt();
   // Before voting opens the roster stays private — only the team's preview
   // (`preview: true`) gets it. Casting a vote is refused until "open" regardless.
   const showRoster = phase === "open" || body?.preview === true;
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   });
   const existing = customer
     ? await prisma.staffVote.findUnique({
-        where: { eventKey_customerId: { eventKey: VOTE_EVENT.key, customerId: customer.id } },
+        where: { eventKey_customerId_voteDay: { eventKey: VOTE_EVENT.key, customerId: customer.id, voteDay } },
         select: { candidateId: true, createdAt: true },
       })
     : null;
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     );
   }
   if (existing) {
-    return NextResponse.json({ error: "already_voted", message: "คุณโหวตไปแล้ว โหวตได้คนละ 1 ครั้ง", ...state }, { status: 409 });
+    return NextResponse.json({ error: "already_voted", message: "วันนี้คุณโหวตแล้ว โหวตได้วันละ 1 ครั้ง กลับมาโหวตใหม่พรุ่งนี้นะคะ", ...state }, { status: 409 });
   }
   if (!candidates.some(c => c.id === candidateId)) {
     return NextResponse.json({ error: "invalid_candidate", message: "ไม่พบพนักงานที่เลือก" }, { status: 400 });
@@ -73,14 +74,14 @@ export async function POST(request: Request) {
 
   try {
     const vote = await prisma.staffVote.create({
-      data: { eventKey: VOTE_EVENT.key, candidateId, customerId: customer.id, lineUserId: lineProfile.userId },
+      data: { eventKey: VOTE_EVENT.key, candidateId, customerId: customer.id, voteDay, lineUserId: lineProfile.userId },
       select: { candidateId: true, createdAt: true },
     });
     return NextResponse.json({ ...state, myVote: { candidateId: vote.candidateId, at: vote.createdAt.toISOString() } }, { status: 201 });
   } catch (e) {
-    // Two taps racing: the unique (eventKey, customerId) rejects the second.
+    // Two taps racing: the unique (eventKey, customerId, voteDay) rejects the second.
     if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
-      return NextResponse.json({ error: "already_voted", message: "คุณโหวตไปแล้ว โหวตได้คนละ 1 ครั้ง" }, { status: 409 });
+      return NextResponse.json({ error: "already_voted", message: "วันนี้คุณโหวตแล้ว โหวตได้วันละ 1 ครั้ง กลับมาโหวตใหม่พรุ่งนี้นะคะ" }, { status: 409 });
     }
     console.error("[vote]", e);
     return NextResponse.json({ error: "vote_failed", message: "โหวตไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });

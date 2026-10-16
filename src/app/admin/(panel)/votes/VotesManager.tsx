@@ -54,7 +54,7 @@ export default function VotesManager({ event, candidates: initial, log }: Props)
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Staff Vote</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>🎃 {event.title}</h1>
-          <p className="text-xs mt-1" style={{ color: MUTED }}>เปิดโหวต {fmtDay(event.from)} – {fmtDay(event.to)} · ลูกค้าโหวตได้คนละ 1 ครั้ง</p>
+          <p className="text-xs mt-1" style={{ color: MUTED }}>เปิดโหวต {fmtDay(event.from)} – {fmtDay(event.to)} · ลูกค้าโหวตได้วันละ 1 ครั้ง (1 คน/วัน)</p>
         </div>
         <a href="/api/admin/votes?format=csv" className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
           style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "white" }}>

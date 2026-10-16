@@ -892,20 +892,22 @@ model VoteCandidate {
 }
 
 /// *
-///  * One customer's vote. The unique (eventKey, customerId) is the "one vote
-///  * per customer" guarantee — enforced by the database, not just the API.
-///  * Rows are never edited or deleted: the table is the voting record.
+///  * One customer's vote. The unique (eventKey, customerId, voteDay) is the
+///  * "one vote per customer per day" guarantee — enforced by the database, not
+///  * just the API. Rows are never edited or deleted: the table is the voting record.
 model StaffVote {
   id          String        @id @default(cuid())
   eventKey    String
   candidateId String
   customerId  String
+  /// Bangkok calendar day of the vote ("YYYY-MM-DD").
+  voteDay     String
   lineUserId  String?
   createdAt   DateTime      @default(now())
   candidate   VoteCandidate @relation(fields: [candidateId], references: [id])
   customer    Customer      @relation(fields: [customerId], references: [id])
 
-  @@unique([eventKey, customerId])
+  @@unique([eventKey, customerId, voteDay])
   @@index([eventKey, candidateId])
 }
 

@@ -19,6 +19,11 @@ export const PARTICIPATION_MIN_VOTES = 20;
 
 const bangkokDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" });
 
+/** Today's Bangkok calendar day, "YYYY-MM-DD" — the key for one vote per day. */
+export function voteDayAt(now: Date = new Date()): string {
+  return bangkokDay.format(now);
+}
+
 export type VotePhase = "upcoming" | "open" | "closed";
 
 export function votePhaseAt(now: Date = new Date()): VotePhase {

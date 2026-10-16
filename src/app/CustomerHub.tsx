@@ -82,16 +82,16 @@ const HUB_UI = {
 
 const VOTE_UI = {
   th: {
-    tab: "โหวต", banner: "Halloween Staff Challenge", bannerOpen: "ร่วมโหวตพนักงานที่แต่งตัวสุดปัง", bannerSoon: "เปิดโหวต 18 ต.ค. 2569", bannerVoted: "คุณโหวตแล้ว ขอบคุณค่ะ",
-    title: "โหวตพนักงานสุดปัง", sub: "เลือกลุคฮาโลวีนที่คุณชอบที่สุด · ลูกค้าโหวตได้ 1 ครั้งเท่านั้น", soon: "เปิดโหวต 18 ต.ค. 2569", closed: "ปิดโหวตแล้ว ขอบคุณที่ร่วมสนุกค่ะ",
-    vote: "โหวตคนนี้", confirmTitle: "ยืนยันการโหวต?", confirmText: "โหวตได้เพียง 1 ครั้ง และเปลี่ยนไม่ได้", confirm: "ยืนยันโหวต", cancel: "ยกเลิก", sending: "กำลังโหวต...",
-    thanks: "ขอบคุณที่โหวตค่ะ 💛", yours: "โหวตของคุณ", notLinked: "กรุณาจองคิวหรือสมัครสมาชิกเพื่อเชื่อมบัญชี LINE ก่อนโหวต", none: "ยังไม่มีรายชื่อ", failed: "โหวตไม่สำเร็จ กรุณาลองใหม่",
+    tab: "โหวต", banner: "Halloween Staff Challenge", bannerOpen: "ร่วมโหวตพนักงานที่แต่งตัวสุดปัง", bannerSoon: "เปิดโหวต 18 ต.ค. 2569", bannerVoted: "วันนี้โหวตแล้ว พรุ่งนี้โหวตได้อีกนะคะ",
+    title: "โหวตพนักงานสุดปัง", sub: "เลือกลุคฮาโลวีนที่คุณชอบที่สุด · โหวตได้วันละ 1 ครั้ง", soon: "เปิดโหวต 18 ต.ค. 2569", closed: "ปิดโหวตแล้ว ขอบคุณที่ร่วมสนุกค่ะ",
+    vote: "โหวตคนนี้", confirmTitle: "ยืนยันการโหวต?", confirmText: "โหวตได้วันละ 1 ครั้ง ยืนยันแล้วเปลี่ยนไม่ได้ พรุ่งนี้กลับมาโหวตใหม่ได้", confirm: "ยืนยันโหวต", cancel: "ยกเลิก", sending: "กำลังโหวต...",
+    thanks: "ขอบคุณที่โหวตค่ะ 💛 พรุ่งนี้มาโหวตกันใหม่นะ", yours: "โหวตวันนี้", notLinked: "กรุณาจองคิวหรือสมัครสมาชิกเพื่อเชื่อมบัญชี LINE ก่อนโหวต", none: "ยังไม่มีรายชื่อ", failed: "โหวตไม่สำเร็จ กรุณาลองใหม่",
   },
   en: {
-    tab: "Vote", banner: "Halloween Staff Challenge", bannerOpen: "Vote for your favourite Halloween look", bannerSoon: "Voting opens 18 Oct 2026", bannerVoted: "You've voted — thank you!",
-    title: "Vote for your favourite", sub: "Pick the Halloween look you love most · one vote per customer", soon: "Voting opens 18 Oct 2026", closed: "Voting has closed. Thanks for joining in!",
-    vote: "Vote", confirmTitle: "Confirm your vote?", confirmText: "You can only vote once, and it can't be changed.", confirm: "Confirm vote", cancel: "Cancel", sending: "Voting...",
-    thanks: "Thank you for voting 💛", yours: "Your vote", notLinked: "Please book or join as a member to link your LINE account before voting.", none: "No candidates yet", failed: "Couldn't submit your vote. Please try again.",
+    tab: "Vote", banner: "Halloween Staff Challenge", bannerOpen: "Vote for your favourite Halloween look", bannerSoon: "Voting opens 18 Oct 2026", bannerVoted: "Voted today — come back tomorrow!",
+    title: "Vote for your favourite", sub: "Pick the Halloween look you love most · one vote per day", soon: "Voting opens 18 Oct 2026", closed: "Voting has closed. Thanks for joining in!",
+    vote: "Vote", confirmTitle: "Confirm your vote?", confirmText: "You get one vote per day and it can't be changed. Come back tomorrow to vote again.", confirm: "Confirm vote", cancel: "Cancel", sending: "Voting...",
+    thanks: "Thank you for voting 💛 See you tomorrow!", yours: "Today's vote", notLinked: "Please book or join as a member to link your LINE account before voting.", none: "No candidates yet", failed: "Couldn't submit your vote. Please try again.",
   },
 } as const;
 
