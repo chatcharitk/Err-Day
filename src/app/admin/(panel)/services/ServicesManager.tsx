@@ -84,9 +84,11 @@ interface BranchPricingRowProps {
   duration: string;
   isActive: boolean;
   onChange: (field: "price" | "duration" | "isActive", value: string | boolean) => void;
+  /** Retail products have a price but no time slot. */
+  hideDuration?: boolean;
 }
 
-function BranchPricingRow({ branch, price, duration, isActive, onChange }: BranchPricingRowProps) {
+function BranchPricingRow({ branch, price, duration, isActive, onChange, hideDuration }: BranchPricingRowProps) {
   return (
     <div className="flex items-center gap-3 py-2 border-b last:border-0" style={{ borderColor: BORDER }}>
       <div className="w-28 text-sm font-medium truncate" style={{ color: TEXT }}>{branch.name}</div>
@@ -105,7 +107,7 @@ function BranchPricingRow({ branch, price, duration, isActive, onChange }: Branc
             style={{ borderColor: BORDER, color: isActive ? TEXT : MUTED, background: isActive ? "white" : "#F9F3EE" }}
           />
         </div>
-        <div className="flex items-center gap-1">
+        {!hideDuration && <div className="flex items-center gap-1">
           <input
             type="number"
             min="15"
@@ -117,7 +119,7 @@ function BranchPricingRow({ branch, price, duration, isActive, onChange }: Branc
             style={{ borderColor: BORDER, color: isActive ? TEXT : MUTED, background: isActive ? "white" : "#F9F3EE" }}
           />
           <span className="text-xs" style={{ color: MUTED }}>นาที</span>
-        </div>
+        </div>}
       </div>
 
       {/* active toggle */}
@@ -197,6 +199,9 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
   const [error, setError]   = useState("");
 
   const effectiveCategory = category === "__custom__" ? customCat : category;
+  // Retail products (หมวด สินค้า): POS-only, priced per branch, no duration and
+  // never bookable by customers.
+  const isProduct = effectiveCategory.trim() === "สินค้า";
 
   function updateBranch(branchId: string, field: "price" | "duration" | "isActive", value: string | boolean) {
     setBranchPricing(prev => ({
@@ -214,7 +219,7 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
       .map(b => ({
         branchId: b.id,
         price:    Number(branchPricing[b.id].price),
-        duration: Number(branchPricing[b.id].duration) || 60,
+        duration: isProduct ? 0 : Number(branchPricing[b.id].duration) || 60,
         isActive: branchPricing[b.id].isActive,
       }));
 
@@ -231,10 +236,10 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
             name: name.trim(),
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
-            advanceBookingRequired: advance,
-            isPublic,
-            memberDiscountPercent: memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
-            memberPrice: memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
+            advanceBookingRequired: isProduct ? false : advance,
+            isPublic: isProduct ? false : isPublic,
+            memberDiscountPercent: !isProduct && memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
+            memberPrice: !isProduct && memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
           }),
         });
         if (!r1.ok) throw new Error((await r1.json()).error);
@@ -257,10 +262,10 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
             name: name.trim(),
             nameTh: nameTh.trim(),
             category: effectiveCategory.trim(),
-            advanceBookingRequired: advance,
-            isPublic,
-            memberDiscountPercent: memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
-            memberPrice: memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
+            advanceBookingRequired: isProduct ? false : advance,
+            isPublic: isProduct ? false : isPublic,
+            memberDiscountPercent: !isProduct && memberMode === "percent" ? (parseFloat(memberPercent) || 0) : 0,
+            memberPrice: !isProduct && memberMode === "net" ? (parseFloat(memberNetBaht) || null) : null,
             branchPricing: pricingRows,
           }),
         });
@@ -353,8 +358,13 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
               )}
             </div>
 
+            {isProduct && (
+              <p className="text-xs" style={{ color: MUTED }}>
+                สินค้า — ขายที่ POS เท่านั้น ไม่มีระยะเวลา และลูกค้าไม่เห็นในหน้าจอง
+              </p>
+            )}
             {/* Flags row */}
-            <div className="flex items-center gap-6">
+            {!isProduct && <><div className="flex items-center gap-6">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -379,8 +389,10 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
                 บริการภายในร้าน — ลูกค้าไม่เห็นในหน้าจอง แต่พนักงานเลือกได้ในปฏิทิน / POS
               </p>
             )}
+            </>}
 
-            {/* Member discount */}
+            {/* Member discount — not offered on retail products */}
+            {!isProduct && (
             <div>
               <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>
                 ราคาสมาชิก
@@ -476,10 +488,11 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
                 </div>
               )}
             </div>
+            )}
 
             {/* Per-branch pricing */}
             <div>
-              <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>ราคา / ระยะเวลา ต่อสาขา</label>
+              <label className="block text-xs mb-2 font-medium" style={{ color: MUTED }}>{isProduct ? "ราคาขาย ต่อสาขา" : "ราคา / ระยะเวลา ต่อสาขา"}</label>
               <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
                 {branches.map(b => (
                   <BranchPricingRow
@@ -488,11 +501,12 @@ function ServiceFormModal({ initial, branches, categories, onClose, onSaved }: S
                     price={branchPricing[b.id]?.price ?? ""}
                     duration={branchPricing[b.id]?.duration ?? "60"}
                     isActive={branchPricing[b.id]?.isActive ?? true}
+                    hideDuration={isProduct}
                     onChange={(field, value) => updateBranch(b.id, field, value)}
                   />
                 ))}
               </div>
-              <p className="text-xs mt-1" style={{ color: MUTED }}>เว้นว่าง "ราคา" ถ้าไม่ให้บริการที่สาขานั้น</p>
+              <p className="text-xs mt-1" style={{ color: MUTED }}>เว้นว่าง "ราคา" {isProduct ? "ถ้าสาขานั้นไม่ขายสินค้านี้" : "ถ้าไม่ให้บริการที่สาขานั้น"}</p>
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -681,7 +695,7 @@ function ServiceCard({
                   <tr key={bs.id} style={{ color: bs.isActive ? TEXT : MUTED }}>
                     <td className="py-0.5">{bs.branch.name}</td>
                     <td className="text-right">{fmt(bs.price)}</td>
-                    <td className="text-right">{bs.duration} นาที</td>
+                    <td className="text-right">{bs.duration > 0 ? `${bs.duration} นาที` : "—"}</td>
                     <td className="text-center">
                       {bs.isActive ? (
                         <span className="inline-flex items-center gap-1 text-green-700"><Check size={11} />เปิด</span>
