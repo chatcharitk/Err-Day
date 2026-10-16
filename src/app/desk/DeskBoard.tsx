@@ -191,8 +191,9 @@ export default function DeskBoard({
       setError("บันทึกค่าเชียร์ไม่สำเร็จ");
     } finally {
       pendingRef.current -= 1;
+      // Reload before clearing busy so the modal's highlight never flickers back.
+      await refresh({ force: true });
       setBusy(s => { const n = new Set(s); n.delete(bookingId); return n; });
-      refresh({ force: true });
     }
   }
 
@@ -552,6 +553,11 @@ function CheerModal({ b, staff, services, busy, onAdd, onRemove, onClose }: {
 }) {
   const [serviceId, setServiceId] = useState<string>(() =>
     services.find(s => s.id === b.serviceId)?.id ?? services[0]?.id ?? "");
+  // Tapped name, shown straight away while the save round-trips; after that the
+  // highlight follows whoever is recorded for the selected treatment.
+  const [picked, setPicked] = useState<{ serviceId: string; staffId: string } | null>(null);
+  const savedStaffId = b.cheers.find(c => c.serviceId === serviceId)?.staffId ?? null;
+  const activeStaffId = busy && picked?.serviceId === serviceId ? picked.staffId : savedStaffId;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.45)" }}
       onClick={onClose}>
@@ -576,7 +582,7 @@ function CheerModal({ b, staff, services, busy, onAdd, onRemove, onClose }: {
                 <span className="flex-1 text-sm font-semibold" style={{ color: "#9A3412" }}>
                   🎉 {c.serviceName} · {c.staffName} · {baht(c.amountSatang)}
                 </span>
-                <button disabled={busy} onClick={() => onRemove(c.id)} title="ลบ"
+                <button disabled={busy} onClick={() => { if (picked?.serviceId === c.serviceId) setPicked(null); onRemove(c.id); }} title="ลบ"
                   className="p-1.5 rounded-lg active:scale-95 disabled:opacity-50" style={{ color: "#9A3412" }}>
                   <X size={16} />
                 </button>
@@ -606,9 +612,9 @@ function CheerModal({ b, staff, services, busy, onAdd, onRemove, onClose }: {
           {staff.length === 0 && <span className="text-xs" style={{ color: MUTED }}>ยังไม่มีพนักงาน</span>}
           {staff.map(s => (
             <button key={s.id} disabled={busy || !serviceId}
-              onClick={() => onAdd(serviceId, s.id)}
+              onClick={() => { setPicked({ serviceId, staffId: s.id }); onAdd(serviceId, s.id); }}
               className="px-4 py-3 rounded-xl text-base font-bold active:scale-95 transition-transform disabled:opacity-50"
-              style={s.id === b.staffId
+              style={s.id === activeStaffId
                 ? { background: PRIMARY, color: "white", border: `2px solid ${PRIMARY}` }
                 : { background: "white", color: PRIMARY, border: `2px solid ${PRIMARY}` }}>
               {s.name}

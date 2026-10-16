@@ -82,7 +82,7 @@ export interface DeskBooking {
   serviceId:        string;
   notes:            string | null;
   /** ค่าเชียร์ already recorded on this booking. */
-  cheers:           { id: string; serviceName: string; staffName: string; amountSatang: number }[];
+  cheers:           { id: string; serviceId: string; serviceName: string; staffId: string; staffName: string; amountSatang: number }[];
 }
 
 /** Membership status for a customer's membership row (inclusive expiry). */
@@ -214,7 +214,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
         },
         staff:    { select: { id: true, name: true } },
         serviceId: true,
-        cheers:   { select: { id: true, amountSatang: true, service: { select: { name: true, nameTh: true } }, staff: { select: { name: true } } } },
+        cheers:   { select: { id: true, serviceId: true, staffId: true, amountSatang: true, service: { select: { name: true, nameTh: true } }, staff: { select: { name: true } } } },
       },
     }),
     prisma.service.findMany({
@@ -250,7 +250,10 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       serviceName:      b.service.nameTh || b.service.name,
       serviceId:        b.serviceId,
       notes:            b.internalNotes,
-      cheers:           b.cheers.map(c => ({ id: c.id, serviceName: c.service.nameTh || c.service.name, staffName: c.staff.name, amountSatang: c.amountSatang })),
+      cheers:           b.cheers.map(c => ({
+        id: c.id, serviceId: c.serviceId, serviceName: c.service.nameTh || c.service.name,
+        staffId: c.staffId, staffName: c.staff.name, amountSatang: c.amountSatang,
+      })),
     };
   });
 
