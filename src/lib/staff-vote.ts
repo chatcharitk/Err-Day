@@ -6,8 +6,8 @@
 export const VOTE_EVENT = {
   key: "halloween-2026",
   titleTh: "Halloween Staff Challenge",
-  /** Inclusive Bangkok days voting is open (poster: 18–31 ต.ค. 2569). */
-  from: "2026-10-18",
+  /** Inclusive Bangkok days voting is open (poster said 18–31 ต.ค.; opened a day early on 17 ต.ค. 2569). */
+  from: "2026-10-17",
   to: "2026-10-31",
 } as const;
 

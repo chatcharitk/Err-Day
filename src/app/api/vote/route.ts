@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   }
   if (phase !== "open") {
     return NextResponse.json(
-      { error: "not_open", message: phase === "upcoming" ? "ยังไม่เปิดโหวต เริ่ม 18 ต.ค. 2569" : "ปิดโหวตแล้ว" },
+      { error: "not_open", message: phase === "upcoming" ? "ยังไม่เปิดโหวต เริ่ม 17 ต.ค. 2569" : "ปิดโหวตแล้ว" },
       { status: 403 },
     );
   }
