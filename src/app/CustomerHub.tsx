@@ -119,7 +119,18 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
   const hubClass = `customer-hub${halloween ? " theme-halloween" : ""}`;
   const [openedAt] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<Tab>(() => searchParams.get("tab") === "book" ? "book" : "home");
+  // ?tab=book / ?tab=vote deep-link a tab (e.g. https://liff.line.me/<id>/?tab=vote).
+  // LIFF delivers the query after the hub has mounted (liff.state → router.replace),
+  // so follow later changes of the param too, not just the first render.
+  const tabParam = searchParams.get("tab");
+  const linkedTab = (t: string | null): Tab | null => t === "book" || t === "vote" ? t : null;
+  const [tab, setTab] = useState<Tab>(() => linkedTab(tabParam) ?? "home");
+  const [seenTabParam, setSeenTabParam] = useState(tabParam);
+  if (tabParam !== seenTabParam) {
+    setSeenTabParam(tabParam);
+    const t = linkedTab(tabParam);
+    if (t) setTab(t);
+  }
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [membership, setMembership] = useState<MembershipData | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
