@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StaffPayoutRow } from "@/lib/payroll";
@@ -10,6 +10,7 @@ import SettingsTab, {
   type AddonCfg,
 } from "./PayrollSettings";
 import FinanceHistory from "@/components/FinanceHistory";
+import { buildDailySummary } from "@/lib/payroll-summary";
 import css from "@/components/Finance.module.css";
 
 interface Branch {
@@ -46,6 +47,11 @@ export default function PayrollView(props: Props) {
   const [tab, setTab] = useState("daily");
   const [staffId, setStaffId] = useState(rows[0]?.staffId ?? "");
   const selected = rows.find((r) => r.staffId === staffId) ?? rows[0];
+  const branchName = branches.find((b) => b.id === activeBranchId)?.name ?? "";
+  const summaryText = useMemo(
+    () => buildDailySummary(branchName, activeDate, rows),
+    [branchName, activeDate, rows],
+  );
   // Mobile already shows "ค่าตอบแทนพนักงาน" in its own sticky header (see
   // admin/m/payroll/page.tsx), so repeating it here as a big h1 + subtitle is
   // pure duplication there. Desktop has no page-level title of its own, so it
@@ -105,6 +111,11 @@ export default function PayrollView(props: Props) {
         </div>
       )}
       {tab === "daily" && (
+        <DaySummary
+          text={summaryText}
+        />
+      )}
+      {tab === "daily" && (
         <div className={css.layout}>
           <aside className={css.people} aria-label="เลือกพนักงาน">
             {rows.map((r) => (
@@ -152,6 +163,51 @@ export default function PayrollView(props: Props) {
         />
       )}
     </main>
+  );
+}
+/** One-tap daily report: copy it, or open LINE's share sheet to send it to whoever pays the staff. */
+function DaySummary({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  const btn = {
+    padding: "8px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer",
+    border: "1px solid #E8D8CC", background: "white", color: "#3B2A24", width: "auto", textDecoration: "none",
+  } as const;
+  return (
+    <section
+      aria-label="สรุปส่งแพร"
+      style={{ margin: "12px 0", padding: 12, borderRadius: 14, border: "1px solid #E8D8CC", background: "#FFFBF7" }}
+    >
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <strong style={{ fontSize: 14, flex: 1, minWidth: 140 }}>สรุปส่งแพร (คอม · OT · ทิป)</strong>
+        <button type="button" onClick={copy} style={{ ...btn, background: copied ? "#DCFCE7" : "white" }}>
+          {copied ? "คัดลอกแล้ว ✓" : "คัดลอกข้อความ"}
+        </button>
+        <a
+          href={`https://line.me/R/share?text=${encodeURIComponent(text)}`}
+          target="_blank" rel="noopener noreferrer"
+          style={{ ...btn, background: "#06C755", color: "white", border: "1px solid #06C755" }}
+        >
+          ส่งทาง LINE
+        </a>
+      </div>
+      <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12.5, lineHeight: 1.6, fontFamily: "inherit", color: "#3B2A24" }}>
+        {text}
+      </pre>
+    </section>
   );
 }
 function DailyReview({
