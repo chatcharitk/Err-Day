@@ -28,6 +28,8 @@ interface SaleRow {
   date:         string;
   startTime:    string;
   totalPrice:   number;
+  /** Tip counted as income (0 before Oct 2026) — shown apart from the service price. */
+  tipSatang:    number;
   serviceName:  string;
   customerName: string;
   staffName:    string | null;
@@ -48,12 +50,13 @@ interface Props {
   period:       Period;
   periodLabel:  string;
   totalRevenue: number;
+  totalTips:    number;
   totalCount:   number;
   truncated:    boolean;
   todayStr:     string;
 }
 
-export default function MobileSalesHistory({ sales, period, periodLabel, totalRevenue, totalCount, truncated, todayStr }: Props) {
+export default function MobileSalesHistory({ sales, period, periodLabel, totalRevenue, totalTips, totalCount, truncated, todayStr }: Props) {
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -128,7 +131,10 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
               ยอดขาย{periodLabel}
             </span>
           </div>
-          <p className="text-3xl font-bold tracking-tight">฿{(totalRevenue / 100).toLocaleString()}</p>
+          <p className="text-3xl font-bold tracking-tight">฿{((totalRevenue + totalTips) / 100).toLocaleString()}</p>
+          {totalTips > 0 && (
+            <p className="text-xs mt-0.5 opacity-80">ค่าบริการ ฿{(totalRevenue / 100).toLocaleString()} · ทิป ฿{(totalTips / 100).toLocaleString()}</p>
+          )}
           <p className="text-sm mt-0.5" style={{ opacity: 0.7 }}>{totalCount.toLocaleString()} รายการ</p>
         </div>
       </section>
@@ -164,7 +170,7 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
             </div>
 
             {grouped.map(([dateStr, rows], gi) => {
-              const dayTotal = rows.reduce((s, r) => s + r.totalPrice, 0);
+              const dayTotal = rows.reduce((s, r) => s + r.totalPrice + r.tipSatang, 0);
               const isToday  = dateStr === todayStr;
               return (
                 <div key={dateStr}>
@@ -214,6 +220,7 @@ export default function MobileSalesHistory({ sales, period, periodLabel, totalRe
                           <ReceiptText size={11} style={{ color: PRIMARY }} aria-label="มีใบเสร็จ" />
                         )}
                         ฿{(row.totalPrice / 100).toLocaleString()}
+                        {row.tipSatang > 0 && <span className="text-[10px]">+ทิป {(row.tipSatang / 100).toLocaleString()}</span>}
                       </span>
                       <ChevronRight size={14} className="mt-px ml-1" style={{ color: MUTED }} />
                     </button>

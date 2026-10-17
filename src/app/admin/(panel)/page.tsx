@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getMembershipBranchByCustomer } from "@/lib/membership";
 import { branchCode } from "@/lib/branch-display";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
+import { TIP_INCOME_FROM, tipIncomeSatang } from "@/lib/tip-income";
 import DashboardView, { DashboardData } from "./DashboardView";
 
 export const revalidate = 30;
@@ -98,7 +99,7 @@ export default async function AdminDashboard({
     // Today: completed bookings (branch-filtered if applicable)
     prisma.booking.findMany({
       where: { ...branchFilter, status: "COMPLETED", date: { gte: todayB.start, lte: todayB.end } },
-      select: { totalPrice: true },
+      select: { totalPrice: true, tipSatang: true, date: true },
     }),
 
     // This month: completed bookings (need full detail for breakdowns)
@@ -106,6 +107,7 @@ export default async function AdminDashboard({
       where: { ...branchFilter, status: "COMPLETED", date: { gte: thisMonthFullB.start, lte: thisMonthFullB.end } },
       select: {
         totalPrice: true,
+        tipSatang:  true,
         serviceId:  true,
         date:       true,
         startTime:  true,
@@ -118,7 +120,7 @@ export default async function AdminDashboard({
     // Last month MTD aggregate (1st → same day of month)
     prisma.booking.aggregate({
       where: { ...branchFilter, status: "COMPLETED", date: { gte: lastMonthMTDB.start, lte: lastMonthMTDB.end } },
-      _sum: { totalPrice: true },
+      _sum: { totalPrice: true, tipSatang: true },
       _count: true,
     }),
 
@@ -152,18 +154,22 @@ export default async function AdminDashboard({
 
   // ── Derived metrics ─────────────────────────────────────────────────────────
 
-  const todayRevenue     = todayCompleted.reduce((s, b) => s + b.totalPrice, 0);
+  // Revenue = services + tips (tips are income from Oct 2026, see tip-income.ts).
+  const todayRevenue     = todayCompleted.reduce((s, b) => s + b.totalPrice + tipIncomeSatang(b.date, b.tipSatang), 0);
   const todayCount       = todayCompleted.length;
 
   // Month-to-date totals (only days 1 → today)
   const mtdEnd = new Date(`${todayStr}T23:59:59.999Z`);
   const thisMonthMTDCompleted = thisMonthCompleted.filter(b => b.date <= mtdEnd);
-  const thisMonthRevenue = thisMonthMTDCompleted.reduce((s, b) => s + b.totalPrice, 0);
+  const thisMonthServices = thisMonthMTDCompleted.reduce((s, b) => s + b.totalPrice, 0);
+  const thisMonthRevenue = thisMonthServices + thisMonthMTDCompleted.reduce((s, b) => s + tipIncomeSatang(b.date, b.tipSatang), 0);
   const thisMonthCount   = thisMonthMTDCompleted.length;
 
-  const lastMonthRevenue = lastMonthAgg._sum.totalPrice ?? 0;
+  const lastMonthRevenue = (lastMonthAgg._sum.totalPrice ?? 0)
+    + (lastMonthMTDB.end.toISOString().slice(0, 10) >= TIP_INCOME_FROM ? (lastMonthAgg._sum.tipSatang ?? 0) : 0);
   const lastMonthCount   = lastMonthAgg._count;
-  const avgTicket        = thisMonthCount > 0 ? Math.round(thisMonthRevenue / thisMonthCount) : 0;
+  // Average bill is the service price only — tips aren't part of the ticket.
+  const avgTicket        = thisMonthCount > 0 ? Math.round(thisMonthServices / thisMonthCount) : 0;
 
   // "มาครั้งเดียวแล้วหาย": exactly one completed visit, and silent since.
   // `new Date()` rather than `Date.now()` — the latter trips react-hooks/purity,
@@ -239,7 +245,7 @@ export default async function AdminDashboard({
   for (const b of thisMonthCompleted) {
     const day     = b.date.getUTCDate();
     const weekIdx = Math.min(Math.floor((day - 1) / 7), 4);
-    weekTotals[weekIdx] += b.totalPrice;
+    weekTotals[weekIdx] += b.totalPrice + tipIncomeSatang(b.date, b.tipSatang);
   }
   const weeklyRevenue = weekTotals
     .map((total, i) => ({ label: String(i + 1), total }))

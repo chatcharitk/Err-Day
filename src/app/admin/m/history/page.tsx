@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { TIP_INCOME_FROM, tipIncomeSatang } from "@/lib/tip-income";
 import MobileSalesHistory from "./MobileSalesHistory";
+
+const TIP_FROM_DATE = new Date(TIP_INCOME_FROM + "T00:00:00Z");
 
 export const revalidate = 30;
 
@@ -60,12 +63,12 @@ export default async function MobileHistoryPage({
   const { gte, lte } = rangeFor(period, now);
 
   const where = {
-    date:       { gte, lte },
-    status:     "COMPLETED" as const,
-    totalPrice: { gt: 0 },
+    date:   { gte, lte },
+    status: "COMPLETED" as const,
+    OR:     [{ totalPrice: { gt: 0 } }, { tipSatang: { gt: 0 } }],
   };
 
-  const [sales, agg] = await Promise.all([
+  const [sales, agg, tipAgg] = await Promise.all([
     prisma.booking.findMany({
       where,
       select: {
@@ -73,6 +76,7 @@ export default async function MobileHistoryPage({
         date:       true,
         startTime:  true,
         totalPrice: true,
+        tipSatang:  true,
         service:  { select: { nameTh: true } },
         customer: { select: { name: true, nickname: true } },
         staff:    { select: { name: true } },
@@ -84,6 +88,11 @@ export default async function MobileHistoryPage({
       take: LIST_CAP,
     }),
     prisma.booking.aggregate({ where, _sum: { totalPrice: true }, _count: true }),
+    // Tips are income from Oct 2026 (TIP_INCOME_FROM) — summed apart from services.
+    prisma.booking.aggregate({
+      where: { ...where, tipSatang: { gt: 0 }, date: { gte: gte > TIP_FROM_DATE ? gte : TIP_FROM_DATE, lte } },
+      _sum: { tipSatang: true },
+    }),
   ]);
 
   const rows = sales.map(b => ({
@@ -91,6 +100,7 @@ export default async function MobileHistoryPage({
     date:         b.date.toISOString().slice(0, 10),
     startTime:    b.startTime,
     totalPrice:   b.totalPrice,
+    tipSatang:    tipIncomeSatang(b.date, b.tipSatang),
     serviceName:  b.service.nameTh,
     customerName: b.customer.nickname || b.customer.name,
     staffName:    b.staff?.name ?? null,
@@ -105,6 +115,7 @@ export default async function MobileHistoryPage({
       period={period}
       periodLabel={PERIOD_LABELS[period]}
       totalRevenue={agg._sum.totalPrice ?? 0}
+      totalTips={tipAgg._sum.tipSatang ?? 0}
       totalCount={totalCount}
       truncated={totalCount > rows.length}
       todayStr={todayStr}

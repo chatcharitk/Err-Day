@@ -18,7 +18,9 @@ interface SaleRecord {
   startTime: string;
   endTime: string;
   status: string;
-  totalPrice: number;     // satang
+  totalPrice: number;     // satang — the service sale (what the receipt covers)
+  /** Customer tip counted as income (satang; 0 before Oct 2026). Kept apart from totalPrice. */
+  tipSatang: number;
   notes: string | null;
   branchId: string;
   serviceId: string;
@@ -414,14 +416,17 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
 
 function SummaryBar({ sales }: { sales: SaleRecord[] }) {
   const completed  = sales.filter(s => s.status === "COMPLETED");
-  const revenue    = completed.reduce((sum, s) => sum + s.totalPrice, 0);
+  const services   = completed.reduce((sum, s) => sum + s.totalPrice, 0);
+  const tips       = completed.reduce((sum, s) => sum + s.tipSatang, 0);
+  const revenue    = services + tips;
   const unpaid     = completed.filter(s => !s.paidAt);
   const unpaidSum  = unpaid.reduce((sum, s) => sum + s.totalPrice, 0);
   const pending    = sales.filter(s => s.status === "PENDING" || s.status === "CONFIRMED").length;
   const cancelled  = sales.filter(s => s.status === "CANCELLED" || s.status === "NO_SHOW").length;
 
-  const cards: { label: string; value: string; color: string; sub?: string }[] = [
+  const cards: { label: string; value: string; color: string; sub?: string; note?: string }[] = [
     { label: "รายได้รวม (เสร็จสิ้น)", value: fmt(revenue), color: PRIMARY,
+      note: tips > 0 ? `ค่าบริการ ${fmt(services)} · ทิป ${fmt(tips)}` : undefined,
       sub: unpaid.length > 0 ? `ยังไม่ชำระ ${fmt(unpaidSum)} · ${unpaid.length} รายการ` : undefined },
     { label: "รายการเสร็จสิ้น",       value: String(completed.length), color: "#1D4ED8" },
     { label: "รอดำเนินการ",           value: String(pending),          color: "#B45309" },
@@ -434,6 +439,7 @@ function SummaryBar({ sales }: { sales: SaleRecord[] }) {
         <div key={c.label} className="rounded-2xl p-4" style={{ background: "white", border: `1.5px solid ${BORDER}` }}>
           <p className="text-xs mb-1" style={{ color: MUTED }}>{c.label}</p>
           <p className="text-xl font-semibold" style={{ color: c.color }}>{c.value}</p>
+          {c.note && <p className="text-[11px] mt-1" style={{ color: MUTED }}>{c.note}</p>}
           {c.sub && <p className="text-[11px] mt-1 font-medium" style={{ color: "#B45309" }}>{c.sub}</p>}
         </div>
       ))}
@@ -599,7 +605,8 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
    *  UTF-8 BOM so Excel renders Thai; amounts as plain numbers (in baht). */
   function handleExport() {
     if (filtered.length === 0) return;
-    const headers = ["วันที่", "เวลา", "สาขา", "ลูกค้า", "เบอร์โทร", "บริการ", "ช่าง", "สถานะ", "ยอด (บาท)", "ชำระเมื่อ", "หมายเหตุ", "รหัส"];
+    // Service and tip stay in separate columns — accounting books them apart.
+    const headers = ["วันที่", "เวลา", "สาขา", "ลูกค้า", "เบอร์โทร", "บริการ", "ช่าง", "สถานะ", "ค่าบริการ (บาท)", "ทิป (บาท)", "รวม (บาท)", "เลขที่ใบเสร็จ", "ชำระเมื่อ", "หมายเหตุ", "รหัส"];
     const rows = filtered.map(s => [
       effectiveDateOf(s),
       `${s.startTime}-${s.endTime}`,
@@ -610,6 +617,9 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
       s.staff?.name ?? "-",
       STATUS_LABEL[s.status] ?? s.status,
       s.totalPrice / 100,
+      s.tipSatang / 100,
+      (s.totalPrice + s.tipSatang) / 100,
+      s.receipt?.number ?? "",
       s.paidAt ? utcToBkkInput(s.paidAt).replace("T", " ") : "",
       (s.notes ?? "").replace(/\s+/g, " ").trim(),
       s.id,
@@ -831,7 +841,7 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
             </thead>
             <tbody>
               {byDate.map(([date, rows]) => {
-                const dateRevenue = rows.filter(r => r.status === "COMPLETED").reduce((s, r) => s + r.totalPrice, 0);
+                const dateRevenue = rows.filter(r => r.status === "COMPLETED").reduce((s, r) => s + r.totalPrice + r.tipSatang, 0);
                 const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("th-TH", {
                   weekday: "short", day: "numeric", month: "short", year: "numeric",
                 });
@@ -938,6 +948,9 @@ export default function SalesHistory({ sales: initial, branches, allStaff, allSe
                           {/* Price */}
                           <td className="px-4 py-3 whitespace-nowrap text-right align-top">
                             <p className="font-semibold text-sm" style={{ color: PRIMARY }}>{fmt(sale.totalPrice)}</p>
+                            {sale.tipSatang > 0 && (
+                              <p className="text-[11px] font-semibold" style={{ color: "#166534" }}>+ ทิป {fmt(sale.tipSatang)}</p>
+                            )}
                             <p className="text-[10px] font-mono" style={{ color: "#C4B0A4" }}>
                               {sale.receipt ? sale.receipt.number : `#${sale.id.slice(-6).toUpperCase()}`}
                             </p>

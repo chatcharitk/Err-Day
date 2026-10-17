@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import SalesHistory from "./SalesHistory";
+import { tipIncomeSatang } from "@/lib/tip-income";
 
 export const revalidate = 30;
 
@@ -31,6 +32,7 @@ export default async function HistoryPage({
         endTime:     true,
         status:      true,
         totalPrice:  true,
+        tipSatang:   true,
         internalNotes: true,
         branchId:    true,
         serviceId:   true,
@@ -63,6 +65,7 @@ export default async function HistoryPage({
         endTime:     b.endTime,
         status:      b.status as string,
         totalPrice:  b.totalPrice,
+        tipSatang:   tipIncomeSatang(b.date, b.tipSatang),
         notes:       b.internalNotes,
         branchId:    b.branchId,
         serviceId:   b.serviceId,
