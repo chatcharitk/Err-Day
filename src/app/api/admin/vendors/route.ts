@@ -68,8 +68,14 @@ async function save(request: Request, update: boolean) {
       throw new Error("กรุณาระบุชื่อผู้รับเงิน");
     if (!["BUSINESS", "PERSON", "EMPLOYEE"].includes(b.type))
       throw new Error("ประเภทผู้รับเงินไม่ถูกต้อง");
-    if (b.taxId && !/^\d{13}$/.test(b.taxId))
-      throw new Error("เลขผู้เสียภาษี / เลขประชาชนต้องมี 13 หลัก");
+    // Pasted IDs often carry spaces, hyphens ("0-1075-37001-65-0"), zero-width
+    // characters from a PDF, or Thai digits — keep just the digits, then check.
+    if (typeof b.taxId === "string" && b.taxId.trim()) {
+      const digits = b.taxId.replace(/[๐-๙]/g, (d: string) => String(d.charCodeAt(0) - 0x0e50)).replace(/\D/g, "");
+      if (digits.length !== 13)
+        throw new Error(`เลขผู้เสียภาษี / เลขประชาชนต้องมี 13 หลัก (ที่กรอกมี ${digits.length} หลัก)`);
+      b.taxId = digits;
+    }
     // A NEW employee payee must be linked to a staff row. An existing one that
     // was never linked (older duplicates of a staff member) may stay unlinked.
     if (b.type === "EMPLOYEE" && !b.staffId && !update)
