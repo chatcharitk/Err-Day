@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Eye, EyeOff, Check } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
@@ -28,6 +28,15 @@ function prizeFor(rank: number, votes: number): number {
 export default function VotesManager({ event, candidates: initial, log }: Props) {
   const router = useRouter();
   const [candidates, setCandidates] = useState(initial);
+  // Live: re-read the server every few seconds and take its fresh counts.
+  const [seen, setSeen] = useState(initial);
+  if (initial !== seen) { setSeen(initial); setCandidates(initial); }
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === "visible") { router.refresh(); setUpdatedAt(Date.now()); } };
+    const id = setInterval(tick, 5000);
+    return () => clearInterval(id);
+  }, [router]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
@@ -53,8 +62,12 @@ export default function VotesManager({ event, candidates: initial, log }: Props)
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Staff Vote</p>
-          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>🎃 {event.title}</h1>
-          <p className="text-xs mt-1" style={{ color: MUTED }}>เปิดโหวต {fmtDay(event.from)} – {fmtDay(event.to)} · ลูกค้าโหวตได้วันละ 1 ครั้ง (1 คน/วัน)</p>
+          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>🎃 {event.title}
+            <span className="ml-3 align-middle inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "#DCFCE7", color: "#166534" }}>
+              <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: "#16A34A" }} /> LIVE
+            </span>
+          </h1>
+          <p className="text-xs mt-1" style={{ color: MUTED }}>เปิดโหวต {fmtDay(event.from)} – {fmtDay(event.to)} · ลูกค้าโหวตได้วันละ 1 ครั้ง (1 คน/วัน){updatedAt ? ` · อัปเดตอัตโนมัติทุก 5 วินาที` : ""}</p>
         </div>
         <a href="/api/admin/votes?format=csv" className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
           style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "white" }}>
