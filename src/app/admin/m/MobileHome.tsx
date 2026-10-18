@@ -674,6 +674,15 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 ค่าตอบแทนพนักงาน
               </Link>
               <Link
+                href="/admin/m/votes"
+                prefetch={false}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
+                style={{ color: TEXT }}
+              >
+                <span style={{ width: 16, textAlign: "center" }}>🎃</span>
+                โหวตพนักงาน (สด)
+              </Link>
+              <Link
                 href="/admin/m/pos"
                 prefetch={false}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
