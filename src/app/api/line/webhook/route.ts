@@ -3,7 +3,6 @@
  *
  * REPLY POLICY (very narrow on purpose):
  *
- *   ✓ Welcome Flex menu on a one-to-one follow/unblock event.
  *   ✓ Reply WITH 2 Flex messages — tarot card + Google review CTA —
  *     ONLY when the inbound text exactly matches a tarot keyword
  *     ("คำทำนาย <English card name>"). This is what the printed QR codes
@@ -25,7 +24,6 @@ import { prisma } from "@/lib/prisma";
 import { replyLine } from "@/lib/line-messaging";
 import { findCardByKeyword } from "@/lib/flex/tarot-cards";
 import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
-import { buildWelcomeFlex } from "@/lib/flex/welcome";
 
 interface LineEvent {
   type:        string;
@@ -78,12 +76,6 @@ async function processEvent(event: LineEvent): Promise<void> {
 }
 
 async function processReply(event: LineEvent, userId: string | undefined): Promise<void> {
-  if (event.type === "follow" && event.source?.type === "user" && event.replyToken) {
-    const result = await replyLine(event.replyToken, [buildWelcomeFlex()]);
-    if (!result.ok) console.error("[webhook] welcome reply failed:", result.error);
-    return;
-  }
-
   // Narrow reply rule: ONLY tarot keywords. Everything else is silent.
   if (event.type !== "message")               return;
   if (event.message?.type !== "text")         return;
