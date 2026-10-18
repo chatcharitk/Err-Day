@@ -7,8 +7,9 @@ import { VOTE_EVENT, voteDayAt, votePhaseAt } from "@/lib/staff-vote";
  * POST /api/vote  { lineAccessToken, candidateId? }
  *
  * Without candidateId: returns the event state, the candidates (no vote counts —
- * customers must not see a running tally) and this customer's own vote, if any.
- * With candidateId: casts the vote. One vote per customer per event; the
+ * customers must not see a running tally) and the caller's vote for today, if any.
+ * With candidateId: casts the vote. Open to anyone signed in with LINE — they
+ * don't need to have visited the shop. One vote per LINE account per day; the
  * database unique key is the real guard, the pre-check just gives a clean answer.
  */
 export async function POST(request: Request) {
@@ -32,18 +33,16 @@ export async function POST(request: Request) {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: { id: true, name: true, photoUrl: true },
   });
-  const existing = customer
-    ? await prisma.staffVote.findUnique({
-        where: { eventKey_customerId_voteDay: { eventKey: VOTE_EVENT.key, customerId: customer.id, voteDay } },
-        select: { candidateId: true, createdAt: true },
-      })
-    : null;
+  const existing = await prisma.staffVote.findUnique({
+    where: { eventKey_lineUserId_voteDay: { eventKey: VOTE_EVENT.key, lineUserId: lineProfile.userId, voteDay } },
+    select: { candidateId: true, createdAt: true },
+  });
 
   const state = {
     event: { key: VOTE_EVENT.key, from: VOTE_EVENT.from, to: VOTE_EVENT.to, phase },
     candidates,
-    // Customers with no booking/membership yet have no customer record to attach a vote to.
-    canVote: !!customer,
+    // Any LINE account may vote; a customer record is attached only when there is one.
+    canVote: true,
     myVote: existing ? { candidateId: existing.candidateId, at: existing.createdAt.toISOString() } : null,
   };
 
@@ -52,12 +51,6 @@ export async function POST(request: Request) {
 
   if (typeof candidateId !== "string" || !candidateId) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
-  }
-  if (!customer) {
-    return NextResponse.json(
-      { error: "customer_not_linked", message: "กรุณาจองคิวหรือสมัครสมาชิกเพื่อเชื่อมบัญชี LINE ก่อนโหวต" },
-      { status: 403 },
-    );
   }
   if (phase !== "open") {
     return NextResponse.json(
@@ -74,12 +67,17 @@ export async function POST(request: Request) {
 
   try {
     const vote = await prisma.staffVote.create({
-      data: { eventKey: VOTE_EVENT.key, candidateId, customerId: customer.id, voteDay, lineUserId: lineProfile.userId },
+      data: {
+        eventKey: VOTE_EVENT.key, candidateId, voteDay,
+        customerId: customer?.id ?? null,
+        lineUserId: lineProfile.userId,
+        voterName: lineProfile.displayName?.slice(0, 80) ?? null,
+      },
       select: { candidateId: true, createdAt: true },
     });
     return NextResponse.json({ ...state, myVote: { candidateId: vote.candidateId, at: vote.createdAt.toISOString() } }, { status: 201 });
   } catch (e) {
-    // Two taps racing: the unique (eventKey, customerId, voteDay) rejects the second.
+    // Two taps racing: the unique (eventKey, lineUserId, voteDay) rejects the second.
     if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
       return NextResponse.json({ error: "already_voted", message: "วันนี้คุณโหวตแล้ว โหวตได้วันละ 1 ครั้ง กลับมาโหวตใหม่พรุ่งนี้นะคะ" }, { status: 409 });
     }

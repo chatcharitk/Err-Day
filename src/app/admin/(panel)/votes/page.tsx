@@ -17,7 +17,7 @@ export default async function VotesPage() {
       where: { eventKey: VOTE_EVENT.key },
       orderBy: { createdAt: "desc" },
       select: {
-        id: true, createdAt: true,
+        id: true, createdAt: true, voterName: true,
         candidate: { select: { name: true } },
         customer: { select: { name: true, nickname: true, phone: true } },
       },
@@ -33,8 +33,8 @@ export default async function VotesPage() {
         id: v.id,
         at: v.createdAt.toISOString(),
         candidate: v.candidate.name,
-        customer: v.customer.nickname || v.customer.name,
-        phone: v.customer.phone,
+        customer: v.customer ? v.customer.nickname || v.customer.name : v.voterName || "ผู้ใช้ LINE",
+        phone: v.customer?.phone ?? "(ยังไม่เคยใช้บริการ)",
       }))}
     />
   );
