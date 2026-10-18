@@ -1,4 +1,4 @@
-import { cheerLines } from "./payroll";
+import { cheerLines, ownCommissionSatang } from "./payroll";
 import { prisma } from "./prisma";
 import { validDay, workMinutes } from "./finance-math";
 import type { PayrollCalculation, PayrollBooking } from "./payroll";
@@ -117,9 +117,7 @@ export async function payrollReport(sp: URLSearchParams) {
             primary: b.staffId === s.id,
             commissionSatang:
               b.status === "COMPLETED" && b.staffId === s.id
-                ? (b.commissionSatang ??
-                  b.service.commissionSatang +
-                    b.addons.reduce((v, a) => v + a.addon.commissionSatang, 0))
+                ? ownCommissionSatang(b)
                 : 0,
             tipSatang:
               b.status === "COMPLETED" && b.staffId === s.id ? b.tipSatang : 0,

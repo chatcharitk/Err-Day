@@ -101,6 +101,27 @@ export interface StaffPayoutRow extends PayrollCalculation {
   changedSincePaid: boolean;
   warnings: string[];
 }
+/**
+ * The stylist's own commission for a completed booking. Treatment commission
+ * (Davines ฿70 / PJOLI ฿60) is now recorded through ค่าเชียร์, so a commission
+ * typed on the booking by hand before the เชียร์ button existed must not be paid
+ * on top of it — the cheer amounts are taken off the booking's figure (never below 0).
+ */
+export function ownCommissionSatang(
+  b: {
+    commissionSatang: number | null;
+    service: { commissionSatang: number };
+    addons: { addon: { commissionSatang: number } }[];
+    cheers?: { amountSatang: number }[];
+  },
+): number {
+  const base =
+    b.commissionSatang ??
+    b.service.commissionSatang + b.addons.reduce((v, a) => v + a.addon.commissionSatang, 0);
+  const cheer = (b.cheers ?? []).reduce((v, c) => v + c.amountSatang, 0);
+  return Math.max(0, base - cheer);
+}
+
 /** Payroll source label of a ค่าเชียร์ line — excluded from job counts. */
 export const CHEER_SOURCE = "ค่าเชียร์";
 
@@ -237,9 +258,7 @@ export async function computeBranchDailyPayout(
           primary,
           commissionSatang:
             b.status === "COMPLETED" && primary
-              ? (b.commissionSatang ??
-                b.service.commissionSatang +
-                  b.addons.reduce((v, a) => v + a.addon.commissionSatang, 0))
+              ? ownCommissionSatang(b)
               : 0,
           tipSatang: b.status === "COMPLETED" && primary ? b.tipSatang : 0,
           source:

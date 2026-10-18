@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { bangkokMonthRange, CHEER_SOURCE, otRatePerHourSatang, type PayrollCalculation } from "@/lib/payroll";
+import { bangkokMonthRange, CHEER_SOURCE, otRatePerHourSatang, ownCommissionSatang, type PayrollCalculation } from "@/lib/payroll";
 
 /**
  * Per-day pay breakdown for the staff portal — every job with its ค่ามือ and
@@ -58,6 +58,7 @@ export async function staffPayDays(staffIds: string[], month: string): Promise<P
       select: {
         date: true, startTime: true, endTime: true, status: true, staffId: true, branchId: true,
         commissionSatang: true, tipSatang: true,
+        cheers: { select: { amountSatang: true } },
         customer: { select: { name: true, nickname: true } },
         service: { select: { name: true, nameTh: true, commissionSatang: true } },
         addons: { select: { addon: { select: { name: true, nameTh: true, commissionSatang: true } } } },
@@ -124,7 +125,7 @@ export async function staffPayDays(staffIds: string[], month: string): Promise<P
     const d = get(date);
     if (!d.branchIds.includes(b.branchId)) d.branchIds.push(b.branchId);
     const commission = b.status === "COMPLETED" && primary
-      ? (b.commissionSatang ?? (b.service.commissionSatang + b.addons.reduce((s, a) => s + a.addon.commissionSatang, 0)))
+      ? ownCommissionSatang(b)
       : 0;
     const tip = b.status === "COMPLETED" && primary ? b.tipSatang : 0;
     d.jobs.push({
