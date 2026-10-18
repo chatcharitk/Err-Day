@@ -1,5 +1,5 @@
 import { addonOfferedOn, serviceOfferedOn } from "@/lib/addon-availability";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMinutes, checkCapacity, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { sendBookingCancelled, sendGroupBookingNotice } from "@/lib/notifications";
@@ -181,8 +181,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const movedBranch = newBranchId !== booking.branchId;
     const changedDetails = newServiceId !== booking.serviceId || requestedAddonIds !== null || notes !== undefined;
     if (movedTime || movedDate || movedBranch || changedDetails) {
-      sendGroupBookingNotice(id, "changed")
-        .catch(e => console.error("[notify] group time changed failed", e));
+      after(() => sendGroupBookingNotice(id, "changed")
+        .catch(e => console.error("[notify] group time changed failed", e)));
     }
 
     return NextResponse.json(updated);
@@ -228,8 +228,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     });
 
     // Notify staff (and confirm to the customer) — the customer cancelled it themselves.
-    sendBookingCancelled(id, { byCustomer: true })
-      .catch(e => console.error("[notify] booking cancelled failed", e));
+    after(() => sendBookingCancelled(id, { byCustomer: true })
+      .catch(e => console.error("[notify] booking cancelled failed", e)));
 
     return NextResponse.json({ ok: true });
   } catch (error) {

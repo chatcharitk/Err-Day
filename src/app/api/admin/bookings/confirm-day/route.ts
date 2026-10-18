@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { sendBookingConfirmed } from "@/lib/notifications";
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
     // Notify each customer (fire-and-forget; deduped per booking).
     for (const b of pending) {
-      sendBookingConfirmed(b.id).catch(e => console.error("[confirm-day] notify failed", b.id, e));
+      after(() => sendBookingConfirmed(b.id).catch(e => console.error("[confirm-day] notify failed", b.id, e)));
     }
 
     return NextResponse.json({ ok: true, confirmed: pending.length });

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
@@ -123,22 +123,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Fire-and-forget LINE confirmation when status flips to CONFIRMED.
     if (status === "CONFIRMED" && prev?.status !== "CONFIRMED") {
-      sendBookingConfirmed(booking.id).catch(e => console.error("[notify] booking confirmed failed", e));
+      after(() => sendBookingConfirmed(booking.id).catch(e => console.error("[notify] booking confirmed failed", e)));
     }
 
     // Notify customer + staff when the booking is cancelled by the shop.
     if (status === "CANCELLED" && prev?.status !== "CANCELLED") {
-      sendBookingCancelled(booking.id).catch(e => console.error("[notify] booking cancelled failed", e));
+      after(() => sendBookingCancelled(booking.id).catch(e => console.error("[notify] booking cancelled failed", e)));
     }
 
     // Notify customer + refresh the branch group's today-list when start time
     // changes (admin reschedule). The group notice is a no-op for non-today or
     // already-past slots.
     if (prev && startTime !== undefined && startTime !== prev.startTime) {
-      sendBookingTimeChanged(booking.id, prev.startTime, prev.endTime)
-        .catch(e => console.error("[notify] time changed failed", e));
-      sendGroupBookingNotice(booking.id, "changed")
-        .catch(e => console.error("[notify] group time changed failed", e));
+      after(() => sendBookingTimeChanged(booking.id, prev.startTime, prev.endTime)
+        .catch(e => console.error("[notify] time changed failed", e)));
+      after(() => sendGroupBookingNotice(booking.id, "changed")
+        .catch(e => console.error("[notify] group time changed failed", e)));
     }
 
     return NextResponse.json(booking);

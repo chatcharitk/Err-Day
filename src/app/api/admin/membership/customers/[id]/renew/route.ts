@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { activateOrRenewMembership, MEMBERSHIP_PRICE_SATANG } from "@/lib/membership";
@@ -43,8 +43,8 @@ export async function POST(
 
   // Send the LINE confirmation flex (deduped per cycle). Fire-and-forget so a
   // LINE failure never blocks the renewal.
-  sendMembershipActivated(membership.id, { cycleId: cycle.id, renewed })
-    .catch((e) => console.error("[notify] membership renew flex failed", e));
+  after(() => sendMembershipActivated(membership.id, { cycleId: cycle.id, renewed })
+    .catch((e) => console.error("[notify] membership renew flex failed", e)));
 
   return NextResponse.json({ membership, cycle, defaultPrice: MEMBERSHIP_PRICE_SATANG });
 }

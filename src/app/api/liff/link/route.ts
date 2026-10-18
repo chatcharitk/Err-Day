@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyLinkToken } from "@/lib/customer-link";
 import { sendMembershipDetails } from "@/lib/notifications";
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   if (alreadyLinked) {
     if (alreadyLinked.id === target.id) {
       // Linked to the right record already — still (re)send the membership card.
-      sendMembershipDetails(target.id).catch(e => console.error("[notify] membership details failed", e));
+      after(() => sendMembershipDetails(target.id).catch(e => console.error("[notify] membership details failed", e)));
       return NextResponse.json({ ok: true, already: true, name: alreadyLinked.nickname || alreadyLinked.name });
     }
     // Linked to a *different* record — don't hijack it; let staff sort it out.
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   });
 
   // Auto-send the membership card (no-op if they have no active membership).
-  sendMembershipDetails(target.id).catch(e => console.error("[notify] membership details failed", e));
+  after(() => sendMembershipDetails(target.id).catch(e => console.error("[notify] membership details failed", e)));
 
   return NextResponse.json({ ok: true, already: false, name: target.nickname || target.name });
 }

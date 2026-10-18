@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDPA_VERSION } from "@/lib/pdpa";
 import { ENTITLEMENT_TERMS_VERSION } from "@/lib/terms";
@@ -164,13 +164,14 @@ export async function POST(request: Request) {
 
     // Fire-and-forget "we got your application, pay at the counter" card.
     if (newlyPending && customer.lineUserId) {
-      sendEntitlementReceived({
-        lineUserId:  customer.lineUserId,
+      const lineUserId = customer.lineUserId;
+      after(() => sendEntitlementReceived({
+        lineUserId,
         greetName:   customer.nickname || customer.name,
         productName,
         priceTh,
         heroUrl:     promoHeroUrl(product),
-      }).catch(e => console.error("[notify] entitlement received failed", e));
+      }).catch(e => console.error("[notify] entitlement received failed", e)));
     }
 
     return NextResponse.json({

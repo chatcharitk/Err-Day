@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { RETAIL_CATEGORY, RETAIL_SKU } from "@/lib/capacity";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -317,8 +317,8 @@ export async function POST(request: Request) {
           });
           // Fire & forget LINE confirmation — never block the sale on LINE failure
           if (m?.membership?.id) {
-            sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e));
-            sendStaffMembershipAlert(m.membership.id).catch((e) => console.error("[notify] staff membership alert failed", e));
+            after(() => sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e)));
+            after(() => sendStaffMembershipAlert(m.membership.id).catch((e) => console.error("[notify] staff membership alert failed", e)));
           }
         }
       }
@@ -334,7 +334,7 @@ export async function POST(request: Request) {
           countFirstUse: true, // 5-pack: count the first visit on purchase
         });
         if (cp?.id) {
-          sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e));
+          after(() => sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e)));
         }
       }
 
@@ -437,7 +437,7 @@ export async function POST(request: Request) {
           bookingId:     booking.id,
         });
         if (m?.membership?.id) {
-          sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e));
+          after(() => sendMembershipActivated(m.membership.id, { cycleId: m.cycle?.id, renewed: m.renewed }).catch((e) => console.error("[notify] membership activated failed", e)));
         }
       }
     }
@@ -452,7 +452,7 @@ export async function POST(request: Request) {
         countFirstUse: true, // 5-pack: count the first visit on purchase
       });
       if (cp?.id) {
-        sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e));
+        after(() => sendPackageActivated(cp.id).catch((e) => console.error("[notify] package activated failed", e)));
       }
     }
 
