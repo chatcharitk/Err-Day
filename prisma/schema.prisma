@@ -1050,3 +1050,28 @@ model CouponRedemption {
   @@index([couponId])
   @@index([bookingId])
 }
+
+/// 50 ทวิ withholding-tax certificates we issue, numbered เล่มที่ (bookNo) /
+/// เลขที่ (runNo). The (bookNo, runNo) pair is unique and never reused — a
+/// re-print of the same payment keeps its number (one row per expense).
+model WithholdingCertificate {
+  id            String   @id @default(cuid())
+  bookNo        Int
+  runNo         Int
+  expenseId     String?  @unique
+  vendorId      String?
+  payeeName     String
+  payeeTaxId    String
+  /// Payment date the certificate states (UTC noon of the Bangkok day); null = not paid yet / left blank.
+  paidDate      DateTime?
+  /// Amount subject to withholding (before VAT) and tax withheld, satang.
+  incomeSatang  Int
+  taxSatang     Int
+  formType      String   @default("PND53")
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([bookNo, runNo])
+  @@index([vendorId])
+}
