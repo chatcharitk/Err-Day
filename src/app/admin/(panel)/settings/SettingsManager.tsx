@@ -254,10 +254,10 @@ export default function SettingsManager({
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="โลโก้บริษัท" hint="ใช้กับเอกสารของบริษัท">
-                <ImageUpload kind="profile" ref="company-logo" value={co.logoUrl} onChange={(url) => setCompany("logoUrl", url)} />
+                <ImageUpload kind="profile" ref={`company-logo`} value={co.logoUrl} onChange={(url) => setCompany("logoUrl", url)} />
               </Field>
               <Field label="ตราประทับบริษัท" hint="ใช้ประทับในเอกสาร เช่น ใบ 50 ทวิ">
-                <ImageUpload kind="profile" ref="company-stamp" value={co.stampUrl} onChange={(url) => setCompany("stampUrl", url)} />
+                <ImageUpload kind="profile" ref={`company-stamp`} value={co.stampUrl} onChange={(url) => setCompany("stampUrl", url)} />
               </Field>
             </div>
 
