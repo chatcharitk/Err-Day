@@ -27,6 +27,7 @@ export function campaignView(c: CouponCampaign) {
     code:              c.code,
     name:              c.name,
     description:       c.description,
+    terms:             c.terms,
     discountType:      c.discountType,
     discountValue:     c.discountValue,
     maxDiscountSatang: c.maxDiscountSatang,
@@ -42,12 +43,18 @@ export async function customerCoupons(customerId: string) {
   const today = bangkokTodayKey();
   const rows = await prisma.coupon.findMany({
     where:   { customerId },
-    include: { campaign: true },
+    include: {
+      campaign: true,
+      // Latest use — the customer's screen shows when/where it was torn.
+      redemptions: { where: { reversedAt: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, booking: { select: { branch: { select: { name: true } } } } } },
+    },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(r => ({
     id:          r.id,
     status:      couponStatus(r, r.campaign, today),
+    usedAt:      r.redemptions[0]?.createdAt.toISOString() ?? null,
+    usedBranch:  r.redemptions[0]?.booking.branch.name ?? null,
     usesAllowed: r.usesAllowed,
     usesUsed:    r.usesUsed,
     createdAt:   r.createdAt.toISOString(),

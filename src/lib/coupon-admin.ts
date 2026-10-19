@@ -22,6 +22,7 @@ export function parseCampaignInput(b: Record<string, unknown>, partial = false):
     if (!name) return { error: "กรุณาใส่ชื่อคูปอง" };
     data.name = name;
   }
+  if (has("terms")) data.terms = typeof b.terms === "string" && b.terms.trim() ? b.terms.trim().slice(0, 1500) : null;
   if (has("description")) data.description = typeof b.description === "string" && b.description.trim() ? b.description.trim().slice(0, 300) : null;
 
   const type = has("discountType") ? b.discountType : partial ? undefined : "PERCENT";

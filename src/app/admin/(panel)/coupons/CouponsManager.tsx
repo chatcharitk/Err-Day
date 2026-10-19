@@ -13,7 +13,7 @@ const BORDER  = "#E8D8CC";
 const ORANGE  = "#C2410C";
 
 interface Campaign {
-  id: string; code: string; name: string; description: string | null;
+  id: string; code: string; name: string; description: string | null; terms: string | null;
   discountType: string; discountValue: number; maxDiscountSatang: number | null; minSpendSatang: number; categories: string[];
   validFrom: string; validUntil: string; claimMode: string; usesPerCoupon: number; maxClaims: number | null; isActive: boolean;
   phase: CampaignPhase; issued: number; uses: number; discountSatang: number;
@@ -143,6 +143,7 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
         <div>
           <h2 className="text-lg font-semibold" style={{ color: TEXT }}>{campaign.name}</h2>
           {campaign.description && <p className="text-sm mt-0.5" style={{ color: MUTED }}>{campaign.description}</p>}
+          {campaign.terms && <p className="text-xs mt-1 whitespace-pre-line" style={{ color: MUTED }}><b style={{ color: TEXT }}>เงื่อนไข:</b> {campaign.terms}</p>}
           <p className="text-xs mt-1" style={{ color: MUTED }}>
             {couponValueLabel(campaign)}
             {campaign.minSpendSatang > 0 && ` · ขั้นต่ำ ${baht(campaign.minSpendSatang)}`}
@@ -252,6 +253,7 @@ function CampaignForm({ initial, today, categories, onClose, onSaved }: {
     code:          initial?.code ?? "",
     name:          initial?.name ?? "",
     description:   initial?.description ?? "",
+    terms:         initial?.terms ?? "",
     discountType:  initial?.discountType ?? "PERCENT",
     discountValue: initial ? String(initial.discountType === "AMOUNT" ? initial.discountValue / 100 : initial.discountValue) : "10",
     maxDiscountBaht: initial?.maxDiscountSatang ? String(initial.maxDiscountSatang / 100) : "",
@@ -301,6 +303,11 @@ function CampaignForm({ initial, today, categories, onClose, onSaved }: {
           <div className="col-span-2">
             <label className={label} style={{ color: MUTED }}>รายละเอียด (ไม่บังคับ)</label>
             <input className={input} style={box} value={f.description} onChange={e => set("description", e.target.value)} placeholder="ขอบคุณที่ร่วมสนุกกิจกรรม Halloween" />
+          </div>
+          <div className="col-span-2">
+            <label className={label} style={{ color: MUTED }}>เงื่อนไขการใช้คูปอง (ลูกค้าและแคชเชียร์เห็น · 1 ข้อต่อ 1 บรรทัด)</label>
+            <textarea className={input} style={{ ...box, minHeight: 96 }} value={f.terms} onChange={e => set("terms", e.target.value)}
+              placeholder={"ใช้ได้ 1 ครั้งต่อ 1 สิทธิ์\nไม่สามารถใช้ร่วมกับโปรโมชั่นอื่น\nไม่สามารถแลกเป็นเงินสด\nร้านขอสงวนสิทธิ์ในการเปลี่ยนแปลงเงื่อนไขโดยไม่แจ้งล่วงหน้า"} />
           </div>
           <div>
             <label className={label} style={{ color: MUTED }}>โค้ด</label>

@@ -983,6 +983,8 @@ model CouponCampaign {
   code              String   @unique
   name              String
   description       String?
+  /// Terms & conditions shown to the customer (and the cashier) — free text, one condition per line.
+  terms             String?
   /// "PERCENT" (discountValue = 1–100) or "AMOUNT" (discountValue = satang).
   discountType      String   @default("PERCENT")
   discountValue     Int

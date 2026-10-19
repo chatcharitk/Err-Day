@@ -56,7 +56,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
       today={today}
       categories={categories.map(c => c.category).filter(Boolean)}
       campaigns={campaigns.map(c => ({
-        id: c.id, code: c.code, name: c.name, description: c.description,
+        id: c.id, code: c.code, name: c.name, description: c.description, terms: c.terms,
         discountType: c.discountType, discountValue: c.discountValue,
         maxDiscountSatang: c.maxDiscountSatang, minSpendSatang: c.minSpendSatang, categories: c.categories,
         validFrom: ymdOf(c.validFrom), validUntil: ymdOf(c.validUntil),

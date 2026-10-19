@@ -8,7 +8,7 @@ export interface PosCoupon {
   id:     string;
   status: "usable" | "upcoming" | "used" | "expired" | "void";
   campaign: {
-    id: string; code: string; name: string;
+    id: string; code: string; name: string; terms?: string | null;
     discountType: string; discountValue: number; maxDiscountSatang: number | null;
     minSpendSatang: number; categories: string[]; validUntil: string;
   };
@@ -96,6 +96,7 @@ export default function CouponPicker({ phone, lines, value, onChange }: {
             <p className="text-[11px]" style={{ color: quote?.problem ? "#B91C1C" : "#C2410C" }}>
               {quote?.problem ?? `ลด ${baht(quote?.discountSatang ?? 0)}`}
             </p>
+            {value.campaign.terms && <p className="text-[10px] mt-0.5 whitespace-pre-line" style={{ color: "#A08070" }}>เงื่อนไข: {value.campaign.terms}</p>}
           </div>
           <button type="button" onClick={() => onChange(null)} className="p-1 rounded-lg" style={{ color: "#9A3412" }} title="เอาคูปองออก">
             <X size={16} />
