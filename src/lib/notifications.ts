@@ -14,7 +14,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { pushText, pushLine, multicastText } from "@/lib/line-messaging";
+import { pushText, pushLine, multicastText, multicastLine } from "@/lib/line-messaging";
+import { buildCouponReceivedFlex } from "@/lib/flex/coupon";
 import { buildBookingFlex } from "@/lib/flex/booking";
 import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
 import { branchGroupId } from "@/lib/line-groups";
@@ -31,7 +32,8 @@ type Kind =
   | "MEMBERSHIP_ACTIVATED"
   | "MEMBERSHIP_EXPIRY_1D"
   | "PACKAGE_ACTIVATED"
-  | "PACKAGE_EXPIRY_1D";
+  | "PACKAGE_EXPIRY_1D"
+  | "COUPON_RECEIVED";
 
 interface SendResult { kind: Kind; targetId: string; status: "SENT" | "FAILED" | "SKIPPED"; reason?: string; }
 
@@ -1077,4 +1079,44 @@ export async function sendOwnerPayrollSummary(): Promise<{ status: string; total
     href:  "/admin/m/payroll",
   });
   return { status: "SENT", total: grand };
+}
+
+// ── Coupon received ──────────────────────────────────────────────────────────
+
+/**
+ * Tell customers they were given a coupon (LINE card with a button into the
+ * app). Idempotent per coupon; customers with no LINE link are logged SKIPPED.
+ * Same-campaign recipients go out in one multicast (≤500 each).
+ */
+export async function sendCouponsReceived(couponIds: string[]): Promise<{ sent: number; skipped: number; failed: number }> {
+  const out = { sent: 0, skipped: 0, failed: 0 };
+  if (couponIds.length === 0) return out;
+  const coupons = await prisma.coupon.findMany({
+    where: { id: { in: couponIds } },
+    include: { campaign: true, customer: { select: { lineUserId: true } } },
+  });
+  const kind: Kind = "COUPON_RECEIVED";
+  const byCampaign = new Map<string, typeof coupons>();
+  for (const c of coupons) {
+    if (await alreadySent(kind, c.id)) continue;
+    if (!c.customer.lineUserId) {
+      await recordLog({ kind, targetId: c.id, status: "SKIPPED", error: "no_line_link" });
+      out.skipped++;
+      continue;
+    }
+    byCampaign.set(c.campaignId, [...(byCampaign.get(c.campaignId) ?? []), c]);
+  }
+  for (const group of byCampaign.values()) {
+    const camp = group[0].campaign;
+    const flex = buildCouponReceivedFlex(camp);
+    for (let i = 0; i < group.length; i += 500) {
+      const chunk = group.slice(i, i + 500);
+      const r = await multicastLine(chunk.map(c => c.customer.lineUserId!), [flex]);
+      for (const c of chunk) {
+        await recordLog({ kind, targetId: c.id, status: r.ok ? "SENT" : "FAILED", recipient: c.customer.lineUserId, error: r.ok ? null : r.error });
+      }
+      if (r.ok) out.sent += chunk.length; else out.failed += chunk.length;
+    }
+  }
+  return out;
 }

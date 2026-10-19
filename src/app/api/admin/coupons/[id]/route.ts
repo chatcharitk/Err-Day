@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { parseCampaignInput } from "@/lib/coupon-admin";
 import { CouponError, issueCoupon } from "@/lib/coupons";
+import { sendCouponsReceived } from "@/lib/notifications";
 import { VOTE_EVENT } from "@/lib/staff-vote";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -47,8 +48,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     switch (b.action) {
       case "issue": {
         if (typeof b.customerId !== "string") return NextResponse.json({ error: "กรุณาเลือกลูกค้า" }, { status: 400 });
-        const { created } = await issueCoupon(campaign, b.customerId, "ADMIN", admin.id);
-        return NextResponse.json({ ok: true, created });
+        const { coupon, created } = await issueCoupon(campaign, b.customerId, "ADMIN", admin.id);
+        // Tell the customer on LINE (card + button into the app).
+        if (created && b.notify !== false) after(() => sendCouponsReceived([coupon.id]).catch(e => console.error("[notify] coupon received failed", e)));
+        return NextResponse.json({ ok: true, created, notified: created && b.notify !== false });
       }
       case "bulk": {
         const where: Prisma.CustomerWhereInput =
@@ -70,7 +73,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           })),
           skipDuplicates: true,
         });
-        return NextResponse.json({ ok: true, issued: res.count });
+        if (res.count > 0 && b.notify !== false) {
+          const fresh = await prisma.coupon.findMany({ where: { campaignId: campaign.id, customerId: { in: ids }, source: "BULK" }, select: { id: true } });
+          after(() => sendCouponsReceived(fresh.map(c => c.id)).catch(e => console.error("[notify] coupon received failed", e)));
+        }
+        return NextResponse.json({ ok: true, issued: res.count, notified: res.count > 0 && b.notify !== false });
       }
       case "void":
       case "unvoid": {

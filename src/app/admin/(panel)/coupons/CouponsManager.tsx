@@ -133,8 +133,8 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
   }
 
   function bulk(audience: "VOTERS" | "LINE", label: string) {
-    if (!confirm(`แจกคูปอง “${campaign.name}” ให้${label}?\nคนที่มีคูปองนี้แล้วจะไม่ได้ซ้ำ`)) return;
-    void act({ action: "bulk", audience }, d => `แจกเพิ่ม ${d.issued} คน`);
+    if (!confirm(`แจกคูปอง “${campaign.name}” ให้${label}?\nคนที่มีคูปองนี้แล้วจะไม่ได้ซ้ำ\n\nระบบจะส่งข้อความ LINE แจ้งลูกค้าทุกคนที่ได้รับ พร้อมลิงก์เปิดแอป`)) return;
+    void act({ action: "bulk", audience }, d => `แจกเพิ่ม ${d.issued} คน · กำลังส่งข้อความ LINE แจ้ง (คนที่ไม่ได้เชื่อม LINE จะไม่ได้รับข้อความ)`);
   }
 
   return (
@@ -161,7 +161,7 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
           <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>แจกให้ลูกค้า 1 คน</p>
           <CustomerSearch value={customer} onChange={setCustomer} showManualPhone={false} compact />
           <button disabled={busy || !customer.id}
-            onClick={() => void act({ action: "issue", customerId: customer.id }, d => d.created ? `แจกให้ ${customer.name} แล้ว` : `${customer.name} มีคูปองนี้อยู่แล้ว`)}
+            onClick={() => void act({ action: "issue", customerId: customer.id }, d => d.created ? `แจกให้ ${customer.name} แล้ว และส่งข้อความ LINE แจ้งแล้ว` : `${customer.name} มีคูปองนี้อยู่แล้ว`)}
             className="mt-2 w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40" style={{ background: ORANGE }}>
             <Ticket size={14} className="inline mr-1" /> แจกคูปอง
           </button>
@@ -179,7 +179,7 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: MUTED }}>
-            คูปองจะขึ้นในหน้า LINE ของลูกค้า (ระบบไม่ส่งข้อความแจ้ง — ถ้าต้องการให้บรอดแคสต์แยก)
+            เมื่อแจก ระบบส่งข้อความ LINE แจ้งลูกค้าพร้อมปุ่มเปิดแอป · คูปองจะขึ้นในหน้าสมาชิกของลูกค้า
           </p>
         </div>
       </div>
