@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { parseCampaignInput } from "@/lib/coupon-admin";
-import { CouponError, issueCoupon } from "@/lib/coupons";
+import { CouponError, couponStatus, issueCoupon } from "@/lib/coupons";
 import { sendCouponsReceived } from "@/lib/notifications";
 import { VOTE_EVENT } from "@/lib/staff-vote";
 import type { Prisma } from "@/generated/prisma/client";
@@ -32,6 +32,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
  * POST /api/admin/coupons/[id] — actions on a campaign's coupons:
  *   { action: "issue", customerId }                 one customer
  *   { action: "bulk", audience: "VOTERS"|"LINE" }   everyone in a group (skips holders)
+ *   { action: "use", couponId }                    admin tears the coupon (same as the customer's app button)
  *   { action: "void" | "unvoid", couponId }
  *   { action: "reverse", redemptionId }             give a used coupon back (refund / mistake)
  */
@@ -78,6 +79,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           after(() => sendCouponsReceived(fresh.map(c => c.id)).catch(e => console.error("[notify] coupon received failed", e)));
         }
         return NextResponse.json({ ok: true, issued: res.count, notified: res.count > 0 && b.notify !== false });
+      }
+      case "use": {
+        if (typeof b.couponId !== "string") return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+        const coupon = await prisma.coupon.findFirst({ where: { id: b.couponId, campaignId: campaign.id } });
+        if (!coupon) return NextResponse.json({ error: "ไม่พบคูปอง" }, { status: 404 });
+        const status = couponStatus(coupon, campaign);
+        if (status !== "usable") return NextResponse.json({ error: status === "used" ? "คูปองนี้ใช้ไปแล้ว" : "คูปองนี้ใช้ไม่ได้ตอนนี้" }, { status: 409 });
+        const spent = await prisma.coupon.updateMany({ where: { id: coupon.id, usesUsed: coupon.usesUsed, voidedAt: null }, data: { usesUsed: { increment: 1 } } });
+        if (spent.count !== 1) return NextResponse.json({ error: "คูปองนี้เพิ่งถูกใช้ไป" }, { status: 409 });
+        // Torn without a bill yet — POS attaches it to the sale (within 3 h), like the in-app button.
+        await prisma.couponRedemption.create({ data: { couponId: coupon.id, source: "APP", discountSatang: 0, adminId: admin.id } });
+        return NextResponse.json({ ok: true });
       }
       case "void":
       case "unvoid": {

@@ -24,6 +24,10 @@ interface Holder {
   redemptions: { id: string; at: string; discountSatang: number; reversed: boolean; bookingId: string | null; branch: string | null; billSatang: number | null; appOnly?: boolean }[];
 }
 interface Props {
+  /** Where campaign links point (desktop /admin/coupons, mobile /admin/m/coupons). */
+  basePath?: string;
+  /** Phone layout: tighter padding, holders as cards instead of a table. */
+  compact?: boolean;
   today: string;
   categories: string[];
   campaigns: Campaign[];
@@ -43,17 +47,17 @@ const PHASE: Record<CampaignPhase, { label: string; bg: string; fg: string }> = 
 const STATUS: Record<string, string> = { usable: "ยังไม่ใช้", upcoming: "รอเริ่ม", used: "ใช้แล้ว", expired: "หมดอายุ", void: "ยกเลิก" };
 const SOURCE: Record<string, string> = { CLAIM: "กดรับใน LINE", CODE: "กรอกโค้ด", ADMIN: "แอดมินแจก", BULK: "แจกกลุ่ม" };
 
-export default function CouponsManager({ today, categories, campaigns, selected }: Props) {
+export default function CouponsManager({ today, categories, campaigns, selected, basePath = "/admin/coupons", compact = false }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<Campaign | "new" | null>(null);
   const current = selected ? campaigns.find(c => c.id === selected.id) ?? null : null;
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className={compact ? "p-4" : "p-6 max-w-6xl"}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
-          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Coupons</p>
-          <h1 className="text-2xl font-medium" style={{ color: TEXT }}>คูปองส่วนลด</h1>
+          {!compact && <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Coupons</p>}
+          <h1 className={compact ? "text-lg font-medium" : "text-2xl font-medium"} style={{ color: TEXT }}>คูปองส่วนลด</h1>
           <p className="text-xs mt-1" style={{ color: MUTED }}>
             สร้างคูปองต่อกิจกรรม · ลูกค้าเห็นคูปองที่ได้รับใน LINE (หน้าสมาชิก) · ใช้ที่ POS ตอนคิดเงิน · ลูกค้า 1 คนได้ 1 ใบต่อกิจกรรม
           </p>
@@ -69,12 +73,12 @@ export default function CouponsManager({ today, categories, campaigns, selected 
           ยังไม่มีคูปอง — กด “สร้างคูปอง” เพื่อเริ่ม
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+        <div className={compact ? "grid gap-3 mb-5" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6"}>
           {campaigns.map(c => {
             const ph = PHASE[c.phase];
             const on = current?.id === c.id;
             return (
-              <button key={c.id} onClick={() => router.push(on ? "/admin/coupons" : `/admin/coupons?c=${c.id}`, { scroll: false })}
+              <button key={c.id} onClick={() => router.push(on ? basePath : `${basePath}?c=${c.id}`, { scroll: false })}
                 className="text-left rounded-2xl bg-white p-4 transition-shadow hover:shadow-md"
                 style={{ border: `${on ? 2 : 1}px solid ${on ? ORANGE : BORDER}` }}>
                 <div className="flex items-start justify-between gap-2">
@@ -98,13 +102,13 @@ export default function CouponsManager({ today, categories, campaigns, selected 
       )}
 
       {current && selected && (
-        <CampaignDetail key={current.id} campaign={current} holders={selected.coupons} onEdit={() => setEditing(current)} />
+        <CampaignDetail key={current.id} campaign={current} holders={selected.coupons} compact={compact} onEdit={() => setEditing(current)} />
       )}
 
       {editing && (
         <CampaignForm initial={editing === "new" ? null : editing} today={today} categories={categories}
           onClose={() => setEditing(null)}
-          onSaved={(id) => { setEditing(null); router.push(`/admin/coupons?c=${id}`, { scroll: false }); router.refresh(); }} />
+          onSaved={(id) => { setEditing(null); router.push(`${basePath}?c=${id}`, { scroll: false }); router.refresh(); }} />
       )}
     </div>
   );
@@ -112,7 +116,7 @@ export default function CouponsManager({ today, categories, campaigns, selected 
 
 // ── Detail: issue + holders ──────────────────────────────────────────────────
 
-function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; holders: Holder[]; onEdit: () => void }) {
+function CampaignDetail({ campaign, holders, onEdit, compact = false }: { campaign: Campaign; holders: Holder[]; onEdit: () => void; compact?: boolean }) {
   const router = useRouter();
   const [customer, setCustomer] = useState<CustomerValue>({ id: null, name: "", phone: "" });
   const [busy, setBusy] = useState(false);
@@ -138,7 +142,7 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
   }
 
   return (
-    <section className="rounded-2xl bg-white p-5" style={{ border: `1px solid ${BORDER}` }}>
+    <section className={compact ? "rounded-2xl bg-white p-4" : "rounded-2xl bg-white p-5"} style={{ border: `1px solid ${BORDER}` }}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <h2 className="text-lg font-semibold" style={{ color: TEXT }}>{campaign.name}</h2>
@@ -156,7 +160,7 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 mb-5">
+      <div className={compact ? "grid gap-4 mb-5" : "grid gap-4 md:grid-cols-2 mb-5"}>
         <div className="rounded-xl p-4" style={{ background: "#FFF8F4", border: `1px solid ${BORDER}` }}>
           <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>แจกให้ลูกค้า 1 คน</p>
           <CustomerSearch value={customer} onChange={setCustomer} showManualPhone={false} compact />
@@ -190,6 +194,22 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
       <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>ผู้ถือคูปอง ({holders.length})</p>
       {holders.length === 0 ? (
         <p className="text-sm" style={{ color: MUTED }}>ยังไม่มีใครได้รับคูปองนี้</p>
+      ) : compact ? (
+        <div className="space-y-2">
+          {holders.map(h => (
+            <div key={h.id} className="rounded-xl p-3" style={{ border: `1px solid ${BORDER}` }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <a href={`/admin/m/customers/${h.customer.id}`} className="font-medium text-sm" style={{ color: TEXT }}>{h.customer.name}</a>
+                  <p className="text-xs" style={{ color: MUTED }}>{h.customer.phone} · {SOURCE[h.source] ?? h.source} · {fmtTime(h.createdAt)}</p>
+                </div>
+                <span className="text-xs font-semibold flex-shrink-0" style={{ color: h.status === "usable" ? "#166534" : MUTED }}>{STATUS[h.status] ?? h.status} · {h.usesUsed}/{h.usesAllowed}</span>
+              </div>
+              <Redemptions h={h} busy={busy} act={act} />
+              <HolderButtons h={h} busy={busy} act={act} />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -214,25 +234,8 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
                     <span className="text-xs font-semibold" style={{ color: h.status === "usable" ? "#166534" : MUTED }}>{STATUS[h.status] ?? h.status}</span>
                     <p className="text-[11px]" style={{ color: MUTED }}>{h.usesUsed}/{h.usesAllowed} ครั้ง</p>
                   </td>
-                  <td className="py-2 pr-3 align-top">
-                    {h.redemptions.length === 0 && <span className="text-xs" style={{ color: MUTED }}>—</span>}
-                    {h.redemptions.map(r => (
-                      <div key={r.id} className="flex items-center gap-2 text-xs" style={{ color: r.reversed ? MUTED : TEXT, textDecoration: r.reversed ? "line-through" : undefined }}>
-                        <span>{r.appOnly ? `${fmtTime(r.at)} · ฉีกในแอปแล้ว (รอใส่ในบิล)` : `${fmtTime(r.at)} · ${r.branch} · ลด ${baht(r.discountSatang)} (บิล ${baht(r.billSatang ?? 0)})`}</span>
-                        {!r.reversed && (
-                          <button disabled={busy} title="คืนสิทธิ์ (ยกเลิกการใช้)"
-                            onClick={() => { if (confirm("คืนสิทธิ์คูปองนี้ให้ลูกค้า? (ใช้เมื่อคืนเงิน/คิดเงินผิด)")) void act({ action: "reverse", redemptionId: r.id }); }}
-                            className="p-1 rounded" style={{ color: ORANGE }}><Undo2 size={13} /></button>
-                        )}
-                      </div>
-                    ))}
-                  </td>
-                  <td className="py-2 align-top text-right">
-                    <button disabled={busy} onClick={() => void act({ action: h.voided ? "unvoid" : "void", couponId: h.id })}
-                      className="text-xs flex items-center gap-1 ml-auto px-2 py-1 rounded" style={{ color: h.voided ? "#166534" : "#991B1B" }}>
-                      <Ban size={12} /> {h.voided ? "เปิดใช้คืน" : "ยกเลิกคูปอง"}
-                    </button>
-                  </td>
+                  <td className="py-2 pr-3 align-top"><Redemptions h={h} busy={busy} act={act} /></td>
+                  <td className="py-2 align-top text-right"><HolderButtons h={h} busy={busy} act={act} /></td>
                 </tr>
               ))}
             </tbody>
@@ -240,6 +243,46 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
         </div>
       )}
     </section>
+  );
+}
+
+// ── Holder rows: usage list + actions (shared by table and card layouts) ───
+
+type Act = (body: Record<string, unknown>, okMsg?: (d: Record<string, unknown>) => string) => Promise<void>;
+
+function Redemptions({ h, busy, act }: { h: Holder; busy: boolean; act: Act }) {
+  if (h.redemptions.length === 0) return <span className="text-xs" style={{ color: MUTED }}>—</span>;
+  return (
+    <div className="mt-1">
+      {h.redemptions.map(r => (
+        <div key={r.id} className="flex items-center gap-2 text-xs" style={{ color: r.reversed ? MUTED : TEXT, textDecoration: r.reversed ? "line-through" : undefined }}>
+          <span>{r.appOnly ? `${fmtTime(r.at)} · ฉีกคูปองแล้ว (รอใส่ในบิล)` : `${fmtTime(r.at)} · ${r.branch} · ลด ${baht(r.discountSatang)} (บิล ${baht(r.billSatang ?? 0)})`}</span>
+          {!r.reversed && (
+            <button disabled={busy} title="คืนสิทธิ์ (ยกเลิกการใช้)"
+              onClick={() => { if (confirm("คืนสิทธิ์คูปองนี้ให้ลูกค้า? (ใช้เมื่อคืนเงิน/คิดเงินผิด)")) void act({ action: "reverse", redemptionId: r.id }); }}
+              className="p-1 rounded" style={{ color: ORANGE }}><Undo2 size={13} /></button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HolderButtons({ h, busy, act }: { h: Holder; busy: boolean; act: Act }) {
+  return (
+    <div className="flex items-center justify-end gap-2 mt-2 md:mt-0 md:justify-end">
+      {h.status === "usable" && (
+        <button disabled={busy}
+          onClick={() => { if (confirm(`ใช้คูปองของ ${h.customer.name} ตอนนี้?\nคูปองจะถูกฉีก (หน้าจอลูกค้าฉีกตาม) แล้วต้องไปใส่ในบิลที่ POS ภายใน 3 ชั่วโมง`)) void act({ action: "use", couponId: h.id }, () => `ใช้คูปองของ ${h.customer.name} แล้ว — ไปใส่ในบิลที่ POS`); }}
+          className="text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ background: ORANGE }}>
+          ✂ ใช้คูปอง
+        </button>
+      )}
+      <button disabled={busy} onClick={() => void act({ action: h.voided ? "unvoid" : "void", couponId: h.id })}
+        className="text-xs flex items-center gap-1 px-2 py-1.5 rounded" style={{ color: h.voided ? "#166534" : "#991B1B" }}>
+        <Ban size={12} /> {h.voided ? "เปิดใช้คืน" : "ยกเลิกคูปอง"}
+      </button>
+    </div>
   );
 }
 
