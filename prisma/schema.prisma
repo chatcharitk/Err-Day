@@ -736,6 +736,8 @@ model CompanyProfile {
   vatRatePercent  Int      @default(7)
   receiptFooterTh String?
   logoUrl         String?
+  /// Company stamp image (ตราประทับ) for documents such as the 50 ทวิ form.
+  stampUrl        String?
   updatedAt       DateTime @updatedAt
 }
 

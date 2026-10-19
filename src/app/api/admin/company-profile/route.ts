@@ -32,7 +32,7 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const {
       legalName, legalNameEn, taxId, addressLine, phone,
-      vatRegistered, vatRatePercent, receiptFooterTh,
+      vatRegistered, vatRatePercent, receiptFooterTh, logoUrl, stampUrl,
     } = body;
 
     // A Thai tax ID is exactly 13 digits — reject anything else rather than let
@@ -65,6 +65,8 @@ export async function PATCH(request: Request) {
         ...(vatRegistered   !== undefined ? { vatRegistered: Boolean(vatRegistered) }        : {}),
         ...(vatRatePercent  !== undefined ? { vatRatePercent: Math.round(Number(vatRatePercent)) } : {}),
         ...(receiptFooterTh !== undefined ? { receiptFooterTh: String(receiptFooterTh).trim() || null } : {}),
+        ...(logoUrl         !== undefined ? { logoUrl:  typeof logoUrl  === "string" && /^https?:\/\//.test(logoUrl)  ? logoUrl  : null } : {}),
+        ...(stampUrl        !== undefined ? { stampUrl: typeof stampUrl === "string" && /^https?:\/\//.test(stampUrl) ? stampUrl : null } : {}),
       },
     });
 

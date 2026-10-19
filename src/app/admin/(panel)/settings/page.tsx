@@ -21,7 +21,7 @@ export default async function SettingsPage() {
       where: { id: "company" },
       select: {
         legalName: true, legalNameEn: true, taxId: true, addressLine: true,
-        phone: true, vatRegistered: true, vatRatePercent: true, receiptFooterTh: true,
+        phone: true, vatRegistered: true, vatRatePercent: true, receiptFooterTh: true, logoUrl: true, stampUrl: true,
       },
     }),
   ]);

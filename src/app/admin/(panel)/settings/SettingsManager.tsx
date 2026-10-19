@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { defaultBranchId, DEFAULT_BRANCH_ID } from "@/lib/utils";
+import ImageUpload from "@/components/ImageUpload";
 import { MapPin, Phone, Clock, Globe, Check, Loader2, ExternalLink, ReceiptText } from "lucide-react";
 
 interface Branch {
@@ -26,11 +27,13 @@ interface Company {
   vatRegistered:   boolean;
   vatRatePercent:  number;
   receiptFooterTh: string | null;
+  logoUrl:         string | null;
+  stampUrl:        string | null;
 }
 
 const EMPTY_COMPANY: Company = {
   legalName: "", legalNameEn: null, taxId: "", addressLine: "",
-  phone: null, vatRegistered: false, vatRatePercent: 7, receiptFooterTh: null,
+  phone: null, vatRegistered: false, vatRatePercent: 7, receiptFooterTh: null, logoUrl: null, stampUrl: null,
 };
 
 const TIME_OPTIONS: string[] = [];
@@ -247,6 +250,15 @@ export default function SettingsManager({
                   </Field>
                 </div>
               )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="โลโก้บริษัท" hint="ใช้กับเอกสารของบริษัท">
+                <ImageUpload kind="profile" ref="company-logo" value={co.logoUrl} onChange={(url) => setCompany("logoUrl", url)} />
+              </Field>
+              <Field label="ตราประทับบริษัท" hint="ใช้ประทับในเอกสาร เช่น ใบ 50 ทวิ">
+                <ImageUpload kind="profile" ref="company-stamp" value={co.stampUrl} onChange={(url) => setCompany("stampUrl", url)} />
+              </Field>
             </div>
 
             <Field label="ข้อความท้ายใบเสร็จ" hint="ไม่บังคับ เช่น เงื่อนไขการคืนเงิน">
