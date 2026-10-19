@@ -415,3 +415,12 @@ body:has(.customer-hub.theme-halloween) { background:#1d1229; }
 .cp-terms summary { cursor:pointer; font-weight:600; }
 .cp-terms p { margin:6px 0 0; white-space:pre-line; line-height:1.6; }
 @media (prefers-reduced-motion:reduce) { .cp-live i, .cp-stage.tearing .cp-half, .cp-stamp { animation:none !important; } }
+
+.cp-tear-btn { width:min(86vw,330px); border:2px dashed #ffd9a8; border-radius:14px; padding:13px; background:#ffffff14; color:#ffe9d1; font-size:15px; font-weight:700; }
+.cp-confirm { width:min(86vw,330px); padding:14px; border-radius:14px; background:#fff; color:#3b2a24; text-align:center; }
+.cp-confirm p { margin:0 0 10px; font-size:13px; line-height:1.5; }
+.cp-confirm div { display:flex; gap:8px; }
+.cp-confirm button { flex:1; border:0; border-radius:10px; padding:11px; font-size:14px; font-weight:700; }
+.cp-confirm .no { background:#f1e9e2; color:#3b2a24; }
+.cp-confirm .yes { background:#dc2626; color:#fff; }
+.cp-confirm button:disabled { opacity:.6; }

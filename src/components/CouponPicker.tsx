@@ -7,6 +7,8 @@ import { couponDate, couponValueLabel, quoteCoupon, type CouponLine } from "@/li
 export interface PosCoupon {
   id:     string;
   status: "usable" | "upcoming" | "used" | "expired" | "void";
+  /** Torn in the customer's app a moment ago, waiting to be put on a bill. */
+  appUse?: { id: string; at: string } | null;
   campaign: {
     id: string; code: string; name: string; terms?: string | null;
     discountType: string; discountValue: number; maxDiscountSatang: number | null;
@@ -71,13 +73,13 @@ export default function CouponPicker({ phone, lines, value, onChange }: {
       const list: PosCoupon[] = d.coupons ?? [];
       setCoupons(list);
       const got = list.find(c => c.campaign.id === d.campaignId);
-      if (got?.status === "usable") onChange(got);
+      if (got?.status === "usable" || (got?.status === "used" && got.appUse)) onChange(got);
       else if (got) setErr(got.status === "used" ? "ลูกค้าใช้คูปองนี้ไปแล้ว" : "คูปองนี้ใช้ไม่ได้ตอนนี้");
       setCode("");
     } catch { setErr("ใช้โค้ดไม่สำเร็จ"); } finally { setLoading(false); }
   }
 
-  const usable = coupons.filter(c => c.status === "usable");
+  const usable = coupons.filter(c => c.status === "usable" || (c.status === "used" && !!c.appUse));
   const quote = value ? quoteCoupon(value.campaign, lines) : null;
 
   if (!cleanPhone) {
@@ -109,7 +111,9 @@ export default function CouponPicker({ phone, lines, value, onChange }: {
               className="text-left px-3 py-1.5 rounded-xl text-xs font-semibold"
               style={{ background: "white", border: "1.5px dashed #FB923C", color: "#9A3412" }}>
               🎟 {c.campaign.name} · {couponValueLabel(c.campaign)}
-              <span className="block text-[10px] font-normal" style={{ color: "#A08070" }}>ใช้ได้ถึง {couponDate(c.campaign.validUntil)}</span>
+              <span className="block text-[10px] font-normal" style={{ color: c.appUse ? "#B91C1C" : "#A08070" }}>
+                {c.appUse ? `✂ ลูกค้าฉีกในแอปแล้ว ${new Date(c.appUse.at).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })} · กดเพื่อใส่ในบิลนี้` : `ใช้ได้ถึง ${couponDate(c.campaign.validUntil)}`}
+              </span>
             </button>
           ))}
         </div>

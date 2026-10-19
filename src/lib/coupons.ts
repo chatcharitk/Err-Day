@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { bangkokTodayKey } from "@/lib/member-pricing";
-import { campaignPhase, type CampaignPhase } from "@/lib/coupon-rules";
+import { APP_USE_WINDOW_MS, campaignPhase, type CampaignPhase } from "@/lib/coupon-rules";
 import type { Coupon, CouponCampaign } from "@/generated/prisma/client";
 
 /**
@@ -46,7 +46,7 @@ export async function customerCoupons(customerId: string) {
     include: {
       campaign: true,
       // Latest use — the customer's screen shows when/where it was torn.
-      redemptions: { where: { reversedAt: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, booking: { select: { branch: { select: { name: true } } } } } },
+      redemptions: { where: { reversedAt: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, source: true, bookingId: true, createdAt: true, booking: { select: { branch: { select: { name: true } } } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -54,7 +54,13 @@ export async function customerCoupons(customerId: string) {
     id:          r.id,
     status:      couponStatus(r, r.campaign, today),
     usedAt:      r.redemptions[0]?.createdAt.toISOString() ?? null,
-    usedBranch:  r.redemptions[0]?.booking.branch.name ?? null,
+    usedBranch:  r.redemptions[0]?.booking?.branch.name ?? null,
+    // Torn in the app but not yet on a bill: the cashier can still apply it (POS).
+    appUse: (() => {
+      const u = r.redemptions[0];
+      return u && u.source === "APP" && !u.bookingId && Date.now() - u.createdAt.getTime() < APP_USE_WINDOW_MS
+        ? { id: u.id, at: u.createdAt.toISOString() } : null;
+    })(),
     usesAllowed: r.usesAllowed,
     usesUsed:    r.usesUsed,
     createdAt:   r.createdAt.toISOString(),

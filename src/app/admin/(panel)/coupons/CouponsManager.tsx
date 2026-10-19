@@ -21,7 +21,7 @@ interface Campaign {
 interface Holder {
   id: string; source: string; createdAt: string; usesAllowed: number; usesUsed: number; voided: boolean; status: string;
   customer: { id: string; name: string; phone: string };
-  redemptions: { id: string; at: string; discountSatang: number; reversed: boolean; bookingId: string; branch: string; billSatang: number }[];
+  redemptions: { id: string; at: string; discountSatang: number; reversed: boolean; bookingId: string | null; branch: string | null; billSatang: number | null; appOnly?: boolean }[];
 }
 interface Props {
   today: string;
@@ -218,7 +218,7 @@ function CampaignDetail({ campaign, holders, onEdit }: { campaign: Campaign; hol
                     {h.redemptions.length === 0 && <span className="text-xs" style={{ color: MUTED }}>—</span>}
                     {h.redemptions.map(r => (
                       <div key={r.id} className="flex items-center gap-2 text-xs" style={{ color: r.reversed ? MUTED : TEXT, textDecoration: r.reversed ? "line-through" : undefined }}>
-                        <span>{fmtTime(r.at)} · {r.branch} · ลด {baht(r.discountSatang)} (บิล {baht(r.billSatang)})</span>
+                        <span>{r.appOnly ? `${fmtTime(r.at)} · ฉีกในแอปแล้ว (รอใส่ในบิล)` : `${fmtTime(r.at)} · ${r.branch} · ลด ${baht(r.discountSatang)} (บิล ${baht(r.billSatang ?? 0)})`}</span>
                         {!r.reversed && (
                           <button disabled={busy} title="คืนสิทธิ์ (ยกเลิกการใช้)"
                             onClick={() => { if (confirm("คืนสิทธิ์คูปองนี้ให้ลูกค้า? (ใช้เมื่อคืนเงิน/คิดเงินผิด)")) void act({ action: "reverse", redemptionId: r.id }); }}

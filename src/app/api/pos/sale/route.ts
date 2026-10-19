@@ -7,7 +7,7 @@ import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
 import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
 import { issueReceiptForBooking, receiptUrl, type ReceiptLineInput } from "@/lib/receipts";
 import { couponStatus } from "@/lib/coupons";
-import { quoteCoupon, couponValueLabel } from "@/lib/coupon-rules";
+import { quoteCoupon, couponValueLabel, APP_USE_WINDOW_MS } from "@/lib/coupon-rules";
 
 /**
  * Issue the receipt for a completed sale.
@@ -57,7 +57,7 @@ interface SaleItem {
  * compare-and-set on usesUsed, so two tills can't spend the last use twice.
  */
 async function claimCoupon(items: SaleItem[], customer: { id?: string; phone?: string }):
-  Promise<{ couponId: string; discount: number } | { error: string } | null> {
+  Promise<{ couponId: string; discount: number; appRedemptionId?: string } | { error: string } | null> {
   const line = items.find(i => typeof i.couponId === "string" && i.couponId);
   if (!line) return null;
   const coupon = await prisma.coupon.findUnique({
@@ -67,7 +67,14 @@ async function claimCoupon(items: SaleItem[], customer: { id?: string; phone?: s
   const owner = customer.id ? coupon.customerId === customer.id : !!customer.phone && coupon.customer.phone === customer.phone;
   if (!owner) return { error: "คูปองนี้ไม่ใช่ของลูกค้าคนนี้" };
   const status = couponStatus(coupon, coupon.campaign);
-  if (status !== "usable") {
+  // Torn in the customer's app a moment ago and not yet on a bill: this sale may take it.
+  const appUse = status === "used" && !coupon.voidedAt
+    ? await prisma.couponRedemption.findFirst({
+        where: { couponId: coupon.id, source: "APP", bookingId: null, reversedAt: null, createdAt: { gte: new Date(Date.now() - APP_USE_WINDOW_MS) } },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
+  if (status !== "usable" && !appUse) {
     return { error: status === "used" ? "คูปองนี้ใช้ไปแล้ว" : status === "expired" ? "คูปองหมดอายุแล้ว" : status === "upcoming" ? "คูปองยังไม่เริ่มใช้" : "คูปองนี้ใช้ไม่ได้" };
   }
 
@@ -86,17 +93,23 @@ async function claimCoupon(items: SaleItem[], customer: { id?: string; phone?: s
   const discountSatang = Math.min(quote.discountSatang, Math.max(0, billBefore));
   if (discountSatang <= 0) return { error: `ใช้คูปองไม่ได้: ${quote.problem ?? "ไม่มีส่วนลด"}` };
 
-  const claimed = await prisma.coupon.updateMany({
-    where: { id: coupon.id, usesUsed: coupon.usesUsed, voidedAt: null },
-    data:  { usesUsed: { increment: 1 } },
-  });
-  if (claimed.count !== 1) return { error: "คูปองนี้เพิ่งถูกใช้ไป กรุณาลองใหม่" };
+  if (!appUse) {
+    const claimed = await prisma.coupon.updateMany({
+      where: { id: coupon.id, usesUsed: coupon.usesUsed, voidedAt: null },
+      data:  { usesUsed: { increment: 1 } },
+    });
+    if (claimed.count !== 1) return { error: "คูปองนี้เพิ่งถูกใช้ไป กรุณาลองใหม่" };
+  } else {
+    // Reserve the torn redemption for this sale (a parallel till can't take it too).
+    const taken = await prisma.couponRedemption.updateMany({ where: { id: appUse.id, bookingId: null }, data: { source: "APP-CLAIMED" } });
+    if (taken.count !== 1) return { error: "คูปองนี้เพิ่งถูกใช้ไป กรุณาลองใหม่" };
+  }
 
   // The authoritative amount and label replace whatever the till sent.
   line.price = -discountSatang;
   line.qty = 1;
   line.name = `คูปอง ${coupon.campaign.name} (${couponValueLabel(coupon.campaign)})`;
-  return { couponId: coupon.id, discount: discountSatang };
+  return { couponId: coupon.id, discount: discountSatang, appRedemptionId: appUse?.id };
 }
 
 /** Units on a line, tolerating older clients that omit `qty` entirely. */
@@ -140,18 +153,32 @@ export async function POST(request: Request) {
   if (gate instanceof Response) return gate;
   const admin = gate;
   // A coupon use claimed below; handed back if the sale then fails.
-  let claimedCoupon: { couponId: string; discount: number } | null = null;
+  let claimedCoupon: { couponId: string; discount: number; appRedemptionId?: string } | null = null;
   const recordCoupon = async (bookingId: string) => {
     if (!claimedCoupon) return;
-    await prisma.couponRedemption.create({
-      data: { couponId: claimedCoupon.couponId, bookingId, discountSatang: claimedCoupon.discount, adminId: admin.id },
-    });
+    if (claimedCoupon.appRedemptionId) {
+      // The coupon was torn in the app: attach that redemption to this bill.
+      await prisma.couponRedemption.update({
+        where: { id: claimedCoupon.appRedemptionId },
+        data: { bookingId, discountSatang: claimedCoupon.discount, adminId: admin.id, source: "APP" },
+      });
+    } else {
+      await prisma.couponRedemption.create({
+        data: { couponId: claimedCoupon.couponId, bookingId, discountSatang: claimedCoupon.discount, adminId: admin.id },
+      });
+    }
     claimedCoupon = null;
   };
   const releaseCoupon = async () => {
     const c = claimedCoupon;
     claimedCoupon = null;
-    if (c) await prisma.coupon.update({ where: { id: c.couponId }, data: { usesUsed: { decrement: 1 } } }).catch(() => {});
+    if (!c) return;
+    if (c.appRedemptionId) {
+      // Sale failed: the torn coupon goes back to waiting for a bill.
+      await prisma.couponRedemption.update({ where: { id: c.appRedemptionId }, data: { source: "APP" } }).catch(() => {});
+    } else {
+      await prisma.coupon.update({ where: { id: c.couponId }, data: { usesUsed: { decrement: 1 } } }).catch(() => {});
+    }
   };
 
   try {

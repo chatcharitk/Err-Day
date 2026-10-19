@@ -21,16 +21,18 @@ const UI = {
     title: "คูปองของฉัน", sub: "แสดงหน้านี้กับพนักงานตอนชำระเงิน", claim: "รับคูปอง", claiming: "กำลังรับ...",
     until: "ใช้ได้ถึง", from: "เริ่มใช้", minSpend: "ขั้นต่ำ", only: "เฉพาะ", got: "ได้รับคูปองแล้ว 🎉", already: "คุณมีคูปองนี้อยู่แล้ว", notLinked: "จองคิวหรือสมัครสมาชิกก่อน เพื่อเก็บคูปองไว้ในบัญชี LINE",
     used: "ใช้แล้ว", expired: "หมดอายุ", failed: "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง", newOne: "คูปองใหม่", pastToggle: "คูปองที่ใช้แล้ว / หมดอายุ",
-    terms: "เงื่อนไขการใช้คูปอง", showStaff: "แสดงให้พนักงาน", showHint: "แสดงหน้านี้ให้พนักงานตอนชำระเงิน พนักงานจะกดใช้คูปองให้", live: "สด",
-    usedMsg: "ใช้คูปองแล้ว", usedAt: "ใช้เมื่อ", close: "ปิด", code: "โค้ด",
+    terms: "เงื่อนไขการใช้คูปอง", showStaff: "แสดงให้พนักงาน", showHint: "แสดงหน้านี้ให้พนักงานตอนชำระเงิน แล้วให้พนักงานกดฉีกคูปองด้านล่าง", live: "สด",
+    usedMsg: "ใช้คูปองแล้ว · พนักงานจะใส่ส่วนลดในบิลให้", usedAt: "ใช้เมื่อ", close: "ปิด", code: "โค้ด",
+    tearBtn: "ฉีกคูปอง (พนักงานกด)", tearAsk: "พนักงานกดยืนยันการใช้คูปองนี้ตอนนี้? กดแล้วย้อนกลับไม่ได้", tearYes: "ยืนยัน ใช้คูปอง", tearNo: "ยกเลิก", tearing: "กำลังใช้คูปอง...",
     off: (label: string) => label,
   },
   en: {
     title: "My coupons", sub: "Show this to our staff when you pay", claim: "Get coupon", claiming: "Getting...",
     until: "Valid until", from: "Starts", minSpend: "Min. spend", only: "Only for", got: "Coupon added 🎉", already: "You already have this coupon", notLinked: "Book or join as a member first to keep coupons in your LINE account",
     used: "Used", expired: "Expired", failed: "Something went wrong. Please try again.", newOne: "New coupon", pastToggle: "Used / expired coupons",
-    terms: "Terms & conditions", showStaff: "Show to staff", showHint: "Show this screen to our staff when you pay — they will apply the coupon", live: "LIVE",
-    usedMsg: "Coupon used", usedAt: "Used", close: "Close", code: "Code",
+    terms: "Terms & conditions", showStaff: "Show to staff", showHint: "Show this screen to our staff when you pay — they tap the button below to tear the coupon", live: "LIVE",
+    usedMsg: "Coupon used · staff will take the discount off your bill", usedAt: "Used", close: "Close", code: "Code",
+    tearBtn: "Tear coupon (staff taps)", tearAsk: "Staff: use this coupon now? This can't be undone.", tearYes: "Yes, use coupon", tearNo: "Cancel", tearing: "Using...",
     off: (label: string) => label.replace("ลด", "").replace("สูงสุด", "max").trim() + " off",
   },
 };
@@ -73,8 +75,10 @@ function TicketFace({ c, lang, t }: { c: MyCoupon; lang: "th" | "en"; t: (typeof
 }
 
 /** Full-screen "show the staff" coupon. Polls (parent) — when the cashier uses it, the ticket tears in two. */
-function ShowCoupon({ c, lang, t, onClose }: { c: MyCoupon; lang: "th" | "en"; t: (typeof UI)["th"]; onClose: () => void }) {
+function ShowCoupon({ c, lang, t, onClose, onUse }: { c: MyCoupon; lang: "th" | "en"; t: (typeof UI)["th"]; onClose: () => void; onUse: () => Promise<boolean> }) {
   const [clock, setClock] = useState(() => new Date());
+  const [asking, setAsking] = useState(false);
+  const [using, setUsing] = useState(false);
   const [prev, setPrev] = useState(c.status);
   const [tearing, setTearing] = useState(false);
   if (prev !== c.status) {
@@ -97,6 +101,17 @@ function ShowCoupon({ c, lang, t, onClose }: { c: MyCoupon; lang: "th" | "en"; t
         <div className="cp-half bottom" style={{ clipPath: tearPath(TEAR_Y, "bottom") }}><TicketFace c={c} lang={lang} t={t} /></div>
         {used && <div className="cp-stamp"><b>{t.used}</b>{c.usedAt && <span>{t.usedAt} {stamp(c.usedAt, lang)}</span>}{c.usedBranch && <span>{c.usedBranch}</span>}</div>}
       </div>
+      {!used && c.status === "usable" && (asking ? (
+        <div className="cp-confirm">
+          <p>{t.tearAsk}</p>
+          <div>
+            <button type="button" className="no" disabled={using} onClick={() => setAsking(false)}>{t.tearNo}</button>
+            <button type="button" className="yes" disabled={using} onClick={async () => { setUsing(true); const ok = await onUse(); if (!ok) { setUsing(false); setAsking(false); } }}>{using ? t.tearing : t.tearYes}</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="cp-tear-btn" onClick={() => setAsking(true)}>✂ {t.tearBtn}</button>
+      ))}
       <p className="cp-hint">{used ? t.usedMsg : t.showHint}</p>
       {c.campaign.terms && !used && (
         <details className="cp-terms"><summary>{t.terms}</summary><p>{c.campaign.terms}</p></details>
@@ -138,6 +153,14 @@ export default function CouponWallet({ accessToken, lang }: { accessToken: strin
     }, 3000);
     return () => { alive = false; clearInterval(id); };
   }, [showId, accessToken, call]);
+
+  async function tearCoupon(id: string): Promise<boolean> {
+    try {
+      const r = await call({ useCouponId: id });
+      if (r.data?.coupons) setState(r.data as WalletState);
+      return r.ok;
+    } catch { return false; }
+  }
 
   async function claim(extra: Record<string, string>, key: string) {
     setBusy(key); setNote(null);
@@ -197,7 +220,7 @@ export default function CouponWallet({ accessToken, lang }: { accessToken: strin
         </article>
       ))}
 
-      {showId && (() => { const sc = state.coupons.find(x => x.id === showId); return sc ? <ShowCoupon key={sc.id} c={sc} lang={lang} t={t} onClose={() => setShowId(null)} /> : null; })()}
+      {showId && (() => { const sc = state.coupons.find(x => x.id === showId); return sc ? <ShowCoupon key={sc.id} c={sc} lang={lang} t={t} onClose={() => setShowId(null)} onUse={() => tearCoupon(sc.id)} /> : null; })()}
 
       {note && <p className={`coupon-msg${note.ok ? " ok" : ""}`} role="status">{note.text}</p>}
 

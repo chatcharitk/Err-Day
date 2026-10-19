@@ -97,6 +97,9 @@ export function couponDate(value: Date | string): string {
   });
 }
 
+/** A coupon torn in the app waits this long for the cashier to apply it to the bill. */
+export const APP_USE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
 export function normalizeCode(code: unknown): string {
   return typeof code === "string" ? code.trim().toUpperCase().replace(/\s+/g, "") : "";
 }

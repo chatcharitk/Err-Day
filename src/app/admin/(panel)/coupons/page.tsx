@@ -75,7 +75,8 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
           customer: { id: k.customer.id, name: k.customer.nickname || k.customer.name, phone: k.customer.phone },
           redemptions: k.redemptions.map(r => ({
             id: r.id, at: r.createdAt.toISOString(), discountSatang: r.discountSatang, reversed: !!r.reversedAt,
-            bookingId: r.booking.id, branch: r.booking.branch.name, billSatang: r.booking.totalPrice,
+            bookingId: r.booking?.id ?? null, branch: r.booking?.branch.name ?? null, billSatang: r.booking?.totalPrice ?? null,
+            appOnly: r.source === "APP" && !r.booking,
           })),
         })),
       } : null}

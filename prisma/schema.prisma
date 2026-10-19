@@ -1032,17 +1032,20 @@ model Coupon {
 }
 
 /// A coupon used on a sale. Reversing (refund / mistake) keeps the row and
-/// gives the use back.
+/// gives the use back. `source` "APP" = torn in the customer's app at the
+/// counter; its bookingId/discount stay empty until the cashier applies the
+/// coupon to the bill at POS (which fills them in).
 model CouponRedemption {
   id             String    @id @default(cuid())
   couponId       String
-  bookingId      String
+  source         String    @default("POS")
+  bookingId      String?
   discountSatang Int
   adminId        String?
   createdAt      DateTime  @default(now())
   reversedAt     DateTime?
   coupon         Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking        Booking?  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([couponId])
   @@index([bookingId])
