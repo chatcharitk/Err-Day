@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { pushText, pushLine, multicastText, multicastLine } from "@/lib/line-messaging";
+import { pushText, pushLine, multicastText } from "@/lib/line-messaging";
 import { buildCouponReceivedFlex } from "@/lib/flex/coupon";
 import { buildBookingFlex } from "@/lib/flex/booking";
 import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
@@ -1086,7 +1086,6 @@ export async function sendOwnerPayrollSummary(): Promise<{ status: string; total
 /**
  * Tell customers they were given a coupon (LINE card with a button into the
  * app). Idempotent per coupon; customers with no LINE link are logged SKIPPED.
- * Same-campaign recipients go out in one multicast (≤500 each).
  */
 export async function sendCouponsReceived(couponIds: string[]): Promise<{ sent: number; skipped: number; failed: number }> {
   const out = { sent: 0, skipped: 0, failed: 0 };
@@ -1106,16 +1105,14 @@ export async function sendCouponsReceived(couponIds: string[]): Promise<{ sent: 
     }
     byCampaign.set(c.campaignId, [...(byCampaign.get(c.campaignId) ?? []), c]);
   }
+  // One push per customer (not multicast): a push shows up in that customer's
+  // chat in LINE OA Manager, so staff can see the coupon card was sent.
   for (const group of byCampaign.values()) {
-    const camp = group[0].campaign;
-    const flex = buildCouponReceivedFlex(camp);
-    for (let i = 0; i < group.length; i += 500) {
-      const chunk = group.slice(i, i + 500);
-      const r = await multicastLine(chunk.map(c => c.customer.lineUserId!), [flex]);
-      for (const c of chunk) {
-        await recordLog({ kind, targetId: c.id, status: r.ok ? "SENT" : "FAILED", recipient: c.customer.lineUserId, error: r.ok ? null : r.error });
-      }
-      if (r.ok) out.sent += chunk.length; else out.failed += chunk.length;
+    const flex = buildCouponReceivedFlex(group[0].campaign);
+    for (const c of group) {
+      const r = await pushLine(c.customer.lineUserId!, [flex]);
+      await recordLog({ kind, targetId: c.id, status: r.ok ? "SENT" : "FAILED", recipient: c.customer.lineUserId, error: r.ok ? null : r.error });
+      if (r.ok) out.sent++; else out.failed++;
     }
   }
   return out;
