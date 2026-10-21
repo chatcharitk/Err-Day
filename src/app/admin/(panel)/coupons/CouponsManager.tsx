@@ -165,7 +165,10 @@ function CampaignDetail({ campaign, holders, onEdit, compact = false }: { campai
           <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>แจกให้ลูกค้า 1 คน</p>
           <CustomerSearch value={customer} onChange={setCustomer} showManualPhone={false} compact />
           <button disabled={busy || !customer.id}
-            onClick={() => void act({ action: "issue", customerId: customer.id }, d => d.created ? `แจกให้ ${customer.name} แล้ว และส่งข้อความ LINE แจ้งแล้ว` : `${customer.name} มีคูปองนี้อยู่แล้ว`)}
+            onClick={() => void act({ action: "issue", customerId: customer.id }, d => !d.created ? `${customer.name} มีคูปองนี้อยู่แล้ว (ไม่ได้ส่ง LINE ซ้ำ)`
+              : d.line === "sent" ? `แจกให้ ${customer.name} แล้ว และส่งข้อความ LINE แล้ว`
+              : d.line === "no_line" ? `แจกให้ ${customer.name} แล้ว · ⚠ ลูกค้ายังไม่ได้เชื่อม LINE จึงส่งข้อความไม่ได้ (คูปองจะขึ้นในแอปเมื่อเชื่อม LINE ด้วยเบอร์นี้)`
+              : `แจกให้ ${customer.name} แล้ว · ⚠ ส่งข้อความ LINE ไม่สำเร็จ`)}
             className="mt-2 w-full py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40" style={{ background: ORANGE }}>
             <Ticket size={14} className="inline mr-1" /> แจกคูปอง
           </button>

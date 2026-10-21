@@ -50,9 +50,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       case "issue": {
         if (typeof b.customerId !== "string") return NextResponse.json({ error: "กรุณาเลือกลูกค้า" }, { status: 400 });
         const { coupon, created } = await issueCoupon(campaign, b.customerId, "ADMIN", admin.id);
-        // Tell the customer on LINE (card + button into the app).
-        if (created && b.notify !== false) after(() => sendCouponsReceived([coupon.id]).catch(e => console.error("[notify] coupon received failed", e)));
-        return NextResponse.json({ ok: true, created, notified: created && b.notify !== false });
+        // Tell the customer on LINE (card + button into the app). Awaited (one push)
+        // so the admin sees whether it really went out — not every customer is LINE-linked.
+        let line: "sent" | "no_line" | "failed" | null = null;
+        if (created && b.notify !== false) {
+          const r = await sendCouponsReceived([coupon.id]).catch(e => { console.error("[notify] coupon received failed", e); return null; });
+          line = r?.sent ? "sent" : r?.skipped ? "no_line" : "failed";
+        }
+        return NextResponse.json({ ok: true, created, line });
       }
       case "bulk": {
         const where: Prisma.CustomerWhereInput =
