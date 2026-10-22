@@ -46,3 +46,4 @@ next-env.d.ts
 # Isolated finance integration preview
 /.next-finance-test/
 /.next-finance-build/
+/scripts/withholding/private/

@@ -7,7 +7,7 @@ laid out by Chrome (proper tone-mark/vowel shaping) and merged onto the blank
 form; the AcroForm fields are removed so it prints exactly as shown.
 Called by scripts/gen-50tawi.ts, which owns the numbering (เล่มที่ / เลขที่).
 """
-import json, os, subprocess, sys, html, tempfile
+import glob, json, os, subprocess, sys, html, tempfile
 import pypdf
 
 job = json.load(open(sys.argv[1]))
@@ -59,6 +59,12 @@ money(180, 196, PAID_BAHT, PAID_SATANG, "pay"); money(180, 196, TAX_BAHT, TAX_SA
 box(185, 158, 558, 177, TAX_WORDS, size=11, align="center", bottom=3)
 # ผู้จ่ายเงิน (1) หัก ณ ที่จ่าย
 tick(82, 119, 94, 131)
+# Directors' signatures on the "ลงชื่อ …… ผู้จ่ายเงิน" line. Transparent PNGs kept only on
+# this machine (scripts/withholding/private/ is gitignored — the repo is public).
+SIGS = sorted(glob.glob(os.path.join(HERE, "private", "sig-*.png")))
+if SIGS:
+    imgs = "".join(f'<img src="file://{html.escape(f)}" style="height:21pt;max-width:58pt;object-fit:contain">' for f in SIGS)
+    items.append(f'<div class="b" style="left:350pt;top:{H-105}pt;width:126pt;height:22pt;justify-content:center;gap:6pt">{imgs}</div>')
 
 page = f'''<!doctype html><html><head><meta charset="utf-8"><style>
 @page {{ size: 595pt 842pt; margin: 0 }}
