@@ -4,8 +4,9 @@
  *
  *   npx tsx scripts/gen-50tawi.ts --expense <expenseId> [--paid YYYY-MM-DD] [--out outputs] [--attach]
  *
- * - เลขที่ is the Thai-year short + 3-digit running number: 69001, 69002 … (restarts each year);
- *   เล่มที่ advances every 50 certificates. runNo is stored as the whole number (69001).
+ * - เลขที่ is YYMMNN: Thai-year short + month + 2-digit running number — 691001, 691002 …
+ *   (Oct 2569; restarts each month). เล่มที่ advances every 50 certificates in the year.
+ *   runNo is stored as the whole number (691001).
  * - --attach also uploads the PDF and attaches it to the expense (needs BLOB_READ_WRITE_TOKEN).
  * - Re-running for the same expense keeps its number (re-print / add the payment date).
  * - Income = bill before VAT, tax = the expense's withholding amount.
@@ -39,25 +40,29 @@ const money = (satang: number) => ({ baht: Math.floor(satang / 100).toLocaleStri
   if (!company?.taxId) throw new Error("company profile missing");
 
   const income = e.totalAmount - (e.vatAmount ?? 0);
-  const paidYmd = arg("paid") ?? (e.paidAt ? new Date(e.paidAt.getTime() + 7 * 3600_000).toISOString().slice(0, 10) : null);
-  const paidDate = paidYmd ? new Date(paidYmd + "T12:00:00Z") : null;
-
   // Number: keep the existing one for this expense, else the next in sequence.
   let cert = await prisma.withholdingCertificate.findUnique({ where: { expenseId } });
+  const ymd = (d: Date | null | undefined) => d ? new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10) : null;
+  // --paid, else the expense's paid date, else what an earlier run printed.
+  const paidYmd = arg("paid") ?? ymd(e.paidAt) ?? ymd(cert?.paidDate);
+  const paidDate = paidYmd ? new Date(paidYmd + "T12:00:00Z") : null;
   if (cert) {
     cert = await prisma.withholdingCertificate.update({
       where: { id: cert.id },
       data: { paidDate, incomeSatang: income, taxSatang: e.withholdingAmount, payeeName: v.legalName || v.name, payeeTaxId: v.taxId },
     });
   } else {
-    // Thai (BE) year, last two digits, of the day it is issued (Bangkok).
-    const yy = (new Date(Date.now() + 7 * 3600_000).getUTCFullYear() + 543) % 100;
+    // Thai (BE) year (last two digits) and month of the day it is issued (Bangkok).
+    const now = new Date(Date.now() + 7 * 3600_000);
+    const yy = (now.getUTCFullYear() + 543) % 100, mm = now.getUTCMonth() + 1;
+    const month = yy * 10000 + mm * 100;
     for (let attempt = 0; attempt < 5 && !cert; attempt++) {
-      const last = await prisma.withholdingCertificate.findFirst({ where: { runNo: { gte: yy * 1000, lt: yy * 1000 + 1000 } }, orderBy: { runNo: "desc" } });
-      const seq = last ? (last.runNo % 1000) + 1 : 1;
-      if (seq > 999) throw new Error("more than 999 certificates this year");
-      const runNo = yy * 1000 + seq;
-      const bookNo = Math.floor((seq - 1) / BOOK_SIZE) + 1;
+      const last = await prisma.withholdingCertificate.findFirst({ where: { runNo: { gte: month, lt: month + 100 } }, orderBy: { runNo: "desc" } });
+      const seq = last ? (last.runNo % 100) + 1 : 1;
+      if (seq > 99) throw new Error("more than 99 certificates this month");
+      const runNo = month + seq;
+      const inYear = await prisma.withholdingCertificate.count({ where: { runNo: { gte: yy * 10000, lt: yy * 10000 + 10000 } } });
+      const bookNo = Math.floor(inYear / BOOK_SIZE) + 1;
       try {
         cert = await prisma.withholdingCertificate.create({ data: {
           bookNo, runNo, expenseId, vendorId: v.id, payeeName: v.legalName || v.name, payeeTaxId: v.taxId,
