@@ -59,6 +59,12 @@ money(180, 196, PAID_BAHT, PAID_SATANG, "pay"); money(180, 196, TAX_BAHT, TAX_SA
 box(185, 158, 558, 177, TAX_WORDS, size=11, align="center", bottom=3)
 # ผู้จ่ายเงิน (1) หัก ณ ที่จ่าย
 tick(82, 119, 94, 131)
+# วันที่ออกหนังสือรับรอง: "…… / …… / ……" under the signature
+ISSUE = job.get("issueDate")
+if ISSUE:
+    box(327, 74, 366, 88, ISSUE["d"], size=9.5, align="center", pad=0, bottom=1.5)
+    box(369, 74, 421, 88, ISSUE["m"], size=9.5, align="center", pad=0, bottom=1.5)
+    box(424, 74, 478, 88, ISSUE["y"], size=9.5, align="center", pad=0, bottom=1.5)
 # Directors' signatures on the "ลงชื่อ …… ผู้จ่ายเงิน" line. Transparent PNGs kept only on
 # this machine (scripts/withholding/private/ is gitignored — the repo is public).
 SIGS = sorted(glob.glob(os.path.join(HERE, "private", "sig-*.png")))

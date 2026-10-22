@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 const BOOK_SIZE = 50;
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
 const MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const MONTHS_FULL = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const thaiShort = (ymd: string) => { const [y, m, d] = ymd.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y + 543}`; };
 const money = (satang: number) => ({ baht: Math.floor(satang / 100).toLocaleString("en-US"), satang: String(satang % 100).padStart(2, "0") });
 
@@ -84,6 +85,8 @@ const money = (satang: number) => ({ baht: Math.floor(satang / 100).toLocaleStri
     payer: { name: company.legalName, tax: company.taxId, addr: (company.addressLine ?? "").replace("บางนา-ตลาด", "บางนา-ตราด") },
     payee: { name: v.legalName || v.name, tax: v.taxId, addr: v.address ?? "" },
     payDate: paidYmd ? thaiShort(paidYmd) : "",
+    // วันที่ออกหนังสือรับรอง = the payment date (blank until paid).
+    issueDate: paidYmd ? (([y, m, d]) => ({ d: String(d), m: MONTHS_FULL[m - 1], y: String(y + 543) }))(paidYmd.split("-").map(Number)) : null,
     paidBaht: paid.baht, paidSatang: paid.satang, taxBaht: tax.baht, taxSatang: tax.satang,
     words: thaiBahtText(e.withholdingAmount),
     bookNo: cert.bookNo, runNo: String(cert.runNo), out,
