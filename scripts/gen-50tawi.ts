@@ -24,6 +24,7 @@ const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); ret
 const MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const MONTHS_FULL = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const thaiShort = (ymd: string) => { const [y, m, d] = ymd.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y + 543}`; };
+const branchLabel = (b: string | null) => !b?.trim() ? "" : /^0+$/.test(b.trim()) || b.includes("สำนักงานใหญ่") ? " (สำนักงานใหญ่)" : ` (สาขาที่ ${b.trim()})`;
 const money = (satang: number) => ({ baht: Math.floor(satang / 100).toLocaleString("en-US"), satang: String(satang % 100).padStart(2, "0") });
 
 (async () => {
@@ -83,7 +84,8 @@ const money = (satang: number) => ({ baht: Math.floor(satang / 100).toLocaleStri
   const paid = money(income), tax = money(e.withholdingAmount);
   const job = {
     payer: { name: company.legalName, tax: company.taxId, addr: (company.addressLine ?? "").replace("บางนา-ตลาด", "บางนา-ตราด") },
-    payee: { name: v.legalName || v.name, tax: v.taxId, addr: v.address ?? "" },
+    // Payee's tax branch after the name: "(สำนักงานใหญ่)" or "(สาขาที่ 00021)".
+    payee: { name: (v.legalName || v.name) + branchLabel(v.taxBranch), tax: v.taxId, addr: v.address ?? "" },
     payDate: paidYmd ? thaiShort(paidYmd) : "",
     // วันที่ออกหนังสือรับรอง = the payment date (blank until paid).
     issueDate: paidYmd ? (([y, m, d]) => ({ d: String(d), m: MONTHS_FULL[m - 1], y: String(y + 543) }))(paidYmd.split("-").map(Number)) : null,
