@@ -11,6 +11,8 @@
  *   ✗ For ANY other message (regular customer chat, stickers, photos,
  *     unrelated text), the webhook stays SILENT. Staff continue to reply
  *     manually — there is no AI auto-reply, no fallback message, nothing.
+ *     (Customer chat messages ARE saved to the admin AI inbox, where a reply
+ *     is drafted for the owner to review — nothing is sent from there either.)
  *
  * Also captures (lineUserId → displayName) into NotificationLog so admin
  * can look up the right LINE userIds — invisible to the customer.
@@ -18,12 +20,14 @@
  * Signature verification runs only if LINE_CHANNEL_SECRET is set, so dev
  * environments still work. Production should set the secret.
  */
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { replyLine } from "@/lib/line-messaging";
 import { findCardByKeyword } from "@/lib/flex/tarot-cards";
 import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
+import { recordLineInbound } from "@/lib/inbox";
+import { draftReply } from "@/lib/inbox-ai";
 
 interface LineEvent {
   type:        string;
@@ -72,7 +76,24 @@ async function processEvent(event: LineEvent): Promise<void> {
   const profileTask = userId
     ? captureProfileOnce(userId).catch(e => console.error("[webhook] capture failed", e))
     : Promise.resolve();
-  await Promise.all([profileTask, processReply(event, userId)]);
+  await Promise.all([profileTask, processReply(event, userId), recordInbox(event)]);
+}
+
+/** Save a customer's chat message to the AI inbox; the reply draft runs after the 200 OK. */
+async function recordInbox(event: LineEvent): Promise<void> {
+  if (event.type !== "message" || event.source?.type !== "user") return;
+  // Printed tarot-QR keywords already get their automatic reply — not a chat.
+  if (event.message?.type === "text" && findCardByKeyword(event.message.text?.trim() ?? "")) return;
+  try {
+    const saved = await recordLineInbound(event);
+    if (saved) {
+      after(() => draftReply(saved.threadId, saved.messageId, { debounce: true })
+        .then(() => undefined)
+        .catch(e => console.error("[webhook] inbox draft failed", e)));
+    }
+  } catch (e) {
+    console.error("[webhook] inbox record failed", e);
+  }
 }
 
 async function processReply(event: LineEvent, userId: string | undefined): Promise<void> {

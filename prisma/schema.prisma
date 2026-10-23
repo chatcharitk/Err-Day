@@ -273,6 +273,7 @@ model Customer {
   bookings         Booking[]
   packages         CustomerPackage[]
   membership       Membership?
+  inboxThreads     InboxThread[]
   membershipCycles MembershipCycle[]
   staffVotes       StaffVote[]
   coupons          Coupon[]
@@ -1076,4 +1077,73 @@ model WithholdingCertificate {
 
   @@unique([bookNo, runNo])
   @@index([vendorId])
+}
+
+/// AI reply inbox: one thread per customer per chat channel (LINE now; Facebook /
+/// Instagram later). Messages are stored as they arrive; an AI draft is prepared
+/// for the owner to review — nothing is sent without a person pressing Send.
+model InboxThread {
+  id             String         @id @default(cuid())
+  /// LINE | FACEBOOK | INSTAGRAM
+  channel        String
+  externalUserId String
+  customerId     String?
+  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  displayName    String?
+  pictureUrl     String?
+  lastMessageAt  DateTime       @default(now())
+  lastInboundAt  DateTime?
+  /// Inbound messages since the last reply / mark-as-read.
+  unread         Int            @default(0)
+  /// Latest LINE reply token (free reply while still fresh, ~1 min).
+  replyToken     String?
+  replyTokenAt   DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  messages       InboxMessage[]
+  drafts         InboxDraft[]
+
+  @@unique([channel, externalUserId])
+  @@index([lastMessageAt])
+}
+
+model InboxMessage {
+  id         String      @id @default(cuid())
+  threadId   String
+  thread     InboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// IN (customer) | OUT (us)
+  direction  String
+  /// text | image | sticker | other
+  kind       String      @default("text")
+  text       String?
+  /// Channel message id — dedupes webhook retries.
+  externalId String?     @unique
+  /// Admin username who sent an OUT message.
+  sentBy     String?
+  draftId    String?
+  createdAt  DateTime    @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+model InboxDraft {
+  id           String      @id @default(cuid())
+  threadId     String
+  thread       InboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// The latest inbound message this draft answers.
+  forMessageId String?
+  /// PENDING | READY | FAILED | USED | EDITED | DISCARDED | STALE
+  status       String      @default("PENDING")
+  /// Reply split into chat bubbles: string[]
+  bubbles      Json?
+  /// Private note to the owner (never sent): what was checked / what is unsure.
+  note         String?
+  model        String?
+  inputTokens  Int?
+  outputTokens Int?
+  error        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([threadId, createdAt])
 }

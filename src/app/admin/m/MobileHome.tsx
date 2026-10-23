@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2,
+  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2, MessageCircle,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
@@ -628,6 +628,15 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                 <Send size={16} />
                 ส่งตารางจองเข้ากลุ่ม LINE
               </button>
+              <Link
+                href="/admin/m/inbox"
+                prefetch={false}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold"
+                style={{ color: TEXT }}
+              >
+                <MessageCircle size={16} style={{ color: "#06C755" }} />
+                แชทลูกค้า · AI ช่วยร่าง
+              </Link>
               <Link
                 href="/admin/m/live"
                 prefetch={false}
