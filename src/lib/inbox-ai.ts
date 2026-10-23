@@ -11,7 +11,6 @@ import { customerCoupons } from "@/lib/coupons";
 import { couponValueLabel } from "@/lib/coupon-rules";
 import { prepareBooking, prepareCancellation, type BookingAction } from "@/lib/inbox-booking";
 import { menuImagesOn } from "@/lib/inbox-media";
-import { notifyAdmins } from "@/lib/notify-admin";
 
 /**
  * AI reply inbox — drafting side. Claude writes a reply in the owner's voice
@@ -297,7 +296,7 @@ async function customerPhotos(history: { id: string; direction: string; kind: st
 export async function draftReply(
   threadId: string,
   forMessageId: string | null,
-  opts: { debounce?: boolean; instruction?: string; previous?: string[]; notify?: boolean } = {},
+  opts: { debounce?: boolean; instruction?: string; previous?: string[] } = {},
 ) {
   if (opts.debounce) {
     await new Promise(r => setTimeout(r, DEBOUNCE_MS));
@@ -424,9 +423,7 @@ export async function draftReply(
           ...(images.length ? { images } : {}),
         },
       });
-      const done = await prisma.inboxDraft.findUnique({ where: { id: draft.id } });
-      if (opts.notify && done?.status === "READY") await notifyDraftReady(threadId);
-      return done;
+      return prisma.inboxDraft.findUnique({ where: { id: draft.id } });
     }
     throw new Error("too many availability lookups");
   } catch (e) {
@@ -435,22 +432,4 @@ export async function draftReply(
     await prisma.inboxDraft.update({ where: { id: draft.id }, data: { status: "FAILED", error: error.slice(0, 500) } });
     return null;
   }
-}
-
-/** Phone notification (in-app + Web Push): a customer wrote and the draft is ready. */
-async function notifyDraftReady(threadId: string) {
-  const t = await prisma.inboxThread.findUnique({
-    where: { id: threadId },
-    select: { displayName: true, customer: { select: { name: true, nickname: true } },
-      messages: { where: { direction: "IN" }, orderBy: { createdAt: "desc" }, take: 1, select: { kind: true, text: true } } },
-  });
-  if (!t) return;
-  const who = t.customer?.nickname || t.customer?.name || t.displayName || "ลูกค้า LINE";
-  const m = t.messages[0];
-  const said = !m ? "" : m.kind === "text" ? (m.text ?? "") : m.kind === "sticker" ? "(สติกเกอร์)" : "(รูปภาพ)";
-  await notifyAdmins({
-    type: "CHAT", title: `💬 ${who} · ร่างคำตอบพร้อมแล้ว`,
-    body: said.length > 120 ? `${said.slice(0, 117)}…` : said,
-    href: `/admin/m/inbox/${threadId}`,
-  });
 }

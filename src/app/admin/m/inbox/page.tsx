@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { lineQuota } from "@/lib/inbox";
-import AutoRefresh from "./AutoRefresh";
+import LiveRefresh from "./LiveRefresh";
 import { channelInfo } from "./channel";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function MobileInboxPage() {
   const pct = quota?.limit ? quota.used / quota.limit : 0;
   return (
     <div>
-      <AutoRefresh seconds={20} />
+      <LiveRefresh />
       <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 bg-white" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <Link href="/admin/m" className="p-1" style={{ color: MUTED }}><ArrowLeft size={18} /></Link>
         <p className="font-medium flex-1" style={{ color: TEXT }}>แชทลูกค้า · AI ช่วยร่าง</p>

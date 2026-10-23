@@ -6,7 +6,7 @@
  */
 import { after, NextResponse } from "next/server";
 import { verifyMetaSignature, type MetaChannel } from "@/lib/meta";
-import { recordMetaEcho, recordMetaInbound, saveRemoteImage } from "@/lib/inbox";
+import { notifyNewMessage, recordMetaEcho, recordMetaInbound, saveRemoteImage } from "@/lib/inbox";
 import { draftReply } from "@/lib/inbox-ai";
 
 export const maxDuration = 60;
@@ -66,8 +66,9 @@ export async function POST(request: Request) {
         });
         if (saved) {
           after(async () => {
+            await notifyNewMessage(saved.threadId, saved.messageId).catch(e => console.error("[meta] notify failed", e));
             if (saved.imageUrl) await saveRemoteImage(saved.messageId, saved.imageUrl).catch(e => console.error("[meta] image save failed", e));
-            await draftReply(saved.threadId, saved.messageId, { debounce: true, notify: true })
+            await draftReply(saved.threadId, saved.messageId, { debounce: true })
               .catch(e => console.error("[meta] inbox draft failed", e));
           });
         }

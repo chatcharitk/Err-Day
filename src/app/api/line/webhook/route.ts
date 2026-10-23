@@ -26,7 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { replyLine } from "@/lib/line-messaging";
 import { findCardByKeyword } from "@/lib/flex/tarot-cards";
 import { buildTarotFlex, buildReviewFlex } from "@/lib/flex/tarot";
-import { recordLineInbound, saveInboundImage } from "@/lib/inbox";
+import { notifyNewMessage, recordLineInbound, saveInboundImage } from "@/lib/inbox";
 import { draftReply } from "@/lib/inbox-ai";
 
 interface LineEvent {
@@ -88,12 +88,14 @@ async function recordInbox(event: LineEvent): Promise<void> {
     const saved = await recordLineInbound(event);
     if (saved) {
       after(async () => {
+        await notifyNewMessage(saved.threadId, saved.messageId)
+          .catch(e => console.error("[webhook] inbox notify failed", e));
         // Photos: keep our own copy first so the owner and the AI can see it.
         if (saved.kind === "image" && saved.lineMessageId) {
           await saveInboundImage(saved.messageId, saved.lineMessageId)
             .catch(e => console.error("[webhook] inbox image save failed", e));
         }
-        await draftReply(saved.threadId, saved.messageId, { debounce: true, notify: true })
+        await draftReply(saved.threadId, saved.messageId, { debounce: true })
           .catch(e => console.error("[webhook] inbox draft failed", e));
       });
     }

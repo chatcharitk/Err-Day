@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getLineMessageContent, pushLine, replyLine, type LineMessage } from "@/lib/line-messaging";
 import { storeImage } from "@/lib/upload";
 import { fetchMetaProfile, sendMetaMessage, type MetaChannel } from "@/lib/meta";
+import { notifyAdmins } from "@/lib/notify-admin";
 import { MENU_IMAGES, menuImageUrls } from "@/lib/inbox-media";
 
 /**
@@ -268,6 +269,43 @@ export async function saveRemoteImage(messageId: string, url: string): Promise<s
   const stored = await storeImage(`inbox/${randomUUID()}.${ext}`, Buffer.from(await res.arrayBuffer()), type);
   await prisma.inboxMessage.update({ where: { id: messageId }, data: { mediaUrl: stored } });
   return stored;
+}
+
+/**
+ * Phone notification (in-app + Web Push) as soon as a customer writes — the AI
+ * draft fills in while the owner opens the chat. A burst of bubbles from the
+ * same customer gives one notification.
+ */
+export async function notifyNewMessage(threadId: string, messageId: string) {
+  const m = await prisma.inboxMessage.findUnique({ where: { id: messageId }, select: { kind: true, text: true, createdAt: true } });
+  if (!m) return;
+  const burst = await prisma.inboxMessage.findFirst({
+    where: { threadId, direction: "IN", id: { not: messageId }, createdAt: { gte: new Date(m.createdAt.getTime() - 60_000), lte: m.createdAt } },
+    select: { id: true },
+  });
+  if (burst) return;
+  const t = await prisma.inboxThread.findUnique({
+    where: { id: threadId },
+    select: { channel: true, displayName: true, customer: { select: { name: true, nickname: true } } },
+  });
+  if (!t) return;
+  const via = t.channel === "FACEBOOK" ? "Facebook" : t.channel === "INSTAGRAM" ? "Instagram" : "LINE";
+  const who = t.customer?.nickname || t.customer?.name || t.displayName || `ลูกค้า ${via}`;
+  const said = m.kind === "text" ? (m.text ?? "") : m.kind === "sticker" ? "(สติกเกอร์)" : m.kind === "image" ? "(รูปภาพ)" : "(ข้อความ)";
+  await notifyAdmins({
+    type: "CHAT", title: `💬 ${who} · ${via}`,
+    body: said.length > 120 ? `${said.slice(0, 117)}…` : said,
+    href: `/admin/m/inbox/${threadId}`,
+  });
+}
+
+/** Cheap change marker for live inbox screens: newest thread / draft change. */
+export async function inboxVersion(threadId?: string): Promise<string> {
+  const [t, d] = await Promise.all([
+    prisma.inboxThread.aggregate({ where: threadId ? { id: threadId } : {}, _max: { updatedAt: true } }),
+    prisma.inboxDraft.aggregate({ where: threadId ? { threadId } : {}, _max: { updatedAt: true } }),
+  ]);
+  return `${t._max.updatedAt?.getTime() ?? 0}.${d._max.updatedAt?.getTime() ?? 0}`;
 }
 
 // ── LINE quota (for the inbox header) ────────────────────────────────────────
