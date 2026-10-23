@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2, MessageCircle,
+  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2, MessageCircle, Ticket, Trophy,
+  type LucideIcon,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
@@ -98,6 +99,34 @@ function dateStripDays(selected: string, today: string): { date: string; isToday
 }
 
 const DOW_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+
+/** Mobile menu, grouped by what the owner is doing. */
+type MenuItem = { label: string; icon: LucideIcon; href?: string; action?: "push"; color?: string; bg?: string };
+const MENU_GROUPS: { title: string; items: MenuItem[] }[] = [
+  { title: "ใช้บ่อย", items: [
+    { label: "แชทลูกค้า (AI)", icon: MessageCircle, href: "/admin/m/inbox", color: "#06C755", bg: "#E9F9EF" },
+    { label: "POS ขายหน้าร้าน", icon: ShoppingBag, href: "/admin/m/pos" },
+    { label: "หน้าร้านสด", icon: Activity, href: "/admin/m/live" },
+    { label: "ส่งตารางเข้ากลุ่ม", icon: Send, action: "push", color: "#166534", bg: "#F0FDF4" },
+  ] },
+  { title: "ลูกค้า", items: [
+    { label: "ลูกค้า", icon: Users, href: "/admin/m/customers" },
+    { label: "สมาชิก", icon: CreditCard, href: "/admin/m/membership" },
+    { label: "คูปอง", icon: Ticket, href: "/admin/m/coupons" },
+    { label: "โหวตพนักงาน", icon: Trophy, href: "/admin/m/votes" },
+  ] },
+  { title: "พนักงานและคิว", items: [
+    { label: "ช่าง", icon: UserCog, href: "/admin/m/staff" },
+    { label: "ตารางงาน", icon: CalendarDays, href: "/admin/m/shifts" },
+    { label: "ค่าตอบแทน", icon: Banknote, href: "/admin/m/payroll" },
+    { label: "ความจุการจอง", icon: Gauge, href: "/admin/m/capacity" },
+  ] },
+  { title: "การเงินและรายงาน", items: [
+    { label: "ประวัติการขาย", icon: Receipt, href: "/admin/m/history" },
+    { label: "บันทึกรายจ่าย", icon: Wallet, href: "/admin/m/expenses" },
+    { label: "BI ภาพรวม", icon: BarChart2, href: "/admin/m/dashboard" },
+  ] },
+];
 
 export default function MobileHome({ branches, activeBranchId, selectedDate, bookings, blockedSlots, todayDate }: Props) {
   const router = useRouter();
@@ -610,168 +639,51 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
           onClick={() => setShowMenu(false)}
         >
           <div
-            className="w-full max-w-md bg-white rounded-t-2xl"
+            className="w-full max-w-md bg-white rounded-t-2xl flex flex-col"
+            style={{ maxHeight: "85vh" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+            {/* Header stays on screen — the sheet scrolls under it. */}
+            <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <p className="font-medium" style={{ color: TEXT }}>เมนู</p>
-              <button onClick={() => setShowMenu(false)} className="p-1" style={{ color: MUTED }}>
+              <button onClick={() => setShowMenu(false)} aria-label="ปิดเมนู" className="p-2 -mr-2 rounded-full" style={{ color: TEXT, background: "#F5EEE8" }}>
                 <X size={18} />
               </button>
             </div>
-            <div className="p-2">
-              <button
-                onClick={() => { setShowMenu(false); setShowPushSheet(true); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold"
-                style={{ color: "#166534", background: "#F0FDF4" }}
-              >
-                <Send size={16} />
-                ส่งตารางจองเข้ากลุ่ม LINE
-              </button>
-              <Link
-                href="/admin/m/inbox"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold"
-                style={{ color: TEXT }}
-              >
-                <MessageCircle size={16} style={{ color: "#06C755" }} />
-                แชทลูกค้า · AI ช่วยร่าง
-              </Link>
-              <Link
-                href="/admin/m/live"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Activity size={16} style={{ color: MUTED }} />
-                หน้าร้านสด — ลูกค้าต่อช่าง
-              </Link>
-              <Link
-                href="/admin/m/dashboard"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <BarChart2 size={16} style={{ color: MUTED }} />
-                BI — ภาพรวมธุรกิจ
-              </Link>
-              <Link
-                href="/admin/m/history"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Receipt size={16} style={{ color: MUTED }} />
-                ประวัติการขาย
-              </Link>
-              <Link
-                href="/admin/m/expenses"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Wallet size={16} style={{ color: MUTED }} />
-                บันทึกรายจ่าย
-              </Link>
-              <Link
-                href="/admin/m/payroll"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Banknote size={16} style={{ color: MUTED }} />
-                ค่าตอบแทนพนักงาน
-              </Link>
-              <Link
-                href="/admin/m/votes"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <span style={{ width: 16, textAlign: "center" }}>🎃</span>
-                โหวตพนักงาน (สด)
-              </Link>
-              <Link
-                href="/admin/m/coupons"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <span style={{ width: 16, textAlign: "center" }}>🎟</span>
-                คูปอง
-              </Link>
-              <Link
-                href="/admin/m/pos"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <ShoppingBag size={16} style={{ color: MUTED }} />
-                POS — ขายหน้าร้าน
-              </Link>
-              <Link
-                href="/admin/m/customers"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Users size={16} style={{ color: MUTED }} />
-                ลูกค้า
-              </Link>
-              <Link
-                href="/admin/m/membership"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <CreditCard size={16} style={{ color: MUTED }} />
-                สมาชิก
-              </Link>
-              <Link
-                href="/admin/m/staff"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <UserCog size={16} style={{ color: MUTED }} />
-                ช่าง
-              </Link>
-              <Link
-                href="/admin/m/shifts"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <CalendarDays size={16} style={{ color: MUTED }} />
-                ตารางงาน
-              </Link>
-              <Link
-                href="/admin/m/capacity"
-                prefetch={false}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Gauge size={16} style={{ color: MUTED }} />
-                ความจุการจอง
-              </Link>
-              <Link
-                href="/admin"
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm"
-                style={{ color: TEXT }}
-              >
-                <Clock size={16} style={{ color: MUTED }} />
-                ไปหน้าแอดมินแบบเต็ม
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left"
-                style={{ color: "#991B1B" }}
-              >
-                <LogOut size={16} />
-                ออกจากระบบ
-              </button>
+            <div className="overflow-y-auto px-4 pt-3 pb-6 space-y-4">
+              {MENU_GROUPS.map(group => (
+                <section key={group.title}>
+                  <p className="text-[11px] font-semibold mb-1.5 px-1" style={{ color: MUTED }}>{group.title}</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {group.items.map(item => {
+                      const inner = (
+                        <>
+                          <span className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: item.bg ?? "#F7F0EA", color: item.color ?? TEXT }}>
+                            <item.icon size={20} />
+                          </span>
+                          <span className="text-[11px] leading-tight text-center" style={{ color: TEXT }}>{item.label}</span>
+                        </>
+                      );
+                      return item.action === "push" ? (
+                        <button key={item.label} type="button" onClick={() => { setShowMenu(false); setShowPushSheet(true); }}
+                          className="flex flex-col items-center gap-1 py-2 rounded-xl active:bg-stone-100">{inner}</button>
+                      ) : (
+                        <Link key={item.label} href={item.href!} prefetch={false}
+                          className="flex flex-col items-center gap-1 py-2 rounded-xl active:bg-stone-100">{inner}</Link>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <Link href="/admin" className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+                  <Clock size={14} style={{ color: MUTED }} /> หน้าแอดมินแบบเต็ม
+                </Link>
+                <button onClick={handleLogout} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs" style={{ border: "1px solid #FECACA", color: "#991B1B" }}>
+                  <LogOut size={14} /> ออกจากระบบ
+                </button>
+              </div>
             </div>
-            <div className="h-4" />
           </div>
         </div>
       )}
