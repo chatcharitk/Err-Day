@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Phone, Clock, Sparkles, FileText } from "lucide-react";
+import { ArrowLeft, Phone, Clock, Sparkles, FileText, ChevronRight } from "lucide-react";
 import { maskPhone } from "@/lib/staff-person";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
@@ -49,7 +49,7 @@ export default async function StaffBookingDetailPage({
       staffId:    true,
       branchId:   true,
       service:    { select: { name: true, nameTh: true } },
-      customer:   { select: { name: true, nickname: true, phone: true } },
+      customer:   { select: { id: true, name: true, nickname: true, phone: true } },
       staff:      { select: { id: true, name: true } },
       addons:     { select: { id: true, price: true, addon: { select: { name: true, nameTh: true } } } },
     },
@@ -115,6 +115,12 @@ export default async function StaffBookingDetailPage({
               {maskPhone(b.customer.phone)}
             </p>
           )}
+          <Link href={`/staff/customers/${b.customer.id}?from=${b.id}`}
+            className="mt-3 flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold"
+            style={{ background: PRIMARY, color: "white" }}>
+            ดูข้อมูลลูกค้า · ประวัติ · รูปภาพ
+            <ChevronRight size={16} />
+          </Link>
         </section>
 
         {/* Time + service card */}
