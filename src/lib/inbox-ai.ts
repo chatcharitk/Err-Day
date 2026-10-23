@@ -17,7 +17,7 @@ import { menuImagesOn } from "@/lib/inbox-media";
  * for the owner to review; it never sends anything itself.
  */
 
-export const INBOX_MODEL = "claude-haiku-5-5";
+export const INBOX_MODEL = "claude-sonnet-5-5";
 const MAX_TOOL_ROUNDS = 4;
 /** Customers often send several bubbles in a row — wait, then answer them together. */
 const DEBOUNCE_MS = 6_000;
@@ -318,6 +318,8 @@ export async function draftReply(
       const res = await client.beta.messages.create({
         model: INBOX_MODEL,
         max_tokens: 4000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
         system,
         tools: TOOLS,
         output_config: { effort: "medium", format: { type: "json_schema", schema: outputSchema(imageKeys) } },
