@@ -207,14 +207,18 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
 
       <div className="flex items-center gap-2">
         <p className="text-[10px] flex-1" style={{ color: MUTED }}>{total > 0 ? `${bubbles.length} ข้อความ${images.length ? ` + ${images.length} รูป` : ""} · เว้นบรรทัดว่าง = แยกข้อความ` : "\u00a0"}</p>
-        <button type="button" onClick={() => void send(!!proposal)} disabled={busy !== "" || total === 0}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: isCancel ? "#B91C1C" : proposal ? "#C2410C" : LINE_GREEN }}>
-          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : isCancel ? <CalendarX size={15} /> : proposal ? <CalendarCheck size={15} /> : <Send size={15} />} {isCancel ? "ยกเลิกคิว + ส่ง" : proposal ? "จอง + ส่ง" : "ส่ง"}
+        {/* The main button only ever sends. Booking / cancelling is its own, explicit button below. */}
+        <button type="button" onClick={() => void send(false)} disabled={busy !== "" || total === 0}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: LINE_GREEN }}>
+          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} ส่ง
         </button>
       </div>
       {proposal && (
-        <button type="button" onClick={() => void send(false)} disabled={busy !== "" || total === 0}
-          className="w-full text-[11px] underline disabled:opacity-40" style={{ color: MUTED }}>ส่งข้อความอย่างเดียว ({isCancel ? "ยังไม่ยกเลิก" : "ยังไม่จอง"})</button>
+        <button type="button" onClick={() => void send(true)} disabled={busy !== "" || total === 0}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold disabled:opacity-40"
+          style={{ border: `1.5px solid ${isCancel ? "#B91C1C" : "#C2410C"}`, color: isCancel ? "#B91C1C" : "#C2410C", background: "white" }}>
+          {isCancel ? <CalendarX size={15} /> : <CalendarCheck size={15} />} {isCancel ? "ยกเลิกคิวนี้ + ส่งข้อความ" : "จองคิวนี้ + ส่งข้อความ"}
+        </button>
       )}
       {!isLine ? null : !showOa ? (
         <button type="button" onClick={() => setShowOa(true)} className="w-full text-[11px] underline" style={{ color: MUTED }}>
