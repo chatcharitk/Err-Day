@@ -13,7 +13,7 @@ interface Draft {
 }
 
 const thaiDay = (ymd: string) => new Date(ymd + "T12:00:00Z").toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", weekday: "short", day: "numeric", month: "short" });
-const KIND_LABEL = { linked: "ลูกค้าในระบบ (LINE นี้)", existing: "ลูกค้าเดิม (เจอจากเบอร์) — เช็คว่าเป็นคนเดียวกัน", new: "ลูกค้าใหม่ — จะสร้างให้ตอนจอง" } as const;
+const KIND_LABEL = { linked: "ลูกค้าในระบบ (แชทนี้)", existing: "ลูกค้าเดิม (เจอจากเบอร์) — เช็คว่าเป็นคนเดียวกัน", new: "ลูกค้าใหม่ — จะสร้างให้ตอนจอง" } as const;
 
 const TEXT = "#3B2A24", MUTED = "#A08070", BORDER = "#E8D8CC", LINE_GREEN = "#06C755";
 const QUICK = ["สั้นลง", "สุภาพขึ้น", "เสนอ 2–3 เวลาที่ว่าง", "ไม่ต้องทักทาย", "ส่งลิงก์จองคิว"];
@@ -25,7 +25,9 @@ const toBubbles = (text: string) => text.split(/\n\s*\n/).map(b => b.trim()).fil
  * Reply box: starts from the AI draft, editable, sent only when the owner taps
  * Send (and confirms). "แก้ด้วย AI" rewrites the draft from a short instruction.
  */
-export default function Composer({ threadId, customerName, draft }: { threadId: string; customerName: string; draft: Draft | null }) {
+export default function Composer({ threadId, customerName, channel, draft }: { threadId: string; customerName: string; channel: string; draft: Draft | null }) {
+  const isLine = channel === "LINE";
+  const via = channel === "FACEBOOK" ? "Facebook" : channel === "INSTAGRAM" ? "Instagram" : "LINE";
   const router = useRouter();
   const ready = draft && (draft.status === "READY" || draft.status === "EDITED" || draft.status === "USED") ? draft : null;
   const [text, setText] = useState("");
@@ -75,8 +77,8 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
     const p = withBooking ? proposal : null;
     const what = `${bubbles.length} ข้อความ${images.length ? ` + ${images.length} รูป` : ""}`;
     const question = !p
-      ? `ส่ง ${what} ถึง ${customerName} ทาง LINE?`
-      : `${p.type === "cancel" ? "ยกเลิกคิว" : "จองคิว"} ${p.customer.name} · ${p.serviceName}\n${thaiDay(p.date)} ${p.startTime}–${p.endTime} · ${p.branchName}\nแล้วส่ง ${what} ทาง LINE?`;
+      ? `ส่ง ${what} ถึง ${customerName} ทาง ${via}?`
+      : `${p.type === "cancel" ? "ยกเลิกคิว" : "จองคิว"} ${p.customer.name} · ${p.serviceName}\n${thaiDay(p.date)} ${p.startTime}–${p.endTime} · ${p.branchName}\nแล้วส่ง ${what} ทาง ${via}?`;
     if (!window.confirm(question)) return;
     setBusy("send"); setErr(""); setMsg("");
     try {
@@ -94,7 +96,7 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(d.error ?? "ส่งไม่สำเร็จ"); return; }
       setText(""); setLoadedId(draft?.id ?? null);
-      setMsg(`${p ? (p.type === "cancel" ? "ยกเลิกแล้ว + " : "จองแล้ว + ") : ""}${d.via === "reply" ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
+      setMsg(`${p ? (p.type === "cancel" ? "ยกเลิกแล้ว + " : "จองแล้ว + ") : ""}${d.via === "reply" && isLine ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
       router.refresh();
     } finally { setBusy(""); }
   }
@@ -214,7 +216,7 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
         <button type="button" onClick={() => void send(false)} disabled={busy !== "" || total === 0}
           className="w-full text-[11px] underline disabled:opacity-40" style={{ color: MUTED }}>ส่งข้อความอย่างเดียว ({isCancel ? "ยังไม่ยกเลิก" : "ยังไม่จอง"})</button>
       )}
-      {!showOa ? (
+      {!isLine ? null : !showOa ? (
         <button type="button" onClick={() => setShowOa(true)} className="w-full text-[11px] underline" style={{ color: MUTED }}>
           ตอบลูกค้าใน LINE OA ไปแล้ว?
         </button>

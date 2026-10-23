@@ -40,7 +40,7 @@ const weekday = (ymd: string) => THAI_DAYS[new Date(ymd + "T12:00:00Z").getUTCDa
 
 // ── Style & rules (stable: cached) ──────────────────────────────────────────────
 
-const STYLE = `You draft LINE chat replies for "err·day", a hair-wash / blow-dry / treatment salon in Bangkok, writing as the shop's admin (แอดมิน). The owner reads every draft and decides whether to send it, edit it, or write their own — so be accurate and say in "note" anything they should check.
+const STYLE = `You draft chat replies (LINE, Facebook Messenger or Instagram DM) for "err·day", a hair-wash / blow-dry / treatment salon in Bangkok, writing as the shop's admin (แอดมิน). The owner reads every draft and decides whether to send it, edit it, or write their own — so be accurate and say in "note" anything they should check.
 
 How the owner writes (follow closely):
 - Thai, warm and short, female polite particles: statements end with ค่ะ / ค่า, questions with คะ / มั้ยคะ / ไหมคะ.
@@ -130,7 +130,7 @@ export async function shopFacts(today: string): Promise<string> {
   }
 
   lines.push("\n## Membership & packages");
-  lines.push(`- สมาชิก err·day ${baht(MEMBERSHIP_PRICE_SATANG)} ใช้ได้ ${MEMBERSHIP_VALIDITY_DAYS} วัน ได้ราคาสมาชิกทุกบริการ; นับวันแรกจากวันที่เข้ามาใช้บริการครั้งแรกหลังสมัคร; สมัครในไลน์: ${link("/liff/membership/signup", "/liff/membership/signup")}`);
+  lines.push(`- สมาชิก err·day ${baht(MEMBERSHIP_PRICE_SATANG)} ใช้ได้ ${MEMBERSHIP_VALIDITY_DAYS} วัน ได้ราคาสมาชิกทุกบริการ; นับวันแรกจากวันที่เข้ามาใช้บริการครั้งแรกหลังสมัคร; สมัครในไลน์: ${link("/liff/membership/signup", "/liff/membership/signup")} (หน้าเว็บ: ${APP_HOST}/liff/membership/signup)`);
   for (const spec of Object.values(PACKAGE_SPECS)) {
     lines.push(`- ${spec.nameTh} ${baht(spec.priceSatang)} — ${spec.shortDescTh} (ใช้ได้ ${spec.validityDays} วัน)`);
   }
@@ -139,7 +139,8 @@ export async function shopFacts(today: string): Promise<string> {
   if (liveAddons.length) lines.push(`- Add-on (เพิ่มได้กับบริการ): ${liveAddons.map(a => `${a.nameTh} +${baht(a.price)}`).join(", ")}`);
   lines.push(`- เงื่อนไขสมาชิก/แพ็กเกจ: ${ENTITLEMENT_TERMS_TH.join(" / ")}`);
   lines.push(`- เงื่อนไขการมาสาย: ${BOOKING_TERMS_TH.join(" / ")}`);
-  lines.push(`\n## Links\n- จองคิวออนไลน์ (ในไลน์): ${link("", "/book")}`);
+  lines.push(`\n## Links\n- จองคิวออนไลน์ — for LINE chats: ${link("", "/book")}; for Facebook/Instagram chats: ${APP_HOST}/book`);
+  lines.push("- Facebook/Instagram customers are not on the shop's LINE: they get no LINE booking card, so always write full booking details in your reply there. You may suggest adding the shop's LINE @err.day for booking reminders.");
   lines.push("\n## Menu posters you can attach (key — what it shows)");
   for (const m of menuImagesOn(today)) lines.push(`- ${m.key} — ${m.title}: ${m.about}`);
   return lines.join("\n");
@@ -303,7 +304,7 @@ export async function draftReply(
     const latest = await prisma.inboxMessage.findFirst({ where: { threadId, direction: "IN" }, orderBy: { createdAt: "desc" }, select: { id: true } });
     if (latest?.id !== forMessageId) return null;
   }
-  const thread = await prisma.inboxThread.findUnique({ where: { id: threadId }, select: { customerId: true, externalUserId: true } });
+  const thread = await prisma.inboxThread.findUnique({ where: { id: threadId }, select: { customerId: true, externalUserId: true, channel: true } });
   if (!thread) return null;
 
   await prisma.inboxDraft.updateMany({ where: { threadId, status: { in: ["PENDING", "READY", "FAILED"] } }, data: { status: "STALE" } });
@@ -322,6 +323,7 @@ export async function draftReply(
     const photos = await customerPhotos(history);
     const photoNo = new Map(photos.map((p, i) => [p.messageId, i + 1]));
     const userText = [
+      `Channel: ${thread.channel === "LINE" ? "LINE" : thread.channel === "FACEBOOK" ? "Facebook Messenger" : "Instagram DM"}.`,
       `Now: ${today} (วัน${weekday(today)}) ${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")} Bangkok time.`,
       await customerProfile(thread.customerId, today),
       "Conversation so far (oldest first; replies the owner typed directly in LINE OA Manager may be missing):",

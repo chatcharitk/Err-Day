@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { lineQuota } from "@/lib/inbox";
 import AutoRefresh from "./AutoRefresh";
+import { channelInfo } from "./channel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "แชทลูกค้า — err.day" };
@@ -52,11 +53,11 @@ export default async function MobileInboxPage() {
         </div>
       )}
       {threads.length === 0 && (
-        <p className="p-6 text-sm text-center" style={{ color: MUTED }}>ยังไม่มีข้อความ — ข้อความ LINE ใหม่จากลูกค้าจะขึ้นที่นี่</p>
+        <p className="p-6 text-sm text-center" style={{ color: MUTED }}>ยังไม่มีข้อความ — ข้อความใหม่จากลูกค้า (LINE / Facebook / Instagram)จะขึ้นที่นี่</p>
       )}
       <ul>
         {threads.map(t => {
-          const name = t.customer ? (t.customer.nickname ? `${t.customer.nickname} · ${t.customer.name}` : t.customer.name) : (t.displayName ?? "ลูกค้า LINE");
+          const name = t.customer ? (t.customer.nickname ? `${t.customer.nickname} · ${t.customer.name}` : t.customer.name) : (t.displayName ?? `ลูกค้า ${channelInfo(t.channel).label}`);
           const last = t.messages[0];
           const preview = !last ? "" : `${last.direction === "OUT" ? "แอดมิน: " : ""}${last.kind === "text" ? last.text : last.kind === "sticker" ? "(สติกเกอร์)" : last.kind === "image" ? "(รูปภาพ)" : last.kind === "note" ? "✓ ตอบใน LINE OA แล้ว" : "(ข้อความ)"}`;
           const draft = t.drafts[0]?.status;
@@ -70,6 +71,7 @@ export default async function MobileInboxPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className={`text-sm truncate ${t.unread ? "font-bold" : "font-medium"}`} style={{ color: TEXT }}>{name}</p>
+                    <span className="text-[9px] font-bold px-1.5 rounded shrink-0" style={{ color: channelInfo(t.channel).color, background: channelInfo(t.channel).bg }}>{channelInfo(t.channel).short}</span>
                     {!t.customer && <span className="text-[10px] shrink-0" style={{ color: MUTED }}>ไม่พบในระบบ</span>}
                   </div>
                   <p className="text-xs truncate" style={{ color: MUTED }}>{preview}</p>

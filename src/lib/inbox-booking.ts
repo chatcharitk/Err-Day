@@ -39,7 +39,7 @@ export async function findCustomerByPhone(phone: string) {
 
 /** Validate what the AI wants to book. Returns a proposal or a reason the AI can act on. */
 export async function prepareBooking(
-  thread: { customerId: string | null; externalUserId: string },
+  thread: { customerId: string | null; externalUserId: string; channel: string },
   input: { branch_id: string; service_id: string; date: string; start_time: string; customer_name?: string; customer_phone?: string },
   freeStartTimes: (branchId: string, date: string, duration: number) => Promise<{ free_start_times?: string[]; error?: string }>,
 ): Promise<{ ok: true; proposal: BookingProposal } | { ok: false; error: string }> {
@@ -69,7 +69,8 @@ export async function prepareBooking(
     const c = await prisma.customer.findUnique({ where: { id: thread.customerId }, select: { id: true, name: true, phone: true, lineUserId: true } });
     if (!c) return { ok: false, error: "linked customer not found" };
     customer = { id: c.id, name: c.name, phone: c.phone, kind: "linked" };
-    cardOnLine = c.lineUserId === thread.externalUserId;
+    // The shop's booking card goes to the customer's LINE — only "in this chat" when this chat is that LINE.
+    cardOnLine = thread.channel === "LINE" && c.lineUserId === thread.externalUserId;
   } else {
     const name = input.customer_name?.trim();
     const phone = input.customer_phone ? digitsOf(input.customer_phone) : "";
@@ -78,7 +79,8 @@ export async function prepareBooking(
     customer = existing
       ? { id: existing.id, name: existing.name, phone: existing.phone, kind: "existing" }
       : { id: null, name, phone, kind: "new" };
-    cardOnLine = existing
+    cardOnLine = thread.channel !== "LINE" ? false
+      : existing
       ? existing.lineUserId === thread.externalUserId
       // A new customer gets this LINE linked unless another customer already has it.
       : !(await prisma.customer.findUnique({ where: { lineUserId: thread.externalUserId }, select: { id: true } }));
@@ -114,7 +116,7 @@ export interface CancelProposal {
 export type BookingAction = BookingProposal | CancelProposal;
 
 /** Only an upcoming booking of the chat's own linked customer can be cancelled from a chat. */
-export async function prepareCancellation(thread: { customerId: string | null }, bookingId: string): Promise<{ ok: true; proposal: CancelProposal } | { ok: false; error: string }> {
+export async function prepareCancellation(thread: { customerId: string | null; channel: string }, bookingId: string): Promise<{ ok: true; proposal: CancelProposal } | { ok: false; error: string }> {
   if (!thread.customerId) return { ok: false, error: "this chat is not linked to a customer — the owner must cancel it by hand; ask for name, date and time and flag it in note" };
   const b = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -132,7 +134,8 @@ export async function prepareCancellation(thread: { customerId: string | null },
       type: "cancel", bookingId: b.id, branchName: b.branch.name, serviceName: b.service.nameTh || b.service.name,
       date, startTime: b.startTime, endTime: b.endTime,
       customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
-      notifiedOnLine: !!b.customer.lineUserId,
+      // The shop's cancellation message goes to their LINE — "in this chat" only for a LINE chat.
+      notifiedOnLine: thread.channel === "LINE" && !!b.customer.lineUserId,
     },
   };
 }
@@ -176,7 +179,7 @@ export async function bookFromDraft(draftId: string, threadId: string): Promise<
     if (existing) {
       // Never rename an existing customer with what was typed in a chat.
       name = existing.name; phone = existing.phone;
-    } else {
+    } else if (draft.thread.channel === "LINE") {
       // New customer from this LINE chat: link the LINE account unless another customer already has it.
       linkLine = !(await prisma.customer.findUnique({ where: { lineUserId: draft.thread.externalUserId }, select: { id: true } }));
     }
@@ -201,7 +204,9 @@ export async function bookFromDraft(draftId: string, threadId: string): Promise<
 
   await prisma.inboxDraft.update({ where: { id: draftId }, data: { bookingId: body.id } });
   // A brand-new customer made from this chat is the chat's customer from now on.
-  if (!draft.thread.customerId && linkLine) {
+  // A Facebook/Instagram chat has no LINE to link, but a customer created from it is still this chat's customer.
+  const createdHere = p.customer.kind === "new" && draft.thread.channel !== "LINE";
+  if (!draft.thread.customerId && (linkLine || createdHere)) {
     await prisma.inboxThread.update({ where: { id: threadId }, data: { customerId: body.customerId } });
   }
   return { bookingId: body.id };

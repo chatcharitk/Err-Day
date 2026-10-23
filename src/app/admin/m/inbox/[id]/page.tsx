@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import AutoRefresh from "../AutoRefresh";
+import { channelInfo } from "../channel";
 import Composer from "./Composer";
 import type { BookingAction } from "@/lib/inbox-booking";
 import { MENU_IMAGES } from "@/lib/inbox-media";
@@ -32,7 +33,9 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
 
   const messages = [...thread.messages].reverse();
   const draft = thread.drafts[0] ?? null;
-  const name = thread.customer ? (thread.customer.nickname ? `${thread.customer.nickname} · ${thread.customer.name}` : thread.customer.name) : (thread.displayName ?? "ลูกค้า LINE");
+  const ch = channelInfo(thread.channel);
+  const isLine = thread.channel === "LINE";
+  const name = thread.customer ? (thread.customer.nickname ? `${thread.customer.nickname} · ${thread.customer.name}` : thread.customer.name) : (thread.displayName ?? `ลูกค้า ${ch.label}`);
   const days = messages.map(m => day(m.createdAt));
 
   return (
@@ -43,7 +46,7 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate" style={{ color: TEXT }}>{name}</p>
           <p className="text-[11px] truncate" style={{ color: MUTED }}>
-            {thread.customer ? thread.customer.phone : "ยังไม่ผูกกับลูกค้าในระบบ"} · LINE{thread.displayName ? ` · ${thread.displayName}` : ""}
+            {thread.customer ? thread.customer.phone : "ยังไม่ผูกกับลูกค้าในระบบ"} · <span style={{ color: ch.color }}>{ch.label}</span>{thread.displayName ? ` · ${thread.displayName}` : ""}
           </p>
         </div>
         {thread.customer && <Link href={`/admin/m/customers?q=${encodeURIComponent(thread.customer.phone)}`} className="text-xs px-2 py-1 rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>ลูกค้า</Link>}
@@ -59,7 +62,7 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
             <div key={m.id}>
               {showDay && <p className="text-center text-[10px] my-2" style={{ color: MUTED }}>{d}</p>}
               <div className={`flex ${mine ? "justify-end" : "justify-start"} items-end gap-1`}>
-                {mine && <span className="text-[9px] text-right" style={{ color: MUTED }}>{m.sentBy?.endsWith("(LINE OA)") ? "LINE OA " : ""}{hhmm(m.createdAt)}</span>}
+                {mine && <span className="text-[9px] text-right" style={{ color: MUTED }}>{m.sentBy?.endsWith("(LINE OA)") ? "LINE OA " : m.sentBy === "Meta Business Suite" ? "Meta " : ""}{hhmm(m.createdAt)}</span>}
                 {m.mediaUrl ? (
                   <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="max-w-[70%]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -76,11 +79,13 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
             </div>
           );
         })}
-        <p className="text-center text-[10px] pt-2" style={{ color: MUTED }}>ข้อความที่ตอบใน LINE OA Manager โดยตรงจะไม่แสดงที่นี่ · ข้อความที่ส่งจากหน้านี้จะขึ้นใน LINE OA ด้วย</p>
+        <p className="text-center text-[10px] pt-2" style={{ color: MUTED }}>{isLine
+          ? "ข้อความที่ตอบใน LINE OA Manager โดยตรงจะไม่แสดงที่นี่ · ข้อความที่ส่งจากหน้านี้จะขึ้นใน LINE OA ด้วย"
+          : "ข้อความที่ตอบใน Meta Business Suite / แอป Instagram จะขึ้นที่นี่ด้วย · ตอบได้ภายใน 24 ชม. หลังลูกค้าทักล่าสุด"}</p>
       </div>
 
       <div className="sticky bottom-0 bg-white px-3 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
-        <Composer threadId={thread.id} customerName={name} draft={draft && {
+        <Composer threadId={thread.id} customerName={name} channel={thread.channel} draft={draft && {
           id: draft.id, status: draft.status, note: draft.note, error: draft.error,
           bubbles: Array.isArray(draft.bubbles) ? (draft.bubbles as string[]) : [],
           booking: (draft.booking as unknown as BookingAction | null) ?? null, bookingId: draft.bookingId,
