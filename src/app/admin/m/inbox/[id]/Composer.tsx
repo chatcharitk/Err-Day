@@ -2,11 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, RefreshCw, Loader2, Sparkles, Wand2 } from "lucide-react";
+import Link from "next/link";
+import { Send, RefreshCw, Loader2, Sparkles, Wand2, CalendarCheck } from "lucide-react";
+import type { BookingProposal } from "@/lib/inbox-booking";
 
 interface Draft {
   id: string; status: string; note: string | null; error: string | null; bubbles: string[];
+  booking: BookingProposal | null; bookingId: string | null;
 }
+
+const thaiDay = (ymd: string) => new Date(ymd + "T12:00:00Z").toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", weekday: "short", day: "numeric", month: "short" });
+const KIND_LABEL = { linked: "ลูกค้าในระบบ (LINE นี้)", existing: "ลูกค้าเดิม (เจอจากเบอร์) — เช็คว่าเป็นคนเดียวกัน", new: "ลูกค้าใหม่ — จะสร้างให้ตอนจอง" } as const;
 
 const TEXT = "#3B2A24", MUTED = "#A08070", BORDER = "#E8D8CC", LINE_GREEN = "#06C755";
 const QUICK = ["สั้นลง", "สุภาพขึ้น", "เสนอ 2–3 เวลาที่ว่าง", "ไม่ต้องทักทาย", "ส่งลิงก์จองคิว"];
@@ -51,12 +57,25 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
     } finally { setBusy(""); }
   }
 
-  async function send() {
+  const proposal = draft?.booking && !draft.bookingId ? draft.booking : null;
+
+  async function send(withBooking: boolean) {
     if (bubbles.length === 0) return;
     if (bubbles.length > 5) { setErr("ส่งได้ครั้งละไม่เกิน 5 ข้อความ — รวมบางข้อความเข้าด้วยกัน"); return; }
-    if (!window.confirm(`ส่ง ${bubbles.length} ข้อความถึง ${customerName} ทาง LINE?`)) return;
+    const p = withBooking ? proposal : null;
+    const question = p
+      ? `จองคิว ${p.customer.name} · ${p.serviceName}\n${thaiDay(p.date)} ${p.startTime}–${p.endTime} · ${p.branchName}\nแล้วส่ง ${bubbles.length} ข้อความทาง LINE?`
+      : `ส่ง ${bubbles.length} ข้อความถึง ${customerName} ทาง LINE?`;
+    if (!window.confirm(question)) return;
     setBusy("send"); setErr(""); setMsg("");
     try {
+      if (p && draft) {
+        const br = await fetch(`/api/admin/inbox/${threadId}/book`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: draft.id }),
+        });
+        const bd = await br.json().catch(() => ({}));
+        if (!br.ok) { setErr(`ยังไม่ได้จองและยังไม่ได้ส่ง: ${bd.error ?? "จองไม่สำเร็จ"}`); return; }
+      }
       const res = await fetch(`/api/admin/inbox/${threadId}/send`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bubbles, draftId: sourceDraftId }),
@@ -64,7 +83,7 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(d.error ?? "ส่งไม่สำเร็จ"); return; }
       setText(""); setLoadedId(draft?.id ?? null);
-      setMsg(d.via === "reply" ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓");
+      setMsg(`${p ? "จองแล้ว + " : ""}${d.via === "reply" ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
       router.refresh();
     } finally { setBusy(""); }
   }
@@ -107,6 +126,19 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
       {draft?.status === "FAILED" && !pending && <p className="text-[11px]" style={{ color: "#B91C1C" }}>{draft.error}</p>}
       {ready?.note && ready.note !== "-" && !pending && <p className="text-[11px] px-1" style={{ color: "#92400E" }}>📝 {ready.note}</p>}
 
+      {draft?.booking && (
+        <div className="rounded-xl p-2.5 text-xs" style={{ background: draft.bookingId ? "#F0FDF4" : "#FFF7ED", border: `1px solid ${draft.bookingId ? "#BBE5C8" : "#FDBA74"}`, color: TEXT }}>
+          <p className="font-semibold flex items-center gap-1.5 mb-1" style={{ color: draft.bookingId ? "#166534" : "#9A3412" }}>
+            <CalendarCheck size={14} /> {draft.bookingId ? "จองแล้ว" : "AI เตรียมการจองไว้ — จะจองเมื่อกด \"จอง + ส่ง\""}
+          </p>
+          <p>{draft.booking.serviceName} · {draft.booking.branchName}</p>
+          <p className="font-semibold">{thaiDay(draft.booking.date)} {draft.booking.startTime}–{draft.booking.endTime} · ฿{(draft.booking.priceSatang / 100).toLocaleString("th-TH")}</p>
+          <p>{draft.booking.customer.name} · {draft.booking.customer.phone}</p>
+          <p className="text-[10px]" style={{ color: MUTED }}>{KIND_LABEL[draft.booking.customer.kind]}</p>
+          {draft.bookingId && <Link href={`/admin/m/${draft.bookingId}`} className="text-[11px] underline" style={{ color: "#166534" }}>ดูการจอง</Link>}
+        </div>
+      )}
+
       {fresh && !usingFresh && (
         <button type="button" onClick={() => { setText(fresh.bubbles.join("\n\n")); setLoadedId(fresh.id); }}
           className="w-full text-[11px] py-1.5 rounded-lg" style={{ background: "#F6FBF7", border: "1px solid #BBE5C8", color: "#166534" }}>
@@ -120,11 +152,15 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
 
       <div className="flex items-center gap-2">
         <p className="text-[10px] flex-1" style={{ color: MUTED }}>{bubbles.length > 0 ? `${bubbles.length} ข้อความ · เว้นบรรทัดว่าง = แยกข้อความ` : " "}</p>
-        <button type="button" onClick={() => void send()} disabled={busy !== "" || bubbles.length === 0}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: LINE_GREEN }}>
-          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} ส่ง
+        <button type="button" onClick={() => void send(!!proposal)} disabled={busy !== "" || bubbles.length === 0}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: proposal ? "#C2410C" : LINE_GREEN }}>
+          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : proposal ? <CalendarCheck size={15} /> : <Send size={15} />} {proposal ? "จอง + ส่ง" : "ส่ง"}
         </button>
       </div>
+      {proposal && (
+        <button type="button" onClick={() => void send(false)} disabled={busy !== "" || bubbles.length === 0}
+          className="w-full text-[11px] underline disabled:opacity-40" style={{ color: MUTED }}>ส่งข้อความอย่างเดียว (ยังไม่จอง)</button>
+      )}
       {msg && <p className="text-[11px] text-center" style={{ color: "#166534" }}>{msg}</p>}
       {err && <p className="text-[11px] text-center" style={{ color: "#B91C1C" }}>{err}</p>}
     </div>

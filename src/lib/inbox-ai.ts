@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { addMinutes, generateTimeSlots, getTakenSlots, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokTodayKey, bangkokYmdOf, serviceMemberRate } from "@/lib/member-pricing";
 import { MEMBERSHIP_PRICE_SATANG, MEMBERSHIP_VALIDITY_DAYS } from "@/lib/membership";
@@ -8,6 +9,7 @@ import { PROMOTIONS } from "@/lib/promotions";
 import { BOOKING_TERMS_TH, ENTITLEMENT_TERMS_TH } from "@/lib/terms";
 import { customerCoupons } from "@/lib/coupons";
 import { couponValueLabel } from "@/lib/coupon-rules";
+import { prepareBooking, type BookingProposal } from "@/lib/inbox-booking";
 
 /**
  * AI reply inbox — drafting side. Claude writes a reply in the owner's voice
@@ -60,7 +62,9 @@ Admin: สวัสดีค่า | ว่างแล้วค่า | คุ�
 Hard rules:
 - Prices, services, promotions, packages, membership and opening hours: ONLY from the shop facts below. Never invent a price or a service. If something is not in the facts, write a holding reply ("ขอแอดมินเช็คให้สักครู่นะคะ") and explain in note.
 - Open times: when the customer asks about a day/time, call check_availability before answering. Never say a time is free without checking. Mention 2–4 concrete free times rather than a long list.
-- You never book, cancel or change appointments yourself. Ask the customer for the time they want ("แจ้งเวลาที่สะดวกได้เลยนะคะ แอดมินลงเวลาให้ค่า") — the owner books it — or share the booking link.
+- Booking from the chat: once you know branch, service, date and time — and the customer has asked to book — call prepare_booking. It checks the slot; the owner then creates the booking with one tap when sending your reply. So when prepare_booking succeeds, write the reply as a confirmation ("แอดมินลงคิวให้เรียบร้อยแล้วค่ะ" + day, date, time, branch, service). If it fails, follow its message (offer the free times it lists, or ask for what is missing).
+- Who the booking is for: if the customer profile says the chat is linked, book for them. If it is NOT linked, ask for their name and phone number first (e.g. "รบกวนขอชื่อและเบอร์โทรศัพท์สำหรับลงคิวด้วยนะคะ 😊"), then pass them to prepare_booking. Never repeat back details of an existing customer found by phone.
+- If the service is unclear, ask (most customers come for สระไดร์). Never cancel or move an existing appointment yourself — say แอดมินจะดำเนินการให้ and flag it in note.
 - Never offer discounts, freebies or exceptions that are not in the facts. Never promise a specific stylist.
 - If the branch is unclear and it matters, ask which branch (สุขุมวิท or บางนา).
 - Complaints, refunds, anything sensitive or unclear: reply politely and briefly, and flag it in note for the owner.
@@ -98,7 +102,7 @@ export async function shopFacts(today: string): Promise<string> {
       if (r.service.endsOn && r.service.endsOn < today) continue;
       const member = serviceMemberRate({ price: r.price, memberPrice: r.service.memberPrice, memberDiscountPercent: r.service.memberDiscountPercent });
       const desc = r.service.descriptionTh?.replace(/\s+/g, " ").trim();
-      lines.push(`- ${r.service.nameTh || r.service.name} [${r.service.category}] — ${baht(r.price)}${member ? ` / สมาชิก ${baht(member)}` : ""} / ${r.duration} นาที${r.service.endsOn ? ` (ถึง ${r.service.endsOn})` : ""}${desc ? ` — ${desc}` : ""}`);
+      lines.push(`- ${r.service.nameTh || r.service.name} (id: ${r.serviceId}) [${r.service.category}] — ${baht(r.price)}${member ? ` / สมาชิก ${baht(member)}` : ""} / ${r.duration} นาที${r.service.endsOn ? ` (ถึง ${r.service.endsOn})` : ""}${desc ? ` — ${desc}` : ""}`);
     }
   }
 
@@ -125,14 +129,14 @@ export async function shopFacts(today: string): Promise<string> {
 // ── Per-request context (not cached) ─────────────────────────────────────────
 
 async function customerProfile(customerId: string | null, today: string): Promise<string> {
-  if (!customerId) return "Customer profile: not linked to a customer record — address them as คุณลูกค้า.";
+  if (!customerId) return "Customer profile: NOT linked to a customer record — address them as คุณลูกค้า; to book, ask for their name and phone first.";
   const c = await prisma.customer.findUnique({
     where: { id: customerId },
     select: { name: true, nickname: true, membership: { select: { pendingActivation: true, expiresAt: true } } },
   });
   if (!c) return "Customer profile: unknown — address them as คุณลูกค้า.";
   const call = c.nickname?.trim() || c.name.trim().split(/\s+/)[0];
-  const out = [`Customer profile: ${c.name}${c.nickname ? ` (ชื่อเล่น ${c.nickname})` : ""} — address them as "คุณ${call}".`];
+  const out = [`Customer profile (linked — bookings go to this customer): ${c.name}${c.nickname ? ` (ชื่อเล่น ${c.nickname})` : ""} — address them as "คุณ${call}".`];
   const m = c.membership;
   if (m) {
     if (m.pendingActivation) out.push("- สมาชิก: สมัครแล้ว รอเริ่มใช้ในการมาครั้งถัดไป");
@@ -186,6 +190,25 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [{
     additionalProperties: false,
   },
 }];
+
+TOOLS.push({
+  name: "prepare_booking",
+  description: "Check and prepare a booking the customer asked for. Does NOT book — the owner confirms with one tap when sending your reply. For a chat not linked to a customer, pass the name and phone the customer gave.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      branch_id: { type: "string" },
+      service_id: { type: "string", description: "Service id from the shop facts" },
+      date: { type: "string", description: "YYYY-MM-DD" },
+      start_time: { type: "string", description: "HH:mm" },
+      customer_name: { type: "string", description: "Only for a chat NOT linked to a customer; else empty string" },
+      customer_phone: { type: "string", description: "Only for a chat NOT linked to a customer; else empty string" },
+    },
+    required: ["branch_id", "service_id", "date", "start_time", "customer_name", "customer_phone"],
+    additionalProperties: false,
+  },
+});
 
 const OUTPUT_SCHEMA = {
   type: "object",
@@ -256,6 +279,7 @@ export async function draftReply(
       { type: "text", text: await shopFacts(today), cache_control: { type: "ephemeral" } },
     ];
     let inputTokens = 0, outputTokens = 0;
+    let booking: BookingProposal | null = null;
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const res = await client.beta.messages.create({
@@ -277,9 +301,20 @@ export async function draftReply(
         messages.push({ role: "assistant", content: res.content });
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
         for (const tu of toolUses) {
-          const input = tu.input as { branch_id?: string; date?: string; duration_minutes?: number };
+          const input = tu.input as { branch_id?: string; date?: string; duration_minutes?: number; service_id?: string; start_time?: string; customer_name?: string; customer_phone?: string };
           let content: string;
-          if (tu.name === "check_availability" && input.branch_id && /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "")) {
+          if (tu.name === "prepare_booking") {
+            const r = await prepareBooking(thread, {
+              branch_id: input.branch_id ?? "", service_id: input.service_id ?? "", date: input.date ?? "", start_time: input.start_time ?? "",
+              customer_name: input.customer_name, customer_phone: input.customer_phone,
+            }, availableStartTimes);
+            if (r.ok) booking = r.proposal;
+            content = JSON.stringify(r.ok
+              ? { ok: true, prepared: { branch: r.proposal.branchName, service: r.proposal.serviceName, date: r.proposal.date, weekday: weekday(r.proposal.date), time: `${r.proposal.startTime}–${r.proposal.endTime}`, price_baht: r.proposal.priceSatang / 100 },
+                  customer: r.proposal.customer.kind === "existing" ? "an existing customer matched this phone — do not repeat their details" : r.proposal.customer.kind,
+                  next: "Write the confirmation reply. The owner books it when sending." }
+              : { ok: false, error: r.error });
+          } else if (tu.name === "check_availability" && input.branch_id && /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "")) {
             content = input.date! < today
               ? JSON.stringify({ error: "date is in the past" })
               : JSON.stringify(await availableStartTimes(input.branch_id, input.date!, Math.max(30, Math.min(240, input.duration_minutes ?? 60))));
@@ -298,7 +333,10 @@ export async function draftReply(
       // Only if still current — a reply may have been sent meanwhile (draft → STALE).
       await prisma.inboxDraft.updateMany({
         where: { id: draft.id, status: "PENDING" },
-        data: { status: "READY", bubbles, note: parsed.note?.trim() || null, inputTokens, outputTokens },
+        data: {
+          status: "READY", bubbles, note: parsed.note?.trim() || null, inputTokens, outputTokens,
+          ...(booking ? { booking: booking as unknown as Prisma.InputJsonValue } : {}),
+        },
       });
       return prisma.inboxDraft.findUnique({ where: { id: draft.id } });
     }

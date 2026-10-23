@@ -1138,6 +1138,10 @@ model InboxDraft {
   bubbles      Json?
   /// Private note to the owner (never sent): what was checked / what is unsure.
   note         String?
+  /// Booking the AI prepared from the chat (owner confirms with "จอง + ส่ง").
+  booking      Json?
+  /// Set once the owner confirmed and the booking was created.
+  bookingId    String?
   model        String?
   inputTokens  Int?
   outputTokens Int?

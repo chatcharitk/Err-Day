@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import AutoRefresh from "../AutoRefresh";
 import Composer from "./Composer";
+import type { BookingProposal } from "@/lib/inbox-booking";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "แชทลูกค้า — err.day" };
@@ -74,6 +75,7 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
         <Composer threadId={thread.id} customerName={name} draft={draft && {
           id: draft.id, status: draft.status, note: draft.note, error: draft.error,
           bubbles: Array.isArray(draft.bubbles) ? (draft.bubbles as string[]) : [],
+          booking: (draft.booking as unknown as BookingProposal | null) ?? null, bookingId: draft.bookingId,
         }} />
       </div>
     </div>
