@@ -214,7 +214,11 @@ function transcript(messages: { direction: string; kind: string; text: string | 
  * waits a few seconds and gives up if a newer customer message arrived (its
  * own call will draft instead).
  */
-export async function draftReply(threadId: string, forMessageId: string | null, opts: { debounce?: boolean } = {}) {
+export async function draftReply(
+  threadId: string,
+  forMessageId: string | null,
+  opts: { debounce?: boolean; instruction?: string; previous?: string[] } = {},
+) {
   if (opts.debounce) {
     await new Promise(r => setTimeout(r, DEBOUNCE_MS));
     const latest = await prisma.inboxMessage.findFirst({ where: { threadId, direction: "IN" }, orderBy: { createdAt: "desc" }, select: { id: true } });
@@ -241,7 +245,9 @@ export async function draftReply(threadId: string, forMessageId: string | null, 
       await customerProfile(thread.customerId, today),
       "Conversation so far (oldest first; replies the owner typed directly in LINE OA Manager may be missing):",
       transcript(history),
-      "Write the next reply to the customer's latest message(s).",
+      opts.instruction?.trim()
+        ? `The owner asked you to rewrite the draft.\nPrevious draft (bubbles): ${JSON.stringify(opts.previous ?? [])}\nOwner's instruction: ${opts.instruction.trim().slice(0, 300)}\nRewrite the reply following the instruction; all rules still apply.`
+        : "Write the next reply to the customer's latest message(s).",
     ].join("\n\n");
 
     const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: userText }];
@@ -289,10 +295,12 @@ export async function draftReply(threadId: string, forMessageId: string | null, 
       const text = res.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map(b => b.text).join("");
       const parsed = JSON.parse(text) as { bubbles: string[]; note: string };
       const bubbles = (parsed.bubbles ?? []).map(s => s.trim()).filter(Boolean).slice(0, 5);
-      return prisma.inboxDraft.update({
-        where: { id: draft.id },
+      // Only if still current — a reply may have been sent meanwhile (draft → STALE).
+      await prisma.inboxDraft.updateMany({
+        where: { id: draft.id, status: "PENDING" },
         data: { status: "READY", bubbles, note: parsed.note?.trim() || null, inputTokens, outputTokens },
       });
+      return prisma.inboxDraft.findUnique({ where: { id: draft.id } });
     }
     throw new Error("too many availability lookups");
   } catch (e) {

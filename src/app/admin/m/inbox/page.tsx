@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
+import { lineQuota } from "@/lib/inbox";
 import AutoRefresh from "./AutoRefresh";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ function ago(d: Date) {
 
 export default async function MobileInboxPage() {
   if (!await getCurrentAdmin()) redirect("/admin/login?next=/admin/m/inbox");
+  const quotaP = lineQuota();
   const threads = await prisma.inboxThread.findMany({
     orderBy: { lastMessageAt: "desc" }, take: 60,
     include: {
@@ -28,6 +30,8 @@ export default async function MobileInboxPage() {
       drafts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
     },
   });
+  const quota = await quotaP;
+  const pct = quota?.limit ? quota.used / quota.limit : 0;
   return (
     <div>
       <AutoRefresh seconds={20} />
@@ -36,6 +40,17 @@ export default async function MobileInboxPage() {
         <p className="font-medium flex-1" style={{ color: TEXT }}>แชทลูกค้า · AI ช่วยร่าง</p>
         <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>ทดลอง</span>
       </div>
+      {quota && (
+        <div className="px-4 py-2 text-[11px] flex items-center gap-2" style={{ borderBottom: `1px solid ${BORDER}`, color: pct > 0.9 ? "#B91C1C" : MUTED }}>
+          <span className="shrink-0">โควตา LINE เดือนนี้</span>
+          {quota.limit && (
+            <span className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "#F3E8E0" }}>
+              <span className="block h-full" style={{ width: `${Math.min(100, pct * 100)}%`, background: pct > 0.9 ? "#B91C1C" : pct > 0.75 ? "#D97706" : "#06C755" }} />
+            </span>
+          )}
+          <span className="shrink-0 font-semibold">{quota.used.toLocaleString()}{quota.limit ? ` / ${quota.limit.toLocaleString()}` : ""}</span>
+        </div>
+      )}
       {threads.length === 0 && (
         <p className="p-6 text-sm text-center" style={{ color: MUTED }}>ยังไม่มีข้อความ — ข้อความ LINE ใหม่จากลูกค้าจะขึ้นที่นี่</p>
       )}

@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import AutoRefresh from "../AutoRefresh";
-import DraftCard from "./DraftCard";
+import Composer from "./Composer";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "แชทลูกค้า — err.day" };
@@ -67,14 +67,13 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
             </div>
           );
         })}
-        <p className="text-center text-[10px] pt-2" style={{ color: MUTED }}>ข้อความที่ตอบใน LINE OA Manager โดยตรงจะไม่แสดงที่นี่</p>
+        <p className="text-center text-[10px] pt-2" style={{ color: MUTED }}>ข้อความที่ตอบใน LINE OA Manager โดยตรงจะไม่แสดงที่นี่ · ข้อความที่ส่งจากหน้านี้จะขึ้นใน LINE OA ด้วย</p>
       </div>
 
       <div className="sticky bottom-0 bg-white px-3 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
-        <DraftCard threadId={thread.id} draft={draft && {
+        <Composer threadId={thread.id} customerName={name} draft={draft && {
           id: draft.id, status: draft.status, note: draft.note, error: draft.error,
           bubbles: Array.isArray(draft.bubbles) ? (draft.bubbles as string[]) : [],
-          createdAt: draft.createdAt.toISOString(),
         }} />
       </div>
     </div>
