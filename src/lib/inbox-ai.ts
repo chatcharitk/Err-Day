@@ -82,7 +82,7 @@ Hard rules:
 - Never offer discounts, freebies or exceptions that are not in the facts. Never promise a specific stylist.
 - If the branch is unclear and it matters, ask which branch (สุขุมวิท or บางนา).
 - Complaints, refunds, anything sensitive or unclear: reply politely and briefly, and flag it in note for the owner.
-- Stickers / photos you cannot see: reply naturally to the conversation, or leave bubbles empty if no reply is needed.
+- Photos from the customer are attached when available — look at them (e.g. a hairstyle they want, their hair length for pricing, a payment slip, a screenshot of a booking) and answer accordingly; describe what you saw in note. Never claim a payment was received from a slip — say แอดมินจะตรวจสอบให้ and flag it in note. Stickers or photos you cannot see: reply naturally, or leave bubbles empty if no reply is needed.
 - note is private to the owner (Thai, one or two short lines): what you checked (e.g. "เช็คคิวบางนา 24 ต.ค. แล้ว ว่าง 10:00, 13:30"), what is uncertain, or "-" when nothing to flag.`;
 
 // ── Shop facts (cached alongside the style; changes only when admin edits) ─────
@@ -256,7 +256,7 @@ function outputSchema(imageKeys: string[]) {
 
 // ── Draft generation ─────────────────────────────────────────────────────────
 
-function transcript(messages: { direction: string; kind: string; text: string | null; createdAt: Date }[]): string {
+function transcript(messages: { id: string; direction: string; kind: string; text: string | null; createdAt: Date }[], photoNo: Map<string, number>): string {
   return messages.map(m => {
     const t = new Date(m.createdAt.getTime() + 7 * 3600_000);
     const stamp = `${bangkokYmdOf(m.createdAt)} ${String(t.getUTCHours()).padStart(2, "0")}:${String(t.getUTCMinutes()).padStart(2, "0")}`;
@@ -264,10 +264,28 @@ function transcript(messages: { direction: string; kind: string; text: string | 
     const body = m.kind === "text" ? m.text
       : m.kind === "note" ? "(แอดมินตอบลูกค้าใน LINE OA ไปแล้ว — ไม่ได้บันทึกข้อความ)"
       : m.kind === "sticker" ? "(ส่งสติกเกอร์)"
-      : m.kind === "image" ? (m.direction === "OUT" ? `(ส่งรูป: ${m.text ?? "รูปภาพ"})` : "(ส่งรูปภาพ)")
+      : m.kind === "image" ? (m.direction === "OUT" ? `(ส่งรูป: ${m.text ?? "รูปภาพ"})` : photoNo.has(m.id) ? `(ส่งรูปภาพ — รูปที่ ${photoNo.get(m.id)} แนบด้านล่าง)` : "(ส่งรูปภาพ — ดูไม่ได้)")
       : "(ส่งไฟล์/ข้อความอื่น)";
     return `[${who} ${stamp}] ${body}`;
   }).join("\n");
+}
+
+type PhotoType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+const PHOTO_TYPES: PhotoType[] = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/** The customer's latest photos (up to 3), fetched from our copy so the AI can look at them. */
+async function customerPhotos(history: { id: string; direction: string; kind: string; mediaUrl: string | null }[]) {
+  const recent = history.filter(m => m.direction === "IN" && m.kind === "image" && m.mediaUrl).slice(-3);
+  const out: { messageId: string; mediaType: PhotoType; data: string }[] = [];
+  for (const m of recent) {
+    const res = await fetch(m.mediaUrl!, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
+    if (!res?.ok) continue;
+    const type = (res.headers.get("content-type") ?? "").split(";")[0].trim() as PhotoType;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!PHOTO_TYPES.includes(type) || buf.length > 3_500_000) continue;
+    out.push({ messageId: m.id, mediaType: type, data: buf.toString("base64") });
+  }
+  return out;
 }
 
 /**
@@ -301,17 +319,27 @@ export async function draftReply(
     const today = bangkokTodayKey();
     const now = new Date(Date.now() + 7 * 3600_000);
     const history = (await prisma.inboxMessage.findMany({ where: { threadId }, orderBy: { createdAt: "desc" }, take: 40 })).reverse();
+    const photos = await customerPhotos(history);
+    const photoNo = new Map(photos.map((p, i) => [p.messageId, i + 1]));
     const userText = [
       `Now: ${today} (วัน${weekday(today)}) ${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")} Bangkok time.`,
       await customerProfile(thread.customerId, today),
       "Conversation so far (oldest first; replies the owner typed directly in LINE OA Manager may be missing):",
-      transcript(history),
+      transcript(history, photoNo),
       opts.instruction?.trim()
         ? `The owner asked you to rewrite the draft.\nPrevious draft (bubbles): ${JSON.stringify(opts.previous ?? [])}\nOwner's instruction: ${opts.instruction.trim().slice(0, 300)}\nRewrite the reply following the instruction; all rules still apply.`
         : "Write the next reply to the customer's latest message(s).",
     ].join("\n\n");
 
-    const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: userText }];
+    const messages: Anthropic.Beta.BetaMessageParam[] = [{
+      role: "user",
+      content: photos.length
+        ? [{ type: "text", text: userText }, ...photos.flatMap((p, i): Anthropic.Beta.BetaContentBlockParam[] => [
+            { type: "text", text: `รูปที่ ${i + 1} จากลูกค้า:` },
+            { type: "image", source: { type: "base64", media_type: p.mediaType, data: p.data } },
+          ])]
+        : userText,
+    }];
     const system: Anthropic.Beta.BetaTextBlockParam[] = [
       { type: "text", text: STYLE },
       { type: "text", text: await shopFacts(today), cache_control: { type: "ephemeral" } },

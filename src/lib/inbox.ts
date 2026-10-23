@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { pushLine, replyLine, type LineMessage } from "@/lib/line-messaging";
+import { randomUUID } from "node:crypto";
+import { getLineMessageContent, pushLine, replyLine, type LineMessage } from "@/lib/line-messaging";
+import { storeImage } from "@/lib/upload";
 import { MENU_IMAGES, menuImageUrls } from "@/lib/inbox-media";
 
 /**
@@ -25,7 +27,7 @@ const KIND: Record<string, string> = { text: "text", image: "image", sticker: "s
  * or null when the event isn't a customer chat message or was already saved
  * (LINE retries deliveries).
  */
-export async function recordLineInbound(event: LineMessageEvent): Promise<{ threadId: string; messageId: string } | null> {
+export async function recordLineInbound(event: LineMessageEvent): Promise<{ threadId: string; messageId: string; kind: string; lineMessageId: string | null } | null> {
   const userId = event.source?.userId;
   if (event.type !== "message" || event.source?.type !== "user" || !userId || !event.message) return null;
   const externalId = event.message.id ? `line:${event.message.id}` : null;
@@ -61,7 +63,7 @@ export async function recordLineInbound(event: LineMessageEvent): Promise<{ thre
         ...(event.replyToken ? { replyToken: event.replyToken, replyTokenAt: new Date() } : {}),
       },
     });
-    return { threadId: thread.id, messageId: msg.id };
+    return { threadId: thread.id, messageId: msg.id, kind, lineMessageId: event.message.id ?? null };
   } catch (e) {
     // Unique externalId: a parallel retry stored it first.
     if (e && typeof e === "object" && "code" in e && e.code === "P2002") return null;
@@ -181,4 +183,21 @@ export async function markAnsweredInLineOa(threadId: string, text: string | null
     prisma.inboxThread.update({ where: { id: threadId }, data: { lastMessageAt: new Date(), unread: 0 } }),
     prisma.inboxDraft.updateMany({ where: { threadId, status: { in: ["PENDING", "READY", "FAILED"] } }, data: { status: "STALE" } }),
   ]);
+}
+
+const IMAGE_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
+
+/**
+ * Keep our own copy of a customer's photo (LINE serves message content only
+ * for a limited time) so the owner and the AI can see it in the inbox.
+ */
+export async function saveInboundImage(messageId: string, lineMessageId: string): Promise<string | null> {
+  const content = await getLineMessageContent(lineMessageId);
+  if (!content) return null;
+  const type = content.contentType.split(";")[0].trim();
+  const ext = IMAGE_EXT[type];
+  if (!ext) return null;
+  const url = await storeImage(`inbox/${randomUUID()}.${ext}`, content.buffer, type);
+  await prisma.inboxMessage.update({ where: { id: messageId }, data: { mediaUrl: url } });
+  return url;
 }

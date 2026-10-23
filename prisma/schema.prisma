@@ -1118,6 +1118,8 @@ model InboxMessage {
   text       String?
   /// Channel message id — dedupes webhook retries.
   externalId String?     @unique
+  /// Our copy of a photo the customer sent (LINE keeps content only for a while).
+  mediaUrl   String?
   /// Admin username who sent an OUT message.
   sentBy     String?
   draftId    String?

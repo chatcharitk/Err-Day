@@ -60,10 +60,17 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
               {showDay && <p className="text-center text-[10px] my-2" style={{ color: MUTED }}>{d}</p>}
               <div className={`flex ${mine ? "justify-end" : "justify-start"} items-end gap-1`}>
                 {mine && <span className="text-[9px] text-right" style={{ color: MUTED }}>{m.sentBy?.endsWith("(LINE OA)") ? "LINE OA " : ""}{hhmm(m.createdAt)}</span>}
-                <p className="max-w-[78%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words"
-                  style={mine ? { background: "#C7DDF7", color: TEXT } : { background: "white", color: TEXT, border: `1px solid ${BORDER}` }}>
-                  {body}
-                </p>
+                {m.mediaUrl ? (
+                  <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="max-w-[70%]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.mediaUrl} alt="รูปจากลูกค้า" className="rounded-2xl max-h-64 object-cover" style={{ border: `1px solid ${BORDER}` }} />
+                  </a>
+                ) : (
+                  <p className="max-w-[78%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words"
+                    style={mine ? { background: "#C7DDF7", color: TEXT } : { background: "white", color: TEXT, border: `1px solid ${BORDER}` }}>
+                    {body}
+                  </p>
+                )}
                 {!mine && <span className="text-[9px]" style={{ color: MUTED }}>{hhmm(m.createdAt)}</span>}
               </div>
             </div>
