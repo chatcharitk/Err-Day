@@ -104,27 +104,25 @@ const DOW_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 type MenuItem = { label: string; icon: LucideIcon; href?: string; action?: "push"; color?: string; bg?: string };
 const MENU_GROUPS: { title: string; items: MenuItem[] }[] = [
   { title: "ใช้บ่อย", items: [
+    { label: "ลูกค้า", icon: Users, href: "/admin/m/customers" },
+    { label: "ช่าง", icon: UserCog, href: "/admin/m/staff" },
+    { label: "ตารางช่าง", icon: CalendarDays, href: "/admin/m/shifts" },
+    { label: "ค่าตอบแทน", icon: Banknote, href: "/admin/m/payroll" },
+    { label: "BI ภาพรวม", icon: BarChart2, href: "/admin/m/dashboard" },
+    { label: "ประวัติการขาย", icon: Receipt, href: "/admin/m/history" },
+    { label: "รายจ่าย", icon: Wallet, href: "/admin/m/expenses" },
+  ] },
+  { title: "หน้าร้าน", items: [
     { label: "แชทลูกค้า (AI)", icon: MessageCircle, href: "/admin/m/inbox", color: "#06C755", bg: "#E9F9EF" },
     { label: "POS ขายหน้าร้าน", icon: ShoppingBag, href: "/admin/m/pos" },
     { label: "หน้าร้านสด", icon: Activity, href: "/admin/m/live" },
     { label: "ส่งตารางเข้ากลุ่ม", icon: Send, action: "push", color: "#166534", bg: "#F0FDF4" },
   ] },
-  { title: "ลูกค้า", items: [
-    { label: "ลูกค้า", icon: Users, href: "/admin/m/customers" },
+  { title: "อื่นๆ", items: [
     { label: "สมาชิก", icon: CreditCard, href: "/admin/m/membership" },
     { label: "คูปอง", icon: Ticket, href: "/admin/m/coupons" },
     { label: "โหวตพนักงาน", icon: Trophy, href: "/admin/m/votes" },
-  ] },
-  { title: "พนักงานและคิว", items: [
-    { label: "ช่าง", icon: UserCog, href: "/admin/m/staff" },
-    { label: "ตารางงาน", icon: CalendarDays, href: "/admin/m/shifts" },
-    { label: "ค่าตอบแทน", icon: Banknote, href: "/admin/m/payroll" },
     { label: "ความจุการจอง", icon: Gauge, href: "/admin/m/capacity" },
-  ] },
-  { title: "การเงินและรายงาน", items: [
-    { label: "ประวัติการขาย", icon: Receipt, href: "/admin/m/history" },
-    { label: "บันทึกรายจ่าย", icon: Wallet, href: "/admin/m/expenses" },
-    { label: "BI ภาพรวม", icon: BarChart2, href: "/admin/m/dashboard" },
   ] },
 ];
 
