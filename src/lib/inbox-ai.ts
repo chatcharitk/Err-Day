@@ -21,7 +21,7 @@ import { notifyAdmins } from "@/lib/notify-admin";
 export const INBOX_MODEL = "claude-sonnet-5-5";
 const MAX_TOOL_ROUNDS = 4;
 /** Customers often send several bubbles in a row — wait, then answer them together. */
-const DEBOUNCE_MS = 6_000;
+const DEBOUNCE_MS = 3_000;
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID;
 const APP_HOST = process.env.NEXT_PUBLIC_APP_URL ?? "https://book.err-daysalon.com";
@@ -73,6 +73,7 @@ Hard rules:
 - Prices, services, promotions, packages, membership and opening hours: ONLY from the shop facts below. Never invent a price or a service. If something is not in the facts, write a holding reply ("ขอแอดมินเช็คให้สักครู่นะคะ") and explain in note.
 - Open times: whenever the customer mentions a day/time (asking, or wanting to book — even if the service is still unknown), call check_availability for EVERY day/time they mention before answering (use 60 minutes when the service is unknown). Never say a time is free or full without checking. Mention 2–4 concrete free times rather than a long list.
 - Answer every question in the customer's latest messages, not only the first one.
+- Speed matters: free times for today and tomorrow (60-minute services) are already given with the conversation — use them instead of calling check_availability. When you do need tools, request every lookup you need in the same turn (parallel calls), not one per turn.
 - Booking from the chat: once you know branch, service, date and time — and the customer has asked to book — call prepare_booking. It checks the slot; the owner then creates the booking with one tap when sending your reply, so write the reply as a confirmation. If prepare_booking says the customer gets the booking card on LINE, keep it short — the card shows every detail (e.g. "แอดมินลงคิวให้เรียบร้อยแล้วค่ะ 😊 รายละเอียดตามการ์ดเลยนะคะ"). Otherwise include day, date, time, branch and service. If it fails, follow its message (offer the free times it lists, or ask for what is missing).
 - Cancelling: when the customer asks to cancel one of the upcoming appointments in their profile, call prepare_cancellation with its booking id (ask which one if it is unclear). If the customer is notified on LINE, keep the reply short — the shop's cancellation message has the details (e.g. "ยกเลิกคิวให้เรียบร้อยแล้วค่ะ ไว้โอกาสหน้านะคะ 🙏"). Only one booking or cancellation per reply. To move an appointment, ask for the new time, then prepare the new booking and say in note that the old one still has to be cancelled.
 - Who the booking is for: if the customer profile says the chat is linked, book for them. If it is NOT linked, ask for their name and phone number first (e.g. "รบกวนขอชื่อและเบอร์โทรศัพท์สำหรับลงคิวด้วยนะคะ 😊"), then pass them to prepare_booking. Never repeat back details of an existing customer found by phone.
@@ -193,6 +194,34 @@ export async function availableStartTimes(branchId: string, date: string, durati
   return { branch: branch.name, date, weekday: weekday(date), open, close, duration_minutes: duration, free_start_times: free };
 }
 
+/** "07:00–09:30, 11:00, 13:30–20:00" from 30-minute start times. */
+function compactTimes(times: string[]): string {
+  if (!times.length) return "เต็ม";
+  const mins = times.map(t => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const out: string[] = [];
+  let start = mins[0], prev = mins[0];
+  for (const m of [...mins.slice(1), -1]) {
+    if (m === prev + 30) { prev = m; continue; }
+    out.push(start === prev ? fmt(start) : `${fmt(start)}–${fmt(prev)}`);
+    start = prev = m;
+  }
+  return out.join(", ");
+}
+
+/** Today's and tomorrow's free start times per branch, so most drafts need no tool round. */
+async function quickAvailability(today: string): Promise<string> {
+  const branches = await prisma.branch.findMany({ where: { isActive: true, bookingEnabled: true }, orderBy: { id: "asc" }, select: { id: true, name: true } });
+  const tomorrow = addDaysYmd(today, 1);
+  const rows = await Promise.all(branches.flatMap(b => [today, tomorrow].map(async d => {
+    const r = await availableStartTimes(b.id, d, 60);
+    return "free_start_times" in r ? `- ${b.name} ${d} (วัน${weekday(d)}): ${compactTimes(r.free_start_times ?? [])}` : null;
+  })));
+  return ["Free start times for a 60-minute service (already checked just now; a 45-minute สระไดร์ may fit slightly more):", ...rows.filter(Boolean)].join("\n");
+}
+
+const addDaysYmd = (ymd: string, n: number) => new Date(Date.parse(ymd + "T12:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+
 const TOOLS: Anthropic.Beta.BetaTool[] = [{
   name: "check_availability",
   description: "Free appointment start times at one branch on one day (Bangkok time), using the same rules as online booking. Call before telling the customer whether a time is free.",
@@ -303,6 +332,7 @@ export async function draftReply(
     const userText = [
       `Now: ${today} (วัน${weekday(today)}) ${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")} Bangkok time.`,
       await customerProfile(thread.customerId, today),
+      await quickAvailability(today),
       "Conversation so far (oldest first; replies the owner typed directly in LINE OA Manager may be missing):",
       transcript(history),
       opts.instruction?.trim()
@@ -327,7 +357,12 @@ export async function draftReply(
         fallbacks: "default",
         system,
         tools: TOOLS,
-        output_config: { effort: "medium", format: { type: "json_schema", schema: outputSchema(imageKeys) } },
+        // Out of tool rounds → must answer now.
+        ...(round === MAX_TOOL_ROUNDS ? { tool_choice: { type: "none" as const } } : {}),
+        // Chat replies: low effort is faster and enough; caching the growing
+        // conversation makes each tool round cheaper and quicker.
+        output_config: { effort: "low", format: { type: "json_schema", schema: outputSchema(imageKeys) } },
+        cache_control: { type: "ephemeral" },
         messages,
       });
       inputTokens += (res.usage.input_tokens ?? 0) + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
@@ -375,6 +410,7 @@ export async function draftReply(
       }
 
       const text = res.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map(b => b.text).join("");
+      if (!text.trim()) throw new Error(res.stop_reason === "max_tokens" ? "ร่างยาวเกินไป ลองกดร่างใหม่" : `AI ไม่ได้เขียนคำตอบ (${res.stop_reason})`);
       const parsed = JSON.parse(text) as { bubbles: string[]; images?: string[]; note: string };
       const images = [...new Set((parsed.images ?? []).filter(k => imageKeys.includes(k)))].slice(0, 2);
       const bubbles = (parsed.bubbles ?? []).map(s => s.trim()).filter(Boolean).slice(0, 5 - images.length);

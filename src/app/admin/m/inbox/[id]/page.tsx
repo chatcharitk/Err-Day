@@ -37,7 +37,7 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
 
   return (
     <div className="flex flex-col min-h-screen">
-      <AutoRefresh seconds={draft?.status === "PENDING" ? 4 : 15} />
+      <AutoRefresh seconds={draft?.status === "PENDING" ? 2 : 15} />
       <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 bg-white" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <Link href="/admin/m/inbox" className="p-1" style={{ color: MUTED }}><ArrowLeft size={18} /></Link>
         <div className="flex-1 min-w-0">
