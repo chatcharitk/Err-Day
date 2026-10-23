@@ -54,12 +54,12 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
           const d = days[i];
           const showDay = i === 0 || d !== days[i - 1];
           const mine = m.direction === "OUT";
-          const body = m.kind === "text" ? m.text : m.kind === "sticker" ? "(สติกเกอร์)" : m.kind === "image" ? (mine ? `🖼 ${m.text ?? "รูปภาพ"}` : "(รูปภาพ — ดูใน LINE OA)") : "(ข้อความประเภทอื่น)";
+          const body = m.kind === "text" ? m.text : m.kind === "sticker" ? "(สติกเกอร์)" : m.kind === "image" ? (mine ? `🖼 ${m.text ?? "รูปภาพ"}` : "(รูปภาพ — ดูใน LINE OA)") : m.kind === "note" ? "✓ ตอบใน LINE OA แล้ว" : "(ข้อความประเภทอื่น)";
           return (
             <div key={m.id}>
               {showDay && <p className="text-center text-[10px] my-2" style={{ color: MUTED }}>{d}</p>}
               <div className={`flex ${mine ? "justify-end" : "justify-start"} items-end gap-1`}>
-                {mine && <span className="text-[9px]" style={{ color: MUTED }}>{hhmm(m.createdAt)}</span>}
+                {mine && <span className="text-[9px] text-right" style={{ color: MUTED }}>{m.sentBy?.endsWith("(LINE OA)") ? "LINE OA " : ""}{hhmm(m.createdAt)}</span>}
                 <p className="max-w-[78%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words"
                   style={mine ? { background: "#C7DDF7", color: TEXT } : { background: "white", color: TEXT, border: `1px solid ${BORDER}` }}>
                   {body}

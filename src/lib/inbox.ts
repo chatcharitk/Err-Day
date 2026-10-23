@@ -164,3 +164,21 @@ export async function lineQuota(): Promise<{ used: number; limit: number | null 
   quotaCache = { at: Date.now(), value };
   return value;
 }
+
+/**
+ * The owner already answered in LINE OA Manager (LINE never tells us about those
+ * replies). Record it — with the text when pasted — so the inbox and the next
+ * AI draft know the customer has been answered.
+ */
+export async function markAnsweredInLineOa(threadId: string, text: string | null, by: string) {
+  const thread = await prisma.inboxThread.findUnique({ where: { id: threadId }, select: { id: true } });
+  if (!thread) throw new InboxSendError("ไม่พบแชทนี้");
+  const body = text?.trim().slice(0, 4800) || null;
+  await prisma.$transaction([
+    prisma.inboxMessage.create({
+      data: { threadId, direction: "OUT", kind: body ? "text" : "note", text: body ?? "แอดมินตอบใน LINE OA แล้ว", sentBy: `${by} (LINE OA)` },
+    }),
+    prisma.inboxThread.update({ where: { id: threadId }, data: { lastMessageAt: new Date(), unread: 0 } }),
+    prisma.inboxDraft.updateMany({ where: { threadId, status: { in: ["PENDING", "READY", "FAILED"] } }, data: { status: "STALE" } }),
+  ]);
+}

@@ -58,7 +58,7 @@ export default async function MobileInboxPage() {
         {threads.map(t => {
           const name = t.customer ? (t.customer.nickname ? `${t.customer.nickname} · ${t.customer.name}` : t.customer.name) : (t.displayName ?? "ลูกค้า LINE");
           const last = t.messages[0];
-          const preview = !last ? "" : `${last.direction === "OUT" ? "แอดมิน: " : ""}${last.kind === "text" ? last.text : last.kind === "sticker" ? "(สติกเกอร์)" : last.kind === "image" ? "(รูปภาพ)" : "(ข้อความ)"}`;
+          const preview = !last ? "" : `${last.direction === "OUT" ? "แอดมิน: " : ""}${last.kind === "text" ? last.text : last.kind === "sticker" ? "(สติกเกอร์)" : last.kind === "image" ? "(รูปภาพ)" : last.kind === "note" ? "✓ ตอบใน LINE OA แล้ว" : "(ข้อความ)"}`;
           const draft = t.drafts[0]?.status;
           return (
             <li key={t.id} style={{ borderBottom: `1px solid ${BORDER}` }}>

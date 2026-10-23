@@ -35,6 +35,8 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
   const [err, setErr] = useState("");
   const [instruction, setInstruction] = useState("");
   const [showRewrite, setShowRewrite] = useState(false);
+  const [showOa, setShowOa] = useState(false);
+  const [oaText, setOaText] = useState("");
   const [dropped, setDropped] = useState<{ draftId: string | null; keys: string[] }>({ draftId: null, keys: [] });
 
   // A draft not yet loaded fills an empty box by itself; it never overwrites typing.
@@ -93,6 +95,19 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
       if (!res.ok) { setErr(d.error ?? "ส่งไม่สำเร็จ"); return; }
       setText(""); setLoadedId(draft?.id ?? null);
       setMsg(`${p ? (p.type === "cancel" ? "ยกเลิกแล้ว + " : "จองแล้ว + ") : ""}${d.via === "reply" ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
+      router.refresh();
+    } finally { setBusy(""); }
+  }
+
+  async function markAnswered() {
+    setBusy("send"); setErr(""); setMsg("");
+    try {
+      const res = await fetch(`/api/admin/inbox/${threadId}/answered`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: oaText }),
+      });
+      if (!res.ok) { setErr((await res.json().catch(() => ({}))).error ?? "บันทึกไม่สำเร็จ"); return; }
+      setShowOa(false); setOaText(""); setText(""); setLoadedId(draft?.id ?? null);
+      setMsg("บันทึกแล้วว่าตอบใน LINE OA ✓");
       router.refresh();
     } finally { setBusy(""); }
   }
@@ -198,6 +213,22 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
       {proposal && (
         <button type="button" onClick={() => void send(false)} disabled={busy !== "" || total === 0}
           className="w-full text-[11px] underline disabled:opacity-40" style={{ color: MUTED }}>ส่งข้อความอย่างเดียว ({isCancel ? "ยังไม่ยกเลิก" : "ยังไม่จอง"})</button>
+      )}
+      {!showOa ? (
+        <button type="button" onClick={() => setShowOa(true)} className="w-full text-[11px] underline" style={{ color: MUTED }}>
+          ตอบลูกค้าใน LINE OA ไปแล้ว?
+        </button>
+      ) : (
+        <div className="rounded-xl p-2 space-y-1.5" style={{ background: "#FAF5F0", border: `1px solid ${BORDER}` }}>
+          <p className="text-[11px]" style={{ color: TEXT }}>วางข้อความที่ตอบไปใน LINE OA (ไม่ใส่ก็ได้) — AI จะได้รู้ว่าตอบอะไรไปแล้ว</p>
+          <textarea value={oaText} onChange={e => setOaText(e.target.value)} rows={2} placeholder="(ไม่บังคับ)"
+            className="w-full px-2 py-1.5 rounded-lg text-xs" style={{ border: `1px solid ${BORDER}`, background: "white" }} />
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => setShowOa(false)} className="flex-1 py-1.5 rounded-lg text-xs" style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "white" }}>ยกเลิก</button>
+            <button type="button" onClick={() => void markAnswered()} disabled={busy !== ""}
+              className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40" style={{ background: TEXT }}>บันทึกว่าตอบแล้ว</button>
+          </div>
+        </div>
       )}
       {msg && <p className="text-[11px] text-center" style={{ color: "#166534" }}>{msg}</p>}
       {err && <p className="text-[11px] text-center" style={{ color: "#B91C1C" }}>{err}</p>}

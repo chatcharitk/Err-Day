@@ -87,7 +87,7 @@ async function recordInbox(event: LineEvent): Promise<void> {
   try {
     const saved = await recordLineInbound(event);
     if (saved) {
-      after(() => draftReply(saved.threadId, saved.messageId, { debounce: true })
+      after(() => draftReply(saved.threadId, saved.messageId, { debounce: true, notify: true })
         .then(() => undefined)
         .catch(e => console.error("[webhook] inbox draft failed", e)));
     }
