@@ -9,14 +9,15 @@ import { PROMOTIONS } from "@/lib/promotions";
 import { BOOKING_TERMS_TH, ENTITLEMENT_TERMS_TH } from "@/lib/terms";
 import { customerCoupons } from "@/lib/coupons";
 import { couponValueLabel } from "@/lib/coupon-rules";
-import { prepareBooking, type BookingProposal } from "@/lib/inbox-booking";
+import { prepareBooking, prepareCancellation, type BookingAction } from "@/lib/inbox-booking";
+import { menuImagesOn } from "@/lib/inbox-media";
 
 /**
  * AI reply inbox — drafting side. Claude writes a reply in the owner's voice
  * for the owner to review; it never sends anything itself.
  */
 
-export const INBOX_MODEL = "claude-sonnet-5-5";
+export const INBOX_MODEL = "claude-haiku-5-5";
 const MAX_TOOL_ROUNDS = 4;
 /** Customers often send several bubbles in a row — wait, then answer them together. */
 const DEBOUNCE_MS = 6_000;
@@ -62,9 +63,11 @@ Admin: สวัสดีค่า | ว่างแล้วค่า | คุ�
 Hard rules:
 - Prices, services, promotions, packages, membership and opening hours: ONLY from the shop facts below. Never invent a price or a service. If something is not in the facts, write a holding reply ("ขอแอดมินเช็คให้สักครู่นะคะ") and explain in note.
 - Open times: when the customer asks about a day/time, call check_availability before answering. Never say a time is free without checking. Mention 2–4 concrete free times rather than a long list.
-- Booking from the chat: once you know branch, service, date and time — and the customer has asked to book — call prepare_booking. It checks the slot; the owner then creates the booking with one tap when sending your reply. So when prepare_booking succeeds, write the reply as a confirmation ("แอดมินลงคิวให้เรียบร้อยแล้วค่ะ" + day, date, time, branch, service). If it fails, follow its message (offer the free times it lists, or ask for what is missing).
+- Booking from the chat: once you know branch, service, date and time — and the customer has asked to book — call prepare_booking. It checks the slot; the owner then creates the booking with one tap when sending your reply, so write the reply as a confirmation. If prepare_booking says the customer gets the booking card on LINE, keep it short — the card shows every detail (e.g. "แอดมินลงคิวให้เรียบร้อยแล้วค่ะ 😊 รายละเอียดตามการ์ดเลยนะคะ"). Otherwise include day, date, time, branch and service. If it fails, follow its message (offer the free times it lists, or ask for what is missing).
+- Cancelling: when the customer asks to cancel one of the upcoming appointments in their profile, call prepare_cancellation with its booking id (ask which one if it is unclear). If the customer is notified on LINE, keep the reply short — the shop's cancellation message has the details (e.g. "ยกเลิกคิวให้เรียบร้อยแล้วค่ะ ไว้โอกาสหน้านะคะ 🙏"). Only one booking or cancellation per reply. To move an appointment, ask for the new time, then prepare the new booking and say in note that the old one still has to be cancelled.
 - Who the booking is for: if the customer profile says the chat is linked, book for them. If it is NOT linked, ask for their name and phone number first (e.g. "รบกวนขอชื่อและเบอร์โทรศัพท์สำหรับลงคิวด้วยนะคะ 😊"), then pass them to prepare_booking. Never repeat back details of an existing customer found by phone.
-- If the service is unclear, ask (most customers come for สระไดร์). Never cancel or move an existing appointment yourself — say แอดมินจะดำเนินการให้ and flag it in note.
+- If the service is unclear, ask (most customers come for สระไดร์).
+- Menu posters: when the customer asks about prices, packages, membership, a service, or opening hours, attach the relevant poster(s) in "images" (at most 2) and keep the text short — the poster answers the details. Bubbles + images must be 5 or fewer.
 - Never offer discounts, freebies or exceptions that are not in the facts. Never promise a specific stylist.
 - If the branch is unclear and it matters, ask which branch (สุขุมวิท or บางนา).
 - Complaints, refunds, anything sensitive or unclear: reply politely and briefly, and flag it in note for the owner.
@@ -120,9 +123,14 @@ export async function shopFacts(today: string): Promise<string> {
   for (const spec of Object.values(PACKAGE_SPECS)) {
     lines.push(`- ${spec.nameTh} ${baht(spec.priceSatang)} — ${spec.shortDescTh} (ใช้ได้ ${spec.validityDays} วัน)`);
   }
+  const addons = await prisma.serviceAddon.findMany({ where: { isActive: true }, orderBy: { price: "asc" }, select: { nameTh: true, price: true, availableUntil: true } });
+  const liveAddons = addons.filter(a => !a.availableUntil || a.availableUntil >= today);
+  if (liveAddons.length) lines.push(`- Add-on (เพิ่มได้กับบริการ): ${liveAddons.map(a => `${a.nameTh} +${baht(a.price)}`).join(", ")}`);
   lines.push(`- เงื่อนไขสมาชิก/แพ็กเกจ: ${ENTITLEMENT_TERMS_TH.join(" / ")}`);
   lines.push(`- เงื่อนไขการมาสาย: ${BOOKING_TERMS_TH.join(" / ")}`);
   lines.push(`\n## Links\n- จองคิวออนไลน์ (ในไลน์): ${link("", "/book")}`);
+  lines.push("\n## Menu posters you can attach (key — what it shows)");
+  for (const m of menuImagesOn(today)) lines.push(`- ${m.key} — ${m.title}: ${m.about}`);
   return lines.join("\n");
 }
 
@@ -152,10 +160,10 @@ async function customerProfile(customerId: string | null, today: string): Promis
   const bookings = await prisma.booking.findMany({
     where: { customerId, date: { gte: new Date(today + "T00:00:00Z") }, status: { in: ["PENDING", "CONFIRMED"] } },
     orderBy: [{ date: "asc" }, { startTime: "asc" }], take: 5,
-    select: { date: true, startTime: true, branch: { select: { name: true } }, service: { select: { nameTh: true, name: true } } },
+    select: { id: true, date: true, startTime: true, endTime: true, branch: { select: { name: true } }, service: { select: { nameTh: true, name: true } } },
   });
   for (const b of bookings) {
-    out.push(`- นัดที่มีอยู่: ${bangkokYmdOf(b.date)} ${b.startTime} ${b.branch.name} — ${b.service.nameTh || b.service.name}`);
+    out.push(`- นัดที่มีอยู่ (booking id ${b.id}): ${bangkokYmdOf(b.date)} ${b.startTime}–${b.endTime} ${b.branch.name} — ${b.service.nameTh || b.service.name}`);
   }
   return out.join("\n");
 }
@@ -210,15 +218,30 @@ TOOLS.push({
   },
 });
 
-const OUTPUT_SCHEMA = {
-  type: "object",
-  properties: {
-    bubbles: { type: "array", items: { type: "string" }, description: "Chat bubbles to send, in order (empty if no reply is needed)" },
-    note: { type: "string", description: "Private note to the owner, Thai, short" },
+TOOLS.push({
+  name: "prepare_cancellation",
+  description: "Prepare cancelling one of the linked customer's upcoming appointments (booking id from the customer profile). Does NOT cancel — the owner confirms with one tap when sending your reply.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: { booking_id: { type: "string" } },
+    required: ["booking_id"],
+    additionalProperties: false,
   },
-  required: ["bubbles", "note"],
-  additionalProperties: false,
-};
+});
+
+function outputSchema(imageKeys: string[]) {
+  return {
+    type: "object",
+    properties: {
+      bubbles: { type: "array", items: { type: "string" }, description: "Chat bubbles to send, in order (empty if no reply is needed)" },
+      images: { type: "array", items: { type: "string", enum: imageKeys }, description: "Menu poster keys to attach after the bubbles (usually none)" },
+      note: { type: "string", description: "Private note to the owner, Thai, short" },
+    },
+    required: ["bubbles", "images", "note"],
+    additionalProperties: false,
+  };
+}
 
 // ── Draft generation ─────────────────────────────────────────────────────────
 
@@ -247,7 +270,7 @@ export async function draftReply(
     const latest = await prisma.inboxMessage.findFirst({ where: { threadId, direction: "IN" }, orderBy: { createdAt: "desc" }, select: { id: true } });
     if (latest?.id !== forMessageId) return null;
   }
-  const thread = await prisma.inboxThread.findUnique({ where: { id: threadId }, select: { customerId: true } });
+  const thread = await prisma.inboxThread.findUnique({ where: { id: threadId }, select: { customerId: true, externalUserId: true } });
   if (!thread) return null;
 
   await prisma.inboxDraft.updateMany({ where: { threadId, status: { in: ["PENDING", "READY", "FAILED"] } }, data: { status: "STALE" } });
@@ -279,17 +302,16 @@ export async function draftReply(
       { type: "text", text: await shopFacts(today), cache_control: { type: "ephemeral" } },
     ];
     let inputTokens = 0, outputTokens = 0;
-    let booking: BookingProposal | null = null;
+    let booking: BookingAction | null = null;
+    const imageKeys = menuImagesOn(today).map(m => m.key);
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const res = await client.beta.messages.create({
         model: INBOX_MODEL,
         max_tokens: 4000,
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
         system,
         tools: TOOLS,
-        output_config: { effort: "medium", format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
+        output_config: { effort: "medium", format: { type: "json_schema", schema: outputSchema(imageKeys) } },
         messages,
       });
       inputTokens += (res.usage.input_tokens ?? 0) + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
@@ -303,7 +325,15 @@ export async function draftReply(
         for (const tu of toolUses) {
           const input = tu.input as { branch_id?: string; date?: string; duration_minutes?: number; service_id?: string; start_time?: string; customer_name?: string; customer_phone?: string };
           let content: string;
-          if (tu.name === "prepare_booking") {
+          if (tu.name === "prepare_cancellation") {
+            const r = await prepareCancellation(thread, String((tu.input as { booking_id?: string }).booking_id ?? ""));
+            if (r.ok) booking = r.proposal;
+            content = JSON.stringify(r.ok
+              ? { ok: true, prepared: { cancel: `${r.proposal.date} ${r.proposal.startTime} ${r.proposal.branchName} — ${r.proposal.serviceName}` },
+                  customer_notified_on_line: r.proposal.notifiedOnLine,
+                  next: "Write the reply. The owner cancels it when sending." }
+              : { ok: false, error: r.error });
+          } else if (tu.name === "prepare_booking") {
             const r = await prepareBooking(thread, {
               branch_id: input.branch_id ?? "", service_id: input.service_id ?? "", date: input.date ?? "", start_time: input.start_time ?? "",
               customer_name: input.customer_name, customer_phone: input.customer_phone,
@@ -312,6 +342,7 @@ export async function draftReply(
             content = JSON.stringify(r.ok
               ? { ok: true, prepared: { branch: r.proposal.branchName, service: r.proposal.serviceName, date: r.proposal.date, weekday: weekday(r.proposal.date), time: `${r.proposal.startTime}–${r.proposal.endTime}`, price_baht: r.proposal.priceSatang / 100 },
                   customer: r.proposal.customer.kind === "existing" ? "an existing customer matched this phone — do not repeat their details" : r.proposal.customer.kind,
+                  customer_gets_booking_card_on_line: !!r.proposal.cardOnLine,
                   next: "Write the confirmation reply. The owner books it when sending." }
               : { ok: false, error: r.error });
           } else if (tu.name === "check_availability" && input.branch_id && /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "")) {
@@ -328,14 +359,16 @@ export async function draftReply(
       }
 
       const text = res.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map(b => b.text).join("");
-      const parsed = JSON.parse(text) as { bubbles: string[]; note: string };
-      const bubbles = (parsed.bubbles ?? []).map(s => s.trim()).filter(Boolean).slice(0, 5);
+      const parsed = JSON.parse(text) as { bubbles: string[]; images?: string[]; note: string };
+      const images = [...new Set((parsed.images ?? []).filter(k => imageKeys.includes(k)))].slice(0, 2);
+      const bubbles = (parsed.bubbles ?? []).map(s => s.trim()).filter(Boolean).slice(0, 5 - images.length);
       // Only if still current — a reply may have been sent meanwhile (draft → STALE).
       await prisma.inboxDraft.updateMany({
         where: { id: draft.id, status: "PENDING" },
         data: {
           status: "READY", bubbles, note: parsed.note?.trim() || null, inputTokens, outputTokens,
           ...(booking ? { booking: booking as unknown as Prisma.InputJsonValue } : {}),
+          ...(images.length ? { images } : {}),
         },
       });
       return prisma.inboxDraft.findUnique({ where: { id: draft.id } });

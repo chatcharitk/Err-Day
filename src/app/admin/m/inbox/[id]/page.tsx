@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import AutoRefresh from "../AutoRefresh";
 import Composer from "./Composer";
-import type { BookingProposal } from "@/lib/inbox-booking";
+import type { BookingAction } from "@/lib/inbox-booking";
+import { MENU_IMAGES } from "@/lib/inbox-media";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "แชทลูกค้า — err.day" };
@@ -53,7 +54,7 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
           const d = days[i];
           const showDay = i === 0 || d !== days[i - 1];
           const mine = m.direction === "OUT";
-          const body = m.kind === "text" ? m.text : m.kind === "sticker" ? "(สติกเกอร์)" : m.kind === "image" ? "(รูปภาพ — ดูใน LINE OA)" : "(ข้อความประเภทอื่น)";
+          const body = m.kind === "text" ? m.text : m.kind === "sticker" ? "(สติกเกอร์)" : m.kind === "image" ? (mine ? `🖼 ${m.text ?? "รูปภาพ"}` : "(รูปภาพ — ดูใน LINE OA)") : "(ข้อความประเภทอื่น)";
           return (
             <div key={m.id}>
               {showDay && <p className="text-center text-[10px] my-2" style={{ color: MUTED }}>{d}</p>}
@@ -75,7 +76,10 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
         <Composer threadId={thread.id} customerName={name} draft={draft && {
           id: draft.id, status: draft.status, note: draft.note, error: draft.error,
           bubbles: Array.isArray(draft.bubbles) ? (draft.bubbles as string[]) : [],
-          booking: (draft.booking as unknown as BookingProposal | null) ?? null, bookingId: draft.bookingId,
+          booking: (draft.booking as unknown as BookingAction | null) ?? null, bookingId: draft.bookingId,
+          images: (Array.isArray(draft.images) ? (draft.images as string[]) : [])
+            .map(k => MENU_IMAGES.find(m => m.key === k)).filter(m => !!m)
+            .map(m => ({ key: m.key, title: m.title, preview: `/line/menu/${m.key}-preview.jpg` })),
         }} />
       </div>
     </div>

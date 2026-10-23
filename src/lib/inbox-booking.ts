@@ -1,15 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { addMinutes, SALE_ONLY_SKUS } from "@/lib/capacity";
-import { bangkokTodayKey, hasMemberPricingOnDate, serviceMemberRate } from "@/lib/member-pricing";
+import { bangkokTodayKey, bangkokYmdOf, hasMemberPricingOnDate, serviceMemberRate } from "@/lib/member-pricing";
 import { resolveServicePrice } from "@/lib/promotions";
 import { POST as createBookingRoute } from "@/app/api/bookings/route";
+import { PATCH as updateBookingRoute } from "@/app/api/bookings/[id]/route";
 
 /**
- * Bookings prepared from the AI inbox. The AI only PREPARES one (validated
- * against the real schedule); the owner creates it by tapping "จอง + ส่ง".
+ * Bookings prepared from the AI inbox. The AI only PREPARES a booking or a
+ * cancellation (validated against the real schedule); the owner applies it by
+ * tapping "จอง + ส่ง" / "ยกเลิก + ส่ง".
  */
 
 export interface BookingProposal {
+  /** Absent on drafts saved before cancellations existed. */
+  type?: "create";
   branchId: string; branchName: string;
   serviceId: string; serviceName: string;
   date: string; startTime: string; endTime: string; duration: number;
@@ -19,6 +23,8 @@ export interface BookingProposal {
     /** linked = the LINE chat's own customer; existing = found by the phone given; new = created on booking */
     kind: "linked" | "existing" | "new";
   };
+  /** The customer gets the shop's booking card on this LINE when it's created. */
+  cardOnLine?: boolean;
 }
 
 const digitsOf = (phone: string) => phone.replace(/\D/g, "").replace(/^66(?=\d{9}$)/, "0");
@@ -33,7 +39,7 @@ export async function findCustomerByPhone(phone: string) {
 
 /** Validate what the AI wants to book. Returns a proposal or a reason the AI can act on. */
 export async function prepareBooking(
-  thread: { customerId: string | null },
+  thread: { customerId: string | null; externalUserId: string },
   input: { branch_id: string; service_id: string; date: string; start_time: string; customer_name?: string; customer_phone?: string },
   freeStartTimes: (branchId: string, date: string, duration: number) => Promise<{ free_start_times?: string[]; error?: string }>,
 ): Promise<{ ok: true; proposal: BookingProposal } | { ok: false; error: string }> {
@@ -58,10 +64,12 @@ export async function prepareBooking(
 
   // Who is it for?
   let customer: BookingProposal["customer"];
+  let cardOnLine: boolean;
   if (thread.customerId) {
-    const c = await prisma.customer.findUnique({ where: { id: thread.customerId }, select: { id: true, name: true, phone: true } });
+    const c = await prisma.customer.findUnique({ where: { id: thread.customerId }, select: { id: true, name: true, phone: true, lineUserId: true } });
     if (!c) return { ok: false, error: "linked customer not found" };
     customer = { id: c.id, name: c.name, phone: c.phone, kind: "linked" };
+    cardOnLine = c.lineUserId === thread.externalUserId;
   } else {
     const name = input.customer_name?.trim();
     const phone = input.customer_phone ? digitsOf(input.customer_phone) : "";
@@ -70,6 +78,10 @@ export async function prepareBooking(
     customer = existing
       ? { id: existing.id, name: existing.name, phone: existing.phone, kind: "existing" }
       : { id: null, name, phone, kind: "new" };
+    cardOnLine = existing
+      ? existing.lineUserId === thread.externalUserId
+      // A new customer gets this LINE linked unless another customer already has it.
+      : !(await prisma.customer.findUnique({ where: { lineUserId: thread.externalUserId }, select: { id: true } }));
   }
 
   const isMember = customer.id ? await hasMemberPricingOnDate(prisma, customer.id, input.date) : false;
@@ -80,10 +92,47 @@ export async function prepareBooking(
   return {
     ok: true,
     proposal: {
+      type: "create",
       branchId: input.branch_id, branchName: bs.branch.name,
       serviceId: input.service_id, serviceName: bs.service.nameTh || bs.service.name,
       date: input.date, startTime: input.start_time, endTime: addMinutes(input.start_time, bs.duration), duration: bs.duration,
-      priceSatang, customer,
+      priceSatang, customer, cardOnLine,
+    },
+  };
+}
+
+export interface CancelProposal {
+  type: "cancel";
+  bookingId: string;
+  branchName: string; serviceName: string;
+  date: string; startTime: string; endTime: string;
+  customer: { id: string; name: string; phone: string };
+  /** The customer gets the shop's own cancellation message on LINE. */
+  notifiedOnLine: boolean;
+}
+
+export type BookingAction = BookingProposal | CancelProposal;
+
+/** Only an upcoming booking of the chat's own linked customer can be cancelled from a chat. */
+export async function prepareCancellation(thread: { customerId: string | null }, bookingId: string): Promise<{ ok: true; proposal: CancelProposal } | { ok: false; error: string }> {
+  if (!thread.customerId) return { ok: false, error: "this chat is not linked to a customer — the owner must cancel it by hand; ask for name, date and time and flag it in note" };
+  const b = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, customerId: true, status: true, date: true, startTime: true, endTime: true,
+      branch: { select: { name: true } }, service: { select: { nameTh: true, name: true } },
+      customer: { select: { id: true, name: true, phone: true, lineUserId: true } } },
+  });
+  if (!b || b.customerId !== thread.customerId) return { ok: false, error: "booking not found for this customer — use a booking id from the customer profile" };
+  if (b.status !== "PENDING" && b.status !== "CONFIRMED") return { ok: false, error: `this booking is already ${b.status}` };
+  const date = bangkokYmdOf(b.date);
+  if (date < bangkokTodayKey()) return { ok: false, error: "this booking is in the past" };
+  return {
+    ok: true,
+    proposal: {
+      type: "cancel", bookingId: b.id, branchName: b.branch.name, serviceName: b.service.nameTh || b.service.name,
+      date, startTime: b.startTime, endTime: b.endTime,
+      customer: { id: b.customer.id, name: b.customer.name, phone: b.customer.phone },
+      notifiedOnLine: !!b.customer.lineUserId,
     },
   };
 }
@@ -98,8 +147,24 @@ export async function bookFromDraft(draftId: string, threadId: string): Promise<
   const draft = await prisma.inboxDraft.findUnique({ where: { id: draftId }, include: { thread: true } });
   if (!draft || draft.threadId !== threadId) throw new InboxBookingError("ไม่พบร่างนี้");
   if (draft.bookingId) return { bookingId: draft.bookingId };
-  const p = draft.booking as unknown as BookingProposal | null;
-  if (!p) throw new InboxBookingError("ร่างนี้ไม่มีการจอง");
+  const action = draft.booking as unknown as BookingAction | null;
+  if (!action) throw new InboxBookingError("ร่างนี้ไม่มีการจอง");
+
+  if (action.type === "cancel") {
+    // Same admin path as the booking screen: status change + the shop's cancellation notices.
+    const check = await prepareCancellation(draft.thread, action.bookingId);
+    if (!check.ok) throw new InboxBookingError("คิวนี้ยกเลิกไม่ได้แล้ว (อาจถูกยกเลิกหรือเปลี่ยนไปแล้ว)");
+    const res = await updateBookingRoute(
+      new Request(`http://internal/api/bookings/${action.bookingId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "CANCELLED" }),
+      }),
+      { params: Promise.resolve({ id: action.bookingId }) },
+    );
+    if (!res.ok) throw new InboxBookingError("ยกเลิกไม่สำเร็จ");
+    await prisma.inboxDraft.update({ where: { id: draftId }, data: { bookingId: action.bookingId } });
+    return { bookingId: action.bookingId };
+  }
+  const p = action;
 
   // Re-resolve the customer now (they may have been created/linked since).
   let name = p.customer.name, phone = p.customer.phone, linkLine = false;

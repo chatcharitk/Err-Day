@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Send, RefreshCw, Loader2, Sparkles, Wand2, CalendarCheck } from "lucide-react";
-import type { BookingProposal } from "@/lib/inbox-booking";
+import { Send, RefreshCw, Loader2, Sparkles, Wand2, CalendarCheck, CalendarX, X } from "lucide-react";
+import type { BookingAction } from "@/lib/inbox-booking";
 
 interface Draft {
   id: string; status: string; note: string | null; error: string | null; bubbles: string[];
-  booking: BookingProposal | null; bookingId: string | null;
+  booking: BookingAction | null; bookingId: string | null;
+  images: { key: string; title: string; preview: string }[];
 }
 
 const thaiDay = (ymd: string) => new Date(ymd + "T12:00:00Z").toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", weekday: "short", day: "numeric", month: "short" });
@@ -34,6 +35,7 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
   const [err, setErr] = useState("");
   const [instruction, setInstruction] = useState("");
   const [showRewrite, setShowRewrite] = useState(false);
+  const [dropped, setDropped] = useState<{ draftId: string | null; keys: string[] }>({ draftId: null, keys: [] });
 
   // A draft not yet loaded fills an empty box by itself; it never overwrites typing.
   const fresh = draft?.status === "READY" && draft.id !== loadedId ? draft : null;
@@ -43,6 +45,11 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
 
   const pending = busy === "draft" || draft?.status === "PENDING";
   const bubbles = toBubbles(value);
+  // Posters belong to the draft whose text is in the box.
+  const imageDraft = draft && sourceDraftId === draft.id ? draft : null;
+  const droppedKeys = dropped.draftId === imageDraft?.id ? dropped.keys : [];
+  const images = (imageDraft?.images ?? []).filter(i => !droppedKeys.includes(i.key));
+  const total = bubbles.length + images.length;
 
   async function requestDraft(instr?: string) {
     setBusy("draft"); setErr(""); setMsg("");
@@ -58,14 +65,16 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
   }
 
   const proposal = draft?.booking && !draft.bookingId ? draft.booking : null;
+  const isCancel = proposal?.type === "cancel";
 
   async function send(withBooking: boolean) {
-    if (bubbles.length === 0) return;
-    if (bubbles.length > 5) { setErr("ส่งได้ครั้งละไม่เกิน 5 ข้อความ — รวมบางข้อความเข้าด้วยกัน"); return; }
+    if (total === 0) return;
+    if (total > 5) { setErr("ส่งได้ครั้งละไม่เกิน 5 ข้อความ (รวมรูป) — รวมบางข้อความเข้าด้วยกัน"); return; }
     const p = withBooking ? proposal : null;
-    const question = p
-      ? `จองคิว ${p.customer.name} · ${p.serviceName}\n${thaiDay(p.date)} ${p.startTime}–${p.endTime} · ${p.branchName}\nแล้วส่ง ${bubbles.length} ข้อความทาง LINE?`
-      : `ส่ง ${bubbles.length} ข้อความถึง ${customerName} ทาง LINE?`;
+    const what = `${bubbles.length} ข้อความ${images.length ? ` + ${images.length} รูป` : ""}`;
+    const question = !p
+      ? `ส่ง ${what} ถึง ${customerName} ทาง LINE?`
+      : `${p.type === "cancel" ? "ยกเลิกคิว" : "จองคิว"} ${p.customer.name} · ${p.serviceName}\n${thaiDay(p.date)} ${p.startTime}–${p.endTime} · ${p.branchName}\nแล้วส่ง ${what} ทาง LINE?`;
     if (!window.confirm(question)) return;
     setBusy("send"); setErr(""); setMsg("");
     try {
@@ -74,16 +83,16 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftId: draft.id }),
         });
         const bd = await br.json().catch(() => ({}));
-        if (!br.ok) { setErr(`ยังไม่ได้จองและยังไม่ได้ส่ง: ${bd.error ?? "จองไม่สำเร็จ"}`); return; }
+        if (!br.ok) { setErr(`ยังไม่ได้${p.type === "cancel" ? "ยกเลิก" : "จอง"}และยังไม่ได้ส่ง: ${bd.error ?? "ไม่สำเร็จ"}`); return; }
       }
       const res = await fetch(`/api/admin/inbox/${threadId}/send`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bubbles, draftId: sourceDraftId }),
+        body: JSON.stringify({ bubbles, images: images.map(i => i.key), draftId: sourceDraftId }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(d.error ?? "ส่งไม่สำเร็จ"); return; }
       setText(""); setLoadedId(draft?.id ?? null);
-      setMsg(`${p ? "จองแล้ว + " : ""}${d.via === "reply" ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
+      setMsg(`${p ? (p.type === "cancel" ? "ยกเลิกแล้ว + " : "จองแล้ว + ") : ""}${d.via === "reply" ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
       router.refresh();
     } finally { setBusy(""); }
   }
@@ -126,7 +135,20 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
       {draft?.status === "FAILED" && !pending && <p className="text-[11px]" style={{ color: "#B91C1C" }}>{draft.error}</p>}
       {ready?.note && ready.note !== "-" && !pending && <p className="text-[11px] px-1" style={{ color: "#92400E" }}>📝 {ready.note}</p>}
 
-      {draft?.booking && (
+      {draft?.booking?.type === "cancel" && (
+        <div className="rounded-xl p-2.5 text-xs" style={{ background: draft.bookingId ? "#F5F5F4" : "#FEF2F2", border: `1px solid ${draft.bookingId ? BORDER : "#FCA5A5"}`, color: TEXT }}>
+          <p className="font-semibold flex items-center gap-1.5 mb-1" style={{ color: draft.bookingId ? MUTED : "#B91C1C" }}>
+            <CalendarX size={14} /> {draft.bookingId ? "ยกเลิกคิวแล้ว" : "AI เตรียมยกเลิกคิวนี้ — จะยกเลิกเมื่อกด \"ยกเลิกคิว + ส่ง\""}
+          </p>
+          <p>{draft.booking.serviceName} · {draft.booking.branchName}</p>
+          <p className="font-semibold">{thaiDay(draft.booking.date)} {draft.booking.startTime}–{draft.booking.endTime}</p>
+          <p>{draft.booking.customer.name} · {draft.booking.customer.phone}</p>
+          {draft.booking.notifiedOnLine && <p className="text-[10px]" style={{ color: MUTED }}>ลูกค้าจะได้ข้อความแจ้งยกเลิกของร้านทาง LINE ด้วย</p>}
+          <Link href={`/admin/m/${draft.booking.bookingId}`} className="text-[11px] underline" style={{ color: MUTED }}>ดูการจอง</Link>
+        </div>
+      )}
+
+      {draft?.booking && draft.booking.type !== "cancel" && (
         <div className="rounded-xl p-2.5 text-xs" style={{ background: draft.bookingId ? "#F0FDF4" : "#FFF7ED", border: `1px solid ${draft.bookingId ? "#BBE5C8" : "#FDBA74"}`, color: TEXT }}>
           <p className="font-semibold flex items-center gap-1.5 mb-1" style={{ color: draft.bookingId ? "#166534" : "#9A3412" }}>
             <CalendarCheck size={14} /> {draft.bookingId ? "จองแล้ว" : "AI เตรียมการจองไว้ — จะจองเมื่อกด \"จอง + ส่ง\""}
@@ -134,7 +156,7 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
           <p>{draft.booking.serviceName} · {draft.booking.branchName}</p>
           <p className="font-semibold">{thaiDay(draft.booking.date)} {draft.booking.startTime}–{draft.booking.endTime} · ฿{(draft.booking.priceSatang / 100).toLocaleString("th-TH")}</p>
           <p>{draft.booking.customer.name} · {draft.booking.customer.phone}</p>
-          <p className="text-[10px]" style={{ color: MUTED }}>{KIND_LABEL[draft.booking.customer.kind]}</p>
+          <p className="text-[10px]" style={{ color: MUTED }}>{KIND_LABEL[draft.booking.customer.kind]}{draft.booking.cardOnLine ? " · ลูกค้าจะได้การ์ดยืนยันการจองทาง LINE" : ""}</p>
           {draft.bookingId && <Link href={`/admin/m/${draft.bookingId}`} className="text-[11px] underline" style={{ color: "#166534" }}>ดูการจอง</Link>}
         </div>
       )}
@@ -150,16 +172,32 @@ export default function Composer({ threadId, customerName, draft }: { threadId: 
         placeholder={pending ? "รอร่างจาก AI สักครู่… หรือพิมพ์เองได้เลย" : "พิมพ์คำตอบ — เว้นบรรทัดว่าง 1 บรรทัด = แยกเป็นข้อความใหม่"}
         className="w-full px-3 py-2 rounded-xl text-sm" style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "white" }} />
 
+      {images.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pt-1">
+          {images.map(i => (
+            <div key={i.key} className="relative shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={i.preview} alt={i.title} className="h-24 rounded-lg" style={{ border: `1px solid ${BORDER}` }} />
+              <button type="button" aria-label={`เอารูป ${i.title} ออก`}
+                onClick={() => setDropped({ draftId: imageDraft?.id ?? null, keys: [...droppedKeys, i.key] })}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white" style={{ background: TEXT }}>
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
-        <p className="text-[10px] flex-1" style={{ color: MUTED }}>{bubbles.length > 0 ? `${bubbles.length} ข้อความ · เว้นบรรทัดว่าง = แยกข้อความ` : " "}</p>
-        <button type="button" onClick={() => void send(!!proposal)} disabled={busy !== "" || bubbles.length === 0}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: proposal ? "#C2410C" : LINE_GREEN }}>
-          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : proposal ? <CalendarCheck size={15} /> : <Send size={15} />} {proposal ? "จอง + ส่ง" : "ส่ง"}
+        <p className="text-[10px] flex-1" style={{ color: MUTED }}>{total > 0 ? `${bubbles.length} ข้อความ${images.length ? ` + ${images.length} รูป` : ""} · เว้นบรรทัดว่าง = แยกข้อความ` : "\u00a0"}</p>
+        <button type="button" onClick={() => void send(!!proposal)} disabled={busy !== "" || total === 0}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40" style={{ background: isCancel ? "#B91C1C" : proposal ? "#C2410C" : LINE_GREEN }}>
+          {busy === "send" ? <Loader2 size={15} className="animate-spin" /> : isCancel ? <CalendarX size={15} /> : proposal ? <CalendarCheck size={15} /> : <Send size={15} />} {isCancel ? "ยกเลิกคิว + ส่ง" : proposal ? "จอง + ส่ง" : "ส่ง"}
         </button>
       </div>
       {proposal && (
-        <button type="button" onClick={() => void send(false)} disabled={busy !== "" || bubbles.length === 0}
-          className="w-full text-[11px] underline disabled:opacity-40" style={{ color: MUTED }}>ส่งข้อความอย่างเดียว (ยังไม่จอง)</button>
+        <button type="button" onClick={() => void send(false)} disabled={busy !== "" || total === 0}
+          className="w-full text-[11px] underline disabled:opacity-40" style={{ color: MUTED }}>ส่งข้อความอย่างเดียว ({isCancel ? "ยังไม่ยกเลิก" : "ยังไม่จอง"})</button>
       )}
       {msg && <p className="text-[11px] text-center" style={{ color: "#166534" }}>{msg}</p>}
       {err && <p className="text-[11px] text-center" style={{ color: "#B91C1C" }}>{err}</p>}

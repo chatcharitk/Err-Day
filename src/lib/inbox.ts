@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { pushLine, replyLine, type LineMessage } from "@/lib/line-messaging";
+import { MENU_IMAGES, menuImageUrls } from "@/lib/inbox-media";
 
 /**
  * AI reply inbox — storage and sending. Customer chat messages are saved here as
@@ -88,13 +89,14 @@ export class InboxSendError extends Error {}
  * Send the owner's reply. Uses the free LINE reply token when the customer's
  * message is still fresh, otherwise a push (counts against the monthly quota).
  */
-export async function sendInboxReply(threadId: string, rawBubbles: string[], opts: { draftId?: string | null; sentBy: string }) {
+export async function sendInboxReply(threadId: string, rawBubbles: string[], opts: { draftId?: string | null; sentBy: string; images?: string[] }) {
   const thread = await prisma.inboxThread.findUnique({ where: { id: threadId } });
   if (!thread) throw new InboxSendError("ไม่พบแชทนี้");
   if (thread.channel !== "LINE") throw new InboxSendError("ยังส่งได้เฉพาะ LINE");
   const bubbles = rawBubbles.map(b => b.trim()).filter(Boolean);
-  if (bubbles.length === 0) throw new InboxSendError("ไม่มีข้อความ");
-  if (bubbles.length > 5) throw new InboxSendError("ส่งได้ครั้งละไม่เกิน 5 ข้อความ");
+  const images = [...new Set(opts.images ?? [])].map(k => MENU_IMAGES.find(m => m.key === k)).filter(m => !!m);
+  if (bubbles.length + images.length === 0) throw new InboxSendError("ไม่มีข้อความ");
+  if (bubbles.length + images.length > 5) throw new InboxSendError("ส่งได้ครั้งละไม่เกิน 5 ข้อความ (รวมรูป)");
   if (bubbles.some(b => b.length > 4800)) throw new InboxSendError("ข้อความยาวเกินไป");
 
   // Double-tap guard: the same last bubble already went out a moment ago.
@@ -102,9 +104,17 @@ export async function sendInboxReply(threadId: string, rawBubbles: string[], opt
     where: { threadId, direction: "OUT", createdAt: { gte: new Date(Date.now() - 20_000) } },
     orderBy: { createdAt: "desc" }, select: { text: true },
   });
-  if (recent?.text === bubbles[bubbles.length - 1]) throw new InboxSendError("เพิ่งส่งข้อความนี้ไปแล้ว");
+  const lastOut = bubbles[bubbles.length - 1] ?? images[images.length - 1]?.title;
+  if (recent?.text === lastOut) throw new InboxSendError("เพิ่งส่งข้อความนี้ไปแล้ว");
 
-  const messages: LineMessage[] = bubbles.map(text => ({ type: "text", text }));
+  const messages: LineMessage[] = [
+    ...bubbles.map(text => ({ type: "text" as const, text })),
+    // LINE image message (line-messaging's LineMessage type lists only text/flex).
+    ...images.map(m => {
+      const u = menuImageUrls(m.key);
+      return { type: "image", originalContentUrl: u.original, previewImageUrl: u.preview } as unknown as LineMessage;
+    }),
+  ];
   let via: "reply" | "push" = "push";
   let result: { ok: boolean; error?: string } | null = null;
   if (thread.replyToken && thread.replyTokenAt && Date.now() - thread.replyTokenAt.getTime() < REPLY_TOKEN_MAX_AGE_MS) {
@@ -120,20 +130,21 @@ export async function sendInboxReply(threadId: string, rawBubbles: string[], opt
 
   const now = Date.now();
   await prisma.$transaction([
-    ...bubbles.map((text, i) => prisma.inboxMessage.create({
-      data: { threadId, direction: "OUT", kind: "text", text, sentBy: opts.sentBy, draftId: opts.draftId ?? null, createdAt: new Date(now + i) },
+    ...[...bubbles.map(text => ({ kind: "text", text })), ...images.map(m => ({ kind: "image", text: m.title }))].map((m, i) => prisma.inboxMessage.create({
+      data: { threadId, direction: "OUT", kind: m.kind, text: m.text, sentBy: opts.sentBy, draftId: opts.draftId ?? null, createdAt: new Date(now + i) },
     })),
     prisma.inboxThread.update({ where: { id: threadId }, data: { lastMessageAt: new Date(now), unread: 0, replyToken: null, replyTokenAt: null } }),
     prisma.inboxDraft.updateMany({ where: { threadId, status: { in: ["PENDING", "FAILED"] } }, data: { status: "STALE" } }),
   ]);
   if (opts.draftId) {
-    const draft = await prisma.inboxDraft.findUnique({ where: { id: opts.draftId }, select: { bubbles: true, threadId: true } });
+    const draft = await prisma.inboxDraft.findUnique({ where: { id: opts.draftId }, select: { bubbles: true, images: true, threadId: true } });
     if (draft?.threadId === threadId) {
-      const same = JSON.stringify(draft.bubbles) === JSON.stringify(bubbles);
+      const same = JSON.stringify(draft.bubbles) === JSON.stringify(bubbles)
+        && JSON.stringify(draft.images ?? []) === JSON.stringify(images.map(m => m.key));
       await prisma.inboxDraft.update({ where: { id: opts.draftId }, data: { status: same ? "USED" : "EDITED" } });
     }
   }
-  return { via, count: bubbles.length };
+  return { via, count: messages.length };
 }
 
 // ── LINE quota (for the inbox header) ────────────────────────────────────────
