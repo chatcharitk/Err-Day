@@ -49,7 +49,7 @@ export default function CountForm({ location, locationName, rows, doneHref, addP
   }
 
   return (
-    <div className="pb-28">
+    <div className="">
       <div className="px-4 pt-3 pb-2 space-y-2">
         <p className="text-xs" style={{ color: MUTED }}>
           นับของที่ <b style={{ color: TEXT }}>{locationName}</b> แล้วกรอกจำนวนจริงบนชั้น (เต็มหน่วย เช่น ขวด/หลอด) · ช่องที่เว้นว่างจะไม่เปลี่ยน
@@ -103,8 +103,8 @@ export default function CountForm({ location, locationName, rows, doneHref, addP
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-20">
-        <div className="max-w-md mx-auto bg-white px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="sticky bottom-0 z-20">
+        <div className="bg-white px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
           {err && <p className="text-xs mb-2" style={{ color: LOW }}>{err}</p>}
           <button type="button" disabled={busy || filled.length === 0} onClick={save}
             className="w-full py-3 rounded-xl text-white font-medium flex items-center justify-center gap-2 disabled:opacity-40"

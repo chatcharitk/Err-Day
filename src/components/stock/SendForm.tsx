@@ -9,8 +9,8 @@ import CategoryChips, { GroupHeader } from "./CategoryChips";
 import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
 
 /** Admin: send stock from one place (usually home) to a branch. */
-export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
-  locations: Location[]; rows: StockRow[]; defaultFrom: string; defaultTo: string;
+export default function SendForm({ locations, rows, defaultFrom, defaultTo, base = "/admin/m/stock" }: {
+  locations: Location[]; rows: StockRow[]; defaultFrom: string; defaultTo: string; base?: string;
 }) {
   const router = useRouter();
   const [from, setFrom] = useState(defaultFrom);
@@ -38,14 +38,14 @@ export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
     const r = await postStock({ action: "transfer", from, to, note, items: chosen.map(([productId, n]) => ({ productId, qty: n })) });
     setBusy(false);
     if (!r.ok) { setErr(r.error); return; }
-    router.push("/admin/m/stock");
+    router.push(base);
     router.refresh();
   }
 
   const chip = (on: boolean) => on ? { background: PRIMARY, color: "white" } : { border: `1px solid ${BORDER}`, color: MUTED };
 
   return (
-    <div className="pb-28">
+    <div className="">
       <div className="px-4 pt-3 space-y-2">
         <p className="text-xs" style={{ color: MUTED }}>จาก</p>
         <div className="flex flex-wrap gap-2">
@@ -80,8 +80,8 @@ export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
           );
         })])}
       </ul>
-      <div className="fixed bottom-0 left-0 right-0 z-20">
-        <div className="max-w-md mx-auto bg-white px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="sticky bottom-0 z-20">
+        <div className="bg-white px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${BORDER}` }}>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="หมายเหตุ (ไม่บังคับ)" className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${BORDER}` }} />
           {err && <p className="text-xs" style={{ color: LOW }}>{err}</p>}
           <button type="button" disabled={busy || chosen.length === 0} onClick={send} className="w-full py-3 rounded-xl text-white font-medium flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: PRIMARY }}>

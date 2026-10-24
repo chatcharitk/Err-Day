@@ -20,7 +20,7 @@ function parse(text: string) {
   }).filter(i => i.name);
 }
 
-export default function BulkAddForm({ locations, categories, defaultCategory }: { locations: Location[]; categories: string[]; defaultCategory: string }) {
+export default function BulkAddForm({ locations, categories, defaultCategory, base = "/admin/m/stock" }: { locations: Location[]; categories: string[]; defaultCategory: string; base?: string }) {
   const router = useRouter();
   const [category, setCategory] = useState(defaultCategory);
   const [brand, setBrand] = useState("");
@@ -49,12 +49,12 @@ export default function BulkAddForm({ locations, categories, defaultCategory }: 
     setBusy(false);
     if (!res?.ok) { setErr(j?.error || "บันทึกไม่สำเร็จ"); return; }
     alert(`เพิ่มใหม่ ${j?.created ?? 0} รายการ${j?.reused ? ` · มีอยู่แล้ว ${j.reused}` : ""}${j?.counted ? ` · บันทึกจำนวน ${j.counted} รายการ` : ""}`);
-    router.push(withQty ? `/admin/m/stock?loc=${location}` : "/admin/m/stock");
+    router.push(withQty ? `${base}?loc=${location}` : base);
     router.refresh();
   }
 
   return (
-    <div className="px-4 py-4 space-y-4 pb-28">
+    <div className="px-4 py-4 space-y-4">
       <p className="text-xs" style={{ color: MUTED }}>สำหรับของที่มีหลายรายการเหมือนกัน เช่น สีย้อมผมแต่ละเบอร์ — ตั้งค่าร่วมด้านบน แล้วพิมพ์ชื่อบรรทัดละ 1 รายการ</p>
       <div>
         <Label>หมวด</Label>
@@ -96,8 +96,8 @@ export default function BulkAddForm({ locations, categories, defaultCategory }: 
           </div>
         </div>
       )}
-      <div className="fixed bottom-0 left-0 right-0 z-20">
-        <div className="max-w-md mx-auto bg-white px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="sticky bottom-0 z-20 -mx-4 -mb-4">
+        <div className="bg-white px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
           {err && <p className="text-xs mb-2" style={{ color: LOW }}>{err}</p>}
           <button type="button" disabled={busy || !items.length} onClick={save} className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-40" style={{ background: PRIMARY }}>
             {busy ? "กำลังบันทึก…" : `เพิ่ม ${items.length} รายการ`}

@@ -213,7 +213,7 @@ export async function stockTable(opts: { includeInactive?: boolean } = {}) {
 
 export type StockRow = {
   id: string; name: string; brand: string | null; size: string | null; unit: string; category: string | null;
-  packUnit: string | null; packSize: number; usage: string; isActive: boolean;
+  packUnit: string | null; packSize: number; usage: string; isActive: boolean; costSatang: number | null;
   /** location id → qty / effective minimum */
   levels: Record<string, { qty: number; min: number }>;
 };
@@ -226,7 +226,7 @@ export async function stockRows(locations: Location[], opts: { includeInactive?:
     (a.size ?? "").localeCompare(b.size ?? "", "th", { numeric: true }));
   return products.map(p => ({
     id: p.id, name: p.name, brand: p.brand, size: p.size, unit: p.unit, category: p.category, packUnit: p.packUnit, packSize: p.packSize,
-    usage: p.usage, isActive: p.isActive,
+    usage: p.usage, isActive: p.isActive, costSatang: p.costSatang,
     levels: Object.fromEntries(locations.map(l => {
       const lv = p.levels.find(x => x.location === l.id);
       return [l.id, { qty: lv?.qty ?? 0, min: minFor(lv, p, l.id) }];

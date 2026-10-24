@@ -93,8 +93,8 @@ export default function LocationStock({ location, rows }: { location: string; ro
       )}
 
       {pick && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => !busy && setPick(null)}>
-          <div className="w-full max-w-md bg-white rounded-t-2xl p-4 pb-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => !busy && setPick(null)}>
+          <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-4 pb-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-2">
               <div className="flex-1">
                 <p className="font-medium" style={{ color: TEXT }}>{label(pick)}</p>

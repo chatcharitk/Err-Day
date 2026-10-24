@@ -51,7 +51,7 @@ export default function ProductForm({ initial, retailOptions, doneHref, categori
   const box = { border: `1px solid ${BORDER}`, color: TEXT };
 
   return (
-    <div className="px-4 py-4 space-y-4 pb-28">
+    <div className="px-4 py-4 space-y-4">
       <div>
         <Label>ชื่อสินค้า *</Label>
         <input className={field} style={box} value={v.name} onChange={e => set("name", e.target.value)} placeholder="เช่น แชมพู Love Smoothing" />
@@ -120,8 +120,8 @@ export default function ProductForm({ initial, retailOptions, doneHref, categori
         </label>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-20">
-        <div className="max-w-md mx-auto bg-white px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="sticky bottom-0 z-20 -mx-4 -mb-4">
+        <div className="bg-white px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
           {err && <p className="text-xs mb-2" style={{ color: LOW }}>{err}</p>}
           <button type="button" disabled={busy} onClick={save} className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50" style={{ background: PRIMARY }}>
             {busy ? "กำลังบันทึก…" : "บันทึก"}

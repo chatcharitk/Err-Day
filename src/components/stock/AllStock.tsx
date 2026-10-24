@@ -9,7 +9,7 @@ import CategoryChips, { GroupHeader } from "./CategoryChips";
 import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
 
 /** Every product × every place; low stock in red. Tap a product for its page. */
-export default function AllStock({ locations, rows }: { locations: Location[]; rows: StockRow[] }) {
+export default function AllStock({ locations, rows, base = "/admin/m/stock" }: { locations: Location[]; rows: StockRow[]; base?: string }) {
   const [q, setQ] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const [cat, setCat] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export default function AllStock({ locations, rows }: { locations: Location[]; r
           <GroupHeader key={`h-${g.category}`} title={g.category} />,
           ...g.rows.map(r => (
           <li key={r.id}>
-            <Link href={`/admin/m/stock/products/${r.id}`} className="grid items-center px-4 py-2.5" style={{ gridTemplateColumns: cols, borderBottom: `1px solid ${BORDER}`, opacity: r.isActive ? 1 : 0.5 }}>
+            <Link href={`${base}/products/${r.id}`} className="grid items-center px-4 py-2.5" style={{ gridTemplateColumns: cols, borderBottom: `1px solid ${BORDER}`, opacity: r.isActive ? 1 : 0.5 }}>
               <span className="text-sm leading-snug pr-2" style={{ color: TEXT }}>{label(r)} <span className="text-[11px]" style={{ color: MUTED }}>({r.unit})</span></span>
               {locations.map(l => {
                 const low = isLow(r, l.id);

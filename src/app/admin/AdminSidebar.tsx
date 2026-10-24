@@ -26,8 +26,7 @@ import {
   Wallet,
   Activity,
   Vote, Ticket,
-  FileText,
-} from "lucide-react";
+  FileText, Package } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const MENU = [
@@ -40,6 +39,7 @@ const MENU = [
   { href: "/admin/payroll",    labelTh: "ค่าตอบแทน",       label: "Payroll",       icon: Wallet,                                    ownerOnly: true  },
   { href: "/admin/payslips",   labelTh: "สลิปเงินเดือน",    label: "Pay Slips",     icon: FileText,                                  ownerOnly: true  },
   { href: "/admin/expenses",   labelTh: "บันทึกรายจ่าย",    label: "Expenses",     icon: Receipt,                                    ownerOnly: false },
+  { href: "/admin/stock",      labelTh: "สต็อก",          label: "Inventory",    icon: Package,                                    ownerOnly: false },
   { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard,                                 ownerOnly: false },
   { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog,                                    ownerOnly: false },
   { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock,                              ownerOnly: false },
