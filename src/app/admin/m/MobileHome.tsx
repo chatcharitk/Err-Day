@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
   Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2, MessageCircle, Ticket, Trophy,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, Package } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
 
@@ -111,6 +110,7 @@ const MENU_GROUPS: { title: string; items: MenuItem[] }[] = [
     { label: "BI ภาพรวม", icon: BarChart2, href: "/admin/m/dashboard" },
     { label: "ประวัติการขาย", icon: Receipt, href: "/admin/m/history" },
     { label: "รายจ่าย", icon: Wallet, href: "/admin/m/expenses" },
+    { label: "สต็อก", icon: Package, href: "/admin/m/stock" },
   ] },
   { title: "หน้าร้าน", items: [
     { label: "แชทลูกค้า (AI)", icon: MessageCircle, href: "/admin/m/inbox", color: "#06C755", bg: "#E9F9EF" },

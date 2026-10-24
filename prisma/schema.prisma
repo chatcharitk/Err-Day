@@ -1156,3 +1156,136 @@ model InboxDraft {
 
   @@index([threadId, createdAt])
 }
+
+/// ── Inventory ────────────────────────────────────────────────────────────────
+/// Stock lives at a "location": the owner's home (central warehouse, id "HOME")
+/// or a branch (the Branch id). Quantities are whole units (bottles, tubes…).
+/// StockMovement is the ledger — every change, signed, with who and why;
+/// StockLevel is its running total per product × location (kept in step inside
+/// the same transaction) plus that location's low-stock minimum.
+model Product {
+  id         String   @id @default(cuid())
+  name       String
+  brand      String?
+  /// Size printed on the item, e.g. "200 ml" (display only).
+  size       String?
+  /// Unit stock is counted in (ขวด, หลอด, ชิ้น…).
+  unit       String   @default("ชิ้น")
+  /// Suppliers sell by pack: 1 packUnit = packSize units (e.g. 1 กล่อง = 12 ขวด).
+  packUnit   String?
+  packSize   Int      @default(1)
+  /// Latest cost per unit (satang), for stock value and usage cost.
+  costSatang Int?
+  /// USE = shop supplies, SALE = sold to customers, BOTH.
+  usage      String   @default("USE")
+  /// The retail item (Service in หมวด สินค้า) sold at POS — sales deduct this product.
+  serviceId  String?  @unique
+  /// Default low-stock minimum for a branch when its level has none set.
+  minQty     Int      @default(0)
+  imageUrl   String?
+  notes      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  levels     StockLevel[]
+  movements  StockMovement[]
+
+  @@index([isActive, name])
+}
+
+model StockLevel {
+  id        String   @id @default(cuid())
+  productId String
+  location  String
+  qty       Int      @default(0)
+  /// Low-stock minimum here; null → Product.minQty (branches) / 0 (home).
+  minQty    Int?
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, location])
+  @@index([location])
+}
+
+model StockMovement {
+  id         String   @id @default(cuid())
+  productId  String
+  location   String
+  /// Signed change in units (+ in, − out).
+  qty        Int
+  /// OPENING | COUNT | RECEIVE | TRANSFER_OUT | TRANSFER_IN | USE | SALE | SALE_VOID | DAMAGE | ADJUST
+  type       String
+  /// Level after this movement (for history display).
+  balance    Int
+  note       String?
+  actorName  String
+  staffId    String?
+  adminId    String?
+  expenseId  String?
+  receiptId  String?
+  transferId String?
+  countId    String?
+  createdAt  DateTime @default(now())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+  @@index([location, createdAt])
+  @@index([type, createdAt])
+  @@index([receiptId])
+  @@index([expenseId])
+}
+
+/// Delivery from one location to another (home → สุขุมวิท / บางนา). Stock leaves
+/// the sender when SENT and arrives when the branch confirms RECEIVED.
+model StockTransfer {
+  id           String   @id @default(cuid())
+  fromLocation String
+  toLocation   String
+  /// SENT | RECEIVED | CANCELLED
+  status       String   @default("SENT")
+  note         String?
+  sentBy       String
+  sentAt       DateTime @default(now())
+  receivedBy   String?
+  receivedAt   DateTime?
+  items        StockTransferItem[]
+
+  @@index([toLocation, status])
+  @@index([sentAt])
+}
+
+model StockTransferItem {
+  id          String        @id @default(cuid())
+  transferId  String
+  productId   String
+  qtySent     Int
+  qtyReceived Int?
+  transfer    StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+}
+
+/// A shelf count at one location. The first one is the opening stock; later
+/// ones record the difference between the app's number and the shelf.
+model StockCount {
+  id         String   @id @default(cuid())
+  location   String
+  countedBy  String
+  note       String?
+  createdAt  DateTime @default(now())
+  lines      StockCountLine[]
+
+  @@index([location, createdAt])
+}
+
+model StockCountLine {
+  id        String     @id @default(cuid())
+  countId   String
+  productId String
+  expected  Int
+  counted   Int
+  count     StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+
+  @@index([countId])
+  @@index([productId])
+}
