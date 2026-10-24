@@ -21,8 +21,10 @@ export default async function StaffStockPage({ searchParams }: { searchParams: P
   if (!me) redirect("/staff/login");
   const { loc } = await searchParams;
 
-  const locations = (await stockLocations()).filter(l => l.id !== HOME);
-  const here = locations.find(l => l.id === loc) ?? locations.find(l => l.id === me.branchId) ?? locations[0];
+  // Staff can look at every place incl. the home warehouse (view-only there).
+  const locations = await stockLocations();
+  const here = locations.find(l => l.id === loc) ?? locations.find(l => l.id === me.branchId) ?? locations.find(l => l.id !== HOME)!;
+  const atHome = here.id === HOME;
   const [rows, deliveries] = await Promise.all([
     stockRows(locations),
     pendingTransfers(locations, [here.id]),
@@ -48,14 +50,18 @@ export default async function StaffStockPage({ searchParams }: { searchParams: P
           </div>
         )}
 
+        {atHome ? (
+          <p className="px-4 pt-3 text-xs" style={{ color: MUTED }}>ของที่บ้าน (คลังกลาง) — ดูได้อย่างเดียว · ถ้าต้องการของ แจ้งแอดมินให้ส่งไปสาขา</p>
+        ) : (
         <div className="px-4 pt-3">
           <Link href={`/staff/stock/count?loc=${here.id}`} className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-white"
             style={{ border: `1px solid ${PRIMARY}`, color: PRIMARY }}>
             <ClipboardList size={16} /> นับสต็อก {here.short}
           </Link>
         </div>
+        )}
 
-        <LocationStock location={here.id} rows={rows} />
+        <LocationStock location={here.id} rows={rows} readOnly={atHome} />
       </div>
     </div>
   );

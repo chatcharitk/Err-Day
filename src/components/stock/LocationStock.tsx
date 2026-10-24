@@ -12,7 +12,7 @@ import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
  * Stock at one place, with the quick "เบิกของ" sheet: tap a product → choose
  * how many → เบิกใช้ (opened for service) or เสีย/หมดอายุ (with a reason).
  */
-export default function LocationStock({ location, rows }: { location: string; rows: StockRow[] }) {
+export default function LocationStock({ location, rows, readOnly }: { location: string; rows: StockRow[]; readOnly?: boolean }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
@@ -53,7 +53,7 @@ export default function LocationStock({ location, rows }: { location: string; ro
       <div className="px-4 pt-3 pb-2 space-y-2">
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white" style={{ border: `1px solid ${BORDER}` }}>
           <Search size={15} style={{ color: MUTED }} />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาสินค้าเพื่อเบิก" className="flex-1 text-sm outline-none bg-transparent" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={readOnly ? "ค้นหาสินค้า" : "ค้นหาสินค้าเพื่อเบิก"} className="flex-1 text-sm outline-none bg-transparent" />
         </div>
         <CategoryChips rows={rows} value={cat} onChange={setCat} />
         {lowCount > 0 && (
@@ -74,7 +74,7 @@ export default function LocationStock({ location, rows }: { location: string; ro
           const low = isLow(r);
           return (
             <li key={r.id}>
-              <button type="button" onClick={() => open(r)} className="w-full text-left px-4 py-3 flex items-center gap-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+              <button type="button" onClick={() => !readOnly && open(r)} disabled={readOnly} className="w-full text-left px-4 py-3 flex items-center gap-3" style={{ borderTop: `1px solid ${BORDER}` }}>
                 <span className="flex-1 text-sm leading-snug" style={{ color: TEXT }}>{label(r)}</span>
                 <span className="text-sm font-semibold px-2 py-0.5 rounded-md" style={{ color: low || (l?.qty ?? 0) < 0 ? LOW : TEXT, background: low ? LOW_BG : "transparent" }}>
                   {l?.qty ?? 0}
