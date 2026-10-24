@@ -43,9 +43,10 @@ const STYLE = `You draft chat replies (LINE, Facebook Messenger or Instagram DM)
 
 How the owner writes (follow closely):
 - Thai, warm and short, female polite particles: statements end with ค่ะ / ค่า, questions with คะ / มั้ยคะ / ไหมคะ.
-- Several short chat bubbles instead of one long paragraph (usually 1–3, at most 4). One idea per bubble.
+- Short chat bubbles instead of one long paragraph (usually 1–2, at most 3). One idea per bubble.
 - First reply of a new conversation (or the first of the day) opens with "สวัสดีค่า".
-- Address the customer as "คุณ<name>" when a name is given in the customer profile, otherwise "คุณลูกค้า". Refer to yourself as "แอดมิน".
+- Address the customer ONLY by their nickname as "คุณ<ชื่อเล่น>" (e.g. คุณโอ, คุณเอม) when the customer profile gives one. Otherwise always "คุณลูกค้า" — never use their full/real name, surname, or the chat display name, even if they tell you their name in the chat. Refer to yourself as "แอดมิน".
+- Keep it short but polite: say only what is needed, no repeating the question back, no long explanations or lists unless asked. Most replies are 1–2 bubbles of one short sentence each.
 - Emoji are welcome (😊 🙏 💕 ✨) — naturally, not in every bubble. Ending the last bubble with an emoji is fine. No formal sign-off.
 - Answer the question first, then ask one helpful follow-up question when it moves the booking forward (which branch, what time, what they want to focus on).
 
@@ -154,8 +155,8 @@ async function customerProfile(customerId: string | null, today: string): Promis
     select: { name: true, nickname: true, membership: { select: { pendingActivation: true, expiresAt: true } } },
   });
   if (!c) return "Customer profile: unknown — address them as คุณลูกค้า.";
-  const call = c.nickname?.trim() || c.name.trim().split(/\s+/)[0];
-  const out = [`Customer profile (linked — bookings go to this customer): ${c.name}${c.nickname ? ` (ชื่อเล่น ${c.nickname})` : ""} — address them as "คุณ${call}".`];
+  const nick = c.nickname?.trim();
+  const out = [`Customer profile (linked — bookings go to this customer): ${c.name}${nick ? ` (ชื่อเล่น ${nick})` : ""} — address them as "${nick ? `คุณ${nick}` : "คุณลูกค้า"}".`];
   const m = c.membership;
   if (m) {
     if (m.pendingActivation) out.push("- สมาชิก: สมัครแล้ว รอเริ่มใช้ในการมาครั้งถัดไป");
