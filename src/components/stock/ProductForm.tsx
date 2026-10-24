@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BORDER, MUTED, PRIMARY, TEXT, LOW } from "./theme";
+import { STOCK_CATEGORIES } from "@/lib/stock-categories";
 
 export type ProductFormValue = {
   id?: string; name: string; brand: string; size: string; unit: string; packUnit: string; packSize: string;
-  costBaht: string; usage: string; serviceId: string; minQty: string; notes: string; isActive: boolean;
+  category: string; costBaht: string; usage: string; serviceId: string; minQty: string; notes: string; isActive: boolean;
 };
 
 const UNITS = ["ขวด", "หลอด", "กระปุก", "ชิ้น", "ซอง", "กล่อง", "แพ็ค"];
@@ -17,7 +18,9 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 /** Add / edit a product. Only the name is required. */
-export default function ProductForm({ initial, retailOptions, doneHref }: {
+export default function ProductForm({ initial, retailOptions, doneHref, categories = [] }: {
+  /** Custom categories already used by other products. */
+  categories?: string[];
   initial: ProductFormValue;
   /** Retail POS items (หมวด สินค้า) this product can be linked to. */
   retailOptions: { id: string; name: string }[];
@@ -52,6 +55,18 @@ export default function ProductForm({ initial, retailOptions, doneHref }: {
       <div>
         <Label>ชื่อสินค้า *</Label>
         <input className={field} style={box} value={v.name} onChange={e => set("name", e.target.value)} placeholder="เช่น แชมพู Love Smoothing" />
+      </div>
+      <div>
+        <Label>หมวด</Label>
+        <div className="flex flex-wrap gap-2">
+          {[...STOCK_CATEGORIES, ...categories.filter(c => !(STOCK_CATEGORIES as readonly string[]).includes(c))].map(c => (
+            <button key={c} type="button" onClick={() => set("category", v.category === c ? "" : c)} className="px-3 py-1.5 rounded-full text-sm"
+              style={v.category === c ? { background: PRIMARY, color: "white" } : box}>{c}</button>
+          ))}
+          <input className="px-3 py-1.5 rounded-full text-sm w-32 outline-none" style={box} placeholder="+ หมวดใหม่"
+            value={[...STOCK_CATEGORIES, ...categories].includes(v.category) ? "" : v.category}
+            onChange={e => set("category", e.target.value)} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>แบรนด์</Label><input className={field} style={box} value={v.brand} onChange={e => set("brand", e.target.value)} placeholder="Davines" /></div>

@@ -1176,6 +1176,8 @@ model Product {
   packSize   Int      @default(1)
   /// Latest cost per unit (satang), for stock value and usage cost.
   costSatang Int?
+  /// Group for lists and counts (แชมพู / ครีมนวด, สีย้อมผม, …); free text, presets in stock-categories.ts.
+  category   String?
   /// USE = shop supplies, SALE = sold to customers, BOTH.
   usage      String   @default("USE")
   /// The retail item (Service in หมวด สินค้า) sold at POS — sales deduct this product.
@@ -1191,6 +1193,7 @@ model Product {
   movements  StockMovement[]
 
   @@index([isActive, name])
+  @@index([category])
 }
 
 model StockLevel {

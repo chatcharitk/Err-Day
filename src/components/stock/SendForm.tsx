@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Search, Minus, Plus, Truck } from "lucide-react";
 import type { Location, StockRow } from "@/lib/stock";
 import { BORDER, MUTED, PRIMARY, TEXT, LOW, label, postStock } from "./theme";
+import CategoryChips, { GroupHeader } from "./CategoryChips";
+import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
 
 /** Admin: send stock from one place (usually home) to a branch. */
 export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
@@ -14,6 +16,7 @@ export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
   const [q, setQ] = useState("");
+  const [cat, setCat] = useState<string | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,9 +25,8 @@ export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
   const chosen = Object.entries(qty).filter(([, n]) => n > 0);
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return rows.filter(r => !s || label(r).toLowerCase().includes(s))
-      .sort((a, b) => (b.levels[from]?.qty ?? 0) - (a.levels[from]?.qty ?? 0));
-  }, [q, rows, from]);
+    return rows.filter(r => (!s || label(r).toLowerCase().includes(s)) && (!cat || (r.category?.trim() || NO_CATEGORY) === cat));
+  }, [q, rows, cat]);
   const name = (id: string) => locations.find(l => l.id === id)?.short ?? id;
 
   function bump(id: string, d: number) { setQty(s => ({ ...s, [id]: Math.max(0, (s[id] ?? 0) + d) })); }
@@ -57,9 +59,12 @@ export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
           <Search size={15} style={{ color: MUTED }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาสินค้า" className="flex-1 text-sm outline-none bg-transparent" />
         </div>
+        <CategoryChips rows={rows} value={cat} onChange={setCat} />
       </div>
       <ul className="mt-2">
-        {shown.map(r => {
+        {groupByCategory(shown).map(g => [
+          <GroupHeader key={`h-${g.category}`} title={g.category} />,
+          ...g.rows.map(r => {
           const n = qty[r.id] ?? 0;
           const have = r.levels[from]?.qty ?? 0;
           return (
@@ -73,7 +78,7 @@ export default function SendForm({ locations, rows, defaultFrom, defaultTo }: {
               <button type="button" onClick={() => bump(r.id, 1)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ border: `1px solid ${BORDER}`, color: MUTED }} aria-label="เพิ่ม"><Plus size={14} /></button>
             </li>
           );
-        })}
+        })])}
       </ul>
       <div className="fixed bottom-0 left-0 right-0 z-20">
         <div className="max-w-md mx-auto bg-white px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${BORDER}` }}>

@@ -6,7 +6,7 @@ import { HOME, MOVE_LABEL, USAGE_LABEL, minFor, productLabel, stockLocations } f
 import MobileTop from "@/components/stock/MobileTop";
 import ProductForm from "@/components/stock/ProductForm";
 import MinEditor from "@/components/stock/MinEditor";
-import { retailOptions } from "../../retail";
+import { retailOptions, usedCategories } from "../../retail";
 
 export const dynamic  = "force-dynamic";
 export const metadata = { title: "สินค้า — err.day" };
@@ -37,9 +37,10 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           initial={{
             id, name: p.name, brand: p.brand ?? "", size: p.size ?? "", unit: p.unit, packUnit: p.packUnit ?? "",
             packSize: p.packUnit ? String(p.packSize) : "", costBaht: p.costSatang != null ? String(p.costSatang / 100) : "",
-            usage: p.usage, serviceId: p.serviceId ?? "", minQty: p.minQty ? String(p.minQty) : "", notes: p.notes ?? "", isActive: p.isActive,
+            category: p.category ?? "", usage: p.usage, serviceId: p.serviceId ?? "", minQty: p.minQty ? String(p.minQty) : "", notes: p.notes ?? "", isActive: p.isActive,
           }}
           retailOptions={await retailOptions(id)}
+          categories={await usedCategories()}
           doneHref={`/admin/m/stock/products/${id}`}
         />
       </div>
@@ -61,7 +62,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       <div className="px-4 pt-4">
         <p className="text-lg font-semibold leading-snug" style={{ color: TEXT }}>{productLabel(p)}</p>
         <p className="text-xs mt-1" style={{ color: MUTED }}>
-          {USAGE_LABEL[p.usage] ?? p.usage} · นับเป็น{p.unit}
+          {p.category ? `${p.category} · ` : ""}{USAGE_LABEL[p.usage] ?? p.usage} · นับเป็น{p.unit}
           {p.packUnit ? ` · 1 ${p.packUnit} = ${p.packSize} ${p.unit}` : ""}
           {p.costSatang != null ? ` · ทุน ฿${(p.costSatang / 100).toLocaleString()}/${p.unit}` : ""}
           {!p.isActive ? " · เลิกใช้แล้ว" : ""}

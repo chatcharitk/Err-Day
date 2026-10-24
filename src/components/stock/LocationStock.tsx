@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Search, X, Minus, Plus } from "lucide-react";
 import type { StockRow } from "@/lib/stock";
 import { BORDER, MUTED, PRIMARY, TEXT, LOW, LOW_BG, label, postStock } from "./theme";
+import CategoryChips, { GroupHeader } from "./CategoryChips";
+import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
 
 /**
  * Stock at one place, with the quick "เบิกของ" sheet: tap a product → choose
@@ -14,6 +16,7 @@ export default function LocationStock({ location, rows }: { location: string; ro
   const router = useRouter();
   const [q, setQ] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
+  const [cat, setCat] = useState<string | null>(null);
   const [pick, setPick] = useState<StockRow | null>(null);
   const [qty, setQty] = useState(1);
   const [mode, setMode] = useState<"use" | "damage">("use");
@@ -25,9 +28,9 @@ export default function LocationStock({ location, rows }: { location: string; ro
   const isLow = (r: StockRow) => { const l = r.levels[location]; return !!l && l.min > 0 && l.qty <= l.min; };
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return rows.filter(r => (!s || label(r).toLowerCase().includes(s)) && (!lowOnly || isLow(r)));
+    return rows.filter(r => (!s || label(r).toLowerCase().includes(s)) && (!lowOnly || isLow(r)) && (!cat || (r.category?.trim() || NO_CATEGORY) === cat));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, rows, lowOnly, location]);
+  }, [q, rows, lowOnly, location, cat]);
   const lowCount = rows.filter(isLow).length;
 
   function open(r: StockRow) { setPick(r); setQty(1); setMode("use"); setNote(""); setErr(null); }
@@ -52,6 +55,7 @@ export default function LocationStock({ location, rows }: { location: string; ro
           <Search size={15} style={{ color: MUTED }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาสินค้าเพื่อเบิก" className="flex-1 text-sm outline-none bg-transparent" />
         </div>
+        <CategoryChips rows={rows} value={cat} onChange={setCat} />
         {lowCount > 0 && (
           <button type="button" onClick={() => setLowOnly(v => !v)} className="text-xs px-3 py-1 rounded-full"
             style={{ background: lowOnly ? LOW : LOW_BG, color: lowOnly ? "white" : LOW }}>
@@ -63,7 +67,9 @@ export default function LocationStock({ location, rows }: { location: string; ro
       {rows.length === 0 && <p className="px-4 py-8 text-center text-sm" style={{ color: MUTED }}>ยังไม่มีสินค้าในระบบ</p>}
 
       <ul className="bg-white">
-        {shown.map(r => {
+        {groupByCategory(shown).map(g => [
+          <GroupHeader key={`h-${g.category}`} title={g.category} />,
+          ...g.rows.map(r => {
           const l = r.levels[location];
           const low = isLow(r);
           return (
@@ -77,7 +83,7 @@ export default function LocationStock({ location, rows }: { location: string; ro
               </button>
             </li>
           );
-        })}
+        })])}
       </ul>
 
       {toast && (

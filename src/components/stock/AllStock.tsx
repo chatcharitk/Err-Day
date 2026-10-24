@@ -5,18 +5,21 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import type { Location, StockRow } from "@/lib/stock";
 import { BORDER, MUTED, TEXT, LOW, LOW_BG, label } from "./theme";
+import CategoryChips, { GroupHeader } from "./CategoryChips";
+import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
 
 /** Every product × every place; low stock in red. Tap a product for its page. */
 export default function AllStock({ locations, rows }: { locations: Location[]; rows: StockRow[] }) {
   const [q, setQ] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
+  const [cat, setCat] = useState<string | null>(null);
   const isLow = (r: StockRow, l: string) => { const v = r.levels[l]; return !!v && ((v.min > 0 && v.qty <= v.min) || v.qty < 0); };
   const anyLow = (r: StockRow) => locations.some(l => isLow(r, l.id));
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return rows.filter(r => (!s || label(r).toLowerCase().includes(s)) && (!lowOnly || anyLow(r)));
+    return rows.filter(r => (!s || label(r).toLowerCase().includes(s)) && (!lowOnly || anyLow(r)) && (!cat || (r.category?.trim() || NO_CATEGORY) === cat));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, rows, lowOnly]);
+  }, [q, rows, lowOnly, cat]);
   const lowCount = rows.filter(anyLow).length;
   const cols = `minmax(0,1fr) repeat(${locations.length}, 2.6rem)`;
 
@@ -27,6 +30,7 @@ export default function AllStock({ locations, rows }: { locations: Location[]; r
           <Search size={15} style={{ color: MUTED }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาสินค้า" className="flex-1 text-sm outline-none bg-transparent" />
         </div>
+        <CategoryChips rows={rows} value={cat} onChange={setCat} />
         {lowCount > 0 && (
           <button type="button" onClick={() => setLowOnly(v => !v)} className="text-xs px-3 py-1 rounded-full"
             style={{ background: lowOnly ? LOW : LOW_BG, color: lowOnly ? "white" : LOW }}>
@@ -40,7 +44,9 @@ export default function AllStock({ locations, rows }: { locations: Location[]; r
       </div>
       {rows.length === 0 && <p className="px-4 py-8 text-center text-sm" style={{ color: MUTED }}>ยังไม่มีสินค้า — กด “เพิ่มสินค้า” เพื่อเริ่ม</p>}
       <ul>
-        {shown.map(r => (
+        {groupByCategory(shown).map(g => [
+          <GroupHeader key={`h-${g.category}`} title={g.category} />,
+          ...g.rows.map(r => (
           <li key={r.id}>
             <Link href={`/admin/m/stock/products/${r.id}`} className="grid items-center px-4 py-2.5" style={{ gridTemplateColumns: cols, borderBottom: `1px solid ${BORDER}`, opacity: r.isActive ? 1 : 0.5 }}>
               <span className="text-sm leading-snug pr-2" style={{ color: TEXT }}>{label(r)} <span className="text-[11px]" style={{ color: MUTED }}>({r.unit})</span></span>
@@ -54,7 +60,7 @@ export default function AllStock({ locations, rows }: { locations: Location[]; r
               })}
             </Link>
           </li>
-        ))}
+        ))])}
       </ul>
     </div>
   );

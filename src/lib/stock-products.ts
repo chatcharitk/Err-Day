@@ -9,7 +9,7 @@ export function parseProductInput(b: Record<string, unknown>, partial: boolean):
     if (!str("name")) return { error: "กรุณาใส่ชื่อสินค้า" };
     data.name = str("name");
   }
-  for (const k of ["brand", "size", "packUnit", "notes", "imageUrl"]) if (has(k)) data[k] = str(k) || null;
+  for (const k of ["brand", "size", "packUnit", "notes", "imageUrl", "category"]) if (has(k)) data[k] = str(k) || null;
   if (!partial || has("unit")) data.unit = str("unit") || "ชิ้น";
   if (has("packSize")) {
     const n = Number(b.packSize);

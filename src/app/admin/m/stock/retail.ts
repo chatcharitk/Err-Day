@@ -10,3 +10,9 @@ export async function retailOptions(productId?: string) {
   const used = new Set(taken.map(t => t.serviceId));
   return services.filter(s => !used.has(s.id)).map(s => ({ id: s.id, name: s.nameTh || s.name }));
 }
+
+/** Categories already used by products (for the picker). */
+export async function usedCategories(): Promise<string[]> {
+  const rows = await prisma.product.findMany({ where: { category: { not: null } }, distinct: ["category"], select: { category: true } });
+  return rows.map(r => r.category!).filter(Boolean);
+}

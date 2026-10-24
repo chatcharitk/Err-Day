@@ -38,6 +38,10 @@ export default async function MobileStockPage({ searchParams }: { searchParams: 
         <Link href="/admin/m/stock/send" className={action} style={{ border: `1px solid ${BORDER}`, color: PRIMARY }}><Truck size={18} />ส่งของไปสาขา</Link>
       </div>
 
+      <p className="px-4 pt-2 text-xs text-right">
+        <Link href="/admin/m/stock/products/bulk" style={{ color: PRIMARY }}>+ เพิ่มหลายรายการพร้อมกัน (เช่น สีแต่ละเบอร์)</Link>
+      </p>
+
       {deliveries.length > 0 && (
         <div className="px-4 pt-3 space-y-2">
           {deliveries.map(t => <DeliveryCard key={t.id} t={t} canCancel />)}

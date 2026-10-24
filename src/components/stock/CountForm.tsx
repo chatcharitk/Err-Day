@@ -5,24 +5,27 @@ import { useRouter } from "next/navigation";
 import { Search, Check, Plus, Minus } from "lucide-react";
 import type { StockRow } from "@/lib/stock";
 import { BORDER, MUTED, PRIMARY, TEXT, LOW, OK, label, postStock } from "./theme";
+import CategoryChips, { GroupHeader } from "./CategoryChips";
+import { groupByCategory, NO_CATEGORY } from "@/lib/stock-categories";
 
 /**
  * Shelf count for one location. Staff type what is on the shelf; blank rows
  * are left unchanged. Shows the difference vs. the app's number as they type.
  */
-export default function CountForm({ location, locationName, rows, doneHref, addProductHref }: {
-  location: string; locationName: string; rows: StockRow[]; doneHref: string; addProductHref?: string;
+export default function CountForm({ location, locationName, rows, doneHref, addProductHref, initialCategory }: {
+  location: string; locationName: string; rows: StockRow[]; doneHref: string; addProductHref?: string; initialCategory?: string | null;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [cat, setCat] = useState<string | null>(initialCategory ?? null);
   const [vals, setVals] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? rows.filter(r => label(r).toLowerCase().includes(s)) : rows;
-  }, [q, rows]);
+    return rows.filter(r => (!s || label(r).toLowerCase().includes(s)) && (!cat || (r.category?.trim() || NO_CATEGORY) === cat));
+  }, [q, rows, cat]);
   const filled = Object.entries(vals).filter(([, v]) => v.trim() !== "");
 
   function bump(id: string, d: number) {
@@ -55,6 +58,7 @@ export default function CountForm({ location, locationName, rows, doneHref, addP
           <Search size={15} style={{ color: MUTED }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาสินค้า" className="flex-1 text-sm outline-none bg-transparent" />
         </div>
+        <CategoryChips rows={rows} value={cat} onChange={setCat} />
       </div>
 
       {rows.length === 0 && (
@@ -62,7 +66,9 @@ export default function CountForm({ location, locationName, rows, doneHref, addP
       )}
 
       <ul>
-        {shown.map(r => {
+        {groupByCategory(shown).map(g => [
+          <GroupHeader key={`h-${g.category}`} title={g.category} />,
+          ...g.rows.map(r => {
           const cur = r.levels[location]?.qty ?? 0;
           const v = vals[r.id] ?? "";
           const n = v.trim() === "" ? null : Number(v);
@@ -88,7 +94,7 @@ export default function CountForm({ location, locationName, rows, doneHref, addP
               <button type="button" onClick={() => bump(r.id, 1)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ border: `1px solid ${BORDER}`, color: MUTED }} aria-label="เพิ่ม"><Plus size={14} /></button>
             </li>
           );
-        })}
+        })])}
       </ul>
 
       {addProductHref && (
