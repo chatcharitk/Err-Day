@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { addMinutes, generateTimeSlots, getTakenSlots, SALE_ONLY_SKUS } from "@/lib/capacity";
+import { addMinutes, generateTimeSlots, getTakenSlots, loadDaySnapshot, SALE_ONLY_SKUS } from "@/lib/capacity";
 import { bangkokTodayKey, bangkokYmdOf, serviceMemberRate } from "@/lib/member-pricing";
 import { MEMBERSHIP_PRICE_SATANG, MEMBERSHIP_VALIDITY_DAYS } from "@/lib/membership";
 import { PACKAGE_SPECS, findActivePackages } from "@/lib/packages";
@@ -76,6 +76,7 @@ Hard rules:
 - Speed matters: when you need several lookups (e.g. two days or two branches), request them all in the same turn (parallel tool calls), not one per turn.
 - Booking from the chat: call prepare_booking ONLY when the customer has clearly asked to book AND has chosen the branch, the service, the date and an exact time themselves. Asking what is free ("ว่างกี่โมง", "มีคิวไหม") is NOT a booking request — just answer with the free times. Never prepare a booking "just in case" or pick a service/time for them. It checks the slot; the owner then creates the booking with one tap when sending your reply, so write the reply as a confirmation. If prepare_booking says the customer gets the booking card on LINE, keep it short — the card shows every detail (e.g. "แอดมินลงคิวให้เรียบร้อยแล้วค่ะ 😊 รายละเอียดตามการ์ดเลยนะคะ"). Otherwise include day, date, time, branch and service. If it fails, follow its message (offer the free times it lists, or ask for what is missing).
 - Cancelling: when the customer asks to cancel one of the upcoming appointments in their profile, call prepare_cancellation with its booking id (ask which one if it is unclear). If the customer is notified on LINE, keep the reply short — the shop's cancellation message has the details (e.g. "ยกเลิกคิวให้เรียบร้อยแล้วค่ะ ไว้โอกาสหน้านะคะ 🙏"). Only one booking or cancellation per reply. To move an appointment, ask for the new time, then prepare the new booking and say in note that the old one still has to be cancelled.
+- Running late: when the customer says they will be late for an appointment, call check_late_arrival with that booking id (from the customer profile; usually today's) and how many minutes late (if they did not say, use 15). If it says fits (the later time does not affect other customers), reply short and warm, e.g. "รับทราบค่า เดี๋ยวแอดมินแจ้งหน้าร้านให้นะคะ 😊" — no rules or warnings. If it does not fit, politely say the next queue is booked so the service may need to be shortened, or offer to move the appointment (check_availability for other times); flag it in note. If the chat is not linked or no booking is found, reply "รับทราบค่า" and ask which branch/time their appointment is if needed. Always put in note: "แจ้งหน้าร้าน: <ชื่อ> สาย ~N นาที (นัด HH:mm สาขา…)" — and add "เลยเวลาปิดร้าน" when finishes_after_closing is set.
 - Who the booking is for: if the customer profile says the chat is linked, book for them. If it is NOT linked, ask for their name and phone number first (e.g. "รบกวนขอชื่อและเบอร์โทรศัพท์สำหรับลงคิวด้วยนะคะ 😊"), then pass them to prepare_booking. Never repeat back details of an existing customer found by phone.
 - If the service is unclear, ask (most customers come for สระไดร์).
 - Menu posters: when the customer asks about prices, packages, membership, a service, or opening hours, attach the relevant poster(s) in "images" (at most 2) and keep the text short — the poster answers the details. Bubbles + images must be 5 or fewer.
@@ -242,6 +243,55 @@ TOOLS.push({
   },
 });
 
+TOOLS.push({
+  name: "check_late_arrival",
+  description: "The customer will be late for one of their upcoming appointments (booking id from the customer profile). Checks whether starting that many minutes later still fits — staff free, the assigned stylist's next customer not affected, and finishing before closing — so other customers are not affected.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      booking_id: { type: "string" },
+      minutes_late: { type: "integer", description: "How many minutes late; 15 if the customer did not say" },
+    },
+    required: ["booking_id", "minutes_late"],
+    additionalProperties: false,
+  },
+});
+
+/** Would this booking, shifted later by `late` minutes, still fit without pushing anyone else? */
+export async function checkLateArrival(customerId: string | null, bookingId: string, late: number) {
+  if (!customerId) return { ok: false, error: "chat is not linked to a customer — cannot look up the appointment" };
+  const b = await prisma.booking.findFirst({
+    where: { id: bookingId, customerId, status: { in: ["PENDING", "CONFIRMED"] } },
+    select: { id: true, branchId: true, date: true, startTime: true, endTime: true, staffId: true, branch: { select: { name: true, closeTime: true } } },
+  });
+  if (!b) return { ok: false, error: "booking not found among this customer's upcoming appointments" };
+  const minutes = Math.max(1, Math.min(180, Math.round(late)));
+  const date = bangkokYmdOf(b.date);
+  const start = addMinutes(b.startTime, minutes);
+  const end = addMinutes(b.endTime, minutes);
+  const close = b.branch.closeTime ?? "21:00";
+  const appointment = { date, time: `${b.startTime}–${b.endTime}`, branch: b.branch.name };
+  // Only other customers matter here (running past closing or a shift end is
+  // the shop's call, reported separately). Staff = those on shift at the
+  // original start; the later window must not need more chairs than that, and
+  // the assigned stylist must not have someone else booked in it.
+  const snap = await loadDaySnapshot(b.branchId, date, b.id);
+  const overlap = (x: { startTime: string; endTime: string }) => x.startTime < end && x.endTime > start;
+  const staffCount = snap.hasShifts
+    ? new Set(snap.shifts.filter(sh => sh.startTime <= b.startTime && sh.endTime > b.startTime).map(sh => sh.staffId)).size
+    : snap.activeStaffIds.length;
+  const others = snap.bookings.filter(overlap);
+  const occupied = new Set(others.filter(o => o.staffId).map(o => o.staffId)).size + others.filter(o => !o.staffId).length;
+  const stylistBusy = !!b.staffId && others.some(o => o.staffId === b.staffId);
+  const fits = occupied < Math.max(1, staffCount) && !stylistBusy;
+  return {
+    ok: true, fits, appointment, minutes_late: minutes, new_time: `${start}–${end}`,
+    ...(end > close ? { finishes_after_closing: close } : {}),
+    ...(fits ? {} : { reason: stylistBusy ? "the assigned stylist has the next customer" : "other customers are booked at the later time — no free staff" }),
+  };
+}
+
 function outputSchema(imageKeys: string[]) {
   return {
     type: "object",
@@ -397,6 +447,9 @@ export async function draftReply(
                   customer_gets_booking_card_on_line: !!r.proposal.cardOnLine,
                   next: "Write the confirmation reply. The owner books it when sending." }
               : { ok: false, error: r.error });
+          } else if (tu.name === "check_late_arrival") {
+            const li = tu.input as { booking_id?: string; minutes_late?: number };
+            content = JSON.stringify(await checkLateArrival(thread.customerId, String(li.booking_id ?? ""), Number(li.minutes_late ?? 15)));
           } else if (tu.name === "check_availability" && input.branch_id && /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "")) {
             content = input.date! < today
               ? JSON.stringify({ error: "date is in the past" })
