@@ -25,6 +25,8 @@ export interface BookingProposal {
   };
   /** The customer gets the shop's booking card on this LINE when it's created. */
   cardOnLine?: boolean;
+  /** Tight slot: only this many minutes fit (less than `duration`); the booking is saved this long. */
+  tightMinutes?: number;
 }
 
 const digitsOf = (phone: string) => phone.replace(/\D/g, "").replace(/^66(?=\d{9}$)/, "0");
@@ -41,7 +43,7 @@ export async function findCustomerByPhone(phone: string) {
 export async function prepareBooking(
   thread: { customerId: string | null; externalUserId: string; channel: string },
   input: { branch_id: string; service_id: string; date: string; start_time: string; customer_name?: string; customer_phone?: string },
-  freeStartTimes: (branchId: string, date: string, duration: number) => Promise<{ free_start_times?: string[]; error?: string }>,
+  freeStartTimes: (branchId: string, date: string, duration: number) => Promise<{ free_start_times?: string[]; tight_start_times?: { time: string; minutes: number }[]; error?: string }>,
 ): Promise<{ ok: true; proposal: BookingProposal } | { ok: false; error: string }> {
   const today = bangkokTodayKey();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || input.date < today) return { ok: false, error: "date must be today or later (YYYY-MM-DD)" };
@@ -58,8 +60,10 @@ export async function prepareBooking(
 
   const free = await freeStartTimes(input.branch_id, input.date, bs.duration);
   if (free.error) return { ok: false, error: free.error };
-  if (!free.free_start_times?.includes(input.start_time)) {
-    return { ok: false, error: `${input.start_time} is not free for this ${bs.duration}-minute service. Free start times: ${(free.free_start_times ?? []).join(", ") || "none"}` };
+  const tight = free.free_start_times?.includes(input.start_time) ? undefined : free.tight_start_times?.find(t => t.time === input.start_time);
+  if (!free.free_start_times?.includes(input.start_time) && !tight) {
+    const tl = (free.tight_start_times ?? []).map(t => `${t.time} (${t.minutes} min)`).join(", ");
+    return { ok: false, error: `${input.start_time} is not free for this ${bs.duration}-minute service. Free start times: ${(free.free_start_times ?? []).join(", ") || "none"}${tl ? `. Tight start times (a little shorter): ${tl}` : ""}` };
   }
 
   // Who is it for?
@@ -97,7 +101,8 @@ export async function prepareBooking(
       type: "create",
       branchId: input.branch_id, branchName: bs.branch.name,
       serviceId: input.service_id, serviceName: bs.service.nameTh || bs.service.name,
-      date: input.date, startTime: input.start_time, endTime: addMinutes(input.start_time, bs.duration), duration: bs.duration,
+      date: input.date, startTime: input.start_time, endTime: addMinutes(input.start_time, tight?.minutes ?? bs.duration), duration: bs.duration,
+      ...(tight ? { tightMinutes: tight.minutes } : {}),
       priceSatang, customer, cardOnLine,
     },
   };
@@ -194,7 +199,7 @@ export async function bookFromDraft(draftId: string, threadId: string): Promise<
       // prepared price; the booking API still lowers it if a member rate applies.
       totalPrice: p.priceSatang,
       name, phone, isWalkin: true, status: "CONFIRMED",
-      internalNotes: "จองผ่านแชท LINE (AI inbox)",
+      internalNotes: p.tightMinutes ? `จองผ่านแชท (AI inbox) · ช่องเวลาตึง ได้ ${p.tightMinutes} จาก ${p.duration} นาที` : "จองผ่านแชท LINE (AI inbox)",
       ...(linkLine ? { lineUserId: draft.thread.externalUserId, ...(draft.thread.displayName ? { lineDisplayName: draft.thread.displayName } : {}) } : {}),
     }),
   }));

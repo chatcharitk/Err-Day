@@ -69,6 +69,17 @@ Admin: ว่างแล้วค่า
 Admin: คุณลูกค้าเข้าไปเลยมั้ยคะ
 In your output each bubble is its own string in "bubbles" — never put separators like "|" inside a bubble.
 
+How to sell (you are the shop's call-center admin, with a sales mindset — still short and polite):
+- Move every conversation toward a booking: answer, then offer the next step (a concrete time, "ให้แอดมินลงคิวให้เลยไหมคะ").
+- When a time is full, never stop at "เต็ม" — offer the nearest free times that day (before and after), or the same time on another day.
+- Offer at most one relevant extra when it fits naturally (an add-on, a current promotion, membership for frequent visitors) — only from the shop facts, never pushy.
+- Close warmly; thank them when they book.
+
+Who the customer is, branch and service (use the customer profile):
+- Linked customer who has used only one branch → assume that branch; say it in the reply so they can correct it (e.g. "สาขาบางนาเหมือนเดิมนะคะ"). Used both branches → ask which branch they'd like this time. New customer or chat not linked → ask which branch is convenient (สุขุมวิท or บางนา).
+- When the customer wants to book and does not name a service, assume สระไดร์ (wash & blow-dry) and say so (e.g. "สระไดร์เหมือนเดิมนะคะ"); if their usual service in the profile is different, assume that one.
+- Tight slots: check_availability also lists tight_start_times — times that fit only if the service runs a little shorter (e.g. 40 of 45 minutes). When the wanted time or nearby free times are not available, you may offer a tight slot as a squeeze ("ช่วง 10:00 ยังพอแทรกได้ค่ะ อาจกระชับเวลานิดนึงนะคะ"); prepare_booking accepts it. Always put it in note: "ช่องเวลาตึง: HH:mm ได้ N จาก M นาที".
+
 Hard rules:
 - Prices, services, promotions, packages, membership and opening hours: ONLY from the shop facts below. Never invent a price or a service. If something is not in the facts, write a holding reply ("ขอแอดมินเช็คให้สักครู่นะคะ") and explain in note.
 - Open times: whenever the customer mentions a day/time (asking, or wanting to book — even if the service is still unknown), call check_availability for EVERY day/time they mention before answering (use 60 minutes when the service is unknown). Never say a time is free or full without checking. Mention 2–4 concrete free times rather than a long list.
@@ -78,7 +89,6 @@ Hard rules:
 - Cancelling: when the customer asks to cancel one of the upcoming appointments in their profile, call prepare_cancellation with its booking id (ask which one if it is unclear). If the customer is notified on LINE, keep the reply short — the shop's cancellation message has the details (e.g. "ยกเลิกคิวให้เรียบร้อยแล้วค่ะ ไว้โอกาสหน้านะคะ 🙏"). Only one booking or cancellation per reply. To move an appointment, ask for the new time, then prepare the new booking and say in note that the old one still has to be cancelled.
 - Running late: when the customer says they will be late for an appointment, call check_late_arrival with that booking id (from the customer profile; usually today's) and how many minutes late (if they did not say, use 15). If it says fits (the later time does not affect other customers), reply short and warm, e.g. "รับทราบค่า เดี๋ยวแอดมินแจ้งหน้าร้านให้นะคะ 😊" — no rules or warnings. If it does not fit, politely say the next queue is booked so the service may need to be shortened, or offer to move the appointment (check_availability for other times); flag it in note. If the chat is not linked or no booking is found, reply "รับทราบค่า" and ask which branch/time their appointment is if needed. Always put in note: "แจ้งหน้าร้าน: <ชื่อ> สาย ~N นาที (นัด HH:mm สาขา…)" — and add "เลยเวลาปิดร้าน" when finishes_after_closing is set.
 - Who the booking is for: if the customer profile says the chat is linked, book for them. If it is NOT linked, ask for their name and phone number first (e.g. "รบกวนขอชื่อและเบอร์โทรศัพท์สำหรับลงคิวด้วยนะคะ 😊"), then pass them to prepare_booking. Never repeat back details of an existing customer found by phone.
-- If the service is unclear, ask (most customers come for สระไดร์).
 - Menu posters: when the customer asks about prices, packages, membership, a service, or opening hours, attach the relevant poster(s) in "images" (at most 2) and keep the text short — the poster answers the details. Bubbles + images must be 5 or fewer.
 - Never offer discounts, freebies or exceptions that are not in the facts. Never promise a specific stylist.
 - If the branch is unclear and it matters, ask which branch (สุขุมวิท or บางนา).
@@ -149,7 +159,7 @@ export async function shopFacts(today: string): Promise<string> {
 
 // ── Per-request context (not cached) ─────────────────────────────────────────
 
-async function customerProfile(customerId: string | null, today: string): Promise<string> {
+export async function customerProfile(customerId: string | null, today: string): Promise<string> {
   if (!customerId) return "Customer profile: NOT linked to a customer record — address them as คุณลูกค้า; to book, ask for their name and phone first.";
   const c = await prisma.customer.findUnique({
     where: { id: customerId },
@@ -170,6 +180,25 @@ async function customerProfile(customerId: string | null, today: string): Promis
   for (const cp of (await customerCoupons(customerId)).filter(x => x.status === "usable")) {
     out.push(`- คูปอง: ${cp.campaign.name} ${couponValueLabel(cp.campaign)} ใช้ได้ถึง ${cp.campaign.validUntil.slice(0, 10)}`);
   }
+  // Visit history per branch (decides whether to assume the branch or ask).
+  const past = await prisma.booking.findMany({
+    where: { customerId, date: { lt: new Date(today + "T00:00:00Z") }, status: { notIn: ["CANCELLED", "NO_SHOW"] }, serviceId: { notIn: SALE_ONLY_SKUS } },
+    select: { date: true, branch: { select: { name: true } }, service: { select: { nameTh: true, name: true } } },
+    orderBy: { date: "desc" }, take: 200,
+  });
+  if (past.length) {
+    const byBranch = new Map<string, { n: number; last: string }>();
+    const bySvc = new Map<string, number>();
+    for (const b of past) {
+      const e = byBranch.get(b.branch.name) ?? { n: 0, last: bangkokYmdOf(b.date) };
+      e.n++; byBranch.set(b.branch.name, e);
+      const sv = b.service.nameTh || b.service.name; bySvc.set(sv, (bySvc.get(sv) ?? 0) + 1);
+    }
+    out.push(`- ประวัติการใช้บริการ (${past.length} ครั้ง): ${[...byBranch].map(([n, e]) => `${n} ${e.n} ครั้ง (ล่าสุด ${e.last})`).join(" · ")} → ${byBranch.size === 1 ? "ใช้สาขาเดียว — สมมติสาขานี้ได้เลย" : "เคยใช้หลายสาขา — ถามว่าสะดวกสาขาไหน"}`);
+    out.push(`- บริการที่ใช้บ่อย: ${[...bySvc].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, k]) => `${n} (${k})`).join(", ")}`);
+  } else {
+    out.push("- ประวัติการใช้บริการ: ยังไม่เคยมาใช้บริการ (ลูกค้าใหม่) — ถามสาขาที่สะดวก");
+  }
   const bookings = await prisma.booking.findMany({
     where: { customerId, date: { gte: new Date(today + "T00:00:00Z") }, status: { in: ["PENDING", "CONFIRMED"] } },
     orderBy: [{ date: "asc" }, { startTime: "asc" }], take: 5,
@@ -183,6 +212,9 @@ async function customerProfile(customerId: string | null, today: string): Promis
 
 // ── Availability tool ────────────────────────────────────────────────────────
 
+/** How much shorter than the service a squeezed ("tight") slot may be. */
+const TIGHT_SLACK = 10;
+
 /** Open start times, same rules as /api/availability (online booking). */
 export async function availableStartTimes(branchId: string, date: string, duration: number) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { name: true, openTime: true, closeTime: true } });
@@ -191,9 +223,21 @@ export async function availableStartTimes(branchId: string, date: string, durati
   const open = isSunday && branchId !== "branch-bangna" ? "10:00" : (branch.openTime ?? "08:00");
   const close = branch.closeTime ?? "21:00";
   const lastStart = addMinutes(close, -30);
+  const slots = generateTimeSlots(open, lastStart);
   const taken = new Set(await getTakenSlots(branchId, date, duration, null, undefined, open, lastStart));
-  const free = generateTimeSlots(open, lastStart).filter(t => !taken.has(t));
-  return { branch: branch.name, date, weekday: weekday(date), open, close, duration_minutes: duration, free_start_times: free };
+  const free = slots.filter(t => !taken.has(t));
+  // "Tight" slots: not free for the full service, but free if it runs up to
+  // TIGHT_SLACK minutes shorter (e.g. 40 of 45) — offered as a squeeze.
+  const tight: { time: string; minutes: number }[] = [];
+  if (duration > 30) {
+    const left = new Set(slots.filter(t => taken.has(t)));
+    for (let m = duration - 5; m >= Math.max(30, duration - TIGHT_SLACK) && left.size; m -= 5) {
+      const takenShort = new Set(await getTakenSlots(branchId, date, m, null, undefined, open, lastStart));
+      for (const t of [...left]) if (!takenShort.has(t)) { tight.push({ time: t, minutes: m }); left.delete(t); }
+    }
+    tight.sort((a, b) => a.time.localeCompare(b.time));
+  }
+  return { branch: branch.name, date, weekday: weekday(date), open, close, duration_minutes: duration, free_start_times: free, tight_start_times: tight };
 }
 
 const TOOLS: Anthropic.Beta.BetaTool[] = [{
@@ -445,6 +489,7 @@ export async function draftReply(
               ? { ok: true, prepared: { branch: r.proposal.branchName, service: r.proposal.serviceName, date: r.proposal.date, weekday: weekday(r.proposal.date), time: `${r.proposal.startTime}–${r.proposal.endTime}`, price_baht: r.proposal.priceSatang / 100 },
                   customer: r.proposal.customer.kind === "existing" ? "an existing customer matched this phone — do not repeat their details" : r.proposal.customer.kind,
                   customer_gets_booking_card_on_line: !!r.proposal.cardOnLine,
+                  ...(r.proposal.tightMinutes ? { tight_slot: `only ${r.proposal.tightMinutes} of ${r.proposal.duration} minutes fit — mention it gently and put it in note` } : {}),
                   next: "Write the confirmation reply. The owner books it when sending." }
               : { ok: false, error: r.error });
           } else if (tu.name === "check_late_arrival") {
