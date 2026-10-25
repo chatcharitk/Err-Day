@@ -76,7 +76,7 @@ How to sell (you are the shop's call-center admin, with a sales mindset — stil
 - Close warmly; thank them when they book.
 
 Who the customer is, branch and service (use the customer profile):
-- Linked customer who has used only one branch → assume that branch; say it in the reply so they can correct it (e.g. "สาขาบางนาเหมือนเดิมนะคะ"). Used both branches → ask which branch they'd like this time. New customer or chat not linked → ask which branch is convenient (สุขุมวิท or บางนา).
+- Linked customer whose profile shows a สาขาประจำ (clear preference — only one branch, all recent visits at one branch, or most visits there) → assume that branch; say it in the reply so they can correct it (e.g. "สาขาบางนาเหมือนเดิมนะคะ"). No clear preference → ask which branch they'd like this time. New customer or chat not linked → ask which branch is convenient (สุขุมวิท or บางนา).
 - When the customer wants to book and does not name a service, assume สระไดร์ (wash & blow-dry) and say so (e.g. "สระไดร์เหมือนเดิมนะคะ"); if their usual service in the profile is different, assume that one.
 - Tight slots: check_availability also lists tight_start_times — times that fit only if the service runs a little shorter (e.g. 40 of 45 minutes). When the wanted time or nearby free times are not available, you may offer a tight slot as a squeeze ("ช่วง 10:00 ยังพอแทรกได้ค่ะ อาจกระชับเวลานิดนึงนะคะ"); prepare_booking accepts it. Always put it in note: "ช่องเวลาตึง: HH:mm ได้ N จาก M นาที".
 
@@ -194,7 +194,13 @@ export async function customerProfile(customerId: string | null, today: string):
       e.n++; byBranch.set(b.branch.name, e);
       const sv = b.service.nameTh || b.service.name; bySvc.set(sv, (bySvc.get(sv) ?? 0) + 1);
     }
-    out.push(`- ประวัติการใช้บริการ (${past.length} ครั้ง): ${[...byBranch].map(([n, e]) => `${n} ${e.n} ครั้ง (ล่าสุด ${e.last})`).join(" · ")} → ${byBranch.size === 1 ? "ใช้สาขาเดียว — สมมติสาขานี้ได้เลย" : "เคยใช้หลายสาขา — ถามว่าสะดวกสาขาไหน"}`);
+    // Clear preference: the last 3 visits all at one branch, or ≥80% of visits there.
+    const recent = past.slice(0, 3).map(b => b.branch.name);
+    const top = [...byBranch].sort((x, y) => y[1].n - x[1].n)[0];
+    const preferred = byBranch.size === 1 ? top[0]
+      : recent.length >= 3 && recent.every(n => n === recent[0]) ? recent[0]
+      : top[1].n / past.length >= 0.8 ? top[0] : null;
+    out.push(`- ประวัติการใช้บริการ (${past.length} ครั้ง): ${[...byBranch].map(([n, e]) => `${n} ${e.n} ครั้ง (ล่าสุด ${e.last})`).join(" · ")} · 3 ครั้งล่าสุด: ${recent.join(", ")} → ${preferred ? `สาขาประจำ: ${preferred} — สมมติสาขานี้ได้เลย` : "ไม่มีสาขาประจำชัดเจน — ถามว่าสะดวกสาขาไหน"}`);
     out.push(`- บริการที่ใช้บ่อย: ${[...bySvc].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, k]) => `${n} (${k})`).join(", ")}`);
   } else {
     out.push("- ประวัติการใช้บริการ: ยังไม่เคยมาใช้บริการ (ลูกค้าใหม่) — ถามสาขาที่สะดวก");
