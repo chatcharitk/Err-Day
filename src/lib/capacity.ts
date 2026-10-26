@@ -1,3 +1,4 @@
+import { onlineStartTimes } from "@/lib/slots";
 /**
  * Capacity & availability — single source of truth.
  *
@@ -331,7 +332,8 @@ export async function getTakenSlots(
   closeTime = "21:00",
 ): Promise<string[]> {
   const snapshot = await loadDaySnapshot(branchId, date, excludeBookingId);
-  const slots  = generateTimeSlots(openTime, closeTime);
+  // closeTime = the branch's closing time; the bookable start list is shared with the customer pages.
+  const slots  = onlineStartTimes(openTime, closeTime);
   const taken: string[] = [];
 
   // Past-slot cutoff + minimum lead time. For today's date, mark any slot

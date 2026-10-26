@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut, Sparkles,
          ChevronDown, ChevronUp, Droplets, Wind, Hand, Layers, Flower2, Plus } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
+import { onlineStartTimes } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,24 +38,6 @@ const LINE_SVG = (
 
 // Hair colour is a long service — restrict to a sensible window regardless of branch hours
 const HAIR_COLOR_SLOTS = ["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00"];
-
-/**
- * Generate 30-minute slots from openTime up to (closeTime - 30 min).
- * Both params are "HH:mm" strings.  Example: "08:00","21:00" → 08:00 … 20:30
- */
-function generateTimeSlots(openTime: string, closeTime: string): string[] {
-  const [oh, om] = openTime.split(":").map(Number);
-  const [ch, cm] = closeTime.split(":").map(Number);
-  const openMin  = oh * 60 + om;
-  const closeMin = ch * 60 + cm;
-  const slots: string[] = [];
-  for (let t = openMin; t <= closeMin - 30; t += 30) {
-    slots.push(
-      `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`
-    );
-  }
-  return slots;
-}
 
 function formatPrice(satang: number) {
   return `฿${(satang / 100).toLocaleString()}`;
@@ -344,16 +327,14 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
   // Build the slot list for the selected day.
   // Sunday (0) opens at 10:00; Mon–Sat open at branch.openTime (default 08:00).
   // branch-bangna is open 07:00–21:00 every day, Sunday included — no 10:00 floor there.
-  // We stop offering new bookings 30 min before branch.closeTime so the last
-  // appointment finishes with some buffer. For a 21:00-close branch, that
-  // means the last bookable slot is 20:00 (not 20:30).
+  // Last online start is 45 min before branch.closeTime (21:00 close → 20:15),
+  // the same list the server checks (lib/slots.ts).
   const timeSlots = useMemo(() => {
     if (isHairColor) return HAIR_COLOR_SLOTS;
     const isSunday   = selectedDate ? selectedDate.getDay() === 0 : false;
     const openTime   = isSunday && branch.id !== "branch-bangna" ? "10:00" : (branch.openTime  ?? "08:00");
     const closeTime  = branch.closeTime ?? "21:00";
-    const lastClose  = addMinutes(closeTime, -30);
-    return generateTimeSlots(openTime, lastClose);
+    return onlineStartTimes(openTime, closeTime);
   }, [isHairColor, selectedDate, branch.id, branch.openTime, branch.closeTime]);
 
   // Fetch availability when date, staff, or service changes

@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { addMinutes, generateTimeSlots, getTakenSlots, loadDaySnapshot, SALE_ONLY_SKUS } from "@/lib/capacity";
+import { addMinutes, getTakenSlots, loadDaySnapshot, SALE_ONLY_SKUS } from "@/lib/capacity";
+import { onlineStartTimes } from "@/lib/slots";
 import { bangkokTodayKey, bangkokYmdOf, serviceMemberRate } from "@/lib/member-pricing";
 import { MEMBERSHIP_PRICE_SATANG, MEMBERSHIP_VALIDITY_DAYS } from "@/lib/membership";
 import { PACKAGE_SPECS, findActivePackages } from "@/lib/packages";
@@ -228,9 +229,8 @@ export async function availableStartTimes(branchId: string, date: string, durati
   const isSunday = new Date(date + "T12:00:00Z").getUTCDay() === 0;
   const open = isSunday && branchId !== "branch-bangna" ? "10:00" : (branch.openTime ?? "08:00");
   const close = branch.closeTime ?? "21:00";
-  const lastStart = addMinutes(close, -30);
-  const slots = generateTimeSlots(open, lastStart);
-  const taken = new Set(await getTakenSlots(branchId, date, duration, null, undefined, open, lastStart));
+  const slots = onlineStartTimes(open, close);
+  const taken = new Set(await getTakenSlots(branchId, date, duration, null, undefined, open, close));
   const free = slots.filter(t => !taken.has(t));
   // "Tight" slots: not free for the full service, but free if it runs up to
   // TIGHT_SLACK minutes shorter (e.g. 40 of 45) — offered as a squeeze.
@@ -238,7 +238,7 @@ export async function availableStartTimes(branchId: string, date: string, durati
   if (duration > 30) {
     const left = new Set(slots.filter(t => taken.has(t)));
     for (let m = duration - 5; m >= Math.max(30, duration - TIGHT_SLACK) && left.size; m -= 5) {
-      const takenShort = new Set(await getTakenSlots(branchId, date, m, null, undefined, open, lastStart));
+      const takenShort = new Set(await getTakenSlots(branchId, date, m, null, undefined, open, close));
       for (const t of [...left]) if (!takenShort.has(t)) { tight.push({ time: t, minutes: m }); left.delete(t); }
     }
     tight.sort((a, b) => a.time.localeCompare(b.time));

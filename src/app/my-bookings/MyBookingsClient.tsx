@@ -11,8 +11,8 @@ import BrandLogo from "@/components/BrandLogo";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import { useLang, type Lang } from "@/components/LanguageProvider";
 
-// Full slot range matching branch hours (Mon–Sat 08:00–20:30)
-// The availability API will still mark taken slots correctly for Sunday (10:00–20:30).
+// Fallback only — the availability API returns the branch's real start times
+// for the chosen day (`slots`), which is what the picker shows.
 const ALL_SLOTS: string[] = (() => {
   const slots: string[] = [];
   for (let t = 8 * 60; t <= 20 * 60 + 30; t += 30) {
@@ -680,6 +680,7 @@ export function RescheduleModal({
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(() => booking.addons?.map(item => item.addon.id) ?? []);
   const [notes,      setNotes]      = useState(booking.notes ?? "");
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
+  const [daySlots, setDaySlots] = useState<string[] | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
@@ -724,7 +725,7 @@ export function RescheduleModal({
     const params = new URLSearchParams({ branchId, date: localDate, duration: String(duration) });
     fetch(`/api/availability?${params}`)
       .then((r) => r.json())
-      .then((data) => setTakenSlots(data.taken ?? []))
+      .then((data) => { setTakenSlots(data.taken ?? []); setDaySlots(Array.isArray(data.slots) ? data.slots : null); })
       .catch(() => {})
       .finally(() => setLoadingSlots(false));
   }, [branchId, date, duration]);
@@ -845,7 +846,7 @@ export function RescheduleModal({
               <p className="text-sm text-center py-4" style={{ color: "#977A6F" }}>{lang === "th" ? "กำลังโหลด..." : "Loading..."}</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
-                {ALL_SLOTS.map((t) => {
+                {(daySlots ?? ALL_SLOTS).map((t) => {
                   const currentDate = booking.date.slice(0, 10);
                   const selectedDate = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
                   const isOwnCurrentSlot = branchId === booking.branchId && serviceId === booking.serviceId && selectedDate === currentDate && t === booking.startTime;

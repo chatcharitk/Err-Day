@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTakenSlots, addMinutes } from "@/lib/capacity";
+import { getTakenSlots } from "@/lib/capacity";
+import { onlineStartTimes } from "@/lib/slots";
 
 /**
  * GET /api/availability?branchId=...&date=YYYY-MM-DD&duration=60[&staffId=...]
@@ -39,11 +40,8 @@ export async function GET(request: Request) {
   const openTime  = isSunday && branchId !== "branch-bangna" ? "10:00" : (branch?.openTime  ?? "08:00");
   const closeTime = branch?.closeTime ?? "21:00";
 
-  // 30-min buffer before close: don't accept new bookings whose start is
-  // within 30 min of closing. Keeps the last appointment from running
-  // straight into close-up time.
-  const lastClose = addMinutes(closeTime, -30);
-
-  const taken = await getTakenSlots(branchId, date, duration, staffId, undefined, openTime, lastClose);
-  return NextResponse.json({ taken });
+  // Bookable start times (last one 45 min before closing — see lib/slots.ts).
+  // `slots` is returned so every customer page shows exactly this list.
+  const taken = await getTakenSlots(branchId, date, duration, staffId, undefined, openTime, closeTime);
+  return NextResponse.json({ taken, slots: onlineStartTimes(openTime, closeTime) });
 }
