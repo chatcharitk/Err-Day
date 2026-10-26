@@ -119,8 +119,25 @@ export async function holdMembershipPrepaid(opts: ActivateOpts) {
       && (existing.expiresAt == null || existing.expiresAt >= today)
       && !(existing.usagesAllowed > 0 && existing.usagesUsed >= existing.usagesAllowed);
 
+    // Still a member → the prepaid 30 days follow straight on from the current
+    // period (no activation step, no days lost). E.g. current ends 29 Oct → new
+    // period 30 Oct – 28 Nov.
+    if (activeAlready && existing!.expiresAt) {
+      const DAY = 24 * 60 * 60 * 1000;
+      const startedAt = new Date(existing!.expiresAt.getTime() + DAY);
+      const endedAt   = new Date(existing!.expiresAt.getTime() + MEMBERSHIP_VALIDITY_DAYS * DAY);
+      const membership = await tx.membership.update({ where: { id: existing!.id }, data: { expiresAt: endedAt } });
+      const cycle = await tx.membershipCycle.create({
+        data: {
+          customerId, membershipId: membership.id, startedAt, endedAt, paidAmount, paymentMethod, bookingId,
+          notes: notes ?? "ต่ออายุล่วงหน้า — เริ่มต่อจากรอบเดิม",
+        },
+      });
+      return { membership, cycle, heldOverActive: true, extendedTo: endedAt };
+    }
+
     const membership = activeAlready
-      ? existing!  // leave an active membership as-is
+      ? existing!  // active with no end date — leave as-is
       : await tx.membership.upsert({
           where:  { customerId },
           update: { activatedAt: now, expiresAt: null, usagesUsed: 0, pendingActivation: true },
@@ -167,7 +184,7 @@ async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: D
       paymentMethod: "POS",
     },
     orderBy: { startedAt: "desc" },
-    select:  { bookingId: true },
+    select:  { id: true, bookingId: true },
   });
   const paidBooking = heldCycle?.bookingId
     ? await tx.booking.findUnique({ where: { id: heldCycle.bookingId }, select: { paidAt: true } })
@@ -185,10 +202,12 @@ async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: D
   // Rewrite the held (still-open) cycle's placeholder window to the real
   // 30 days. If there was no held cycle (e.g. a manual pending entry), this
   // simply affects nothing.
-  await tx.membershipCycle.updateMany({
-    where: { membershipId: membership.id, closedAt: null },
-    data:  { startedAt: startDate, endedAt: expiresAt },
-  });
+  if (heldCycle) {
+    await tx.membershipCycle.update({
+      where: { id: heldCycle.id },
+      data:  { startedAt: startDate, endedAt: expiresAt },
+    });
+  }
   return membership;
 }
 
