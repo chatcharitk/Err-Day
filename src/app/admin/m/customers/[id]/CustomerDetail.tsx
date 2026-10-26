@@ -174,6 +174,10 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
     else if (expired || usedUp)   memberStatus = "expired";
     else                          memberStatus = "active";
   }
+  // A prepaid period waiting to be activated (paid at POS, window not set yet).
+  const heldCycle = c.membershipCycles.find(cy => !cy.closedAt && cy.startedAt === cy.endedAt) ?? null;
+  const heldStart = memberStatus === "active" && c.membership?.expiresAt
+    ? new Date(new Date(c.membership.expiresAt).getTime() + 86400000).toISOString() : null;
 
   const startEdit = () => {
     setName(c.name);
@@ -569,19 +573,30 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
               {c.membership.expiresAt ? `หมดอายุ: ${fmtDate(c.membership.expiresAt)}` : "ตลอดชีพ"}
               {c.membership.usagesAllowed > 0 && ` · ใช้ ${c.membership.usagesUsed}/${c.membership.usagesAllowed} ครั้ง`}
             </p>
+            {heldCycle && memberStatus !== "pending" && (
+              <div className="mt-2 rounded-lg px-2.5 py-2 text-xs" style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}>
+                <b>จ่ายล่วงหน้าแล้ว 1 รอบ</b> ({fmtPrice(heldCycle.paidAmount)} · {fmtDate(heldCycle.startedAt)}) — <b>รอเปิดใช้งาน</b>
+                <p className="mt-0.5" style={{ color: MUTED }}>
+                  {memberStatus === "active" ? "กดเปิดใช้งานเมื่อลูกค้ามาครั้งถัดไปหลังรอบนี้หมด (ถ้ากดตอนนี้ จะเริ่มต่อจากรอบปัจจุบัน)" : "กดเปิดใช้งานเมื่อลูกค้ามา — เริ่มนับ 30 วันจากวันที่กด"}
+                </p>
+              </div>
+            )}
             <p className="text-[11px] mt-1.5 flex items-start gap-1" style={{ color: MUTED }}>
               <Info size={10} className="flex-shrink-0 mt-0.5" />
               <span>ต่ออายุ: ขายบริการ &quot;สมาชิก 30 วัน&quot; ที่ POS</span>
             </p>
             <div className="flex gap-2 mt-2">
-              {memberStatus === "pending" && (
+              {(memberStatus === "pending" || heldCycle) && (
                 <button
-                  onClick={async () => { const ok = await saveMembership({ activate: true }); if (ok) router.refresh(); }}
+                  onClick={async () => {
+                    if (heldStart && !confirm(`รอบปัจจุบันยังใช้ได้ถึง ${fmtDate(c.membership!.expiresAt!)} — เปิดใช้รอบที่จ่ายไว้ให้เริ่ม ${fmtDate(heldStart)} เลยไหม?`)) return;
+                    const ok = await saveMembership({ activate: true }); if (ok) router.refresh();
+                  }}
                   disabled={busy}
                   className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
                   style={{ background: PRIMARY }}
                 >
-                  เปิดใช้งาน (เริ่ม 30 วันวันนี้)
+                  {heldStart ? `เปิดใช้รอบที่จ่ายไว้ (เริ่ม ${fmtDate(heldStart)})` : "เปิดใช้งาน (เริ่ม 30 วันวันนี้)"}
                 </button>
               )}
               <button
@@ -622,7 +637,8 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
           </p>
           <div className="space-y-2">
             {c.membershipCycles.map((cy, i) => {
-              const isOpen = cy.closedAt == null;
+              const isHeld = cy.closedAt == null && cy.startedAt === cy.endedAt;
+              const isOpen = cy.closedAt == null && !isHeld;
               // Show live count for the open cycle, snapshotted count for closed ones
               const usageCount = isOpen ? (c.membership?.usagesUsed ?? 0) : cy.bookingsUsed;
               return (
@@ -654,7 +670,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                           : { background: "#F3F4F6", color: "#6B7280" }
                       }
                     >
-                      {isOpen ? "ใช้งานอยู่" : "ปิดแล้ว"}
+                      {isHeld ? "รอเปิดใช้งาน" : isOpen ? "ใช้งานอยู่" : "ปิดแล้ว"}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ color: TEXT }}>
@@ -664,7 +680,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                     </div>
                     <div>
                       <span style={{ color: MUTED }}>หมดอายุ</span>
-                      <p className="font-medium">{fmtDate(cy.endedAt)}</p>
+                      <p className="font-medium">{isHeld ? "เริ่มนับเมื่อเปิดใช้งาน" : fmtDate(cy.endedAt)}</p>
                     </div>
                     <div>
                       <span style={{ color: MUTED }}>ชำระ</span>

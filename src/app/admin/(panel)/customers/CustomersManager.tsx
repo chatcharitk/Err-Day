@@ -426,9 +426,13 @@ function MembershipSection({
   const isExpired = !isPending && m?.expiresAt ? new Date(m.expiresAt) < today : false;
   const isUsagesExhausted = (m?.usagesAllowed ?? 0) > 0 && m ? m.usagesUsed >= m.usagesAllowed : false;
   const isActive = !!m && !isPending && !isExpired && !isUsagesExhausted;
+  // A prepaid period waiting to be activated (paid at POS, window not set yet).
+  const heldCycle = (customer.membershipCycles ?? []).find(cy => !cy.closedAt && cy.startedAt === cy.endedAt) ?? null;
+  const heldStart = isActive && m?.expiresAt ? new Date(new Date(m.expiresAt).getTime() + 86400000) : null;
 
   async function handleActivateNow() {
     if (!m) return;
+    if (heldStart && !confirm(`รอบปัจจุบันยังใช้ได้ถึง ${expiresLabel} — เปิดใช้รอบที่จ่ายไว้ให้เริ่ม ${heldStart.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })} เลยไหม?`)) return;
     setSaving(true);
     setError("");
     try {
@@ -538,7 +542,15 @@ function MembershipSection({
             <Info size={11} className="flex-shrink-0 mt-0.5" />
             <span>ต่ออายุ: ขายบริการ &quot;สมาชิก 30 วัน&quot; ที่ POS — ระบบจะปิดรอบเก่าและเปิดรอบใหม่ให้อัตโนมัติ</span>
           </p>
-          {isPending && (
+          {heldCycle && !isPending && (
+            <div className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}>
+              <b>จ่ายล่วงหน้าแล้ว 1 รอบ</b> ({fmt(heldCycle.paidAmount)} · {new Date(heldCycle.startedAt).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}) — <b>รอเปิดใช้งาน</b>
+              <p className="mt-0.5" style={{ color: MUTED }}>
+                {isActive ? "กดเปิดใช้งานเมื่อลูกค้ามาครั้งถัดไปหลังรอบนี้หมด (ถ้ากดตอนนี้ จะเริ่มต่อจากรอบปัจจุบัน)" : "กดเปิดใช้งานเมื่อลูกค้ามา — เริ่มนับ 30 วันจากวันที่กด"}
+              </p>
+            </div>
+          )}
+          {(isPending || heldCycle) && (
             <button
               onClick={handleActivateNow}
               disabled={saving}
@@ -546,7 +558,7 @@ function MembershipSection({
               style={{ background: PRIMARY }}
             >
               <Zap size={11} className="inline mr-1" />
-              {saving ? "กำลังเปิด..." : "เปิดใช้งานตอนนี้ (30 วัน)"}
+              {saving ? "กำลังเปิด..." : heldStart ? `เปิดใช้รอบที่จ่ายไว้ (เริ่ม ${heldStart.toLocaleDateString("th-TH", { day: "numeric", month: "short" })})` : "เปิดใช้งานตอนนี้ (30 วัน)"}
             </button>
           )}
         </div>
@@ -687,7 +699,8 @@ function MembershipCyclesSection({
           </thead>
           <tbody>
             {cycles.map((cy, i) => {
-              const isOpen     = cy.closedAt == null;
+              const isHeld     = cy.closedAt == null && cy.startedAt === cy.endedAt;
+              const isOpen     = cy.closedAt == null && !isHeld;
               const usageCount = isOpen
                 ? (customer.membership?.usagesUsed ?? 0)
                 : cy.bookingsUsed;
@@ -720,7 +733,7 @@ function MembershipCyclesSection({
                     )}
                   </td>
                   <td className="px-3 py-3 text-xs" style={{ color: TEXT }}>
-                    {fmtDateOnly(cy.endedAt)}
+                    {isHeld ? <span style={{ color: MUTED }}>เริ่มนับเมื่อเปิดใช้งาน</span> : fmtDateOnly(cy.endedAt)}
                   </td>
                   <td className="px-3 py-3">
                     <span
@@ -731,7 +744,7 @@ function MembershipCyclesSection({
                           : { background: "#F3F4F6", color: "#6B7280" }
                       }
                     >
-                      {isOpen ? "ใช้งานอยู่" : "ปิดแล้ว"}
+                      {isHeld ? "รอเปิดใช้งาน" : isOpen ? "ใช้งานอยู่" : "ปิดแล้ว"}
                     </span>
                     {!isOpen && cy.closedAt && i === 0 && (
                       <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>

@@ -119,25 +119,8 @@ export async function holdMembershipPrepaid(opts: ActivateOpts) {
       && (existing.expiresAt == null || existing.expiresAt >= today)
       && !(existing.usagesAllowed > 0 && existing.usagesUsed >= existing.usagesAllowed);
 
-    // Still a member → the prepaid 30 days follow straight on from the current
-    // period (no activation step, no days lost). E.g. current ends 29 Oct → new
-    // period 30 Oct – 28 Nov.
-    if (activeAlready && existing!.expiresAt) {
-      const DAY = 24 * 60 * 60 * 1000;
-      const startedAt = new Date(existing!.expiresAt.getTime() + DAY);
-      const endedAt   = new Date(existing!.expiresAt.getTime() + MEMBERSHIP_VALIDITY_DAYS * DAY);
-      const membership = await tx.membership.update({ where: { id: existing!.id }, data: { expiresAt: endedAt } });
-      const cycle = await tx.membershipCycle.create({
-        data: {
-          customerId, membershipId: membership.id, startedAt, endedAt, paidAmount, paymentMethod, bookingId,
-          notes: notes ?? "ต่ออายุล่วงหน้า — เริ่มต่อจากรอบเดิม",
-        },
-      });
-      return { membership, cycle, heldOverActive: true, extendedTo: endedAt };
-    }
-
     const membership = activeAlready
-      ? existing!  // active with no end date — leave as-is
+      ? existing!  // still a member: keep the current period; the prepaid one waits (see activateHeldMembership)
       : await tx.membership.upsert({
           where:  { customerId },
           update: { activatedAt: now, expiresAt: null, usagesUsed: 0, pendingActivation: true },
@@ -167,25 +150,29 @@ export async function holdMembershipPrepaid(opts: ActivateOpts) {
  * has neither and cannot be activated by mistake. Rewrites the prepayment
  * cycle's placeholder window so purchase history reads correctly.
  */
+/** A prepaid period waiting to be activated: still open, with the placeholder window (start = end). */
+export function isHeldCycle(cy: { closedAt: Date | string | null; startedAt: Date | string; endedAt: Date | string }): boolean {
+  return cy.closedAt == null && new Date(cy.startedAt).getTime() === new Date(cy.endedAt).getTime();
+}
+
 async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: Date) {
   const membershipBefore = await tx.membership.findUnique({
     where:  { customerId },
-    select: { id: true, pendingActivation: true },
+    select: { id: true, pendingActivation: true, expiresAt: true },
   });
-  if (!membershipBefore?.pendingActivation) {
+  if (!membershipBefore) throw new Error("MEMBERSHIP_NOT_PENDING");
+
+  const openCycles = await tx.membershipCycle.findMany({
+    where:   { membershipId: membershipBefore.id, closedAt: null, bookingId: { not: null }, paymentMethod: "POS" },
+    orderBy: { startedAt: "desc" },
+    select:  { id: true, bookingId: true, startedAt: true, endedAt: true, closedAt: true },
+  });
+  // A member who prepaid while still active has a waiting (held) period even
+  // though the membership itself isn't pending.
+  const heldCycle = openCycles.find(isHeldCycle) ?? (membershipBefore.pendingActivation ? openCycles[0] : undefined);
+  if (!membershipBefore.pendingActivation && !heldCycle) {
     throw new Error("MEMBERSHIP_NOT_PENDING");
   }
-
-  const heldCycle = await tx.membershipCycle.findFirst({
-    where: {
-      membershipId: membershipBefore.id,
-      closedAt:      null,
-      bookingId:     { not: null },
-      paymentMethod: "POS",
-    },
-    orderBy: { startedAt: "desc" },
-    select:  { id: true, bookingId: true },
-  });
   const paidBooking = heldCycle?.bookingId
     ? await tx.booking.findUnique({ where: { id: heldCycle.bookingId }, select: { paidAt: true } })
     : null;
@@ -193,11 +180,24 @@ async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: D
     throw new Error("MEMBERSHIP_PAYMENT_REQUIRED");
   }
 
-  const expiresAt = new Date(startDate.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * 24 * 60 * 60 * 1000);
+  // Still inside the current period → the waiting one starts the day after it
+  // ends, so no paid days are lost. Otherwise it starts today.
+  const DAY = 24 * 60 * 60 * 1000;
+  const today0 = new Date(startDate); today0.setUTCHours(0, 0, 0, 0);
+  const stillActive = !membershipBefore.pendingActivation && !!membershipBefore.expiresAt && membershipBefore.expiresAt >= today0;
+  const start = stillActive ? new Date(membershipBefore.expiresAt!.getTime() + DAY) : startDate;
+  const expiresAt = new Date(start.getTime() + (MEMBERSHIP_VALIDITY_DAYS - 1) * DAY);
 
+  // Close the period being replaced (it keeps its own dates).
+  if (heldCycle) {
+    await tx.membershipCycle.updateMany({
+      where: { membershipId: membershipBefore.id, closedAt: null, id: { not: heldCycle.id } },
+      data:  { closedAt: new Date() },
+    });
+  }
   const membership = await tx.membership.update({
     where: { customerId },
-    data:  { activatedAt: startDate, expiresAt, usagesUsed: 0, pendingActivation: false },
+    data:  { activatedAt: start, expiresAt, usagesUsed: 0, pendingActivation: false },
   });
   // Rewrite the held (still-open) cycle's placeholder window to the real
   // 30 days. If there was no held cycle (e.g. a manual pending entry), this
@@ -205,7 +205,7 @@ async function activateHeldMembershipTx(tx: Db, customerId: string, startDate: D
   if (heldCycle) {
     await tx.membershipCycle.update({
       where: { id: heldCycle.id },
-      data:  { startedAt: startDate, endedAt: expiresAt },
+      data:  { startedAt: start, endedAt: expiresAt, notes: "รับเงินล่วงหน้า — เปิดใช้งานแล้ว" },
     });
   }
   return membership;
