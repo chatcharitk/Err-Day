@@ -11,6 +11,7 @@ import {
 import ImageUpload from "@/components/ImageUpload";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import { resolveServicePrice } from "@/lib/promotions";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -397,7 +398,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
           <div className="flex-1 min-w-0">
             <p className="text-xs" style={{ color: MUTED }}>รายละเอียดรายการ</p>
             <p className="text-sm font-medium truncate" style={{ color: TEXT }}>
-              {b.customerNickname || b.customerName}
+              {customerLabel({ name: b.customerName, nickname: b.customerNickname })}
             </p>
           </div>
           <button

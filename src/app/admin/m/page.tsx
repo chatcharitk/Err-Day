@@ -3,6 +3,7 @@ import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
 import { PACKAGE_SPECS } from "@/lib/packages";
 import MobileHome from "./MobileHome";
+import { customerLabel } from "@/lib/customer-name";
 
 export const revalidate = 30;
 
@@ -194,7 +195,7 @@ export default async function MobileHomePage({
       displayPrice,
       hasMemberDiscount,
       serviceName:  b.service.nameTh,
-      customerName: b.customer.nickname || b.customer.name,
+      customerName: customerLabel(b.customer),
       customerPhone:b.customer.phone,
       staffName:    b.staff?.name ?? null,
       addonCount:   b._count.addons,

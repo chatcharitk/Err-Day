@@ -67,7 +67,7 @@ export default function NewCustomerForm() {
 
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-4">
         <div>
-          <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>ชื่อ-นามสกุล *</label>
+          <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>ชื่อจริง นามสกุล * <span style={{ fontWeight: 400 }}>(ไม่ต้องใส่ชื่อเล่น)</span></label>
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="เช่น สมชาย ใจดี"
@@ -77,7 +77,7 @@ export default function NewCustomerForm() {
         </div>
 
         <div>
-          <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>ชื่อเล่น</label>
+          <label className="block text-xs mb-1.5 font-medium" style={{ color: MUTED }}>ชื่อเล่น <span style={{ fontWeight: 400 }}>(เฉพาะชื่อเล่น เช่น บิว)</span></label>
           <input
             type="text" value={nickname} onChange={e => setNickname(e.target.value)}
             placeholder="ใช้เรียกเวลาจอง"

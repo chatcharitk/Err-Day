@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import CustomersList from "./CustomersList";
+import { nameCheckCount } from "@/lib/customer-name-check";
 
 export const revalidate = 30;
 
@@ -26,5 +27,5 @@ export default async function MobileCustomersPage() {
     isPending:  !!c.membership?.pendingActivation,
   }));
 
-  return <CustomersList initialCustomers={rows} />;
+  return <CustomersList initialCustomers={rows} nameCheckCount={await nameCheckCount()} />;
 }

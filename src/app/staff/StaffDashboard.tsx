@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Calendar as CalendarIcon, CalendarRange, Clock, Sparkles } from "lucide-react";
 import StaffNav from "./StaffNav";
 import type { CurrentStaff } from "@/lib/staff-auth";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -299,8 +300,7 @@ function BookingRow({ b, dim = false, compact = false, showBranch = false }: { b
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: TEXT }}>
           <span className="truncate">
-            {b.customerName}
-            {b.customerNickname && <span className="font-normal text-xs ml-1" style={{ color: MUTED }}>({b.customerNickname})</span>}
+            {customerLabel({ name: b.customerName, nickname: b.customerNickname })}
           </span>
           {b.isMine && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"

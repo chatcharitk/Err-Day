@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Search, Phone, Loader2, Calendar, Clock } from "lucide-react";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -118,8 +119,7 @@ export default function SearchView() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>
-                        {c.name}
-                        {c.nickname && <span style={{ color: MUTED }} className="font-normal"> · {c.nickname}</span>}
+                        {customerLabel(c)}
                       </p>
                       <a href={`tel:${c.phone}`} className="text-xs flex items-center gap-1" style={{ color: PRIMARY }}>
                         <Phone size={10} /> {c.phone}

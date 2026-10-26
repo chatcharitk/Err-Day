@@ -8,6 +8,7 @@ import {
   AlertCircle, Check, X, Clock,
 } from "lucide-react";
 import { resolveServicePrice } from "@/lib/promotions";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -390,8 +391,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1 flex-wrap">
                         <p className="font-medium truncate">
-                          {c.name}
-                          {c.nickname && <span style={{ color: MUTED }}> · {c.nickname}</span>}
+                          {customerLabel(c)}
                         </p>
                         {c.isMember && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#F0FDF4", color: "#166534" }}>สมาชิก</span>
@@ -426,8 +426,7 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1 flex-wrap">
                 <p className="text-sm font-semibold" style={{ color: TEXT }}>
-                  {matched.name}
-                  {matched.nickname && <span style={{ color: MUTED }}> · {matched.nickname}</span>}
+                  {customerLabel(matched)}
                 </p>
                 {matched.isMember && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#F0FDF4", color: "#166534" }}>สมาชิก</span>
@@ -463,14 +462,14 @@ export default function NewBookingForm({ branches, activeBranchId, defaultDate, 
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={isWalkin ? "ชื่อ-นามสกุล (ไม่บังคับ)" : "ชื่อ-นามสกุล *"}
+                placeholder={isWalkin ? "ชื่อจริง นามสกุล (ไม่บังคับ)" : "ชื่อจริง นามสกุล * (ไม่ต้องใส่ชื่อเล่น)"}
                 className="flex-1 text-sm outline-none bg-transparent"
                 style={{ color: TEXT }}
               />
             </div>
 
             <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 bg-white" style={{ border: `1px solid ${BORDER}` }}>
-              <span className="text-xs" style={{ color: MUTED }}>ชื่อเล่น</span>
+              <span className="text-xs" style={{ color: MUTED }}>ชื่อเล่น (เฉพาะชื่อเล่น)</span>
               <input
                 type="text"
                 value={nickname}

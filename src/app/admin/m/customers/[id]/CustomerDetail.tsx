@@ -411,13 +411,13 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: "#FAFAFA" }}>
             <p className="text-sm font-semibold" style={{ color: TEXT }}>แก้ไขข้อมูลลูกค้า</p>
             <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อ-นามสกุล *</label>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อจริง นามสกุล * <span style={{ fontWeight: 400 }}>(ไม่ต้องใส่ชื่อเล่น)</span></label>
               <input type="text" value={name} onChange={e => setName(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                 style={{ borderColor: BORDER, color: TEXT }} />
             </div>
             <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อเล่น</label>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อเล่น <span style={{ fontWeight: 400 }}>(เฉพาะชื่อเล่น เช่น บิว)</span></label>
               <input type="text" value={nickname} onChange={e => setNickname(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                 style={{ borderColor: BORDER, color: TEXT }} />

@@ -270,6 +270,8 @@ model Customer {
   photoUrls        String?
   dateOfBirth      DateTime?
   lineDisplayName  String?
+  /// Set when the name/nickname were checked in the Oct 2026 cleanup (drops it off the checklist).
+  nameCheckedAt    DateTime?
   bookings         Booking[]
   packages         CustomerPackage[]
   membership       Membership?

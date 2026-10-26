@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
+import { customerLabel } from "@/lib/customer-name";
 
 // Modals are lazy-loaded — only fetched when the user actually opens one.
 // Cuts ~700 lines (~30-40 KB) from the initial calendar bundle.
@@ -351,9 +352,7 @@ function VerticalGantt({
                     onClick={() => onClickBooking(b)}>
                     <div className={`px-1.5 py-1 text-[11px] leading-tight ${c.text}`}>
                       <div className="font-semibold truncate">
-                        {b.customer.nickname
-                          ? `${b.customer.name.split(" ")[0]} (${b.customer.nickname})`
-                          : b.customer.name.split(" ")[0]}
+                        {customerLabel(b.customer)}
                       </div>
                       <div className="opacity-70 truncate">{b.startTime}</div>
                       {height > 44 && (
@@ -484,9 +483,7 @@ function HorizontalGantt({
                       onClick={() => onClickBooking(b)}>
                       <div className={`px-2 py-1 text-xs leading-tight truncate ${c.text}`}>
                         <span className="font-semibold">
-                          {b.customer.nickname
-                            ? `${b.customer.name.split(" ")[0]} (${b.customer.nickname})`
-                            : b.customer.name.split(" ")[0]}
+                          {customerLabel(b.customer)}
                         </span>
                         <span className="opacity-70 ml-1">{b.startTime}</span>
                       </div>
@@ -551,9 +548,7 @@ function ListView({ weekBookings, onClickBooking }: {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`font-semibold text-sm truncate ${c.text}`}>
-                        {b.customer.nickname
-                          ? `${b.customer.name.split(" ")[0]} (${b.customer.nickname})`
-                          : b.customer.name}
+                        {customerLabel(b.customer)}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
                         {b.service.nameTh || b.service.name} · {b.customer.phone}

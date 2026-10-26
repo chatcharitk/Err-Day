@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Search, Sparkles, AlertCircle, Clock } from "lucide-react";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -170,8 +171,7 @@ export default function MembershipList({ memberships }: { memberships: Membershi
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium truncate" style={{ color: TEXT }}>
-                            {m.customer.name}
-                            {m.customer.nickname && <span style={{ color: MUTED }}> · {m.customer.nickname}</span>}
+                            {customerLabel(m.customer)}
                           </p>
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-0.5" style={{ background: "white", color: colorFg }}>
                             <Sparkles size={9} />

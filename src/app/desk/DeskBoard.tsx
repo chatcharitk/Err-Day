@@ -7,6 +7,7 @@ import {
   Sparkles, ArrowLeft, Search, PartyPopper,
 } from "lucide-react";
 import type { DeskBooking } from "@/lib/desk";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -365,8 +366,7 @@ function CustomerLine({ b }: { b: DeskBooking }) {
   return (
     <div>
       <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
-        {b.customerName}
-        {b.customerNickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customerNickname})</span>}
+        {customerLabel({ name: b.customerName, nickname: b.customerNickname })}
         {b.isWalkin && (
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 align-middle"
             style={{ background: "#FEF3C7", color: "#92400E" }}>วอร์คอิน</span>
@@ -828,8 +828,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                         style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
                         <div className="flex-1 min-w-0">
                           <p className="text-base font-bold truncate" style={{ color: TEXT }}>
-                            {c.customer.name}
-                            {c.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({c.customer.nickname})</span>}
+                            {customerLabel(c.customer)}
                           </p>
                           <p className="text-xs" style={{ color: MUTED }}>{c.customer.phone}</p>
                         </div>
@@ -868,8 +867,7 @@ function MemberWalkinModal({ staff, onClose, onDone, onError }: {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-lg font-bold leading-tight" style={{ color: TEXT }}>
-                      {result.customer.name}
-                      {result.customer.nickname && <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({result.customer.nickname})</span>}
+                      {customerLabel(result.customer)}
                     </p>
                     {result.memberStatus === "active" ? (
                       <p className="flex items-center gap-1 text-sm font-semibold mt-1" style={{ color: GREEN }}>

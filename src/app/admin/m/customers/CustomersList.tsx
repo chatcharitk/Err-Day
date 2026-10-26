@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Search, Plus, User, Phone, Sparkles, Clock, Package } from "lucide-react";
+import { ArrowLeft, Search, Plus, User, Phone, Sparkles, Clock, Package, ListChecks } from "lucide-react";
+import { customerLabel } from "@/lib/customer-name";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -35,11 +36,11 @@ function CustomerRow({ c }: { c: CustomerRow }) {
             className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 text-white"
             style={{ background: PRIMARY }}
           >
-            {c.name.charAt(0)}
+            {(c.nickname || c.name).charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium truncate" style={{ color: TEXT }}>{c.name}</p>
+              <p className="text-sm font-medium truncate" style={{ color: TEXT }}>{customerLabel(c)}</p>
               {c.isMember && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#F0FDF4", color: "#166534" }}>
                   <Sparkles size={9} className="inline mr-0.5" />สมาชิก
@@ -56,8 +57,8 @@ function CustomerRow({ c }: { c: CustomerRow }) {
                 </span>
               )}
             </div>
-            {c.nickname && (
-              <p className="text-xs truncate" style={{ color: MUTED }}>{c.nickname}</p>
+            {c.nickname && c.name !== c.nickname && (
+              <p className="text-xs truncate" style={{ color: MUTED }}>{c.name}</p>
             )}
             <p className="text-[11px] mt-0.5 flex items-center gap-2" style={{ color: MUTED }}>
               <span className="inline-flex items-center gap-1"><Phone size={10} />{c.phone}</span>
@@ -93,7 +94,7 @@ function isWalkin(c: CustomerRow) {
   return c.phone.startsWith("walkin-") || c.phone.startsWith("pos-") || c.name === "Walk-in";
 }
 
-export default function CustomersList({ initialCustomers }: { initialCustomers: CustomerRow[] }) {
+export default function CustomersList({ initialCustomers, nameCheckCount = 0 }: { initialCustomers: CustomerRow[]; nameCheckCount?: number }) {
   const router = useRouter();
   const [query,       setQuery]       = useState("");
   const [memberOnly,  setMemberOnly]  = useState(false);
@@ -197,6 +198,14 @@ export default function CustomersList({ initialCustomers }: { initialCustomers: 
           </div>
         </div>
       </header>
+      {nameCheckCount > 0 && (
+        <Link href="/admin/m/customers/name-check" className="mx-4 mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm"
+          style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}>
+          <ListChecks size={16} />
+          <span className="flex-1">ตรวจชื่อลูกค้า — เหลือ {nameCheckCount} คนที่ต้องเช็คชื่อเล่น/ชื่อจริง</span>
+          <span className="font-semibold">เปิด ›</span>
+        </Link>
+      )}
 
       <section className="px-4 pt-3 pb-6">
         {list.length === 0 ? (

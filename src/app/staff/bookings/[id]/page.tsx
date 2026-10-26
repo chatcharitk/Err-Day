@@ -4,6 +4,7 @@ import { ArrowLeft, Phone, Clock, Sparkles, FileText, ChevronRight } from "lucid
 import { maskPhone } from "@/lib/staff-person";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
+import { customerLabel } from "@/lib/customer-name";
 
 export const dynamic  = "force-dynamic";
 export const metadata = { title: "รายละเอียดการจอง — err.day" };
@@ -86,10 +87,7 @@ export default async function StaffBookingDetailPage({
             <div className="flex-1 min-w-0">
               <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: MUTED }}>ลูกค้า</p>
               <p className="text-lg font-bold mt-1" style={{ color: TEXT }}>
-                {b.customer.name}
-                {b.customer.nickname && (
-                  <span className="text-sm font-normal ml-1.5" style={{ color: MUTED }}>({b.customer.nickname})</span>
-                )}
+                {customerLabel(b.customer)}
               </p>
             </div>
             {/* Assignment badge — who's the appointment for? */}

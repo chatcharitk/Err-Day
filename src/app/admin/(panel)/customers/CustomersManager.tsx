@@ -9,6 +9,7 @@ import {
   Receipt, Info, Link2,
 } from "lucide-react";
 import LineLinkButton from "@/components/LineLinkButton";
+import { customerLabel } from "@/lib/customer-name";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -235,7 +236,7 @@ function AddCustomerModal({ onClose, onSaved }: {
 
           <div className="px-6 py-5 space-y-4">
             <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อ-นามสกุล *</label>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อจริง นามสกุล * <span style={{ fontWeight: 400 }}>(ไม่ต้องใส่ชื่อเล่น)</span></label>
               <input
                 autoFocus value={name}
                 onChange={e => setName(e.target.value)}
@@ -245,7 +246,7 @@ function AddCustomerModal({ onClose, onSaved }: {
               />
             </div>
             <div>
-              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อเล่น (ไม่บังคับ)</label>
+              <label className="block text-xs mb-1 font-medium" style={{ color: MUTED }}>ชื่อเล่น <span style={{ fontWeight: 400 }}>(เฉพาะชื่อเล่น เช่น บิว)</span></label>
               <input
                 value={nickname}
                 onChange={e => setNickname(e.target.value)}
@@ -1263,14 +1264,14 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
                   <input
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="ชื่อ-นามสกุล *"
+                    placeholder="ชื่อจริง นามสกุล *"
                     className="text-lg font-semibold w-full px-2 py-1 rounded-lg border"
                     style={{ borderColor: BORDER, color: TEXT }}
                   />
                   <input
                     value={nickname}
                     onChange={e => setNickname(e.target.value)}
-                    placeholder="ชื่อเล่น (ไม่บังคับ)"
+                    placeholder="ชื่อเล่น (เฉพาะชื่อเล่น)"
                     className="text-sm w-full px-2 py-1 rounded-lg border"
                     style={{ borderColor: BORDER, color: TEXT }}
                   />
@@ -1644,10 +1645,7 @@ function CustomerCard({ customer, onClick, highlightRef }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-semibold text-sm" style={{ color: TEXT }}>
-            {customer.name}
-            {customer.nickname && (
-              <span className="font-normal text-xs ml-1.5" style={{ color: MUTED }}>({customer.nickname})</span>
-            )}
+            {customerLabel(customer)}
           </p>
           {customer.membership && (
             <span
