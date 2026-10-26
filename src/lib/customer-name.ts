@@ -33,6 +33,11 @@ const loose = (s: string) => s.normalize("NFC").replace(/[ัิ-ฺ็-๎]/g, 
 export function tidyCustomerName(name: string, nickname: string | null): { name: string; nickname: string | null } {
   const n = name.trim().split(/\s+/).filter(Boolean);
   const k = (nickname ?? "").trim();
+  // Nickname "ลูกปัด จุฬาลักษณ์" with name "จุฬาลักษณ์ ศรีภูริจรรยา" → nickname "ลูกปัด".
+  const kw = k.split(/\s+/).filter(Boolean);
+  if (kw.length >= 2 && kw.slice(1).every((w, i) => n[i] !== undefined && loose(n[i]) === loose(w))) {
+    return { name: n.join(" "), nickname: kw[0] };
+  }
   // Thai names only (in "Alina Changkueng" the first word is the real first name),
   // and not when the rest is a description ("ลูกคุณหลิน", "ร้าน…", "เพื่อน…").
   const rest = n.slice(1);
@@ -106,6 +111,7 @@ function suggestNameFixRaw(c: { name: string; nickname: string | null }): NameFi
     // nickname "บิว" or "บิว ศุภิสรา", name "บิว ศุภิสรา สุขใจ"
     return { action: "auto", reason: "ชื่อขึ้นต้นด้วยชื่อเล่น", nickname: n[0], name: n.slice(1).join(" "), note };
   }
+  if (k.length >= 2 && startsWith(n, k.slice(1))) return { action: "auto", reason: "ชื่อเล่นมีชื่อจริงต่อท้าย", nickname: k[0], name: n.join(" "), note };
   if (k.length === 1 && !n.includes(k[0])) return { action: "keep", reason: "แยกถูกแล้ว", nickname: k[0], name: n.join(" "), note };
   return { action: "review", reason: "ชื่อกับชื่อเล่นไม่ตรงกัน", nickname: k[0], name: n.join(" "), note };
 }
