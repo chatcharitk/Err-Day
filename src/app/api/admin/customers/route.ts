@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { tidyCustomerName } from "@/lib/customer-name";
 
 // GET /api/admin/customers?q=search&limit=N — search customers by name, nickname, or phone
 export async function GET(request: Request) {
@@ -84,10 +85,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "เบอร์โทรนี้มีในระบบแล้ว" }, { status: 409 });
     }
 
+    const names = tidyCustomerName(name, nickname ?? null);
     const customer = await prisma.customer.create({
       data: {
-        name:        name.trim(),
-        nickname:    nickname?.trim() || null,
+        name:        names.name,
+        nickname:    names.nickname,
         phone:       phone.trim(),
         email:       email?.trim() || null,
         gender:      gender || null,

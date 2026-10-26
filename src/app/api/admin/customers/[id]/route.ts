@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { tidyCustomerName } from "@/lib/customer-name";
 import { findCustomerPackagesForAdmin } from "@/lib/packages";
 
 // GET /api/admin/customers/[id] — fetch single customer (for re-loading after mutations)
@@ -140,11 +141,18 @@ export async function PATCH(
       }
     }
 
+    // Real name must not repeat the nickname ("ยุ้ย ชณิดาภา" + "ยุ้ย" → "ชณิดาภา").
+    let names: { name?: string; nickname?: string | null } = {};
+    if (name !== undefined || nickname !== undefined) {
+      const cur = await prisma.customer.findUnique({ where: { id }, select: { name: true, nickname: true } });
+      const t = tidyCustomerName(name !== undefined ? String(name) : cur?.name ?? "", nickname !== undefined ? (nickname ?? null) : cur?.nickname ?? null);
+      names = { ...(name !== undefined || t.name !== cur?.name ? { name: t.name } : {}), ...(nickname !== undefined || t.nickname !== cur?.nickname ? { nickname: t.nickname } : {}) };
+    }
+
     const customer = await prisma.customer.update({
       where: { id },
       data: {
-        ...(name       !== undefined ? { name:       name.trim()                } : {}),
-        ...(nickname   !== undefined ? { nickname:   nickname?.trim() || null   } : {}),
+        ...names,
         ...(phone      !== undefined ? { phone:      phone.trim()               } : {}),
         ...(email      !== undefined ? { email:      email?.trim() || null      } : {}),
         ...(gender      !== undefined ? { gender:      gender || null                                       } : {}),

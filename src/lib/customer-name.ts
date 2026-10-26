@@ -22,6 +22,25 @@ export function customerLabel(c: { name?: string | null; nickname?: string | nul
 const NOTE_WORDS = /^(walk-?in|walkin|วอคอิน|วอล์คอิน|influencer|อินฟลู\S*|ผมต่อ|ทรีทเม้นต์|เทสระบบ|test|ลบออก|academy|สก|\d+)$/i;
 const TAIL_NOTE = /(^|\s)(สมาชิก|หมดอายุ|หมด\s*\d|\d+\s*ครั้ง).*$/;
 const thai = (s: string) => /[฀-๿]/.test(s);
+/** Compare words ignoring Thai vowel/tone marks and case, so a typo like "ยุัย" still matches "ยุ้ย". */
+const loose = (s: string) => s.normalize("NFC").replace(/[ัิ-ฺ็-๎]/g, "").toLowerCase();
+
+/**
+ * Applied whenever staff save a customer: if the real-name field starts with
+ * the nickname ("ยุ้ย ชณิดาภา" + ชื่อเล่น "ยุ้ย"), keep only the real name
+ * ("ชณิดาภา"). The nickname takes the name field's spelling.
+ */
+export function tidyCustomerName(name: string, nickname: string | null): { name: string; nickname: string | null } {
+  const n = name.trim().split(/\s+/).filter(Boolean);
+  const k = (nickname ?? "").trim();
+  // Thai names only (in "Alina Changkueng" the first word is the real first name),
+  // and not when the rest is a description ("ลูกคุณหลิน", "ร้าน…", "เพื่อน…").
+  const rest = n.slice(1);
+  if (k && !k.includes(" ") && n.length >= 2 && thai(n[0]) && loose(n[0]) === loose(k) && !rest.some(w => /^(เพื่อน|ญาติ|ชื่อ|ลูก|ร้าน)/.test(w)) && rest.length <= 2) {
+    return { name: rest.join(" "), nickname: n[0] };
+  }
+  return { name: name.trim(), nickname: k || null };
+}
 
 /** Split notes out of a name field: returns the remaining words and the note text. */
 export function stripNameNotes(raw: string): { words: string[]; note: string } {
@@ -68,7 +87,7 @@ function suggestNameFixRaw(c: { name: string; nickname: string | null }): NameFi
   const note = [N.note, (c.nickname ?? "").trim() !== c.name.trim() ? K.note : ""].filter(Boolean).join(" ");
   const n = N.words, k = K.words;
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
-  const startsWith = (a: string[], b: string[]) => b.length > 0 && b.every((x, i) => a[i] === x);
+  const startsWith = (a: string[], b: string[]) => b.length > 0 && b.every((x, i) => a[i] !== undefined && loose(a[i]) === loose(x));
   const keepNick = k.join(" ") || null;
 
   if (!n.length && !k.length) return { action: "review", reason: "ชื่อมีแต่หมายเหตุ", nickname: null, name: c.name.trim(), note };
@@ -85,7 +104,7 @@ function suggestNameFixRaw(c: { name: string; nickname: string | null }): NameFi
   if (startsWith(n, k) && n.length > k.length) {
     if (!thai(k[0])) return { action: "review", reason: "ชื่ออังกฤษ — คำแรกอาจเป็นชื่อจริง", nickname: k[0], name: n.slice(1).join(" "), note };
     // nickname "บิว" or "บิว ศุภิสรา", name "บิว ศุภิสรา สุขใจ"
-    return { action: "auto", reason: "ชื่อขึ้นต้นด้วยชื่อเล่น", nickname: k[0], name: n.slice(1).join(" "), note };
+    return { action: "auto", reason: "ชื่อขึ้นต้นด้วยชื่อเล่น", nickname: n[0], name: n.slice(1).join(" "), note };
   }
   if (k.length === 1 && !n.includes(k[0])) return { action: "keep", reason: "แยกถูกแล้ว", nickname: k[0], name: n.join(" "), note };
   return { action: "review", reason: "ชื่อกับชื่อเล่นไม่ตรงกัน", nickname: k[0], name: n.join(" "), note };
