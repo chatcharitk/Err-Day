@@ -9,6 +9,7 @@ import {
   Receipt, Info, FileImage, NotebookPen, Cake, ChevronRight,
 } from "lucide-react";
 import LineLinkButton from "@/components/LineLinkButton";
+import MergeCustomerButton from "@/components/MergeCustomerButton";
 
 const PACKAGE_OPTIONS: { sku: string; nameTh: string; price: number }[] = [
   { sku: "svc-buffet", nameTh: "Buffet 30 วัน",   price: 3500 },
@@ -407,7 +408,10 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
 
         {!editing && (
           <div className="mb-3">
-            <LineLinkButton customerId={c.id} linked={!!c.lineUserId} />
+            <div className="flex flex-wrap items-center gap-2">
+              <LineLinkButton customerId={c.id} linked={!!c.lineUserId} />
+              <MergeCustomerButton customerId={c.id} />
+            </div>
           </div>
         )}
 
