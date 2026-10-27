@@ -1,5 +1,6 @@
 "use client";
 
+import StaffVisibilityToggle from "@/components/StaffVisibilityToggle";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { defaultBranchId } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Plus, Trash2, X, Copy, Loader2 } from "lucide-react";
@@ -182,9 +183,12 @@ export default function ShiftsManager({ branches }: { branches: Branch[] }) {
           </div>
         </div>
 
-        <p className="text-base font-medium mb-4" style={{ color: "#3B2A24" }}>
-          {formatRangeLabel(weekStart, weekEnd)}
-        </p>
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <p className="text-base font-medium flex-1" style={{ color: "#3B2A24" }}>
+            {formatRangeLabel(weekStart, weekEnd)}
+          </p>
+          <div className="w-80 max-w-full"><StaffVisibilityToggle week={ymd(weekStart)} /></div>
+        </div>
 
         {/* Grid */}
         {staff.length === 0 ? (

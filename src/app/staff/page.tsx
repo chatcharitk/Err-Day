@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
 import { maskPhone } from "@/lib/staff-person";
 import StaffDashboard from "./StaffDashboard";
+import { hiddenWeeks, mondayKey } from "@/lib/shift-visibility";
 
 export const dynamic  = "force-dynamic"; // cookie-dependent
 export const metadata = { title: "ตารางงานของฉัน — err.day" };
@@ -64,6 +65,10 @@ export default async function StaffHome() {
     }),
   ]);
 
+  // Weeks the owner hasn't published yet are left out of "ของฉัน".
+  const hidden = await hiddenWeeks([...new Set(shifts.map(sh => mondayKey(sh.date.toISOString().slice(0, 10))))]);
+  const visibleShifts = shifts.filter(sh => !hidden.has(mondayKey(sh.date.toISOString().slice(0, 10))));
+
   const todayStr = ymd(now);
   const weekData = {
     todayStr,
@@ -85,7 +90,7 @@ export default async function StaffHome() {
       branchId:         b.branchId,
       branchName:       b.branch.name.replace("err.day ", ""),
     })),
-    shifts: shifts.map(s => ({
+    shifts: visibleShifts.map(s => ({
       date:      ymd(s.date),
       startTime: s.startTime,
       endTime:   s.endTime,

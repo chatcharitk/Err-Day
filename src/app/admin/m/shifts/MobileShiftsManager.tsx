@@ -1,5 +1,6 @@
 "use client";
 
+import StaffVisibilityToggle from "@/components/StaffVisibilityToggle";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -352,6 +353,8 @@ export default function MobileShiftsManager({
             วันนี้
           </button>
         </div>
+
+        <StaffVisibilityToggle week={ymd(weekStart)} />
 
         {/* List / Gantt view toggle */}
         <div className="flex items-center gap-1 p-1 rounded-xl bg-white" style={{ border: `1px solid ${BORDER}` }}>

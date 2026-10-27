@@ -1379,3 +1379,13 @@ model ColorVisit {
   @@index([customerId, date])
   @@index([branchId, date])
 }
+
+/// Whether staff can see a week's shift roster in the staff app ("ของฉัน" and
+/// "ตารางทีม"). Keyed by the week's Monday (YYYY-MM-DD, Bangkok). No row =
+/// visible. Online booking and the admin views always use the shifts.
+model ShiftWeekVisibility {
+  weekStart String   @id
+  hidden    Boolean  @default(false)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}

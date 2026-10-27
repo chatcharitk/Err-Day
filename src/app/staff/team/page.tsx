@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
 import { bangkokTodayStr } from "@/lib/payroll";
+import { hiddenWeeks } from "@/lib/shift-visibility";
 import StaffHeader from "../StaffHeader";
 import StaffNav from "../StaffNav";
 
@@ -34,6 +35,7 @@ export default async function StaffTeamPage({ searchParams }: { searchParams: Pr
   const monday = addDays(today, (dow === 0 ? -6 : 1 - dow) + (next ? 7 : 0));
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 
+  const weekHidden = (await hiddenWeeks([monday])).has(monday);
   const [branches, shifts] = await Promise.all([
     prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.staffShift.findMany({
@@ -61,7 +63,13 @@ export default async function StaffTeamPage({ searchParams }: { searchParams: Pr
           })}
         </div>
 
-        {days.map(d => {
+        {weekHidden && (
+          <div className="bg-white rounded-2xl px-4 py-8 text-center" style={{ border: `1px solid ${BORDER}` }}>
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>ตารางงานสัปดาห์นี้ยังไม่ประกาศ</p>
+            <p className="text-xs mt-1" style={{ color: MUTED }}>รอแอดมินจัดตารางเสร็จก่อนนะคะ</p>
+          </div>
+        )}
+        {!weekHidden && days.map(d => {
           const isToday = d === today;
           const dayShifts = shifts.filter(s => s.date.toISOString().slice(0, 10) === d);
           return (
