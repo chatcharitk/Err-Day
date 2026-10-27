@@ -272,6 +272,8 @@ model Customer {
   lineDisplayName  String?
   /// Set when the name/nickname were checked in the Oct 2026 cleanup (drops it off the checklist).
   nameCheckedAt    DateTime?
+  hairProfile      HairProfile?
+  colorVisits      ColorVisit[]
   bookings         Booking[]
   packages         CustomerPackage[]
   membership       Membership?
@@ -1293,4 +1295,87 @@ model StockCountLine {
 
   @@index([countId])
   @@index([productId])
+}
+
+
+/// ── Hair-color record (Oct 2026) ─────────────────────────────────────────────
+/// Page 1 of the paper "HAIR COLOR RECORD": one per customer, asked at the salon
+/// the first time (never a customer self-service form) and updated when things
+/// change. Allergy answers are health data → saved only with consentAt (PDPA).
+model HairProfile {
+  id                  String    @id @default(cuid())
+  customerId          String    @unique
+  naturalLevel        Int?
+  grayPercent         Int?
+  length              String?
+  texture             String?
+  curl                String?
+  density             String?
+  condition           String[]
+  scalp               String[]
+  chemicalHistory     String[]
+  lastChemical        String?
+  lastChemicalProduct String?
+  /// NONE | YES | UNSURE | UNKNOWN
+  allergy             String    @default("UNKNOWN")
+  allergyDetail       String?
+  /// PASS | FAIL — patch test is done only when the stylist has a concern.
+  patchTestResult     String?
+  patchTestAt         DateTime?
+  patchTestBy         String?
+  preferredTones      String?
+  avoidTones          String?
+  goals               String?
+  /// Customer tapped consent on the salon's device (health data + in-salon photos).
+  consentAt           DateTime?
+  consentMarketing    Boolean   @default(false)
+  consentVersion      String?
+  assessedBy          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  customer            Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+/// Page 2: one per colour job. `zones` holds the mixed formula:
+/// [{ zone: ROOT|MID|ENDS|TONER|OTHER, shades: [{ productId, label, grams }],
+///    developerPercent, ratio, developerGrams, minutes, startedAt, rinsedAt }].
+/// costSatang is computed from grams × stock cost and is ADMIN-ONLY — never
+/// send it to staff screens.
+model ColorVisit {
+  id              String    @id @default(cuid())
+  customerId      String
+  bookingId       String?   @unique
+  branchId        String
+  staffId         String?
+  stylistName     String
+  visitNo         Int
+  date            DateTime
+  serviceTypes    String[]
+  rootLevel       Int?
+  midEndsLevel    Int?
+  targetLevel     Int?
+  grayPercent     Int?
+  preChecks       String[]
+  patchTestNeeded Boolean   @default(false)
+  zones           Json      @default("[]")
+  otherProducts   String?
+  colorGrams      Int       @default(0)
+  developerGrams  Int       @default(0)
+  costSatang      Int?
+  result          String?
+  scalpAfter      String?
+  referencePhotos String[]
+  beforePhotos    String[]
+  afterPhotos     String[]
+  nextTimeNotes   String?
+  /// DRAFT | DONE
+  status          String    @default("DRAFT")
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, date])
+  @@index([branchId, date])
 }

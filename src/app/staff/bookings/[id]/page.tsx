@@ -119,6 +119,12 @@ export default async function StaffBookingDetailPage({
             ดูข้อมูลลูกค้า · ประวัติ · รูปภาพ
             <ChevronRight size={16} />
           </Link>
+          <Link href={`/staff/customers/${b.customer.id}/color?booking=${b.id}`}
+            className="mt-2 flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold"
+            style={{ background: "white", color: PRIMARY, border: `1px solid ${PRIMARY}` }}>
+            การ์ดสีผม · บันทึกสูตรสี
+            <ChevronRight size={16} />
+          </Link>
         </section>
 
         {/* Time + service card */}

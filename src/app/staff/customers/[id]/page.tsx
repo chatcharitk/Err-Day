@@ -106,6 +106,13 @@ export default async function StaffCustomerPage({ params, searchParams }: {
           </div>
         </section>
 
+        <Link href={`/staff/customers/${c.id}/color${from ? `?booking=${from}` : ""}`}
+          className="flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold bg-white"
+          style={{ color: PRIMARY, border: `1px solid ${PRIMARY}` }}>
+          การ์ดสีผม · ประวัติสูตรสี
+          <span>›</span>
+        </Link>
+
         {/* Shop notes */}
         {c.notes && (
           <section className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${BORDER}` }}>

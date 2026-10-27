@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -401,6 +402,10 @@ export default function BookingDetail({ booking: initial, branchServices, branch
               {customerLabel({ name: b.customerName, nickname: b.customerNickname })}
             </p>
           </div>
+          <Link href={`/admin/m/customers/${b.customerId}/color?booking=${b.id}`} className="text-xs font-semibold px-2.5 py-1.5 rounded-full"
+            style={{ color: PRIMARY, border: `1px solid ${PRIMARY}` }}>
+            การ์ดสีผม
+          </Link>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}

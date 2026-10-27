@@ -511,6 +511,15 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
         )}
       </section>
 
+      {/* Hair-colour record */}
+      <section className="px-4 pb-4">
+        <Link href={`/admin/m/customers/${c.id}/color`} className="flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold bg-white"
+          style={{ color: PRIMARY, border: `1px solid ${PRIMARY}` }}>
+          การ์ดสีผม · ประวัติสูตรสี
+          <span>›</span>
+        </Link>
+      </section>
+
       {/* Membership */}
       <section className="px-4 pb-4">
         <div className="flex items-center justify-between mb-2">

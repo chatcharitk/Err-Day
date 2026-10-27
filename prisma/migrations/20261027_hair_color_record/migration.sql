@@ -1,0 +1,71 @@
+CREATE TABLE "HairProfile" (
+  "id" TEXT NOT NULL,
+  "customerId" TEXT NOT NULL,
+  "naturalLevel" INTEGER,
+  "grayPercent" INTEGER,
+  "length" TEXT,
+  "texture" TEXT,
+  "curl" TEXT,
+  "density" TEXT,
+  "condition" TEXT[],
+  "scalp" TEXT[],
+  "chemicalHistory" TEXT[],
+  "lastChemical" TEXT,
+  "lastChemicalProduct" TEXT,
+  "allergy" TEXT NOT NULL DEFAULT 'UNKNOWN',
+  "allergyDetail" TEXT,
+  "patchTestResult" TEXT,
+  "patchTestAt" TIMESTAMP(3),
+  "patchTestBy" TEXT,
+  "preferredTones" TEXT,
+  "avoidTones" TEXT,
+  "goals" TEXT,
+  "consentAt" TIMESTAMP(3),
+  "consentMarketing" BOOLEAN NOT NULL DEFAULT false,
+  "consentVersion" TEXT,
+  "assessedBy" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "HairProfile_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "HairProfile_customerId_key" ON "HairProfile"("customerId");
+ALTER TABLE "HairProfile" ADD CONSTRAINT "HairProfile_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "ColorVisit" (
+  "id" TEXT NOT NULL,
+  "customerId" TEXT NOT NULL,
+  "bookingId" TEXT,
+  "branchId" TEXT NOT NULL,
+  "staffId" TEXT,
+  "stylistName" TEXT NOT NULL,
+  "visitNo" INTEGER NOT NULL,
+  "date" TIMESTAMP(3) NOT NULL,
+  "serviceTypes" TEXT[],
+  "rootLevel" INTEGER,
+  "midEndsLevel" INTEGER,
+  "targetLevel" INTEGER,
+  "grayPercent" INTEGER,
+  "preChecks" TEXT[],
+  "patchTestNeeded" BOOLEAN NOT NULL DEFAULT false,
+  "zones" JSONB NOT NULL DEFAULT '[]',
+  "otherProducts" TEXT,
+  "colorGrams" INTEGER NOT NULL DEFAULT 0,
+  "developerGrams" INTEGER NOT NULL DEFAULT 0,
+  "costSatang" INTEGER,
+  "result" TEXT,
+  "scalpAfter" TEXT,
+  "referencePhotos" TEXT[],
+  "beforePhotos" TEXT[],
+  "afterPhotos" TEXT[],
+  "nextTimeNotes" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT',
+  "createdBy" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "completedAt" TIMESTAMP(3),
+  CONSTRAINT "ColorVisit_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "ColorVisit_bookingId_key" ON "ColorVisit"("bookingId");
+CREATE INDEX "ColorVisit_customerId_date_idx" ON "ColorVisit"("customerId", "date");
+CREATE INDEX "ColorVisit_branchId_date_idx" ON "ColorVisit"("branchId", "date");
+ALTER TABLE "ColorVisit" ADD CONSTRAINT "ColorVisit_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
