@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sameReply } from "@/lib/inbox-feedback";
 import { randomUUID } from "node:crypto";
 import { getLineMessageContent, pushLine, replyLine, type LineMessage } from "@/lib/line-messaging";
 import { storeImage } from "@/lib/upload";
@@ -146,7 +147,8 @@ export async function sendInboxReply(threadId: string, rawBubbles: string[], opt
   if (opts.draftId) {
     const draft = await prisma.inboxDraft.findUnique({ where: { id: opts.draftId }, select: { bubbles: true, images: true, threadId: true } });
     if (draft?.threadId === threadId) {
-      const same = JSON.stringify(draft.bubbles) === JSON.stringify(bubbles)
+      // Unchanged = same words (spaces, emoji and bubble splits don't count) and same posters.
+      const same = sameReply((draft.bubbles as string[] | null) ?? [], bubbles)
         && JSON.stringify(draft.images ?? []) === JSON.stringify(images.map(m => m.key));
       await prisma.inboxDraft.update({ where: { id: opts.draftId }, data: { status: same ? "USED" : "EDITED" } });
     }
@@ -192,7 +194,8 @@ async function sendMetaReply(
   if (opts.draftId) {
     const draft = await prisma.inboxDraft.findUnique({ where: { id: opts.draftId }, select: { bubbles: true, images: true, threadId: true } });
     if (draft?.threadId === thread.id) {
-      const same = JSON.stringify(draft.bubbles) === JSON.stringify(bubbles)
+      // Unchanged = same words (spaces, emoji and bubble splits don't count) and same posters.
+      const same = sameReply((draft.bubbles as string[] | null) ?? [], bubbles)
         && JSON.stringify(draft.images ?? []) === JSON.stringify(images.map(m => m.key));
       await prisma.inboxDraft.update({ where: { id: opts.draftId }, data: { status: same ? "USED" : "EDITED" } });
     }

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { addMinutes, getTakenSlots, loadDaySnapshot, SALE_ONLY_SKUS } from "@/lib/capacity";
@@ -439,6 +440,10 @@ export async function draftReply(
     return null;
   }
 
+  // Everything the model saw and did — saved on the draft so it can be replayed in evals.
+  const trace: { promptVersion?: string; factsVersion?: string; userText?: string; photoMessageIds?: string[]; instruction?: string; tools: { name: string; input: unknown; result: string }[] } = { tools: [] };
+  const hash = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 12);
+
   try {
     const today = bangkokTodayKey();
     const now = new Date(Date.now() + 7 * 3600_000);
@@ -465,9 +470,19 @@ export async function draftReply(
           ])]
         : userText,
     }];
+    const facts = await shopFacts(today);
+    trace.promptVersion = hash(STYLE);
+    trace.factsVersion = hash(facts);
+    trace.userText = userText;
+    trace.photoMessageIds = photos.map(p => p.messageId);
+    if (opts.instruction?.trim()) trace.instruction = opts.instruction.trim().slice(0, 300);
+    await prisma.inboxPromptText.createMany({
+      data: [{ hash: trace.promptVersion, kind: "STYLE", text: STYLE }, { hash: trace.factsVersion, kind: "FACTS", text: facts }],
+      skipDuplicates: true,
+    }).catch(() => {});
     const system: Anthropic.Beta.BetaTextBlockParam[] = [
       { type: "text", text: STYLE },
-      { type: "text", text: await shopFacts(today), cache_control: { type: "ephemeral" } },
+      { type: "text", text: facts, cache_control: { type: "ephemeral" } },
     ];
     let inputTokens = 0, outputTokens = 0;
     let booking: BookingAction | null = null;
@@ -532,6 +547,7 @@ export async function draftReply(
             content = JSON.stringify({ error: "invalid input" });
           }
           results.push({ type: "tool_result", tool_use_id: tu.id, content });
+          trace.tools.push({ name: tu.name, input: tu.input, result: content.slice(0, 4000) });
         }
         messages.push({ role: "user", content: results });
         continue;
@@ -547,6 +563,7 @@ export async function draftReply(
         where: { id: draft.id, status: "PENDING" },
         data: {
           status: "READY", bubbles, note: parsed.note?.trim() || null, inputTokens, outputTokens,
+          trace: trace as unknown as Prisma.InputJsonValue, promptVersion: trace.promptVersion,
           ...(booking ? { booking: booking as unknown as Prisma.InputJsonValue } : {}),
           ...(images.length ? { images } : {}),
         },
@@ -557,7 +574,7 @@ export async function draftReply(
   } catch (e) {
     const error = e instanceof Anthropic.APIError ? `API ${e.status}: ${e.message}` : e instanceof Error ? e.message : String(e);
     console.error("[inbox] draft failed", threadId, error);
-    await prisma.inboxDraft.update({ where: { id: draft.id }, data: { status: "FAILED", error: error.slice(0, 500) } });
+    await prisma.inboxDraft.update({ where: { id: draft.id }, data: { status: "FAILED", error: error.slice(0, 500), trace: trace as unknown as Prisma.InputJsonValue, promptVersion: trace.promptVersion ?? null } });
     return null;
   }
 }

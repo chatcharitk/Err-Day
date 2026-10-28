@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DRAFT_FEEDBACK_REASONS, sameReply } from "@/lib/inbox-feedback";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Send, RefreshCw, Loader2, Sparkles, Wand2, CalendarCheck, CalendarX, X } from "lucide-react";
@@ -40,6 +41,7 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
   const [showOa, setShowOa] = useState(false);
   const [oaText, setOaText] = useState("");
   const [dropped, setDropped] = useState<{ draftId: string | null; keys: string[] }>({ draftId: null, keys: [] });
+  const [reasons, setReasons] = useState<{ draftId: string | null; list: string[] }>({ draftId: null, list: [] });
 
   // A draft not yet loaded fills an empty box by itself; it never overwrites typing.
   const fresh = draft?.status === "READY" && draft.id !== loadedId ? draft : null;
@@ -54,6 +56,13 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
   const droppedKeys = dropped.draftId === imageDraft?.id ? dropped.keys : [];
   const images = (imageDraft?.images ?? []).filter(i => !droppedKeys.includes(i.key));
   const total = bubbles.length + images.length;
+
+  // Reason chips: shown when the text going out differs from the AI draft it came from
+  // (or the owner typed their own while a draft was there). Saved with the send.
+  const feedbackDraft = draft && (draft.id === sourceDraftId || (!sourceDraftId && ready?.id === draft.id)) && draft.bubbles?.length ? draft : null;
+  const edited = !!feedbackDraft && bubbles.length > 0 && !sameReply(bubbles, feedbackDraft.bubbles);
+  const pickedReasons = reasons.draftId === feedbackDraft?.id ? reasons.list : [];
+  const toggleReason = (r: string) => setReasons({ draftId: feedbackDraft?.id ?? null, list: pickedReasons.includes(r) ? pickedReasons.filter(x => x !== r) : [...pickedReasons, r] });
 
   async function requestDraft(instr?: string) {
     setBusy("draft"); setErr(""); setMsg("");
@@ -95,6 +104,12 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(d.error ?? "ส่งไม่สำเร็จ"); return; }
+      if (edited && feedbackDraft && pickedReasons.length) {
+        void fetch(`/api/admin/inbox/${threadId}/feedback`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftId: feedbackDraft.id, reasons: pickedReasons }),
+        }).catch(() => {});
+      }
       setText(""); setLoadedId(draft?.id ?? null);
       setMsg(`${p ? (p.type === "cancel" ? "ยกเลิกแล้ว + " : "จองแล้ว + ") : ""}${d.via === "reply" && isLine ? "ส่งแล้ว ✓ (ตอบกลับฟรี ไม่กินโควตา)" : "ส่งแล้ว ✓"}`);
       router.refresh();
@@ -202,6 +217,23 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {edited && (
+        <div className="rounded-xl px-2.5 py-2 space-y-1.5" style={{ background: "#FFFBF5", border: "1px solid #F3E2CC" }}>
+          <p className="text-[11px]" style={{ color: MUTED }}>แก้จากร่าง AI เพราะ… <span className="opacity-70">(ไม่บังคับ — ช่วยให้ AI ตอบแม่นขึ้น)</span></p>
+          <div className="flex flex-wrap gap-1">
+            {DRAFT_FEEDBACK_REASONS.map(r => {
+              const on = pickedReasons.includes(r);
+              return (
+                <button key={r} type="button" onClick={() => toggleReason(r)} className="text-[11px] px-2 py-1 rounded-full"
+                  style={on ? { background: TEXT, color: "white", border: `1px solid ${TEXT}` } : { background: "white", color: TEXT, border: `1px solid ${BORDER}` }}>
+                  {r}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

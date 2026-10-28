@@ -1155,6 +1155,15 @@ model InboxDraft {
   inputTokens  Int?
   outputTokens Int?
   error        String?
+  /// What the AI saw and did, so the draft can be replayed for evals:
+  /// { promptVersion, factsVersion, userText, photoMessageIds, instruction, tools: [{ name, input, result }] }.
+  trace        Json?
+  /// Hash of the instructions (STYLE) used — text kept once in InboxPromptText.
+  promptVersion String?
+  /// Owner's reasons for editing / not using the draft (reason chips in the reply box).
+  feedback     String[]
+  feedbackNote String?
+  feedbackAt   DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -1388,4 +1397,14 @@ model ShiftWeekVisibility {
   hidden    Boolean  @default(false)
   updatedBy String?
   updatedAt DateTime @updatedAt
+}
+
+
+/// Each distinct version of the AI inbox instructions ("STYLE") and shop facts,
+/// stored once by hash; InboxDraft.trace points at them (eval replays).
+model InboxPromptText {
+  hash      String   @id
+  kind      String
+  text      String
+  createdAt DateTime @default(now())
 }

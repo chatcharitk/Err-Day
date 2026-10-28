@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { lineQuota } from "@/lib/inbox";
+import { draftQuality } from "@/lib/inbox-quality";
 import LiveRefresh from "./LiveRefresh";
 import { channelInfo } from "./channel";
 
@@ -23,6 +24,7 @@ function ago(d: Date) {
 export default async function MobileInboxPage() {
   if (!await getCurrentAdmin()) redirect("/admin/login?next=/admin/m/inbox");
   const quotaP = lineQuota();
+  const qualityP = draftQuality(7);
   const threads = await prisma.inboxThread.findMany({
     orderBy: { lastMessageAt: "desc" }, take: 60,
     include: {
@@ -31,7 +33,7 @@ export default async function MobileInboxPage() {
       drafts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
     },
   });
-  const quota = await quotaP;
+  const [quota, quality] = await Promise.all([quotaP, qualityP]);
   const pct = quota?.limit ? quota.used / quota.limit : 0;
   return (
     <div>
@@ -50,6 +52,15 @@ export default async function MobileInboxPage() {
             </span>
           )}
           <span className="shrink-0 font-semibold">{quota.used.toLocaleString()}{quota.limit ? ` / ${quota.limit.toLocaleString()}` : ""}</span>
+        </div>
+      )}
+      {quality.sent > 0 && (
+        <div className="px-4 py-2 text-[11px] flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED }}>
+          <span>7 วันล่าสุด ส่งตามร่าง AI ไม่ต้องแก้</span>
+          <span className="font-semibold" style={{ color: (quality.pct ?? 0) >= 70 ? "#166534" : (quality.pct ?? 0) >= 50 ? "#92400E" : "#B91C1C" }}>
+            {quality.pct}% ({quality.unchanged}/{quality.sent})
+          </span>
+          {quality.topReasons.length > 0 && <span className="w-full">แก้บ่อยเพราะ: {quality.topReasons.map(([r, n]) => `${r} ${n}`).join(" · ")}</span>}
         </div>
       )}
       {threads.length === 0 && (
