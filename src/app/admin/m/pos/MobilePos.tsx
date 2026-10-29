@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ShoppingBag, Plus, Minus, X, Check, Loader2, Tag,
-  Sparkles, ChevronDown, AlertCircle, ReceiptText,
+  Sparkles, ChevronDown, AlertCircle, ReceiptText, PenLine,
 } from "lucide-react";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import { getPromotionServicePrice } from "@/lib/promotions";
@@ -227,6 +227,10 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     return implied > 0 ? implied / 100 : 0;
   });
   const [discountingItemId, setDiscountingItemId] = useState<string | null>(null);
+  // บริการพิเศษ — a one-off service typed in at the till (name + price).
+  const [customOpen,  setCustomOpen]  = useState(false);
+  const [customName,  setCustomName]  = useState("");
+  const [customPrice, setCustomPrice] = useState("");
 
   const activeBranch = branches.find(b => b.id === activeBranchId);
 
@@ -372,6 +376,30 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       }
       return newCart;
     });
+    setShowCart(true);
+  };
+
+  /**
+   * Off-menu service with a hand-entered name and price. Sent without a
+   * branchServiceId, so the sale records it as a service line at exactly this
+   * price — member pricing and packages never touch it.
+   */
+  const customPriceSatang = Math.round(parseFloat(customPrice) * 100);
+  const customValid = customName.trim().length > 0 && Number.isFinite(customPriceSatang) && customPriceSatang > 0;
+  const addCustom = () => {
+    if (!customValid) return;
+    setCart(prev => [...prev, {
+      id:          `custom-${Date.now()}`,
+      name:        customName.trim(),
+      basePrice:   customPriceSatang,
+      price:       customPriceSatang,
+      qty:         1,
+      memberPrice: customPriceSatang,
+      isCustom:    true,
+    }]);
+    setCustomName("");
+    setCustomPrice("");
+    setCustomOpen(false);
     setShowCart(true);
   };
 
@@ -651,6 +679,67 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
 
       {/* Service catalog */}
       <section className="px-4 py-2 space-y-4">
+        {/* บริการพิเศษ — off-menu service, name and price typed in */}
+        {customOpen ? (
+          <div className="rounded-xl p-3 space-y-2" style={{ background: "white", border: `1.5px solid ${PRIMARY}` }}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: TEXT }}>
+                <PenLine size={14} style={{ color: PRIMARY }} /> บริการพิเศษ
+              </p>
+              <button onClick={() => setCustomOpen(false)} className="p-1" style={{ color: MUTED }} aria-label="ปิด">
+                <X size={16} />
+              </button>
+            </div>
+            <input
+              autoFocus
+              type="text"
+              value={customName}
+              onChange={e => setCustomName(e.target.value)}
+              placeholder="ชื่อบริการ เช่น ทำสีแฟชั่นพิเศษ"
+              className="w-full rounded-lg px-3 py-2.5 text-sm outline-none"
+              style={{ border: `1px solid ${BORDER}`, color: TEXT }}
+            />
+            <div className="flex gap-2">
+              <div className="flex-1 flex items-center rounded-lg px-3" style={{ border: `1px solid ${BORDER}` }}>
+                <span className="text-sm" style={{ color: MUTED }}>฿</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  value={customPrice}
+                  onChange={e => setCustomPrice(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addCustom()}
+                  placeholder="ราคา"
+                  className="flex-1 py-2.5 pl-1.5 text-sm outline-none bg-transparent"
+                  style={{ color: TEXT }}
+                />
+              </div>
+              <button
+                onClick={addCustom}
+                disabled={!customValid}
+                className="px-5 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
+                style={{ background: PRIMARY }}
+              >
+                เพิ่ม
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setCustomOpen(true)}
+            className="w-full rounded-xl p-3 flex items-center gap-2.5 text-left active:scale-[0.98] transition-transform"
+            style={{ background: "white", border: `1.5px dashed ${PRIMARY}` }}
+          >
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#FFF3ED", color: PRIMARY }}>
+              <PenLine size={16} />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold" style={{ color: PRIMARY }}>บริการพิเศษ</span>
+              <span className="block text-[11px]" style={{ color: MUTED }}>นอกเมนู — กรอกชื่อและราคาเอง</span>
+            </span>
+          </button>
+        )}
+
         {grouped.map(({ category, services }) => (
           <div key={category}>
             <p className="text-[11px] uppercase tracking-widest mb-2 font-semibold" style={{ color: MUTED }}>
