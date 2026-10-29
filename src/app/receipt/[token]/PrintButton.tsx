@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { RECEIPT_TEXT, type ReceiptLang } from "@/lib/receipt-i18n";
+import ShopPrintButton from "@/components/ShopPrintButton";
 
 /**
  * Rendered above the receipt card. Every entry point (POS success screen,
@@ -47,7 +48,7 @@ export function ReceiptLangToggle({ lang }: { lang: ReceiptLang }) {
 }
 
 /** Print / share controls, below the receipt card. Hidden on paper via `.no-print`. */
-export default function PrintButton({ url, lang = "th" }: { url: string; lang?: ReceiptLang }) {
+export default function PrintButton({ url, lang = "th", shopPrint }: { url: string; lang?: ReceiptLang; shopPrint?: { receiptNumber: string } }) {
   const t = RECEIPT_TEXT[lang];
   const share = async () => {
     // Web Share on mobile (staff handing the link to a customer); clipboard elsewhere.
@@ -68,13 +69,18 @@ export default function PrintButton({ url, lang = "th" }: { url: string; lang?: 
   };
 
   return (
-    <div className="no-print receipt-actions">
-      <button type="button" onClick={() => window.print()} className="receipt-btn receipt-btn-primary">
-        {t.print}
-      </button>
-      <button type="button" onClick={share} className="receipt-btn">
-        {t.share}
-      </button>
+    <div className="no-print" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      {shopPrint && (
+        <ShopPrintButton receiptNumber={shopPrint.receiptNumber} lang={lang} className="receipt-btn receipt-btn-primary" />
+      )}
+      <div className="receipt-actions">
+        <button type="button" onClick={() => window.print()} className={shopPrint ? "receipt-btn" : "receipt-btn receipt-btn-primary"}>
+          {t.print}
+        </button>
+        <button type="button" onClick={share} className="receipt-btn">
+          {t.share}
+        </button>
+      </div>
     </div>
   );
 }

@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
+import { getCurrentAdmin } from "@/lib/admin-auth";
 import { receiptUrl } from "@/lib/receipts";
 import PrintButton, { ReceiptBackButton, ReceiptLangToggle } from "./PrintButton";
+import { englishNames } from "@/lib/receipt-names";
 import { RECEIPT_TEXT, fmtReceiptDate, lineLabel, parseReceiptLang, paymentLabel } from "@/lib/receipt-i18n";
 
 // A receipt can be voided after issue, so never serve a cached copy.
@@ -120,7 +122,7 @@ export default async function ReceiptPage({
   const lang = parseReceiptLang((await searchParams).lang);
   const t = RECEIPT_TEXT[lang];
 
-  const [receipt, company] = await Promise.all([
+  const [receipt, company, admin] = await Promise.all([
     prisma.receipt.findUnique({
       where: { publicToken: token },
       include: {
@@ -135,6 +137,9 @@ export default async function ReceiptPage({
       where:  { id: "company" },
       select: { receiptFooterTh: true },
     }),
+    // Only a signed-in admin gets the "print on the shop printer" button — the
+    // page itself is public (customers scan its QR).
+    getCurrentAdmin(),
   ]);
   if (!receipt) notFound();
 
@@ -157,18 +162,7 @@ export default async function ReceiptPage({
   const customerName = receipt.buyerName ?? receipt.booking?.customer?.name ?? null;
 
   // Thai → English service / add-on names, only fetched for the English copy.
-  const names = new Map<string, string>();
-  if (lang === "en") {
-    const texts = [...new Set(receipt.items.flatMap(i => {
-      const inner = i.description.match(/^ส่วนลด \((.+)\)$/)?.[1];
-      return inner ? [i.description, inner] : [i.description];
-    }))];
-    const [services, addons] = await Promise.all([
-      prisma.service.findMany({ where: { nameTh: { in: texts } }, select: { nameTh: true, name: true } }),
-      prisma.serviceAddon.findMany({ where: { nameTh: { in: texts } }, select: { nameTh: true, name: true } }),
-    ]);
-    for (const r of [...services, ...addons]) if (r.name) names.set(r.nameTh, r.name);
-  }
+  const names = lang === "en" ? await englishNames(receipt.items.map(i => i.description)) : new Map<string, string>();
 
   return (
     <>
@@ -274,7 +268,7 @@ export default async function ReceiptPage({
           <div className="r-center" style={{ marginTop: "2mm" }}>{t.thanks}</div>
         </div>
 
-        <PrintButton url={url} lang={lang} />
+        <PrintButton url={url} lang={lang} shopPrint={admin ? { receiptNumber: receipt.number } : undefined} />
       </div>
     </>
   );

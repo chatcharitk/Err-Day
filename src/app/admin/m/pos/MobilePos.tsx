@@ -11,6 +11,7 @@ import {
   Sparkles, ChevronDown, AlertCircle, ReceiptText, PenLine,
 } from "lucide-react";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
+import ShopPrintButton from "@/components/ShopPrintButton";
 import { getPromotionServicePrice } from "@/lib/promotions";
 
 interface Branch { id: string; name: string; }
@@ -579,16 +580,24 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           <p className="text-sm mt-1" style={{ color: MUTED }}>ยอดรวม {formatPrice(total)}</p>
 
           {receipt && (
-            // Same tab (not target="_blank") — this is a mobile PWA with no tab
-            // bar, so a new tab has no visible way back. A real history entry
-            // here means the receipt page's own back button works.
-            <a
-              href={receipt.url}
-              className="mt-5 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium text-white"
-              style={{ background: PRIMARY }}
-            >
-              <ReceiptText size={16} /> พิมพ์ใบเสร็จ {receipt.number}
-            </a>
+            <div className="mt-5">
+              {/* One tap → the branch's receipt printer. */}
+              <ShopPrintButton
+                receiptNumber={receipt.number}
+                className="w-full py-3 rounded-2xl text-sm font-medium text-white"
+                style={{ background: PRIMARY }}
+              />
+              {/* Same tab (not target="_blank") — this is a mobile PWA with no tab
+                  bar, so a new tab has no visible way back. A real history entry
+                  here means the receipt page's own back button works. */}
+              <a
+                href={receipt.url}
+                className="mt-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium"
+                style={{ border: `1px solid ${BORDER}`, color: TEXT }}
+              >
+                <ReceiptText size={16} /> ดูใบเสร็จ {receipt.number}
+              </a>
+            </div>
           )}
 
           <button

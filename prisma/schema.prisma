@@ -33,6 +33,10 @@ model Branch {
   /// Revenue-Department branch code printed on receipts: "00000" = สำนักงานใหญ่,
   /// "00001" = สาขาที่ 1, etc. Null until the company fills it in under settings.
   taxBranchCode     String?
+  /// sha256 of the key the branch's print helper uses; the key itself is shown once.
+  printAgentKeyHash String?
+  /// Last time the print helper checked in — drives the "connected" light.
+  printAgentSeenAt  DateTime?
   blockedSlots      BlockedSlot[]
   bookings          Booking[]
   services          BranchService[]
@@ -1409,4 +1413,24 @@ model InboxPromptText {
   kind      String
   text      String
   createdAt DateTime @default(now())
+}
+
+/// A request to print on a branch's receipt printer. receiptId is a plain string
+/// (no FK) so voiding or removing a receipt never cascades into print history.
+model PrintJob {
+  id          String    @id @default(cuid())
+  branchId    String
+  receiptId   String?
+  /// RECEIPT | TEST
+  kind        String    @default("RECEIPT")
+  lang        String    @default("th")
+  /// PENDING → PRINTING → DONE | FAILED | EXPIRED (never picked up in time)
+  status      String    @default("PENDING")
+  error       String?
+  requestedBy String?
+  createdAt   DateTime  @default(now())
+  claimedAt   DateTime?
+  printedAt   DateTime?
+
+  @@index([branchId, status, createdAt])
 }

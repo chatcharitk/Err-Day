@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Receipt printing draws the slip with a native (Skia) module — it must be
+  // loaded by Node as-is, not bundled — and reads the Sarabun font files at
+  // runtime, so the print routes have to ship them.
+  serverExternalPackages: ["@napi-rs/canvas"],
+  outputFileTracingIncludes: {
+    "/api/print/**": ["./src/lib/print-fonts/**"],
+  },
   // Isolate local integration previews from an already-running development server.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   images: {

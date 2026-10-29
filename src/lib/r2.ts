@@ -40,12 +40,14 @@ export async function uploadToR2(
   key: string,
   body: Buffer | Uint8Array,
   contentType: string,
+  opts: { cacheControl?: string } = {},
 ): Promise<string> {
   await client().send(new PutObjectCommand({
     Bucket:      process.env.R2_BUCKET,
     Key:         key,
     Body:        body,
     ContentType: contentType,
+    ...(opts.cacheControl ? { CacheControl: opts.cacheControl } : {}),
   }));
   // `.trim()` first — a stray newline/space in the R2_PUBLIC_URL env value would
   // otherwise get baked into the middle of every URL (…r2.dev\n/key). Then drop

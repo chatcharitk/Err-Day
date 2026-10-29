@@ -26,7 +26,7 @@ import {
   Wallet,
   Activity,
   Vote, Ticket,
-  FileText, Package } from "lucide-react";
+  FileText, Package, Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const MENU = [
@@ -49,6 +49,7 @@ const MENU = [
   { href: "/admin/votes",      labelTh: "โหวตพนักงาน",    label: "Staff Vote",   icon: Vote,                                       ownerOnly: false },
   { href: "/admin/coupons",    labelTh: "คูปอง",          label: "Coupons",      icon: Ticket,                                     ownerOnly: false },
   { href: "/admin/settings",   labelTh: "ตั้งค่าร้าน",    label: "Shop Settings",icon: Settings,                                   ownerOnly: false },
+  { href: "/admin/printers",  labelTh: "เครื่องพิมพ์",     label: "Printers",     icon: Printer,                                    ownerOnly: true  },
   { href: "/admin/notifications", labelTh: "การแจ้งเตือน",   label: "Notifications", icon: Bell,                                   ownerOnly: false },
   { href: "/admin/users",      labelTh: "จัดการผู้ใช้",   label: "Users",        icon: ShieldCheck,                                ownerOnly: true  },
 ];

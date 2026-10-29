@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Plus, Minus, Trash2, Check, ShoppingBag, PenLine, X, CreditCard, Tag, Package as PackageIcon, ReceiptText } from "lucide-react";
 import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/prisma/client";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
+import ShopPrintButton from "@/components/ShopPrintButton";
 import { getPromotionServicePrice } from "@/lib/promotions";
 
 type BS = BranchService & { service: Service };
@@ -820,15 +821,22 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                   <Check className="w-4 h-4" /> บันทึกเรียบร้อย!
                 </div>
                 {receipt && (
-                  <a
-                    href={receipt.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white"
-                    style={{ background: "#3B2A24" }}
-                  >
-                    <ReceiptText className="w-4 h-4" /> พิมพ์ใบเสร็จ {receipt.number}
-                  </a>
+                  <>
+                    <ShopPrintButton
+                      receiptNumber={receipt.number}
+                      className="w-full py-2.5 rounded-xl text-sm font-medium text-white"
+                      style={{ background: "#3B2A24" }}
+                    />
+                    <a
+                      href={receipt.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border"
+                      style={{ borderColor: "#D6BCAE", color: "#3B2A24", background: "white" }}
+                    >
+                      <ReceiptText className="w-4 h-4" /> ดูใบเสร็จ {receipt.number}
+                    </a>
+                  </>
                 )}
                 {showMemberPrompt && lastCustomerPhone && (
                   <a
