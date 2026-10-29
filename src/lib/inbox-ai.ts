@@ -102,7 +102,7 @@ Hard rules:
 - Open times: whenever the customer mentions a day/time (asking, or wanting to book — even if the service is still unknown), call check_availability for EVERY day/time they mention before answering (use 60 minutes when the service is unknown). Never say a time is free or full without checking. Mention 2–4 concrete free times rather than a long list.
 - Answer every question in the customer's latest messages, not only the first one.
 - Speed matters: when you need several lookups (e.g. two days or two branches), request them all in the same turn (parallel tool calls), not one per turn.
-- Booking from the chat: call prepare_booking ONLY when the customer has clearly asked to book AND has chosen the branch, the service, the date and an exact time themselves. Asking what is free ("ว่างกี่โมง", "มีคิวไหม") is NOT a booking request — just answer with the free times. Never prepare a booking "just in case" or pick a service/time for them. It checks the slot; the owner then creates the booking with one tap when sending your reply, so write the reply as a confirmation. If prepare_booking says the customer gets the booking card on LINE, keep it short — the card shows every detail (e.g. "แอดมินลงคิวให้เรียบร้อยแล้วค่ะ 😊 รายละเอียดตามการ์ดเลยนะคะ"). Otherwise include day, date, time, branch and service. If it fails, follow its message (offer the free times it lists, or ask for what is missing).
+- Booking from the chat: call prepare_booking ONLY when the customer has clearly asked to book AND has chosen the branch, the service, the date and an exact time themselves. Asking what is free ("ว่างกี่โมง", "มีคิวไหม") is NOT a booking request — just answer with the free times. Never prepare a booking "just in case" or pick a service/time for them — and never prepare one for a different day or time than the one the customer asked about (if their time is full and you are offering other times, prepare nothing and let them choose). It checks the slot; the owner then creates the booking with one tap when sending your reply, so write the reply as a confirmation. If prepare_booking says the customer gets the booking card on LINE, keep it short — the card shows every detail (e.g. "แอดมินลงคิวให้เรียบร้อยแล้วค่ะ 😊 รายละเอียดตามการ์ดเลยนะคะ"). Otherwise include day, date, time, branch and service. If it fails, follow its message (offer the free times it lists, or ask for what is missing).
 - Cancelling: when the customer asks to cancel one of the upcoming appointments in their profile, call prepare_cancellation with its booking id (ask which one if it is unclear). If the customer is notified on LINE, keep the reply short — the shop's cancellation message has the details (e.g. "ยกเลิกคิวให้เรียบร้อยแล้วค่ะ ไว้โอกาสหน้านะคะ 🙏"). Only one booking or cancellation per reply. To move an appointment, ask for the new time, then prepare the new booking and say in note that the old one still has to be cancelled.
 - Running late: when the customer says they will be late for an appointment, call check_late_arrival with that booking id (from the customer profile; usually today's) and how many minutes late (if they did not say, use 15). If it says fits (the later time does not affect other customers), reply short and warm, e.g. "รับทราบค่า เดี๋ยวแอดมินแจ้งหน้าร้านให้นะคะ 😊" — no rules or warnings. If it does not fit, politely say the next queue is booked so the service may need to be shortened, or offer to move the appointment (check_availability for other times); flag it in note. If the chat is not linked or no booking is found, reply "รับทราบค่า" and ask which branch/time their appointment is if needed. Always put in note: "แจ้งหน้าร้าน: <ชื่อ> สาย ~N นาที (นัด HH:mm สาขา…)" — and add "เลยเวลาปิดร้าน" when finishes_after_closing is set.
 - Who the booking is for: if the customer profile says the chat is linked, book for them. If it is NOT linked, ask for their name and phone number first (e.g. "รบกวนขอชื่อและเบอร์โทรศัพท์สำหรับลงคิวด้วยนะคะ 😊"), then pass them to prepare_booking. Never repeat back details of an existing customer found by phone.
@@ -373,8 +373,12 @@ function outputSchema(imageKeys: string[]) {
       bubbles: { type: "array", items: { type: "string" }, description: "Chat bubbles to send, in order (empty if no reply is needed)" },
       images: { type: "array", items: { type: "string", enum: imageKeys }, description: "Menu poster keys to attach after the bubbles (usually none)" },
       note: { type: "string", description: "Private note to the owner, Thai, short" },
+      confirms_action: {
+        type: "boolean",
+        description: "true ONLY if this reply tells the customer that a booking or cancellation you prepared is done. false if you are offering options, asking what they want, or anything is still undecided — then any prepared booking is thrown away.",
+      },
     },
-    required: ["bubbles", "images", "note"],
+    required: ["bubbles", "images", "note", "confirms_action"],
     additionalProperties: false,
   };
 }
@@ -441,7 +445,7 @@ export async function draftReply(
   }
 
   // Everything the model saw and did — saved on the draft so it can be replayed in evals.
-  const trace: { promptVersion?: string; factsVersion?: string; userText?: string; photoMessageIds?: string[]; instruction?: string; tools: { name: string; input: unknown; result: string }[] } = { tools: [] };
+  const trace: { promptVersion?: string; factsVersion?: string; userText?: string; photoMessageIds?: string[]; instruction?: string; droppedBooking?: boolean; tools: { name: string; input: unknown; result: string }[] } = { tools: [] };
   const hash = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 12);
 
   try {
@@ -555,7 +559,11 @@ export async function draftReply(
 
       const text = res.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map(b => b.text).join("");
       if (!text.trim()) throw new Error(res.stop_reason === "max_tokens" ? "ร่างยาวเกินไป ลองกดร่างใหม่" : `AI ไม่ได้เขียนคำตอบ (${res.stop_reason})`);
-      const parsed = JSON.parse(text) as { bubbles: string[]; images?: string[]; note: string };
+      const parsed = JSON.parse(text) as { bubbles: string[]; images?: string[]; note: string; confirms_action?: boolean };
+      // A booking card next to a reply that is still asking the customer to
+      // choose would let the owner book something nobody agreed to. Only keep it
+      // when the model says the reply confirms it.
+      if (booking && parsed.confirms_action === false) { booking = null; trace.droppedBooking = true; }
       const images = [...new Set((parsed.images ?? []).filter(k => imageKeys.includes(k)))].slice(0, 2);
       const bubbles = (parsed.bubbles ?? []).map(s => s.trim()).filter(Boolean).slice(0, 5 - images.length);
       // Only if still current — a reply may have been sent meanwhile (draft → STALE).
