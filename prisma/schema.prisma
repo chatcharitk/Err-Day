@@ -446,6 +446,8 @@ model Booking {
   paidAt            DateTime?
   receiptUploadedAt DateTime?
   receiptUrl        String?
+  /// All payment-slip images for this booking; `receiptUrl` mirrors the first.
+  receiptUrls       String[]     @default([])
   /// Legacy audit flag for bookings that activated a pending membership under
   /// the former auto-activation flow. New bookings leave this false because a
   /// booking alone is not proof of payment.

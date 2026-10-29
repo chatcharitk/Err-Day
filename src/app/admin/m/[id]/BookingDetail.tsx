@@ -9,7 +9,7 @@ import {
   XCircle, Calendar, Pencil, Loader2, CreditCard,
   AlertCircle, Sparkles, RefreshCw, ChevronRight, Receipt,
 } from "lucide-react";
-import ImageUpload from "@/components/ImageUpload";
+import MultiImageUpload from "@/components/MultiImageUpload";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import { resolveServicePrice } from "@/lib/promotions";
 import { customerLabel } from "@/lib/customer-name";
@@ -43,6 +43,8 @@ interface Booking {
   notes:         string | null;
   internalNotes: string | null;
   receiptUrl:    string | null;
+  /** Every payment-slip image, in the order uploaded. */
+  receiptUrls:   string[];
   paidAt:        string | null; // ISO — null = ยังไม่ชำระ
   createdAt:     string;
   completedAt:   string | null;
@@ -792,15 +794,15 @@ export default function BookingDetail({ booking: initial, branchServices, branch
 
       {/* ── Receipt upload — customer's payment slip image, not the document above ── */}
       <section className="px-4 mt-5">
-        <ImageUpload
+        <MultiImageUpload
           kind="receipt"
           ref={b.id}
-          value={b.receiptUrl}
+          value={b.receiptUrls}
           label="สลิปโอนเงิน (รูปภาพ)"
-          onChange={async (url) => {
-            const updated = await patch({ receiptUrl: url });
-            // Attaching a receipt also stamps paidAt server-side — mirror it.
-            if (updated) setB(x => ({ ...x, receiptUrl: url, paidAt: updated.paidAt ?? x.paidAt }));
+          onChange={async (urls) => {
+            const updated = await patch({ receiptUrls: urls });
+            // Attaching a slip also stamps paidAt server-side — mirror it.
+            if (updated) setB(x => ({ ...x, receiptUrls: urls, receiptUrl: urls[0] ?? null, paidAt: updated.paidAt ?? x.paidAt }));
           }}
         />
       </section>

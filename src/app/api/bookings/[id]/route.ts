@@ -28,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const body = await request.json();
     const {
       status, staffId, notes, internalNotes, startTime, endTime, totalPrice, commissionSatang, tipSatang, serviceId, date,
-      completedAt, receiptUrl, paidAt,
+      completedAt, receiptUrl, receiptUrls, paidAt,
       extraStaffIds, customerId: newCustomerId, branchId: newBranchId,
     } = body;
 
@@ -51,10 +51,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Invalid tip" }, { status: 400 });
     }
 
+    const slipList: string[] | undefined = Array.isArray(receiptUrls)
+      ? receiptUrls.filter((u: unknown): u is string => typeof u === "string" && /^https?:\/\//.test(u)).slice(0, 20)
+      : receiptUrl !== undefined ? (receiptUrl ? [receiptUrl] : []) : undefined;
+
     // Capture previous fields we need to compare after the update (paidAt so a
     // receipt upload preserves an earlier payment time instead of re-stamping).
     const needsPrev = status !== undefined || startTime !== undefined || endTime !== undefined
-      || !!receiptUrl || paidAt !== undefined;
+      || !!receiptUrl || (Array.isArray(receiptUrls) && receiptUrls.length > 0) || paidAt !== undefined;
     const prev = needsPrev
       ? await prisma.booking.findUnique({ where: { id }, select: { status: true, startTime: true, endTime: true, customerId: true, paidAt: true } })
       : null;
@@ -91,13 +95,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         ...(newBranchId    !== undefined ? { branchId: newBranchId }                : {}),
         ...(newCustomerId  !== undefined ? { customerId: newCustomerId }            : {}),
         ...(completedAt    !== undefined ? { completedAt: completedAt ? new Date(completedAt) : null } : {}),
-        ...(receiptUrl     !== undefined ? {
-          receiptUrl: receiptUrl || null,
-          receiptUploadedAt: receiptUrl ? new Date() : null,
+        // Slip images. `receiptUrls` is the full list; `receiptUrl` (single) is
+        // still accepted and always mirrors the first image.
+        ...(slipList !== undefined ? {
+          receiptUrls: slipList,
+          receiptUrl: slipList[0] ?? null,
+          receiptUploadedAt: slipList.length > 0 ? new Date() : null,
           // A receipt/slip attached by an admin is payment evidence — stamp
-          // paidAt (keeping an earlier payment time). Clearing the receipt
+          // paidAt (keeping an earlier payment time). Clearing the slips
           // leaves paidAt alone; un-pay explicitly via the paidAt field.
-          ...(receiptUrl ? { paidAt: prev?.paidAt ?? new Date() } : {}),
+          ...(slipList.length > 0 ? { paidAt: prev?.paidAt ?? new Date() } : {}),
         } : {}),
         // Explicit mark-paid / un-paid (admin-only route). Placed after the
         // receipt spread so an explicit value always wins.
