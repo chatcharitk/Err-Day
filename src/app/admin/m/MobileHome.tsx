@@ -9,6 +9,7 @@ import {
   type LucideIcon, Package } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
+import StaffRoster, { type RosterStaff } from "./StaffRoster";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -59,6 +60,8 @@ interface Props {
   /** Admin-created ปิดรับจอง windows for the day (staffName null = whole branch). */
   blockedSlots:   BlockedSlotRow[];
   todayDate:      string;
+  /** Active staff with their shifts across the date strip's 7 days. */
+  roster:         RosterStaff[];
 }
 
 interface BlockedSlotRow {
@@ -126,7 +129,7 @@ const MENU_GROUPS: { title: string; items: MenuItem[] }[] = [
   ] },
 ];
 
-export default function MobileHome({ branches, activeBranchId, selectedDate, bookings, blockedSlots, todayDate }: Props) {
+export default function MobileHome({ branches, activeBranchId, selectedDate, bookings, blockedSlots, todayDate, roster }: Props) {
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
@@ -251,6 +254,8 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
   // Count of customers who actually paid — same COMPLETED-and-isPaid rule as
   // paidRevenue above, just a headcount instead of a total.
   const paidCount = visibleBookings.filter((b) => b.status === "COMPLETED" && b.isPaid).length;
+  const queueByName: Record<string, number> = {};
+  for (const b of visibleBookings) if (b.staffName) queueByName[b.staffName] = (queueByName[b.staffName] ?? 0) + 1;
 
 
   // Format date headline
@@ -391,6 +396,16 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
           {cancelledCount > 0 && ` · ยกเลิก ${cancelledCount}`}
         </p>
       </section>
+
+      {/* ── Who's working — answer "is anyone free Saturday?" without leaving the queue ── */}
+      <StaffRoster
+        staff={roster}
+        days={days.map((d) => d.date)}
+        selectedDate={selectedDate}
+        todayDate={todayDate}
+        queueByName={queueByName}
+        onPickDate={switchDate}
+      />
 
       {/* ── Blocked ปิดรับจอง windows — created via the 🚫 button; shown here so
             they're visible and removable (they close online booking) ── */}

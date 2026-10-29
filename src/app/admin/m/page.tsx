@@ -19,6 +19,14 @@ function dayBounds(dateStr: string) {
   return { start, end };
 }
 
+/** The 7 days the date strip shows (selected −2 … +4), as "YYYY-MM-DD". Pure UTC
+ *  arithmetic on a noon timestamp so the server's zone can't shift a day. */
+function stripDates(selected: string): string[] {
+  const base = new Date(selected + "T12:00:00Z").getTime();
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(base + (i - 2) * 86_400_000).toISOString().slice(0, 10));
+}
+
 export default async function MobileHomePage({
   searchParams,
 }: {
@@ -45,7 +53,9 @@ export default async function MobileHomePage({
   // they appear in sales history, but excluded from booking lists.
   const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-retail"];
 
-  const [bookings, branchServiceList, blockedSlotRows] = activeBranchId
+  const weekDays = stripDates(selectedDate);
+
+  const [bookings, branchServiceList, blockedSlotRows, rosterRows] = activeBranchId
     ? await Promise.all([
         prisma.booking.findMany({
           where: {
@@ -121,8 +131,23 @@ export default async function MobileHomePage({
           select:  { id: true, startTime: true, endTime: true, reason: true, staff: { select: { name: true } } },
           orderBy: { startTime: "asc" },
         }),
+        // Who is on shift across the strip's 7 days — the small roster under the
+        // date headline. Shifts are stored at UTC noon of the Bangkok day.
+        prisma.staff.findMany({
+          where:   { branchId: activeBranchId, isActive: true },
+          orderBy: { name: "asc" },
+          select: {
+            id:   true,
+            name: true,
+            shifts: {
+              where:   { date: { gte: new Date(weekDays[0] + "T00:00:00Z"), lte: new Date(weekDays[6] + "T23:59:59Z") } },
+              orderBy: [{ date: "asc" }, { startTime: "asc" }],
+              select:  { date: true, startTime: true, endTime: true },
+            },
+          },
+        }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
   // Lookup map: serviceId → branch list price
   const branchPriceByService = new Map(
@@ -219,6 +244,13 @@ export default async function MobileHomePage({
         staffName: b.staff?.name ?? null,
       }))}
       todayDate={today}
+      roster={rosterRows.map((r) => {
+        const byDate: Record<string, { start: string; end: string }[]> = {};
+        for (const sh of r.shifts) {
+          (byDate[sh.date.toISOString().slice(0, 10)] ??= []).push({ start: sh.startTime, end: sh.endTime });
+        }
+        return { id: r.id, name: r.name, byDate };
+      })}
     />
   );
 }
