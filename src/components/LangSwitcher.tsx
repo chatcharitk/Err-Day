@@ -2,8 +2,9 @@
 
 import { useLang } from "./LanguageProvider";
 
-export function LangSwitcher({ className }: { className?: string }) {
+export function LangSwitcher({ className, tone = "dark" }: { className?: string; /** "light" = for pages with a light background. */ tone?: "dark" | "light" }) {
   const { lang, toggle } = useLang();
+  const light = tone === "light";
 
   return (
     <button
@@ -15,9 +16,9 @@ export function LangSwitcher({ className }: { className?: string }) {
         letterSpacing: "0.05em",
         padding: "2px 10px",
         borderRadius: "999px",
-        border: "1.5px solid rgba(255,255,255,0.35)",
-        color: "rgba(255,255,255,0.85)",
-        background: "transparent",
+        border: light ? "1.5px solid #EADDD4" : "1.5px solid rgba(255,255,255,0.35)",
+        color: light ? "#45352F" : "rgba(255,255,255,0.85)",
+        background: light ? "white" : "transparent",
         cursor: "pointer",
         transition: "all 0.15s",
       }}
