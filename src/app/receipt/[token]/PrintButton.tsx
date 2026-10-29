@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
+import { RECEIPT_TEXT, type ReceiptLang } from "@/lib/receipt-i18n";
 
 /**
  * Rendered above the receipt card. Every entry point (POS success screen,
@@ -12,7 +13,7 @@ import { ArrowLeft } from "lucide-react";
  * no app history to return to, so the button only renders once we can confirm
  * there's actually somewhere to go.
  */
-export function ReceiptBackButton() {
+export function ReceiptBackButton({ label = "กลับ" }: { label?: string }) {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(false);
 
@@ -26,15 +27,28 @@ export function ReceiptBackButton() {
       type="button"
       onClick={() => router.back()}
       className="no-print receipt-back"
-      aria-label="กลับ"
+      aria-label={label}
     >
-      <ArrowLeft size={18} /> กลับ
+      <ArrowLeft size={18} /> {label}
     </button>
   );
 }
 
+/** TH | EN switch. Replaces the history entry so Back still returns to the till, not to the other language. */
+export function ReceiptLangToggle({ lang }: { lang: ReceiptLang }) {
+  const router = useRouter();
+  const go = (l: ReceiptLang) => { if (l !== lang) router.replace(l === "en" ? "?lang=en" : "?", { scroll: false }); };
+  return (
+    <div className="no-print receipt-lang">
+      <button type="button" onClick={() => go("th")} className={lang === "th" ? "on" : ""}>TH</button>
+      <button type="button" onClick={() => go("en")} className={lang === "en" ? "on" : ""}>EN</button>
+    </div>
+  );
+}
+
 /** Print / share controls, below the receipt card. Hidden on paper via `.no-print`. */
-export default function PrintButton({ url }: { url: string }) {
+export default function PrintButton({ url, lang = "th" }: { url: string; lang?: ReceiptLang }) {
+  const t = RECEIPT_TEXT[lang];
   const share = async () => {
     // Web Share on mobile (staff handing the link to a customer); clipboard elsewhere.
     if (navigator.share) {
@@ -47,7 +61,7 @@ export default function PrintButton({ url }: { url: string }) {
     }
     try {
       await navigator.clipboard.writeText(url);
-      alert("คัดลอกลิงก์ใบเสร็จแล้ว");
+      alert(t.copied);
     } catch {
       alert(url);
     }
@@ -56,10 +70,10 @@ export default function PrintButton({ url }: { url: string }) {
   return (
     <div className="no-print receipt-actions">
       <button type="button" onClick={() => window.print()} className="receipt-btn receipt-btn-primary">
-        พิมพ์ใบเสร็จ
+        {t.print}
       </button>
       <button type="button" onClick={share} className="receipt-btn">
-        ส่งลิงก์
+        {t.share}
       </button>
     </div>
   );

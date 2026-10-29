@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { receiptUrl } from "@/lib/receipts";
-import PrintButton, { ReceiptBackButton } from "./PrintButton";
+import PrintButton, { ReceiptBackButton, ReceiptLangToggle } from "./PrintButton";
+import { RECEIPT_TEXT, fmtReceiptDate, lineLabel, parseReceiptLang, paymentLabel } from "@/lib/receipt-i18n";
 
 // A receipt can be voided after issue, so never serve a cached copy.
 export const dynamic = "force-dynamic";
@@ -14,20 +15,6 @@ function baht(satang: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-/** "18/08/2569 14:32" — Bangkok clock, Buddhist-era year. Server runs in UTC. */
-function fmtDateTime(d: Date): string {
-  const bkk = new Date(d.getTime() + 7 * 60 * 60 * 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(bkk.getUTCDate())}/${pad(bkk.getUTCMonth() + 1)}/${bkk.getUTCFullYear() + 543}`
-       + ` ${pad(bkk.getUTCHours())}:${pad(bkk.getUTCMinutes())}`;
-}
-
-/** "00000" is the head office; anything else is a numbered branch. */
-function branchLabel(code: string | null): string | null {
-  if (!code) return null;
-  return /^0*$/.test(code) ? "สำนักงานใหญ่" : `สาขาที่ ${code}`;
 }
 
 /**
@@ -94,6 +81,15 @@ const CSS = `
     cursor: pointer;
   }
 
+  .receipt-lang { width: 72mm; display: flex; justify-content: flex-end; }
+  .receipt-lang button {
+    font: inherit; font-size: 12px; padding: 3px 12px; border: 1px solid #C9BCB2; background: #fff;
+    color: #3B2A24; cursor: pointer;
+  }
+  .receipt-lang button:first-child { border-radius: 999px 0 0 999px; }
+  .receipt-lang button:last-child { border-radius: 0 999px 999px 0; border-left: 0; }
+  .receipt-lang button.on { background: #8B1D24; border-color: #8B1D24; color: #fff; }
+
   .receipt-actions { display: flex; gap: 8px; }
   .receipt-btn {
     font: inherit; font-size: 13px;
@@ -115,10 +111,14 @@ const CSS = `
 
 export default async function ReceiptPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ lang?: string | string[] }>;
 }) {
   const { token } = await params;
+  const lang = parseReceiptLang((await searchParams).lang);
+  const t = RECEIPT_TEXT[lang];
 
   const [receipt, company] = await Promise.all([
     prisma.receipt.findUnique({
@@ -145,23 +145,41 @@ export default async function ReceiptPage({
   const proto    = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
   const origin   = host ? `${proto}://${host}` : undefined;
 
-  const url   = receiptUrl(receipt.publicToken, origin);
+  // The English copy's QR and share link open the English page too.
+  const baseUrl = receiptUrl(receipt.publicToken, origin);
+  const url   = lang === "en" ? `${baseUrl}?lang=en` : baseUrl;
   const qrSvg = await QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M" });
 
   const isTaxInvoice = receipt.vatRegistered && receipt.docType === "ABB_TAX_INVOICE";
   const subtotal     = receipt.items.reduce((s, i) => s + i.totalSatang, 0);
-  const branchText   = branchLabel(receipt.sellerBranchCode);
+  const branchCode   = receipt.sellerBranchCode;
+  const branchText   = !branchCode ? null : /^0*$/.test(branchCode) ? t.headOffice : t.branchNo(branchCode);
   const customerName = receipt.buyerName ?? receipt.booking?.customer?.name ?? null;
+
+  // Thai → English service / add-on names, only fetched for the English copy.
+  const names = new Map<string, string>();
+  if (lang === "en") {
+    const texts = [...new Set(receipt.items.flatMap(i => {
+      const inner = i.description.match(/^ส่วนลด \((.+)\)$/)?.[1];
+      return inner ? [i.description, inner] : [i.description];
+    }))];
+    const [services, addons] = await Promise.all([
+      prisma.service.findMany({ where: { nameTh: { in: texts } }, select: { nameTh: true, name: true } }),
+      prisma.serviceAddon.findMany({ where: { nameTh: { in: texts } }, select: { nameTh: true, name: true } }),
+    ]);
+    for (const r of [...services, ...addons]) if (r.name) names.set(r.nameTh, r.name);
+  }
 
   return (
     <>
       <style>{CSS}</style>
       <div className="receipt-screen">
-        <ReceiptBackButton />
+        <ReceiptBackButton label={t.back} />
+        <ReceiptLangToggle lang={lang} />
         <div className="receipt">
           {receipt.voidedAt && (
             <div className="r-void">
-              ยกเลิกแล้ว / VOID
+              {t.void}
               {receipt.voidReason ? <div className="r-muted">{receipt.voidReason}</div> : null}
             </div>
           )}
@@ -173,24 +191,24 @@ export default async function ReceiptPage({
               <div className="r-muted" style={{ whiteSpace: "pre-line" }}>{receipt.sellerAddress}</div>
             )}
             {receipt.sellerTaxId && (
-              <div className="r-muted">เลขประจำตัวผู้เสียภาษี {receipt.sellerTaxId}</div>
+              <div className="r-muted">{t.taxId} {receipt.sellerTaxId}</div>
             )}
             {branchText && <div className="r-muted">{branchText}</div>}
-            {receipt.sellerPhone && <div className="r-muted">โทร. {receipt.sellerPhone}</div>}
+            {receipt.sellerPhone && <div className="r-muted">{t.tel} {receipt.sellerPhone}</div>}
           </div>
 
-          <div className="r-title">
-            {isTaxInvoice ? "ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ" : "ใบเสร็จรับเงิน"}
+          <div className="r-title" style={{ whiteSpace: "pre-line" }}>
+            {isTaxInvoice ? t.titleTax : t.titlePlain}
           </div>
 
           <div className="r-rule" />
 
-          <div className="r-kv"><span>เลขที่</span><span className="r-strong">{receipt.number}</span></div>
-          <div className="r-kv"><span>วันที่</span><span>{fmtDateTime(receipt.issuedAt)}</span></div>
-          <div className="r-kv"><span>สาขา</span><span>{receipt.branch.name}</span></div>
-          {customerName && <div className="r-kv"><span>ลูกค้า</span><span>{customerName}</span></div>}
+          <div className="r-kv"><span>{t.no}</span><span className="r-strong">{receipt.number}</span></div>
+          <div className="r-kv"><span>{t.date}</span><span>{fmtReceiptDate(receipt.issuedAt, lang)}</span></div>
+          <div className="r-kv"><span>{t.branch}</span><span>{receipt.branch.name}</span></div>
+          {customerName && <div className="r-kv"><span>{t.customer}</span><span>{customerName}</span></div>}
           {receipt.issuedByName && (
-            <div className="r-kv"><span>ผู้รับเงิน</span><span>{receipt.issuedByName}</span></div>
+            <div className="r-kv"><span>{t.cashier}</span><span>{receipt.issuedByName}</span></div>
           )}
 
           <div className="r-rule" />
@@ -199,7 +217,7 @@ export default async function ReceiptPage({
                  cleanly, with qty × unit price and the amount underneath. ── */}
           {receipt.items.map((item) => (
             <div className="r-line" key={item.id}>
-              <div className="r-line-desc">{item.description}</div>
+              <div className="r-line-desc">{lineLabel(item.description, lang, names)}</div>
               <div className="r-line-calc">
                 <span className="r-qty">{item.quantity} x {baht(item.unitPriceSatang)}</span>
                 <span>{baht(item.totalSatang)}</span>
@@ -212,25 +230,25 @@ export default async function ReceiptPage({
           {/* Subtotal is only worth printing when it differs from the total — it
               can't today, but a future service charge would make it meaningful. */}
           {subtotal !== receipt.grossSatang && (
-            <div className="r-kv"><span>รวมย่อย</span><span>{baht(subtotal)}</span></div>
+            <div className="r-kv"><span>{t.subtotal}</span><span>{baht(subtotal)}</span></div>
           )}
 
           {isTaxInvoice ? (
             <>
-              <div className="r-kv"><span>มูลค่าก่อนภาษี</span><span>{baht(receipt.netSatang)}</span></div>
+              <div className="r-kv"><span>{t.net}</span><span>{baht(receipt.netSatang)}</span></div>
               <div className="r-kv">
-                <span>ภาษีมูลค่าเพิ่ม {receipt.vatRatePercent}%</span>
+                <span>{t.vat(receipt.vatRatePercent)}</span>
                 <span>{baht(receipt.vatSatang)}</span>
               </div>
-              <div className="r-kv r-total"><span>รวมทั้งสิ้น</span><span>{baht(receipt.grossSatang)}</span></div>
+              <div className="r-kv r-total"><span>{t.total}</span><span>{baht(receipt.grossSatang)}</span></div>
             </>
           ) : (
-            <div className="r-kv r-total"><span>รวมทั้งสิ้น</span><span>{baht(receipt.grossSatang)}</span></div>
+            <div className="r-kv r-total"><span>{t.total}</span><span>{baht(receipt.grossSatang)}</span></div>
           )}
 
           {receipt.paymentMethod && (
             <div className="r-kv" style={{ marginTop: "1mm" }}>
-              <span>ชำระโดย</span><span>{receipt.paymentMethod}</span>
+              <span>{t.paidBy}</span><span>{paymentLabel(receipt.paymentMethod, lang)}</span>
             </div>
           )}
 
@@ -239,11 +257,11 @@ export default async function ReceiptPage({
           {/* QR back to this same page — how the paper slip hands over the
               electronic copy, since receipts aren't pushed over LINE. */}
           <div className="r-qr" data-receipt-url={url} dangerouslySetInnerHTML={{ __html: qrSvg }} />
-          <div className="r-center r-muted">สแกนเพื่อดูใบเสร็จอิเล็กทรอนิกส์</div>
+          <div className="r-center r-muted">{t.scan}</div>
 
           {isTaxInvoice && (
             <div className="r-center r-muted" style={{ marginTop: "1mm" }}>
-              เอกสารออกเป็นชุด
+              {t.issuedInSet}
             </div>
           )}
 
@@ -253,10 +271,10 @@ export default async function ReceiptPage({
             </div>
           )}
 
-          <div className="r-center" style={{ marginTop: "2mm" }}>ขอบคุณที่ใช้บริการ</div>
+          <div className="r-center" style={{ marginTop: "2mm" }}>{t.thanks}</div>
         </div>
 
-        <PrintButton url={url} />
+        <PrintButton url={url} lang={lang} />
       </div>
     </>
   );

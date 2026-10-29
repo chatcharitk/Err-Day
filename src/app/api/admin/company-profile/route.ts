@@ -17,6 +17,12 @@ async function loadOrCreate() {
   return prisma.companyProfile.create({ data: { id: COMPANY_ID } });
 }
 
+/** Empty / null input clears the field. (String(null) is "null" — it used to get saved as that text.) */
+function optionalText(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  return String(v).trim() || null;
+}
+
 export async function GET() {
   const gate = await requireAdmin().catch((e: unknown) => e as Response);
   if (gate instanceof Response) return gate;
@@ -58,13 +64,13 @@ export async function PATCH(request: Request) {
       where: { id: COMPANY_ID },
       data: {
         ...(legalName       !== undefined ? { legalName:   String(legalName).trim() }        : {}),
-        ...(legalNameEn     !== undefined ? { legalNameEn: String(legalNameEn).trim() || null } : {}),
+        ...(legalNameEn     !== undefined ? { legalNameEn: optionalText(legalNameEn) } : {}),
         ...(taxId           !== undefined ? { taxId:       String(taxId).replace(/\D/g, "") } : {}),
         ...(addressLine     !== undefined ? { addressLine: String(addressLine).trim() }      : {}),
-        ...(phone           !== undefined ? { phone:       String(phone).trim() || null }    : {}),
+        ...(phone           !== undefined ? { phone:       optionalText(phone) }             : {}),
         ...(vatRegistered   !== undefined ? { vatRegistered: Boolean(vatRegistered) }        : {}),
         ...(vatRatePercent  !== undefined ? { vatRatePercent: Math.round(Number(vatRatePercent)) } : {}),
-        ...(receiptFooterTh !== undefined ? { receiptFooterTh: String(receiptFooterTh).trim() || null } : {}),
+        ...(receiptFooterTh !== undefined ? { receiptFooterTh: optionalText(receiptFooterTh) } : {}),
         ...(logoUrl         !== undefined ? { logoUrl:  typeof logoUrl  === "string" && /^https?:\/\//.test(logoUrl)  ? logoUrl  : null } : {}),
         ...(stampUrl        !== undefined ? { stampUrl: typeof stampUrl === "string" && /^https?:\/\//.test(stampUrl) ? stampUrl : null } : {}),
       },
