@@ -8,18 +8,14 @@ import { useLiff } from "@/hooks/useLiff";
 import { Calendar } from "@/components/ui/calendar";
 import { UserCheck, CreditCard as CardIcon, Package as PackageIcon } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import TimeSlotPicker from "@/components/TimeSlotPicker";
+import { onlineStartTimes } from "@/lib/slots";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import { useLang, type Lang } from "@/components/LanguageProvider";
 
 // Fallback only — the availability API returns the branch's real start times
 // for the chosen day (`slots`), which is what the picker shows.
-const ALL_SLOTS: string[] = (() => {
-  const slots: string[] = [];
-  for (let t = 8 * 60; t <= 20 * 60 + 30; t += 30) {
-    slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
-  }
-  return slots;
-})();
+const ALL_SLOTS: string[] = onlineStartTimes("08:00", "21:00");
 
 const NON_APPOINTMENT_SERVICE_IDS = new Set([
   "svc-membership-30d", "svc-member-monthly", "svc-member-pkg", "svc-buffet", "svc-pkg5",
@@ -845,32 +841,21 @@ export function RescheduleModal({
             {loadingSlots ? (
               <p className="text-sm text-center py-4" style={{ color: "#977A6F" }}>{lang === "th" ? "กำลังโหลด..." : "Loading..."}</p>
             ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {(daySlots ?? ALL_SLOTS).map((t) => {
-                  const currentDate = booking.date.slice(0, 10);
-                  const selectedDate = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-                  const isOwnCurrentSlot = branchId === booking.branchId && serviceId === booking.serviceId && selectedDate === currentDate && t === booking.startTime;
-                  const isTaken = takenSlots.includes(t) && !isOwnCurrentSlot;
-                  const isSelected = startTime === t;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => !isTaken && setStartTime(t)}
-                      disabled={isTaken}
-                      className="py-2 rounded-lg text-sm border-2 transition-all"
-                      style={
-                        isTaken
-                          ? { background: "#F5F0EC", borderColor: "#EADDD4", color: "#C4B0A4", cursor: "not-allowed" }
-                          : isSelected
-                          ? { background: "#B52F3A", borderColor: "#B52F3A", color: "white", fontWeight: 500 }
-                          : { background: "white", borderColor: "#EADDD4", color: "#5C4A42" }
-                      }
-                    >
-                      {t}
-                    </button>
-                  );
-                })}
-              </div>
+              (() => {
+                const currentDate  = booking.date.slice(0, 10);
+                const selectedDate = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+                // The customer's own current time is never "taken" for them.
+                const ownSlot = branchId === booking.branchId && serviceId === booking.serviceId && selectedDate === currentDate ? booking.startTime : null;
+                return (
+                  <TimeSlotPicker
+                    slots={daySlots ?? ALL_SLOTS}
+                    taken={new Set(takenSlots.filter((t) => t !== ownSlot))}
+                    selected={startTime}
+                    onSelect={setStartTime}
+                    lang={lang}
+                  />
+                );
+              })()
             )}
           </div>
 

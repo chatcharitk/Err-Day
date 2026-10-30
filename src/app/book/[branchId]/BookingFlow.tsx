@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, Clock, AlertCircle, Star, Ban, LogOut, Sp
          ChevronDown, ChevronUp, Droplets, Wind, Hand, Layers, Flower2, Plus } from "lucide-react";
 import { useLiff } from "@/hooks/useLiff";
 import { onlineStartTimes } from "@/lib/slots";
+import TimeSlotPicker from "@/components/TimeSlotPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -196,7 +197,7 @@ const UI = {
     dateTime: "Date & Time", dateTimeSub: "เลือกวันและเวลา",
     hairColorNotice: "Hair color services available 11:00–16:00 only",
     availableSlots: "Available Times",
-    slotTaken: "Taken",
+    slotTaken: "Booked",
     loadingSlots: "Loading...",
     details: "Your Details", detailsSub: "ข้อมูลของคุณ",
     name: "Full Name", namePh: "Your name",
@@ -880,8 +881,8 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
             <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: "#977A6F" }}>
               <Clock className="w-3.5 h-3.5 flex-shrink-0" />
               {lang === "th"
-                ? "จ–ส 08:00–21:00 · อา 10:00–21:00 (รับจองถึง 20:30)"
-                : "Mon–Sat 08:00–21:00 · Sun 10:00–21:00 (last slot 20:30)"}
+                ? "จ–ส 08:00–21:00 · อา 10:00–21:00 (รับจองทุก 15 นาที ถึง 20:15)"
+                : "Mon–Sat 08:00–21:00 · Sun 10:00–21:00 (every 15 min, last 20:15)"}
             </p>
 
             {isHairColor && (
@@ -906,29 +907,15 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                 <p className="text-sm font-medium mb-3" style={{ color: "#6F574D" }}>
                   {loadingSlots ? u.loadingSlots : u.availableSlots}
                 </p>
-                <div className="grid grid-cols-4 gap-2">
-                  {timeSlots.map((t) => {
-                    const isTaken = takenSlots.includes(t);
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => !isTaken && setSelectedTime(t)}
-                        disabled={isTaken || loadingSlots}
-                        className="py-2 rounded-lg text-sm border-2 transition-all"
-                        style={
-                          isTaken
-                            ? { backgroundColor: "#F5F0EC", borderColor: "#EADDD4", color: "#C4B0A4", cursor: "not-allowed" }
-                            : selectedTime === t
-                            ? { backgroundColor: "#B52F3A", borderColor: "#B52F3A", color: "white", fontWeight: 500 }
-                            : { backgroundColor: "white", borderColor: "#EADDD4", color: "#5C4A42" }
-                        }
-                      >
-                        {t}
-                        {isTaken && <span className="block text-xs" style={{ color: "#C4B0A4" }}>{u.slotTaken}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+                <TimeSlotPicker
+                  slots={timeSlots}
+                  taken={new Set(takenSlots)}
+                  selected={selectedTime}
+                  onSelect={setSelectedTime}
+                  disabled={loadingSlots}
+                  lang={lang}
+                  takenLabel={u.slotTaken}
+                />
               </div>
             )}
           </div>
