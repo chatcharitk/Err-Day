@@ -101,6 +101,21 @@ export function generateTimeSlots(openTime: string, closeTime: string): string[]
 /** Full default slot grid (Mon–Sat hours). Exported for admin schedule views. */
 export const ALL_SLOTS = generateTimeSlots("08:00", "21:00"); // 08:00 … 20:30
 
+/**
+ * Wash beds: every customer is washed at the start, so a branch can only take
+ * as many customers *starting together* as it has beds. Online bookings may
+ * not start in a 15-minute slot that already holds this many starts (any
+ * source — online, admin, walk-in). Branches not listed have no such limit.
+ */
+export const WASH_BEDS: Record<string, number> = { "branch-sukhumvit": 2 };
+const START_SLOT_MINUTES = 15;
+
+/** Bookings starting in the same 15-minute slot as `startTime` (e.g. 18:00–18:14). */
+export function startsInSlot(bookings: { startTime: string }[], startTime: string): number {
+  const slot = Math.floor(timeToMins(startTime) / START_SLOT_MINUTES);
+  return bookings.filter((b) => Math.floor(timeToMins(b.startTime) / START_SLOT_MINUTES) === slot).length;
+}
+
 // ── Day snapshot — fetch shifts + bookings + active staff for one branch/day ──
 
 export interface DaySnapshot {
@@ -250,6 +265,12 @@ export function evaluateCapacity(
   );
   if (branchBlocked) {
     return { ok: false, reason: "no_capacity", scheduledCount: 0, occupiedCount: 0 };
+  }
+
+  // Wash-bed limit on simultaneous starts (online only; admin can still squeeze in).
+  const beds = online ? WASH_BEDS[snapshot.branchId] : undefined;
+  if (beds != null && startsInSlot(bookings, startTime) >= beds) {
+    return { ok: false, reason: "no_capacity", scheduledCount: 0, occupiedCount: beds };
   }
 
   // Staff scheduled to cover the window.
