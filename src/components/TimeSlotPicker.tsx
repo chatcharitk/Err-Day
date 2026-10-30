@@ -4,7 +4,7 @@
  * Customer time picker for 15-minute start times. Slots are grouped into
  * เช้า / บ่าย / เย็น and laid out one hour per row with the quarters in fixed
  * columns (:00 :15 :30 :45), so the eye can run down a column or across an
- * hour. Unavailable times stay in place, greyed, with the word "จอง".
+ * hour. Unavailable times stay in place, greyed out (no label — the grey says it).
  */
 const PERIODS = [
   { th: "เช้า",  en: "Morning",   from: 0,  to: 12 },
@@ -59,6 +59,7 @@ export default function TimeSlotPicker({
                         type="button"
                         onClick={() => !isTaken && onSelect(t)}
                         disabled={isTaken || disabled}
+                        aria-label={isTaken ? `${t} ${label}` : t}
                         className="h-12 rounded-lg border-2 flex flex-col items-center justify-center leading-tight transition-all"
                         style={
                           isTaken
@@ -68,8 +69,7 @@ export default function TimeSlotPicker({
                             : { backgroundColor: "white", borderColor: "#EADDD4", color: "#45352F" }
                         }
                       >
-                        <span className={isTaken ? "text-[11px]" : "text-[15px] font-semibold"}>{t}</span>
-                        {isTaken && <span className="text-xs font-semibold" style={{ color: "#A08F86" }}>{label}</span>}
+                        <span className={isTaken ? "text-[15px]" : "text-[15px] font-semibold"}>{t}</span>
                       </button>
                     );
                   })}
