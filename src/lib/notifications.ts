@@ -23,6 +23,7 @@ import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import { notifyAdmins } from "@/lib/notify-admin";
 import { PACKAGE_SPECS } from "@/lib/packages";
 import { startOfTodayUTC } from "@/lib/utils";
+import { customerLabel as fmtCustomerName } from "@/lib/customer-name";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -314,6 +315,7 @@ type GroupBooking = {
   internalNotes: string | null;
   date: Date;
   serviceId: string;
+  staff: { name: string } | null;
   addons: {
     price: number;
     addon: { name: string; nameTh: string };
@@ -345,6 +347,7 @@ const groupBookingSelect = () => ({
   internalNotes: true,
   date:       true,
   serviceId:  true,
+  staff:      { select: { name: true } },
   addons:     {
     select: {
       price: true,
@@ -378,7 +381,7 @@ function fmtGroupDate(date: Date): string {
 }
 
 /**
- * "14:00 : ชื่อลูกค้า - ฿500 - เสริม: ทรีตเมนต์ - โน้ต" (optional add-ons/note).
+ * "14:00 : ชื่อเล่น · ชื่อจริง (ช่างตั้ก) - ฿500 - เสริม: ทรีตเมนต์ - โน้ต" (optional add-ons/note).
  *
  * A service covered by an active package (5-pack / buffet) with uses left is
  * redeemed for free at checkout, so the service portion shows as ฿0 and only
@@ -388,7 +391,9 @@ function fmtGroupDate(date: Date): string {
  * PENDING/CONFIRMED bookings, so there is no completed-booking case to guard.
  */
 function fmtGroupBookingLine(b: GroupBooking): string {
-  const name = b.customer.nickname || b.customer.name;
+  // "ชื่อเล่น · ชื่อจริง" like the admin lists; the assigned stylist (chosen by
+  // the customer or set by an admin) follows in brackets.
+  const name = fmtCustomerName(b.customer) + (b.staff ? ` (ช่าง${b.staff.name})` : "");
 
   const coveredByPackage = b.customer.packages.some(p =>
     !p.pendingActivation
