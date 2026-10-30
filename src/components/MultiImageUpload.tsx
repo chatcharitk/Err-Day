@@ -14,6 +14,8 @@ interface Props {
   /** Called with the full new list after an add or a remove. */
   onChange: (urls: string[]) => void | Promise<void>;
   label?:   string;
+  /** Text on the big add button, e.g. "แนบสลิป". */
+  addLabel?: string;
   /** Upper bound so a stuck tap can't pile up endless uploads. */
   max?:     number;
 }
@@ -23,11 +25,11 @@ const MUTED   = "#A08070";
 const BORDER  = "#E8D8CC";
 
 /**
- * A grid of images with a "+" tile: pick one or several photos at once, tap a
- * thumbnail to open it full-size, ✕ to remove one. Uploads go one after the
+ * A grid of images with a full-width add button under it: pick one or several
+ * photos at once, tap a thumbnail to open it full-size, ✕ to remove one. Uploads go one after the
  * other and the list is saved once at the end.
  */
-export default function MultiImageUpload({ kind, ref: refId, value, onChange, label, max = 10 }: Props) {
+export default function MultiImageUpload({ kind, ref: refId, value, onChange, label, addLabel = "เพิ่มรูป", max = 10 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
@@ -70,43 +72,51 @@ export default function MultiImageUpload({ kind, ref: refId, value, onChange, la
       )}
       <input ref={inputRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" />
 
-      <div className="grid grid-cols-3 gap-2">
-        {value.map((url, i) => (
-          <div key={url} className="relative aspect-square rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
-            <button type="button" onClick={() => window.open(url, "_blank")} className="block w-full h-full" aria-label={`เปิดรูปที่ ${i + 1}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`รูปที่ ${i + 1}`} className="w-full h-full object-cover" />
-            </button>
-            <button
-              type="button"
-              onClick={() => remove(url)}
-              disabled={busy}
-              className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center disabled:opacity-50"
-              style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
-              aria-label={`ลบรูปที่ ${i + 1}`}
-            >
-              <X size={13} />
-            </button>
-          </div>
-        ))}
+      {value.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {value.map((url, i) => (
+            <div key={url} className="relative aspect-square rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
+              <button type="button" onClick={() => window.open(url, "_blank")} className="block w-full h-full" aria-label={`เปิดรูปที่ ${i + 1}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`รูปที่ ${i + 1}`} className="w-full h-full object-cover" />
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(url)}
+                disabled={busy}
+                className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center disabled:opacity-50"
+                style={{ background: "rgba(0,0,0,0.55)", color: "white" }}
+                aria-label={`ลบรูปที่ ${i + 1}`}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-        {canAdd && (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={busy}
-            className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 disabled:opacity-60"
-            style={{ border: `1.5px dashed ${BORDER}`, background: "white", color: MUTED }}
-          >
-            {busy
-              ? <Loader2 size={20} className="animate-spin" style={{ color: PRIMARY }} />
-              : value.length === 0 ? <Camera size={20} /> : <Plus size={20} />}
-            <span className="text-[11px] text-center leading-tight px-1">
-              {busy ? "กำลังอัปโหลด..." : value.length === 0 ? "ถ่าย/เลือกรูป (เลือกได้หลายรูป)" : "เพิ่มรูป"}
+      {/* Big, full-width add button — the old third-width tile was too small to hit. */}
+      {canAdd && (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className={`w-full rounded-2xl flex items-center justify-center gap-3 px-4 disabled:opacity-60 active:scale-[0.99] ${value.length === 0 ? "py-7" : "py-4 mt-2"}`}
+          style={{ border: `2px dashed ${PRIMARY}`, background: "#FFF8F4", color: PRIMARY }}
+        >
+          {busy
+            ? <Loader2 size={26} className="animate-spin" />
+            : value.length === 0 ? <Camera size={28} /> : <Plus size={24} />}
+          <span className="text-left leading-tight">
+            <span className="block text-base font-semibold">
+              {busy ? "กำลังอัปโหลด..." : addLabel}
             </span>
-          </button>
-        )}
-      </div>
+            {!busy && value.length === 0 && (
+              <span className="block text-xs mt-0.5" style={{ color: MUTED }}>ถ่ายหรือเลือกรูป · เลือกได้หลายรูป</span>
+            )}
+          </span>
+        </button>
+      )}
       {err && <p className="text-xs text-red-600 mt-1.5">{err}</p>}
     </div>
   );

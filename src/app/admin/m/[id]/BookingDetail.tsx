@@ -799,6 +799,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
           ref={b.id}
           value={b.receiptUrls}
           label="สลิปโอนเงิน (รูปภาพ)"
+          addLabel={b.receiptUrls.length === 0 ? "แนบสลิป" : "แนบสลิปเพิ่ม"}
           onChange={async (urls) => {
             const updated = await patch({ receiptUrls: urls });
             // Attaching a slip also stamps paidAt server-side — mirror it.
