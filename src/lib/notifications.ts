@@ -24,6 +24,7 @@ import { notifyAdmins } from "@/lib/notify-admin";
 import { PACKAGE_SPECS } from "@/lib/packages";
 import { startOfTodayUTC } from "@/lib/utils";
 import { customerLabel as fmtCustomerName } from "@/lib/customer-name";
+import { cheerKind, CHEER_AFTER_DAYS, CHEER_LABEL, type CheerKind } from "@/lib/cheer-due";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -601,6 +602,63 @@ export async function sendStaffShiftSummary(): Promise<{ status: string; count: 
     href:  "/admin/m/shifts",
   });
   return { status: "SENT", count: shifts.length };
+}
+
+// ── ค่าเชียร์ prompts: customers due a repeat treatment / colour ────────────
+
+/**
+ * Daily digest of customers whose last COMPLETED treatment was 7 days ago or
+ * last colouring 56 days ago (see cheer-due.ts), so staff can cheer them to come
+ * back. Goes to the branch's LINE group (if configured) and every admin's
+ * in-app inbox. Customers who already booked or had the same kind of service
+ * since are left off. Nothing is sent when nobody is due.
+ */
+export async function sendCheerDigest(
+  branchId: string,
+): Promise<{ branchId: string; status: string; count: number; reason?: string }> {
+  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const dayNoon = (back: number) => new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate() - back, 12, 0, 0));
+
+  const lines: Record<CheerKind, string[]> = { treatment: [], color: [] };
+  for (const kind of ["treatment", "color"] as const) {
+    const day = dayNoon(CHEER_AFTER_DAYS[kind]);
+    const visits = await prisma.booking.findMany({
+      where: { branchId, status: "COMPLETED", date: { gte: new Date(day.getTime() - 12 * 3600e3), lte: new Date(day.getTime() + 12 * 3600e3) }, serviceId: { notIn: SALE_ONLY_SKUS } },
+      select: {
+        customerId: true, date: true,
+        customer: { select: { name: true, nickname: true, phone: true } },
+        service: { select: { name: true, nameTh: true, category: true } },
+        staff: { select: { name: true } },
+      },
+      orderBy: { startTime: "asc" },
+    });
+    const seen = new Set<string>();
+    for (const v of visits) {
+      if (cheerKind(v.service) !== kind || seen.has(v.customerId)) continue;
+      // Already came back (or is booked) for the same kind of service since.
+      const later = await prisma.booking.findMany({
+        where: { customerId: v.customerId, date: { gt: v.date }, status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] } },
+        select: { service: { select: { name: true, nameTh: true, category: true } } },
+      });
+      if (later.some(l => cheerKind(l.service) === kind)) continue;
+      seen.add(v.customerId);
+      lines[kind].push(`• ${fmtCustomerName(v.customer)}${v.customer.phone ? ` ${v.customer.phone}` : ""} — ${v.service.nameTh || v.service.name}${v.staff ? ` (ช่าง${v.staff.name})` : ""}`);
+    }
+  }
+
+  const count = lines.treatment.length + lines.color.length;
+  if (count === 0) return { branchId, status: "SKIPPED", count: 0, reason: "nobody_due" };
+
+  const sections = (["treatment", "color"] as const)
+    .filter(k => lines[k].length)
+    .map(k => `${k === "treatment" ? "💆" : "🎨"} ครบ ${CHEER_AFTER_DAYS[k] === 7 ? "1 สัปดาห์" : "8 สัปดาห์"} หลัง${CHEER_LABEL[k]} (${lines[k].length})\n${lines[k].join("\n")}`);
+  const text = `📣 ลูกค้าที่ควรเชียร์วันนี้\n\n${sections.join("\n\n")}`;
+
+  await notifyAdmins({ type: "CHEER", title: `📣 ลูกค้าที่ควรเชียร์วันนี้ (${count})`, body: sections.join("\n\n"), href: "/admin/m", branchId });
+  const groupId = branchGroupId(branchId);
+  if (!groupId) return { branchId, status: "SENT", count, reason: "no_group" };
+  const r = await pushLine(groupId, [{ type: "text", text }]);
+  return { branchId, status: r.ok ? "SENT" : "FAILED", count, reason: r.error };
 }
 
 // ── Booking confirmation (sent immediately on creation) ────────────────────

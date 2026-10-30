@@ -31,6 +31,7 @@ import {
   sendBranchDailySummary,
   sendStaffShiftSummary,
   sendOwnerPayrollSummary,
+  sendCheerDigest,
 } from "@/lib/notifications";
 import { branchesWithGroups } from "@/lib/line-groups";
 
@@ -159,6 +160,27 @@ export async function GET(request: Request) {
     results.push(...await Promise.all(batch.map((run) => run())));
   }
 
+  // ── 3b) ค่าเชียร์ digest — customers due a repeat treatment / colour ──────
+  // From 09:00 Bangkok. Once per branch per day via the NotificationLog marker,
+  // so the wide window (sparse ticks) never double-sends.
+  const cheerResults: { branchId: string; status: string; count?: number; reason?: string }[] = [];
+  const bkkNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  if (bkkNow.getUTCHours() >= 9) {
+    const today = bkkNow.toISOString().slice(0, 10);
+    const branches = await prisma.branch.findMany({ select: { id: true } });
+    for (const { id: branchId } of branches) {
+      try {
+        await prisma.notificationLog.create({
+          data: { kind: "BOOKING_REMINDER_4H", targetId: `cheer:${branchId}:${today}`, status: "SENT" },
+        });
+      } catch (e) {
+        if ((e as { code?: string }).code === "P2002") continue; // already sent today
+        throw e;
+      }
+      cheerResults.push(await sendCheerDigest(branchId));
+    }
+  }
+
   // ── 4) Branch daily summary — fires in the 20:00–23:59 Bangkok window ──
   // Lists TOMORROW's bookings to each branch's LINE group. The window was
   // widened from 2h (22:00–23:59) to 4h (20:00–23:59) because the cron actually
@@ -221,7 +243,7 @@ export async function GET(request: Request) {
     ranAt:   now.toISOString(),
   };
 
-  return NextResponse.json({ ok: true, stats, results, summaryResults });
+  return NextResponse.json({ ok: true, stats, results, summaryResults, cheerResults });
 }
 
 // Allow POST too — some cron services send POST instead of GET
