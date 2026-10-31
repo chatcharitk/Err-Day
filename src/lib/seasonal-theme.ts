@@ -6,7 +6,7 @@
 export type SeasonalTheme = "halloween";
 
 const SEASONS: Array<{ theme: SeasonalTheme; from: string; to: string }> = [
-  { theme: "halloween", from: "2026-09-30", to: "2026-10-31" },
+  { theme: "halloween", from: "2026-09-30", to: "2026-10-30" },
 ];
 
 const bangkokDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" });
