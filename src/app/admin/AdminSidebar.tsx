@@ -25,7 +25,7 @@ import {
   Sparkles,
   Wallet,
   Activity,
-  Vote, Ticket,
+  Ticket,
   FileText, Package, Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -46,7 +46,6 @@ const MENU = [
   { href: "/admin/capacity",   labelTh: "ความจุการจอง",   label: "Capacity",     icon: Gauge,                                      ownerOnly: false },
   { href: "/admin/services",   labelTh: "รายการบริการ",   label: "Services",     icon: Scissors,                                   ownerOnly: false },
   { href: "/admin/addons",     labelTh: "บริการเสริม",     label: "Add-ons",      icon: Sparkles,                                   ownerOnly: false },
-  { href: "/admin/votes",      labelTh: "โหวตพนักงาน",    label: "Staff Vote",   icon: Vote,                                       ownerOnly: false },
   { href: "/admin/coupons",    labelTh: "คูปอง",          label: "Coupons",      icon: Ticket,                                     ownerOnly: false },
   { href: "/admin/settings",   labelTh: "ตั้งค่าร้าน",    label: "Shop Settings",icon: Settings,                                   ownerOnly: false },
   { href: "/admin/printers",  labelTh: "เครื่องพิมพ์",     label: "Printers",     icon: Printer,                                    ownerOnly: true  },
