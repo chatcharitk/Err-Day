@@ -19,7 +19,7 @@ import { useLang } from "@/components/LanguageProvider";
 import { HalloweenStrip } from "@/components/HalloweenDecor";
 import TermsConsentBlock from "@/components/TermsConsentBlock";
 import { BOOKING_TERMS_TH, BOOKING_TERMS_EN } from "@/lib/terms";
-import { DAVINES_SPA_PROMOTION, PJOLI_TREATMENT_SERVICE_ID, getCurrentOrUpcomingPromotion, getPromotionServicePrice, getServicePromotion } from "@/lib/promotions";
+import { DAVINES_SPA_PROMOTION, getCurrentOrUpcomingPromotion, getPromotionServicePrice, getServicePromotion } from "@/lib/promotions";
 import type { Branch, Service, BranchService, ServiceAddon } from "@/generated/prisma/client";
 import { addonOfferedOn } from "@/lib/addon-availability";
 
@@ -96,7 +96,7 @@ const featuredRank = (id: string) => {
 };
 
 /** Services shown with a twinkling "New!" badge. Remove an id once it stops being new. */
-const NEW_SERVICE_IDS = new Set<string>([PJOLI_TREATMENT_SERVICE_ID]);
+const NEW_SERVICE_IDS = new Set<string>([]);
 
 const CAT_EN: Record<string, string> = {
   "บริการทั่วไป":  "General Services",
