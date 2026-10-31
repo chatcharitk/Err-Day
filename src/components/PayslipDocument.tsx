@@ -28,7 +28,6 @@ export interface PayslipDocData {
 export default function PayslipDocument({ d }: { d: PayslipDocData }) {
   const earnings = d.lines.filter(l => l.kind !== "DEDUCTION");
   const deductions = d.lines.filter(l => l.kind === "DEDUCTION");
-  const remaining = d.netSatang - d.paidDailySatang;
   return (
     <article className="payslip-doc bg-white mx-auto p-5 sm:p-10 print:p-0" style={{ color: TEXT, maxWidth: 760, border: `1px solid ${LINE}`, borderRadius: 16 }}>
       {d.status !== "ISSUED" && (
@@ -87,11 +86,6 @@ export default function PayslipDocument({ d }: { d: PayslipDocData }) {
         <div className="text-right"><p className="text-xs" style={{ color: MUTED }}>รายได้สุทธิ (บาท)</p><p className="text-lg font-bold">{money(d.netSatang)}</p></div>
       </section>
 
-      {d.paidDailySatang > 0 && (
-        <p className="text-xs mt-3" style={{ color: MUTED }}>
-          ในรายได้สุทธินี้ ได้รับเป็นรายวันระหว่างเดือนแล้ว {money(d.paidDailySatang)} บาท (ค่าคอม/OT/ทิป/ค่าเดินทาง) · คงเหลือรับ {money(remaining)} บาท
-        </p>
-      )}
       {d.notes && <p className="text-xs mt-2 whitespace-pre-line">หมายเหตุ: {d.notes}</p>}
 
       <footer className="flex justify-between text-[11px] mt-8" style={{ color: MUTED }}>
