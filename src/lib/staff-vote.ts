@@ -8,7 +8,7 @@ export const VOTE_EVENT = {
   titleTh: "Halloween Staff Challenge",
   /** Inclusive Bangkok days voting is open (poster said 18–31 ต.ค.; opened a day early on 17 ต.ค. 2569). */
   from: "2026-10-17",
-  to: "2026-10-31",
+  to: "2026-10-30",
 } as const;
 
 /** Poster prizes (บาท) by rank; ranks 4+ get the participation bonus. */
