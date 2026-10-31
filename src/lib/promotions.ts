@@ -34,22 +34,11 @@ export const DAVINES_SPA_PROMOTION = {
   labelEn: "Promo 7–9 Aug 2026",
 } as const satisfies ServicePromotion;
 
-/** Normal price ฿990 / member ฿890 — set per branch in the services admin. */
+/** Regular price ฿990 / member ฿890 (launch promo ฿790/฿690 ended 31 Oct 2026) — set per branch in the services admin. */
 export const PJOLI_TREATMENT_SERVICE_ID = "svc-pjoli-treatment";
-
-export const PJOLI_TREATMENT_PROMOTION = {
-  serviceId: PJOLI_TREATMENT_SERVICE_ID,
-  startsOn: "2026-10-03",
-  endsOn: "2026-10-31",
-  regularPrice: 79_000,
-  memberPrice: 69_000,
-  labelTh: "โปรโมชันสำหรับนัดหมายถึง 31 ต.ค. 2569",
-  labelEn: "Promotion for appointments until 31 Oct 2026",
-} as const satisfies ServicePromotion;
 
 export const PROMOTIONS: readonly ServicePromotion[] = [
   DAVINES_SPA_PROMOTION,
-  PJOLI_TREATMENT_PROMOTION,
 ];
 
 function toDateKey(value: Date | string): string {
