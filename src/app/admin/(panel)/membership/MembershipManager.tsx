@@ -612,6 +612,7 @@ export default function MembershipManager() {
   const [tab,       setTab]       = useState<Tab>("members");
   const [filter,    setFilter]    = useState<"all" | "active" | "expired">("all");
   const [search,    setSearch]    = useState("");
+  const [pendingSort, setPendingSort] = useState<"newest" | "oldest" | "name" | "type">("newest");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -696,6 +697,13 @@ export default function MembershipManager() {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return p.name.toLowerCase().includes(q) || (p.phone ?? "").includes(q);
+  }).sort((a, b) => {
+    const ta = a.consentedAt ? Date.parse(a.consentedAt) : 0;
+    const tb = b.consentedAt ? Date.parse(b.consentedAt) : 0;
+    if (pendingSort === "newest") return tb - ta;
+    if (pendingSort === "oldest") return ta - tb;
+    if (pendingSort === "name")   return a.name.localeCompare(b.name, "th");
+    return parseProductSource(a.source).label.localeCompare(parseProductSource(b.source).label, "th") || tb - ta;
   });
 
   const historyFiltered = data.history.filter(h => {
@@ -797,6 +805,21 @@ export default function MembershipManager() {
               </button>
             ))}
           </div>
+        )}
+
+        {tab === "pending" && (
+          <select
+            value={pendingSort}
+            onChange={e => setPendingSort(e.target.value as typeof pendingSort)}
+            aria-label="เรียงลำดับ"
+            className="px-3 py-2 rounded-xl border bg-white text-sm outline-none"
+            style={{ borderColor: BORDER, color: TEXT }}
+          >
+            <option value="newest">ลงทะเบียนล่าสุดก่อน</option>
+            <option value="oldest">ลงทะเบียนเก่าสุดก่อน</option>
+            <option value="name">ชื่อ ก–ฮ</option>
+            <option value="type">ประเภท (สมาชิก / แพ็กเกจ)</option>
+          </select>
         )}
 
         <div
