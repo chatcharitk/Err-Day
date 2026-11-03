@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Check, Minus, Plus, Search, Timer, Trash2, X } from "lucide-react";
+import { Camera, Check, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { OPT, ZONES, ZONE_LABEL, developerGramsOf, type ColorZone } from "@/lib/color-options";
 import { resizeImageFile } from "@/lib/resize-image";
 import { C, Chips, Field, LevelPicker, Section } from "./ui";
+
+const SPLIT_ZONES = ["ROOT", "ENDS", "TONER"] as const;
 
 export type ShadeOpt = { id: string; label: string; brand: string | null; name: string; qtyByBranch: Record<string, number> };
 export type EditableVisit = {
@@ -14,23 +16,19 @@ export type EditableVisit = {
   result: string | null; scalpAfter: string | null; referencePhotos: string[]; beforePhotos: string[]; afterPhotos: string[]; nextTimeNotes: string | null;
 };
 
-const RESULTS = [["ON_TARGET", "ตรงตามเป้าหมาย"], ["DARKER", "เข้มกว่า"], ["LIGHTER", "อ่อนกว่า"], ["NEEDS_FIX", "ต้องปรับแก้"]] as const;
+const RESULTS = [["ON_TARGET", "ตรงเป้า"], ["DARKER", "เข้มไป"], ["LIGHTER", "อ่อนไป"], ["NEEDS_FIX", "ต้องแก้"]] as const;
 const MINUTES = [10, 15, 20, 25, 30, 35, 40, 45];
 const emptyZone = (zone: ColorZone["zone"]): ColorZone => ({ zone, shades: [], developerPercent: null, ratio: null, minutes: null, startedAt: null, rinsedAt: null });
 
-/** Live "time left" for a zone that is processing. */
-function useNow(active: boolean) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { if (!active) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [active]);
-  return now;
-}
-
-export default function VisitEditor({ customerId, branchId, initial, shades, backHref, canPhoto }: {
+export default function VisitEditor({ customerId, branchId, initial, shades, backHref, canPhoto: photoOk }: {
   customerId: string; branchId: string; initial: EditableVisit; shades: ShadeOpt[]; backHref: string; canPhoto: boolean;
 }) {
+  const [canPhoto, setCanPhoto] = useState(photoOk);
   const router = useRouter();
   const [v, setV] = useState<EditableVisit>(initial);
-  const [zoneTab, setZoneTab] = useState<ColorZone["zone"]>(initial.zones[0]?.zone ?? "ROOT");
+  // One formula for the whole head by default; "แยกโซน" opens root / ends / toner tabs.
+  const [split, setSplit] = useState(initial.zones.some(z => z.zone !== "ALL"));
+  const [zoneTab, setZoneTab] = useState<ColorZone["zone"]>(initial.zones.find(z => z.zone !== "ALL")?.zone ?? "ALL");
   const [picker, setPicker] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,8 +42,6 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
     const keep = z.shades.length || z.developerPercent || z.ratio || z.minutes || z.startedAt;
     set("zones", ZONES.flatMap(k => (k === z.zone ? (keep ? [z] : []) : others.filter(x => x.zone === k))));
   };
-  const running = v.zones.some(z => z.startedAt && !z.rinsedAt);
-  const now = useNow(running);
 
   const totals = useMemo(() => ({
     color: v.zones.reduce((s, z) => s + z.shades.reduce((t, x) => t + x.grams, 0), 0),
@@ -63,15 +59,6 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
     if (!res?.ok) { const j = await res?.json().catch(() => ({})) as { error?: string } | undefined; setMsg({ t: j?.error ?? "บันทึกไม่สำเร็จ ลองอีกครั้ง", bad: true }); return false; }
     setDirty(false); setMsg({ t: extra.finish ? "บันทึกเสร็จงานแล้ว" : "บันทึกแล้ว" });
     return true;
-  }
-
-  // Timer start/stop saves straight away so another device sees the clock too.
-  async function timer(action: "start" | "rinse") {
-    const z = { ...zone, [action === "start" ? "startedAt" : "rinsedAt"]: new Date().toISOString(), ...(action === "start" ? { rinsedAt: null } : {}) };
-    const zones = ZONES.flatMap(k => (k === z.zone ? [z] : v.zones.filter(x => x.zone === k)));
-    const next = { ...v, zones };
-    setV(next);
-    await save({}, next);
   }
 
   async function upload(kind: "referencePhotos" | "beforePhotos" | "afterPhotos", files: FileList | null) {
@@ -126,38 +113,39 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
 
   return (
     <div className="space-y-3 pb-32">
-      <Section title="ประเภทบริการ">
+      <Section title="งานนี้">
         <Chips multi options={OPT.service} value={v.serviceTypes} onChange={x => set("serviceTypes", x as string[])} small />
-      </Section>
-
-      <Section title="สภาพผมและเป้าหมายก่อนทำ">
         <Field label="ระดับสีโคนเดิม"><LevelPicker max={12} value={v.rootLevel} onChange={x => set("rootLevel", x)} /></Field>
         <Field label="ระดับสีช่วงกลาง–ปลาย"><LevelPicker max={12} value={v.midEndsLevel} onChange={x => set("midEndsLevel", x)} /></Field>
         <Field label="ระดับสีเป้าหมาย"><LevelPicker max={12} value={v.targetLevel} onChange={x => set("targetLevel", x)} /></Field>
         <Field label="ผมหงอก (%)">
           <Chips options={["0", "10", "25", "50", "75", "100"]} value={v.grayPercent != null ? String(v.grayPercent) : null} onChange={x => set("grayPercent", x == null ? null : Number(x))} small />
         </Field>
-        <Field label="เช็คก่อนทำ"><Chips multi options={OPT.preCheck} value={v.preChecks} onChange={x => set("preChecks", x as string[])} small /></Field>
         <label className="flex items-center gap-2 text-sm" style={{ color: C.text }}>
           <input type="checkbox" className="w-4 h-4" checked={v.patchTestNeeded} onChange={e => set("patchTestNeeded", e.target.checked)} />
-          ช่างสงสัย — ต้องทำ patch test (บันทึกผลในประวัติลูกค้า)
+          ช่างสงสัย — ต้องทำ patch test
         </label>
-        {photos("referencePhotos", "สี / รูปอ้างอิงลูกค้า")}
+        {canPhoto && photos("referencePhotos", "สี / รูปอ้างอิงลูกค้า")}
       </Section>
 
-      <Section title="สูตรที่ผสมจริง">
-        <div className="grid grid-cols-4 gap-1 p-1 rounded-xl" style={{ background: C.border }}>
-          {ZONES.map(k => {
-            const has = v.zones.some(z => z.zone === k && z.shades.length);
-            return (
-              <button key={k} type="button" onClick={() => setZoneTab(k)} className="py-1.5 rounded-lg text-xs relative"
-                style={zoneTab === k ? { background: "white", color: C.primary, fontWeight: 600 } : { color: C.muted }}>
-                {ZONE_LABEL[k].replace("อื่นๆ / ", "")}
-                {has && <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: C.primary }} />}
-              </button>
-            );
-          })}
-        </div>
+      <Section title="สูตรที่ผสม" right={!split ? (
+        <button type="button" onClick={() => { setSplit(true); setZoneTab("ROOT"); }} className="text-xs font-semibold" style={{ color: C.primary }}>แยกโซน ›</button>
+      ) : null}>
+        {split && (
+          <div className="grid grid-cols-4 gap-1 p-1 rounded-xl" style={{ background: C.border }}>
+            {(["ALL", ...SPLIT_ZONES] as const).map(k => {
+              const has = v.zones.some(z => z.zone === k && z.shades.length);
+              return (
+                <button key={k} type="button" onClick={() => setZoneTab(k)} className="py-1.5 rounded-lg text-xs relative"
+                  style={zoneTab === k ? { background: "white", color: C.primary, fontWeight: 600 } : { color: C.muted }}>
+                  {ZONE_LABEL[k].replace(" / อื่นๆ", "")}
+                  {has && <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: C.primary }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {zoneTab === "MID" && <p className="text-xs" style={{ color: C.muted }}>ช่วงกลาง (บันทึกเดิม)</p>}
 
         <div className="space-y-2">
           {zone.shades.map((s, i) => (
@@ -172,69 +160,48 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
             </div>
           ))}
           <button type="button" onClick={() => setPicker(true)} className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5" style={{ border: `1.5px dashed ${C.primary}`, color: C.primary }}>
-            <Plus size={15} /> เพิ่มเบอร์สี ({ZONE_LABEL[zoneTab]})
+            <Plus size={15} /> เพิ่มเบอร์สี{split ? ` (${ZONE_LABEL[zoneTab].replace(" / อื่นๆ", "")})` : ""}
           </button>
         </div>
 
-        <Field label="ไฮ / Developer"><Chips options={OPT.developer} value={zone.developerPercent} onChange={x => putZone({ ...zone, developerPercent: x as string | null })} small /></Field>
-        <Field label="อัตราผสม (สี : ไฮ)"><Chips options={OPT.ratio} value={zone.ratio} onChange={x => putZone({ ...zone, ratio: x as string | null })} small /></Field>
-        {developerGramsOf(zone) > 0 && <p className="text-xs" style={{ color: C.muted }}>ไฮที่ต้องใช้โซนนี้ ≈ <b style={{ color: C.text }}>{developerGramsOf(zone)}g</b></p>}
-        <Field label="เวลาทิ้งสี (นาที)">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="ไฮ"><Chips options={OPT.developer} value={zone.developerPercent} onChange={x => putZone({ ...zone, developerPercent: x as string | null })} small /></Field>
+          <Field label="ผสม (สี : ไฮ)"><Chips options={OPT.ratio} value={zone.ratio} onChange={x => putZone({ ...zone, ratio: x as string | null })} small /></Field>
+        </div>
+        <Field label="ทิ้งสี (นาที)">
           <Chips options={MINUTES.map(String)} value={zone.minutes != null ? String(zone.minutes) : null} onChange={x => putZone({ ...zone, minutes: x == null ? null : Number(x) })} small />
         </Field>
 
-        {zone.shades.length > 0 && (
-          <div className="rounded-xl px-3 py-2.5 flex items-center gap-3" style={{ background: C.text, color: "white" }}>
-            <Timer size={18} />
-            {zone.startedAt && !zone.rinsedAt ? (() => {
-              const left = (zone.minutes ?? 0) * 60 - Math.floor((now - Date.parse(zone.startedAt)) / 1000);
-              const abs = Math.abs(left);
-              return (
-                <>
-                  <div className="flex-1">
-                    <p className="text-[11px] opacity-70">เริ่ม {new Date(zone.startedAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })}{zone.minutes ? ` · ${zone.minutes} นาที` : ""}</p>
-                    <p className="text-xl font-semibold tabular-nums" style={{ color: left < 0 ? "#FCA5A5" : "white" }}>{left < 0 ? "เกิน " : ""}{String(Math.floor(abs / 60)).padStart(2, "0")}:{String(abs % 60).padStart(2, "0")}</p>
-                  </div>
-                  <button type="button" disabled={busy} onClick={() => timer("rinse")} className="px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: "white", color: C.text }}>ล้างแล้ว</button>
-                </>
-              );
-            })() : (
-              <>
-                <p className="flex-1 text-sm">
-                  {zone.rinsedAt && zone.startedAt
-                    ? `ทิ้งไว้ ${Math.round((Date.parse(zone.rinsedAt) - Date.parse(zone.startedAt)) / 60000)} นาที · ล้าง ${new Date(zone.rinsedAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })}`
-                    : "จับเวลาทิ้งสีโซนนี้"}
-                </p>
-                <button type="button" disabled={busy} onClick={() => timer("start")} className="px-3 py-2 rounded-lg text-sm font-semibold" style={{ background: "white", color: C.text }}>
-                  {zone.rinsedAt ? "เริ่มใหม่" : "เริ่ม"}
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        <input id="otherProducts" className={input} style={box} value={v.otherProducts ?? ""} onChange={e => set("otherProducts", e.target.value)} placeholder="แบรนด์ / ไลน์สีอื่น · ฟอก / อื่นๆ (ชื่อผลิตภัณฑ์)" />
-        <div className="flex gap-4 text-xs" style={{ color: C.muted }}>
-          <span>สีรวม <b style={{ color: C.text }}>{totals.color}g</b></span>
-          <span>ไฮรวม <b style={{ color: C.text }}>{totals.dev}g</b></span>
-        </div>
+        <input id="otherProducts" className={input} style={box} value={v.otherProducts ?? ""} onChange={e => set("otherProducts", e.target.value)} placeholder="ฟอก / ผลิตภัณฑ์อื่นที่ใช้ (ถ้ามี)" />
+        <p className="text-xs" style={{ color: C.muted }}>
+          สีรวม <b style={{ color: C.text }}>{totals.color}g</b> · ไฮรวม <b style={{ color: C.text }}>{totals.dev}g</b>
+        </p>
       </Section>
 
-      <Section title="ผลการทำ">
-        {photos("beforePhotos", "รูปก่อนทำ")}
-        {photos("afterPhotos", "รูปหลังทำ")}
-        {!canPhoto && <p className="text-xs" style={{ color: C.amber }}>ลูกค้ายังไม่ได้ยินยอมให้เก็บรูป</p>}
-        <Field label="ผลลัพธ์หลังทำ">
-          <div className="grid grid-cols-2 gap-1.5">
+      <Section title="หลังทำ">
+        {canPhoto ? (
+          <div className="grid grid-cols-2 gap-3">{photos("beforePhotos", "รูปก่อน")}{photos("afterPhotos", "รูปหลัง")}</div>
+        ) : (
+          <label className="flex items-start gap-2.5 text-sm rounded-xl p-3 cursor-pointer" style={{ background: C.bg, color: C.text }}>
+            <input type="checkbox" className="mt-1 w-4 h-4" onChange={async e => {
+              if (!e.target.checked) return;
+              const res = await fetch("/api/color/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customerId, consent: true }) }).catch(() => null);
+              if (res?.ok) setCanPhoto(true); else { e.target.checked = false; setMsg({ t: "บันทึกความยินยอมไม่สำเร็จ", bad: true }); }
+            }} />
+            <span>ลูกค้ายินยอมให้ err·day เก็บรูปก่อน–หลังและบันทึกการทำสี เพื่อใช้ภายในร้าน (ส่งเครื่องให้ลูกค้ากดเอง)</span>
+          </label>
+        )}
+        <Field label="ผลลัพธ์">
+          <div className="grid grid-cols-4 gap-1.5">
             {RESULTS.map(([k, t]) => (
-              <button key={k} type="button" onClick={() => set("result", v.result === k ? null : k)} className="py-2 rounded-lg text-sm"
+              <button key={k} type="button" onClick={() => set("result", v.result === k ? null : k)} className="py-2 rounded-lg text-xs"
                 style={v.result === k ? { background: k === "NEEDS_FIX" ? C.red : C.primary, color: "white" } : { ...box, background: "white" }}>{t}</button>
             ))}
           </div>
         </Field>
         <Field label="สภาพเส้นผม / หนังศีรษะหลังทำ"><Chips options={OPT.scalpAfter} value={v.scalpAfter} onChange={x => set("scalpAfter", x as string | null)} small /></Field>
-        <textarea id="nextTimeNotes" rows={3} className={input} style={box} value={v.nextTimeNotes ?? ""} onChange={e => set("nextTimeNotes", e.target.value)}
-          placeholder="สิ่งที่ต้องจำสำหรับครั้งหน้า / สูตรที่ควรปรับ / การดูแลที่แนะนำ" />
+        <textarea id="nextTimeNotes" rows={2} className={input} style={box} value={v.nextTimeNotes ?? ""} onChange={e => set("nextTimeNotes", e.target.value)}
+          placeholder="จำไว้ครั้งหน้า (สูตรที่ควรปรับ / การดูแลที่แนะนำ)" />
       </Section>
 
       {v.status === "DRAFT" && (

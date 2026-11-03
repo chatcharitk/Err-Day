@@ -4,7 +4,6 @@ import { loadColorCard, loadShadeOptions } from "@/lib/color-card";
 import { prisma } from "@/lib/prisma";
 import { VISIT_PUBLIC_SELECT, cleanZones } from "@/lib/color";
 import ColorCard from "./ColorCard";
-import ProfileForm from "./ProfileForm";
 import VisitEditor from "./VisitEditor";
 import PrintCard from "./PrintCard";
 
@@ -37,30 +36,10 @@ export async function ColorCardView({ customerId, base, back, bookingId, default
     <Shell title={`การ์ดสีผม · ${data.customer.label}`} back={back}>
       <ColorCard
         customerId={customerId} base={base}
-        profile={p ? { ...p, patchTestAt: iso(p.patchTestAt), consentAt: iso(p.consentAt), updatedAt: p.updatedAt.toISOString() } : null}
+        profile={p ? { allergy: p.allergy, allergyDetail: p.allergyDetail, consentAt: iso(p.consentAt) } : null}
         visits={data.visits.map(v => ({ ...v, date: v.date.toISOString() }))}
         branches={data.branches} bookingId={booking?.id ?? null}
         defaultBranchId={booking?.branchId ?? defaultBranchId ?? data.branches[0]?.id ?? null} canChooseBranch={canChooseBranch}
-      />
-    </Shell>
-  );
-}
-
-export async function ColorProfileView({ customerId, base }: { customerId: string; base: string }) {
-  const data = await loadColorCard(customerId);
-  if (!data) notFound();
-  const p = data.profile;
-  return (
-    <Shell title="ประวัติก่อนทำสี" sub={`${data.customer.label} · ถามลูกค้าที่หน้าร้าน`} back={base}>
-      <ProfileForm
-        customerId={customerId} customerLabel={data.customer.label} doneHref={base}
-        initial={{
-          naturalLevel: p?.naturalLevel ?? null, grayPercent: p?.grayPercent ?? null, length: p?.length ?? null, texture: p?.texture ?? null,
-          curl: p?.curl ?? null, density: p?.density ?? null, condition: p?.condition ?? [], scalp: p?.scalp ?? [], chemicalHistory: p?.chemicalHistory ?? [],
-          lastChemical: p?.lastChemical ?? null, lastChemicalProduct: p?.lastChemicalProduct ?? "", allergy: p?.allergy ?? "UNKNOWN",
-          allergyDetail: p?.allergyDetail ?? "", patchTestResult: p?.patchTestResult ?? null, preferredTones: p?.preferredTones ?? "",
-          avoidTones: p?.avoidTones ?? "", goals: p?.goals ?? "", consentMarketing: p?.consentMarketing ?? false, hasConsent: !!p?.consentAt,
-        }}
       />
     </Shell>
   );
@@ -79,7 +58,7 @@ export async function ColorVisitView({ customerId, visitId, base }: { customerId
     <Shell title={`บันทึกสี · ${data.customer.label}`} sub={`ครั้งที่ ${v.visitNo} · ${when} · ${branch} · ช่าง${v.stylistName}${v.status === "DONE" ? " · เสร็จแล้ว" : ""}`} back={base}>
       {data.profile?.allergy === "YES" && (
         <p className="mb-3 rounded-xl px-3 py-2 text-sm" style={{ background: "#FDE9E7", color: "#B42318" }}>
-          <b>⚠︎ เคยแพ้ / ระคายเคือง</b>{data.profile.allergyDetail ? ` — ${data.profile.allergyDetail}` : ""}
+          <b>⚠︎ ข้อควรระวัง</b>{data.profile.allergyDetail ? ` — ${data.profile.allergyDetail}` : ""}
         </p>
       )}
       <VisitEditor

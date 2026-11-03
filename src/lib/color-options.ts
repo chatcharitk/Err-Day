@@ -22,8 +22,9 @@ export const OPT = {
 
 export const ALLERGY_LABEL: Record<string, string> = { NONE: "ไม่เคยแพ้", YES: "เคยแพ้", UNSURE: "ไม่แน่ใจ", UNKNOWN: "ยังไม่ได้ถาม" };
 export const RESULT_LABEL: Record<string, string> = { ON_TARGET: "ตรงตามเป้าหมาย", DARKER: "เข้มกว่า", LIGHTER: "อ่อนกว่า", NEEDS_FIX: "ต้องปรับแก้" };
-export const ZONE_LABEL: Record<string, string> = { ROOT: "โคน", MID: "ช่วงกลาง", ENDS: "ปลายผม", TONER: "อื่นๆ / โทนเนอร์" };
-export const ZONES = ["ROOT", "MID", "ENDS", "TONER"] as const;
+export const ZONE_LABEL: Record<string, string> = { ALL: "ทั้งหัว", ROOT: "โคน", MID: "ช่วงกลาง", ENDS: "ปลายผม", TONER: "โทนเนอร์ / อื่นๆ" };
+/** ALL = one formula for the whole head (the default); the others are only used when the stylist splits zones. MID is kept for old records. */
+export const ZONES = ["ALL", "ROOT", "MID", "ENDS", "TONER"] as const;
 export const RETOUCH_WEEKS = 8;
 
 export type ColorShade = { productId: string | null; label: string; grams: number };

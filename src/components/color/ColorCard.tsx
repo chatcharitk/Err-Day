@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, ClipboardList, Copy, Plus, Printer, ShieldAlert } from "lucide-react";
+import { Copy, Plus, Printer, ShieldAlert } from "lucide-react";
 import { C, fmtThaiDate } from "./ui";
 
 type Zone = { zone: string; shades: { label: string; grams: number }[]; developerPercent: string | null; ratio: string | null; minutes: number | null };
@@ -12,13 +12,9 @@ export type CardVisit = {
   serviceTypes: string[]; targetLevel: number | null; result: string | null; nextTimeNotes: string | null;
   zones: Zone[]; beforePhotos: string[]; afterPhotos: string[];
 };
-export type CardProfile = {
-  naturalLevel: number | null; grayPercent: number | null; condition: string[]; scalp: string[]; chemicalHistory: string[];
-  lastChemical: string | null; allergy: string; allergyDetail: string | null; patchTestResult: string | null; patchTestAt: string | null;
-  preferredTones: string | null; avoidTones: string | null; consentAt: string | null; updatedAt: string;
-} | null;
+export type CardProfile = { allergy: string; allergyDetail: string | null; consentAt: string | null } | null;
 
-const ZONE: Record<string, string> = { ROOT: "โคน", MID: "ช่วงกลาง", ENDS: "ปลาย", TONER: "โทนเนอร์" };
+const ZONE: Record<string, string> = { ALL: "ทั้งหัว", ROOT: "โคน", MID: "ช่วงกลาง", ENDS: "ปลาย", TONER: "โทนเนอร์" };
 const RESULT: Record<string, { t: string; c: string; bg: string }> = {
   ON_TARGET: { t: "ตรงเป้า", c: C.green, bg: C.greenBg }, DARKER: { t: "เข้มกว่า", c: C.amber, bg: C.amberBg },
   LIGHTER: { t: "อ่อนกว่า", c: C.amber, bg: C.amberBg }, NEEDS_FIX: { t: "ต้องแก้", c: C.red, bg: C.redBg },
@@ -29,42 +25,50 @@ export function zoneLine(z: Zone) {
   return [shades || "—", [z.developerPercent, z.ratio].filter(Boolean).join(" "), z.minutes ? `${z.minutes}′` : ""].filter(Boolean).join(" · ");
 }
 
-export function SafetyBanner({ profile, base }: { profile: CardProfile; base: string }) {
-  if (!profile) {
-    return (
-      <Link href={`${base}/profile`} className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm" style={{ background: C.amberBg, color: C.amber, border: "1px solid #FED7AA" }}>
-        <ClipboardList size={16} className="mt-0.5 flex-shrink-0" />
-        <span className="flex-1"><b>ยังไม่มีประวัติก่อนทำสี</b><br />ถามลูกค้าที่หน้าร้าน (แพ้ / เคมีเดิม / สภาพผม) แล้วให้ลูกค้ากดยินยอม</span>
-        <span className="font-semibold">ถาม ›</span>
-      </Link>
+/** One-line caution (allergy / sensitivity) — the only thing kept per customer besides photo consent. */
+function Caution({ customerId, profile }: { customerId: string; profile: CardProfile }) {
+  const router = useRouter();
+  const saved = profile?.allergy === "YES" ? profile.allergyDetail ?? "" : "";
+  const [text, setText] = useState(saved);
+  const [editing, setEditing] = useState(false);
+  const [consent, setConsent] = useState(!!profile?.consentAt);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    if (!consent) { setErr("ให้ลูกค้ากดยินยอมก่อนบันทึก"); return; }
+    setBusy(true); setErr(null);
+    const res = await fetch("/api/color/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customerId, caution: text, consent: true }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { setErr("บันทึกไม่สำเร็จ"); return; }
+    setEditing(false); router.refresh();
+  }
+
+  if (!editing) {
+    return saved ? (
+      <button type="button" onClick={() => setEditing(true)} className="w-full text-left flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm" style={{ background: C.redBg, color: C.red }}>
+        <ShieldAlert size={16} className="mt-0.5 flex-shrink-0" /><span className="flex-1"><b>ข้อควรระวัง</b> — {saved}</span><span className="text-xs font-semibold">แก้</span>
+      </button>
+    ) : (
+      <button type="button" onClick={() => setEditing(true)} className="text-xs px-1" style={{ color: C.muted }}>+ ข้อควรระวัง (เคยแพ้ / หนังศีรษะบอบบาง)</button>
     );
   }
   return (
-    <div className="space-y-2">
-      {profile.allergy === "YES" && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm" style={{ background: C.redBg, color: C.red }}>
-          <ShieldAlert size={16} className="mt-0.5 flex-shrink-0" />
-          <span><b>เคยแพ้ / ระคายเคือง</b>{profile.allergyDetail ? ` — ${profile.allergyDetail}` : ""}</span>
-        </div>
+    <section className="bg-white rounded-2xl p-3.5 space-y-2.5" style={{ border: `1px solid ${C.border}` }}>
+      <input autoFocus value={text} onChange={e => setText(e.target.value)} maxLength={200} placeholder="เช่น แพ้สีย้อมเบอร์ 7 / หนังศีรษะระคายง่าย"
+        className="w-full px-3 py-2 rounded-lg text-sm outline-none bg-white" style={{ border: `1px solid ${C.border}`, color: C.text }} />
+      {!profile?.consentAt && (
+        <label className="flex items-start gap-2.5 text-xs rounded-xl p-2.5 cursor-pointer" style={{ background: C.bg, color: C.text }}>
+          <input type="checkbox" className="mt-0.5 w-4 h-4" checked={consent} onChange={e => setConsent(e.target.checked)} />
+          <span>ลูกค้ายินยอมให้ err·day เก็บข้อมูลนี้และรูปก่อน–หลัง เพื่อใช้ภายในร้าน</span>
+        </label>
       )}
-      {profile.allergy === "UNSURE" && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm" style={{ background: C.amberBg, color: C.amber }}>
-          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
-          <span><b>ลูกค้าไม่แน่ใจเรื่องการแพ้</b>{profile.allergyDetail ? ` — ${profile.allergyDetail}` : ""} · พิจารณา patch test</span>
-        </div>
-      )}
-      {profile.allergy === "UNKNOWN" && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm" style={{ background: C.amberBg, color: C.amber }}>
-          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" /><span>ยังไม่ได้ถามประวัติการแพ้</span>
-        </div>
-      )}
-      {profile.patchTestResult && (
-        <div className="flex items-start gap-2 rounded-xl px-3 py-2 text-sm" style={profile.patchTestResult === "PASS" ? { background: C.greenBg, color: C.green } : { background: C.redBg, color: C.red }}>
-          <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" />
-          <span>Patch test {profile.patchTestResult === "PASS" ? "ผ่าน" : "ไม่ผ่าน"}{profile.patchTestAt ? ` · ${fmtThaiDate(profile.patchTestAt)}` : ""}</span>
-        </div>
-      )}
-    </div>
+      {err && <p className="text-xs" style={{ color: C.red }}>{err}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={() => { setEditing(false); setText(saved); }} className="flex-1 py-2 rounded-lg text-sm" style={{ border: `1px solid ${C.border}`, color: C.muted }}>ยกเลิก</button>
+        <button type="button" disabled={busy} onClick={save} className="flex-1 py-2 rounded-lg text-sm text-white font-semibold disabled:opacity-50" style={{ background: C.primary }}>{busy ? "…" : "บันทึก"}</button>
+      </div>
+    </section>
   );
 }
 
@@ -80,7 +84,6 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
   const lastDone = visits.find(v => v.status === "DONE" && v.zones.length);
 
   async function start(copyFrom?: string) {
-    if (!profile?.consentAt) { router.push(`${base}/profile`); return; }
     setBusy(true); setErr(null);
     const res = await fetch("/api/color/visit", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -94,26 +97,7 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
 
   return (
     <div className="space-y-3">
-      <SafetyBanner profile={profile} base={base} />
-
-      {profile && (
-        <section className="bg-white rounded-2xl p-4 space-y-2" style={{ border: `1px solid ${C.border}` }}>
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] uppercase tracking-wider font-semibold flex-1" style={{ color: C.muted }}>ผมของลูกค้า · อัปเดต {fmtThaiDate(profile.updatedAt)}</p>
-            <Link href={`${base}/profile`} className="text-xs font-semibold" style={{ color: C.primary }}>แก้ไข</Link>
-          </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm" style={{ color: C.text }}>
-            <span><span style={{ color: C.muted }}>ระดับธรรมชาติ</span> <b>{profile.naturalLevel ?? "—"}</b></span>
-            <span><span style={{ color: C.muted }}>ผมหงอก</span> <b>{profile.grayPercent != null ? `${profile.grayPercent}%` : "—"}</b></span>
-            <span className="col-span-2"><span style={{ color: C.muted }}>สภาพผม</span> {profile.condition.join(", ") || "—"}</span>
-            <span className="col-span-2"><span style={{ color: C.muted }}>หนังศีรษะ</span> {profile.scalp.join(", ") || "—"}</span>
-            <span className="col-span-2"><span style={{ color: C.muted }}>เคมีใน 12 เดือน</span> {profile.chemicalHistory.join(", ") || "—"}{profile.lastChemical ? ` · ล่าสุด ${profile.lastChemical}` : ""}</span>
-            {(profile.preferredTones || profile.avoidTones) && (
-              <span className="col-span-2"><span style={{ color: C.muted }}>โทน</span> {profile.preferredTones ? `ชอบ ${profile.preferredTones}` : ""}{profile.avoidTones ? ` · ไม่เอา ${profile.avoidTones}` : ""}</span>
-            )}
-          </div>
-        </section>
-      )}
+      <Caution customerId={customerId} profile={profile} />
 
       <section className="bg-white rounded-2xl p-4 space-y-2.5" style={{ border: `1px solid ${C.border}` }}>
         {forBooking ? (
@@ -141,7 +125,6 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
             </button>
           </>
         )}
-        {!profile?.consentAt && <p className="text-xs" style={{ color: C.amber }}>ต้องบันทึกประวัติ + ความยินยอมของลูกค้าก่อนเริ่มบันทึกสูตร</p>}
         {err && <p className="text-xs" style={{ color: C.red }}>{err}</p>}
         <Link href={`${base}/print`} className="flex items-center justify-center gap-2 py-2 text-sm" style={{ color: C.muted }}>
           <Printer size={15} /> พิมพ์การ์ดสีผม A4

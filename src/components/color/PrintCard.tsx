@@ -1,4 +1,4 @@
-import { ALLERGY_LABEL, RESULT_LABEL, ZONE_LABEL } from "@/lib/color-options";
+import { RESULT_LABEL, ZONE_LABEL } from "@/lib/color-options";
 import { zoneSummary, type ColorCardData } from "@/lib/color-card";
 import PrintButton from "./PrintButton";
 
@@ -52,27 +52,7 @@ export default function PrintCard({ data, backHref }: { data: ColorCardData; bac
           <span className="muted" style={{ fontSize: 11 }}>พิมพ์ {fmt(new Date())}</span>
         </div>
 
-        {profile?.allergy === "YES" && <div className="alert">⚠︎ เคยแพ้ / ระคายเคือง{profile.allergyDetail ? ` — ${profile.allergyDetail}` : ""}</div>}
-        {profile && profile.allergy !== "YES" && profile.allergy !== "NONE" && <div className="warn">ประวัติการแพ้: {ALLERGY_LABEL[profile.allergy]}{profile.allergyDetail ? ` — ${profile.allergyDetail}` : ""}</div>}
-        {profile?.patchTestResult && <div className={profile.patchTestResult === "PASS" ? "warn" : "alert"}>Patch test {profile.patchTestResult === "PASS" ? "ผ่าน" : "ไม่ผ่าน"}{profile.patchTestAt ? ` · ${fmt(profile.patchTestAt)}` : ""}{profile.patchTestBy ? ` · ${profile.patchTestBy}` : ""}</div>}
-        {!profile && <div className="warn">ยังไม่มีประวัติก่อนทำสี — ถามลูกค้าที่หน้าร้านก่อนเริ่มงาน</div>}
-
-        {profile && (
-          <>
-            <div className="grid">
-              <div><small>ระดับธรรมชาติ</small><b>{profile.naturalLevel ?? "—"}</b></div>
-              <div><small>ผมหงอก</small><b>{profile.grayPercent != null ? `${profile.grayPercent}%` : "—"}</b></div>
-              <div><small>ความยาว / เส้น</small><b>{[profile.length, profile.texture, profile.curl].filter(Boolean).join(" · ") || "—"}</b></div>
-              <div><small>ความหนา</small><b>{profile.density ?? "—"}</b></div>
-            </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <span><span className="muted">สภาพผม:</span> {profile.condition.join(", ") || "—"} · <span className="muted">หนังศีรษะ:</span> {profile.scalp.join(", ") || "—"}</span>
-              <span><span className="muted">เคมีใน 12 เดือน:</span> {profile.chemicalHistory.join(", ") || "—"}{profile.lastChemical ? ` · ล่าสุด ${profile.lastChemical}` : ""}{profile.lastChemicalProduct ? ` (${profile.lastChemicalProduct})` : ""}</span>
-              <span><span className="muted">โทนที่ชอบ:</span> {profile.preferredTones ?? "—"} · <span className="muted">ไม่ต้องการ:</span> {profile.avoidTones ?? "—"}</span>
-              {profile.goals && <span><span className="muted">เป้าหมาย:</span> {profile.goals}</span>}
-            </div>
-          </>
-        )}
+        {profile?.allergy === "YES" && <div className="alert">⚠︎ ข้อควรระวัง{profile.allergyDetail ? ` — ${profile.allergyDetail}` : ""}</div>}
 
         <h3>สูตร {done.length} ครั้งล่าสุด</h3>
         {done.length === 0 ? <p className="muted">ยังไม่มีสูตรที่บันทึกเสร็จ</p> : (
@@ -83,8 +63,8 @@ export default function PrintCard({ data, backHref }: { data: ColorCardData; bac
                 <tr key={v.id}>
                   <td>{fmt(v.date)}<br /><span className="muted">{v.stylistName} · {v.branchName}</span><br /><span className="muted">{v.serviceTypes.join(", ")}</span></td>
                   <td>
-                    {v.zones.map(z => <div key={z.zone}><b>{ZONE_LABEL[z.zone]}</b> · {zoneSummary(z)}</div>)}
-                    {v.targetLevel ? <div className="muted">เป้าหมายระดับ {v.targetLevel}{v.rootLevel ? ` · โคนเดิม ${v.rootLevel}` : ""}</div> : null}
+                    {v.zones.map(z => <div key={z.zone}>{z.zone !== "ALL" && <b>{ZONE_LABEL[z.zone]} · </b>}{zoneSummary(z)}</div>)}
+                    {v.targetLevel ? <div className="muted">เป้าหมายระดับ {v.targetLevel}{v.rootLevel ? ` · เดิม ${v.rootLevel}` : ""}</div> : null}
                     {v.otherProducts && <div className="muted">อื่นๆ: {v.otherProducts}</div>}
                   </td>
                   <td>{v.result ? RESULT_LABEL[v.result] : "—"}{v.scalpAfter ? <><br /><span className="muted">{v.scalpAfter}</span></> : null}</td>
