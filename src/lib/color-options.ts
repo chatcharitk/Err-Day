@@ -39,8 +39,8 @@ export type ColorZone = {
 };
 
 /** Amounts a stylist taps per shade, in tubes — nobody weighs colour. */
-export const TUBE_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2] as const;
-export const tubeLabel = (t: number) => ({ 0.25: "¼", 0.5: "½", 0.75: "¾", 1: "1", 1.5: "1½", 2: "2" } as Record<number, string>)[t] ?? String(t);
+export const TUBE_STEPS = [0.125, 0.2, 0.25, 0.5, 0.75, 1, 1.5, 2] as const;
+export const tubeLabel = (t: number) => ({ 0.125: "⅛", 0.2: "⅕", 0.25: "¼", 0.5: "½", 0.75: "¾", 1: "1", 1.5: "1½", 2: "2" } as Record<number, string>)[t] ?? String(t);
 
 /** Grams (≈ ml) in one tube, read from the product's size ("80 g", "100 ml"); null if unknown. */
 export function tubeSize(size: string | null | undefined): number | null {

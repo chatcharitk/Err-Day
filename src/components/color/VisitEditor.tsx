@@ -191,7 +191,7 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
                   <span className="text-xs tabular-nums" style={{ color: s.grams ? C.muted : C.amber }}>{s.grams ? `≈ ${s.grams} g` : "ใช้กี่หลอด?"}</span>
                   <button type="button" onClick={() => putZone({ ...zone, shades: zone.shades.filter((_, j) => j !== i) })} className="p-1" style={{ color: C.muted }} aria-label="เอาออก"><X size={15} /></button>
                 </div>
-                <div className="grid grid-cols-6 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   {TUBE_STEPS.map(t => {
                     const g = Math.round(t * tube);
                     const on = s.grams === g;
