@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Check, Minus, Plus, Search, Trash2, X } from "lucide-react";
-import { OPT, ZONES, ZONE_LABEL, developerGramsOf, type ColorZone } from "@/lib/color-options";
+import { Camera, Check, Minus, PackageOpen, Plus, Search, Trash2, X } from "lucide-react";
+import { OPT, TUBE_STEPS, ZONES, ZONE_LABEL, developerGramsOf, tubeLabel, type ColorZone } from "@/lib/color-options";
 import { resizeImageFile } from "@/lib/resize-image";
 import { C, Chips, Field, LevelPicker, Section } from "./ui";
 
 const SPLIT_ZONES = ["ROOT", "ENDS", "TONER"] as const;
 
-export type ShadeOpt = { id: string; label: string; brand: string | null; name: string; qtyByBranch: Record<string, number> };
+export type ShadeOpt = { id: string; label: string; brand: string | null; name: string; qtyByBranch: Record<string, number>; tube: number | null };
 export type EditableVisit = {
   id: string; status: string; serviceTypes: string[]; rootLevel: number | null; midEndsLevel: number | null; targetLevel: number | null;
   grayPercent: number | null; preChecks: string[]; patchTestNeeded: boolean; zones: ColorZone[]; otherProducts: string | null;
@@ -77,15 +77,36 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
     if (urls.length) { const next = { ...v, [kind]: [...v[kind], ...urls] }; setV(next); await save({}, next); }
   }
 
+  // Colour amount is required on every shade before the job can be finished.
+  const missingAmount = v.zones.some(z => z.shades.some(s => !s.grams));
+
+  // "เปิดหลอดใหม่" — the real stock truth: one whole tube leaves this branch's shelf.
+  const [openedQty, setOpenedQty] = useState<Record<string, number>>({});
+  async function openTube(productId: string, label: string) {
+    if (!window.confirm(`เปิด ${label} หลอดใหม่? (ตัดสต็อกสาขานี้ 1 หลอด)`)) return;
+    setBusy(true); setMsg(null);
+    const res = await fetch("/api/stock", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "use", location: branchId, productId, qty: 1, note: "เปิดหลอดใหม่ · การ์ดสี" }),
+    }).catch(() => null);
+    const j = await res?.json().catch(() => ({})) as { balance?: number; error?: string } | undefined;
+    setBusy(false);
+    if (!res?.ok) { setMsg({ t: j?.error ?? "ตัดสต็อกไม่สำเร็จ", bad: true }); return; }
+    setOpenedQty(o => ({ ...o, [productId]: j?.balance ?? 0 }));
+    setMsg({ t: `ตัดสต็อก ${label} 1 หลอดแล้ว · เหลือ ${j?.balance ?? 0}` });
+  }
+
   async function remove() {
     if (!window.confirm("ลบบันทึกสีครั้งนี้?")) return;
     const res = await fetch(`/api/color/visit/${v.id}`, { method: "DELETE" }).catch(() => null);
-    if (res?.ok) { router.push(backHref); router.refresh(); }
+    if (res?.ok) { router.replace(backHref); router.refresh(); }
   }
 
   const filtered = shades.filter(s => !q.trim() || s.label.toLowerCase().includes(q.trim().toLowerCase()));
   const addShade = (s: { id: string | null; label: string }) => {
-    putZone({ ...zone, shades: [...zone.shades, { productId: s.id, label: s.label, grams: 20 }] });
+    // Shades with a known tube size start at 0 so the stylist must tap an amount.
+    const tube = s.id ? shades.find(x => x.id === s.id)?.tube : null;
+    putZone({ ...zone, shades: [...zone.shades, { productId: s.id, label: s.label, grams: tube ? 0 : 20 }] });
     setPicker(false); setQ("");
   };
   const box = { border: `1px solid ${C.border}`, color: C.text };
@@ -148,17 +169,49 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
         {zoneTab === "MID" && <p className="text-xs" style={{ color: C.muted }}>ช่วงกลาง (บันทึกเดิม)</p>}
 
         <div className="space-y-2">
-          {zone.shades.map((s, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: C.bg }}>
-              <span className="flex-1 text-sm" style={{ color: C.text }}>{s.label}</span>
-              <button type="button" onClick={() => putZone({ ...zone, shades: zone.shades.map((x, j) => (j === i ? { ...x, grams: Math.max(0, x.grams - 5) } : x)) })} className="w-8 h-8 rounded-full bg-white flex items-center justify-center" style={{ border: `1px solid ${C.border}` }} aria-label="ลด 5 กรัม"><Minus size={14} /></button>
-              <input inputMode="numeric" value={s.grams} onChange={e => putZone({ ...zone, shades: zone.shades.map((x, j) => (j === i ? { ...x, grams: Number(e.target.value.replace(/\D/g, "")) || 0 } : x)) })}
-                className="w-12 text-center py-1 rounded-lg text-sm bg-white outline-none tabular-nums" style={{ border: `1px solid ${C.border}` }} aria-label="กรัม" />
-              <span className="text-xs" style={{ color: C.muted }}>g</span>
-              <button type="button" onClick={() => putZone({ ...zone, shades: zone.shades.map((x, j) => (j === i ? { ...x, grams: x.grams + 5 } : x)) })} className="w-8 h-8 rounded-full bg-white flex items-center justify-center" style={{ border: `1px solid ${C.border}` }} aria-label="เพิ่ม 5 กรัม"><Plus size={14} /></button>
-              <button type="button" onClick={() => putZone({ ...zone, shades: zone.shades.filter((_, j) => j !== i) })} className="p-1" style={{ color: C.muted }} aria-label="เอาออก"><X size={15} /></button>
-            </div>
-          ))}
+          {zone.shades.map((s, i) => {
+            const setGrams = (g: number) => putZone({ ...zone, shades: zone.shades.map((x, j) => (j === i ? { ...x, grams: g } : x)) });
+            const tube = s.productId ? shades.find(x => x.id === s.productId)?.tube ?? null : null;
+            if (!tube) return (
+              <div key={i} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: C.bg }}>
+                <span className="flex-1 text-sm" style={{ color: C.text }}>{s.label}</span>
+                <button type="button" onClick={() => setGrams(Math.max(0, s.grams - 5))} className="w-8 h-8 rounded-full bg-white flex items-center justify-center" style={{ border: `1px solid ${C.border}` }} aria-label="ลด 5 กรัม"><Minus size={14} /></button>
+                <input inputMode="numeric" value={s.grams} onChange={e => setGrams(Number(e.target.value.replace(/\D/g, "")) || 0)}
+                  className="w-12 text-center py-1 rounded-lg text-sm bg-white outline-none tabular-nums" style={{ border: `1px solid ${C.border}` }} aria-label="กรัม" />
+                <span className="text-xs" style={{ color: C.muted }}>g</span>
+                <button type="button" onClick={() => setGrams(s.grams + 5)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center" style={{ border: `1px solid ${C.border}` }} aria-label="เพิ่ม 5 กรัม"><Plus size={14} /></button>
+                <button type="button" onClick={() => putZone({ ...zone, shades: zone.shades.filter((_, j) => j !== i) })} className="p-1" style={{ color: C.muted }} aria-label="เอาออก"><X size={15} /></button>
+              </div>
+            );
+            const left = s.productId != null && s.productId in openedQty ? openedQty[s.productId] : null;
+            return (
+              <div key={i} className="rounded-xl px-3 py-2.5 space-y-2" style={{ background: C.bg, ...(s.grams ? {} : { outline: `1.5px solid ${C.amber}` }) }}>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-sm font-medium" style={{ color: C.text }}>{s.label}</span>
+                  <span className="text-xs tabular-nums" style={{ color: s.grams ? C.muted : C.amber }}>{s.grams ? `≈ ${s.grams} g` : "ใช้กี่หลอด?"}</span>
+                  <button type="button" onClick={() => putZone({ ...zone, shades: zone.shades.filter((_, j) => j !== i) })} className="p-1" style={{ color: C.muted }} aria-label="เอาออก"><X size={15} /></button>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {TUBE_STEPS.map(t => {
+                    const g = Math.round(t * tube);
+                    const on = s.grams === g;
+                    return (
+                      <button key={t} type="button" onClick={() => setGrams(on ? 0 : g)} className="py-2 rounded-lg text-sm font-semibold"
+                        style={on ? { background: C.primary, color: "white" } : { background: "white", border: `1px solid ${C.border}`, color: C.text }}>{tubeLabel(t)}</button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between text-[11px]" style={{ color: C.muted }}>
+                  <span>หลอด · 1 หลอด = {tube} g</span>
+                  {s.productId && (
+                    <button type="button" disabled={busy} onClick={() => openTube(s.productId!, s.label)} className="flex items-center gap-1 font-semibold disabled:opacity-50" style={{ color: C.primary }}>
+                      <PackageOpen size={13} /> เปิดหลอดใหม่{left != null ? ` (เหลือ ${left})` : ""}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
           <button type="button" onClick={() => setPicker(true)} className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5" style={{ border: `1.5px dashed ${C.primary}`, color: C.primary }}>
             <Plus size={15} /> เพิ่มเบอร์สี{split ? ` (${ZONE_LABEL[zoneTab].replace(" / อื่นๆ", "")})` : ""}
           </button>
@@ -214,7 +267,10 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
           <div className="flex gap-2">
             <button type="button" disabled={busy} onClick={() => save()} className="flex-1 py-3 rounded-xl font-semibold disabled:opacity-50"
               style={{ border: `1px solid ${C.primary}`, color: C.primary }}>{busy ? "กำลังบันทึก…" : dirty ? "บันทึก" : "บันทึกแล้ว"}</button>
-            <button type="button" disabled={busy} onClick={async () => { if (await save({ finish: true })) { router.push(backHref); router.refresh(); } }}
+            <button type="button" disabled={busy} onClick={async () => {
+              if (missingAmount) { setMsg({ t: "เลือกปริมาณสี (กี่หลอด) ให้ครบทุกเบอร์ก่อนกดเสร็จงาน", bad: true }); return; }
+              if (await save({ finish: true })) { router.replace(backHref); router.refresh(); }
+            }}
               className="flex-1 py-3 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50" style={{ background: C.primary }}>
               <Check size={16} /> {v.status === "DONE" ? "บันทึกการแก้ไข" : "เสร็จงาน"}
             </button>

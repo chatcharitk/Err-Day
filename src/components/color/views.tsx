@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import MobileTop from "@/components/stock/MobileTop";
+import ColorBack from "./ColorBack";
 import { loadColorCard, loadShadeOptions } from "@/lib/color-card";
 import { prisma } from "@/lib/prisma";
 import { VISIT_PUBLIC_SELECT, cleanZones } from "@/lib/color";
@@ -13,10 +13,13 @@ import PrintCard from "./PrintCard";
  * prefix; nothing here selects ColorVisit.costSatang.
  */
 
-const Shell = ({ title, sub, back, children }: { title: string; sub?: string; back: string; children: React.ReactNode }) => (
+const Shell = ({ title, sub, back, history = false, children }: { title: string; sub?: string; back: string; history?: boolean; children: React.ReactNode }) => (
   <div className="min-h-screen" style={{ background: "#FDF8F3" }}>
     <div className="max-w-md mx-auto min-h-screen">
-      <MobileTop title={title} back={back} />
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 bg-white" style={{ borderBottom: "1px solid #E8D8CC" }}>
+        <ColorBack href={back} history={history} />
+        <p className="font-medium flex-1" style={{ color: "#3B2A24" }}>{title}</p>
+      </div>
       {sub && <p className="px-4 pt-2 text-xs" style={{ color: "#A08070" }}>{sub}</p>}
       <div className="px-4 py-3">{children}</div>
     </div>
@@ -33,7 +36,7 @@ export async function ColorCardView({ customerId, base, back, bookingId, default
   const booking = bookingId ? await prisma.booking.findFirst({ where: { id: bookingId, customerId }, select: { id: true, branchId: true } }) : null;
   const p = data.profile;
   return (
-    <Shell title={`การ์ดสีผม · ${data.customer.label}`} back={back}>
+    <Shell title={`การ์ดสีผม · ${data.customer.label}`} back={back} history>
       <ColorCard
         customerId={customerId} base={base}
         profile={p ? { allergy: p.allergy, allergyDetail: p.allergyDetail, consentAt: iso(p.consentAt) } : null}

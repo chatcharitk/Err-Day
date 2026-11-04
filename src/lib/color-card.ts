@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { customerLabel } from "@/lib/customer-name";
 import { VISIT_PUBLIC_SELECT, cleanZones, type ColorZone } from "@/lib/color";
+import { tubeSize } from "@/lib/color-options";
 
 /**
  * Everything the colour card screens need — staff-safe (no cost). The shade
  * picker comes from stock products in the "สีย้อมผม" category.
  */
 
-export type ShadeOption = { id: string; label: string; brand: string | null; name: string; qtyByBranch: Record<string, number> };
+export type ShadeOption = { id: string; label: string; brand: string | null; name: string; qtyByBranch: Record<string, number>; tube: number | null };
 
 export async function loadColorCard(customerId: string) {
   const customer = await prisma.customer.findUnique({
@@ -34,13 +35,14 @@ export type ColorVisitView = ColorCardData["visits"][number];
 export async function loadShadeOptions(): Promise<ShadeOption[]> {
   const products = await prisma.product.findMany({
     where: { isActive: true, category: "สีย้อมผม", NOT: { name: { contains: "Bleach" } } },
-    select: { id: true, name: true, brand: true, levels: { select: { location: true, qty: true } } },
+    select: { id: true, name: true, brand: true, size: true, levels: { select: { location: true, qty: true } } },
   });
   return products
     .map(p => ({
       id: p.id, name: p.name, brand: p.brand,
       label: [p.brand, p.name].filter(Boolean).join(" "),
       qtyByBranch: Object.fromEntries(p.levels.map(l => [l.location, l.qty])),
+      tube: tubeSize(p.size),
     }))
     .sort((a, b) => (a.brand ?? "").localeCompare(b.brand ?? "") || a.name.localeCompare(b.name, "th", { numeric: true }));
 }

@@ -92,7 +92,7 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
     const j = await res?.json().catch(() => ({})) as { id?: string; error?: string } | undefined;
     setBusy(false);
     if (!res?.ok || !j?.id) { setErr(j?.error ?? "เริ่มบันทึกไม่สำเร็จ"); return; }
-    router.push(`${base}/visit/${j.id}`);
+    router.replace(`${base}/visit/${j.id}`);
   }
 
   return (
@@ -101,7 +101,7 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
 
       <section className="bg-white rounded-2xl p-4 space-y-2.5" style={{ border: `1px solid ${C.border}` }}>
         {forBooking ? (
-          <Link href={`${base}/visit/${forBooking.id}`} className="block w-full py-3 rounded-xl text-center text-white font-semibold" style={{ background: C.primary }}>
+          <Link replace href={`${base}/visit/${forBooking.id}`} className="block w-full py-3 rounded-xl text-center text-white font-semibold" style={{ background: C.primary }}>
             {forBooking.status === "DONE" ? "ดูบันทึกสีของนัดนี้" : "บันทึกสีของนัดนี้ต่อ"}
           </Link>
         ) : (
@@ -126,7 +126,7 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
           </>
         )}
         {err && <p className="text-xs" style={{ color: C.red }}>{err}</p>}
-        <Link href={`${base}/print`} className="flex items-center justify-center gap-2 py-2 text-sm" style={{ color: C.muted }}>
+        <Link replace href={`${base}/print`} className="flex items-center justify-center gap-2 py-2 text-sm" style={{ color: C.muted }}>
           <Printer size={15} /> พิมพ์การ์ดสีผม A4
         </Link>
       </section>
@@ -134,7 +134,7 @@ export default function ColorCard({ customerId, base, profile, visits, branches,
       <p className="text-[11px] uppercase tracking-wider font-semibold px-1 pt-1" style={{ color: C.muted }}>ประวัติการทำสี · {visits.length} ครั้ง</p>
       {visits.length === 0 && <p className="text-sm px-1" style={{ color: C.muted }}>ยังไม่เคยบันทึกสูตรสี</p>}
       {visits.map(v => (
-        <Link key={v.id} href={`${base}/visit/${v.id}`} className="block bg-white rounded-2xl p-3.5 space-y-1.5" style={{ border: `1px solid ${C.border}` }}>
+        <Link replace key={v.id} href={`${base}/visit/${v.id}`} className="block bg-white rounded-2xl p-3.5 space-y-1.5" style={{ border: `1px solid ${C.border}` }}>
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold flex-1" style={{ color: C.text }}>{fmtThaiDate(v.date)} · {v.branchName} · {v.stylistName}</p>
             {v.status === "DRAFT" && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: C.amberBg, color: C.amber }}>ยังไม่เสร็จ</span>}

@@ -1,5 +1,6 @@
 import { RESULT_LABEL, ZONE_LABEL } from "@/lib/color-options";
 import { zoneSummary, type ColorCardData } from "@/lib/color-card";
+import Link from "next/link";
 import PrintButton from "./PrintButton";
 
 const fmt = (d: Date | string) => new Date(d).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "2-digit" });
@@ -42,7 +43,7 @@ export default function PrintCard({ data, backHref }: { data: ColorCardData; bac
         @media print { .print-root { background: #fff; padding: 0; } .bar { display: none; } .sheet { box-shadow: none; padding: 0; max-width: none; } }
       `}</style>
       <div className="bar">
-        <a href={backHref} style={{ color: "#86736A", fontSize: 14 }}>← กลับ</a>
+        <Link replace href={backHref} style={{ color: "#86736A", fontSize: 14 }}>← กลับ</Link>
         <PrintButton />
       </div>
       <div className="sheet">
