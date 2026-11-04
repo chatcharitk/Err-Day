@@ -1434,3 +1434,27 @@ model PrintJob {
 
   @@index([branchId, status, createdAt])
 }
+
+/// ── Restock requests (Nov 2026) ─────────────────────────────────────────────
+/// The paper "เช็กลิสต์ของนำไปเติมที่ร้าน": staff tick what the branch is out of
+/// (items are labels from src/lib/restock.ts, plus free-text extras) and the
+/// owner brings them over, then marks the request done.
+model RestockRequest {
+  id          String    @id @default(cuid())
+  branchId    String
+  /// Ticked checklist labels, in checklist order.
+  items       String[]  @default([])
+  /// Free-text lines ("ของเพิ่มเติม").
+  extras      String[]  @default([])
+  note        String?
+  requestedBy String
+  staffId     String?
+  /// OPEN | DONE
+  status      String    @default("OPEN")
+  doneAt      DateTime?
+  doneBy      String?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([branchId, createdAt])
+}

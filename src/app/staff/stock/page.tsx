@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, ShoppingBasket } from "lucide-react";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
 import { HOME, pendingTransfers, stockLocations, stockRows } from "@/lib/stock";
 import StaffHeader from "../StaffHeader";
@@ -42,6 +42,12 @@ export default async function StaffStockPage({ searchParams }: { searchParams: P
               {l.short}
             </Link>
           ))}
+        </div>
+
+        <div className="px-4 pt-3">
+          <Link href="/staff/stock/restock" className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white" style={{ background: PRIMARY }}>
+            <ShoppingBasket size={17} /> แจ้งของที่ต้องเติม
+          </Link>
         </div>
 
         {deliveries.length > 0 && (

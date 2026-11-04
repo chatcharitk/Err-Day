@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreVertical, LogOut, RefreshCw,
-  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2, MessageCircle, Ticket,
+  Clock, User, Check, X, Sparkles, ShoppingBag, Users, CreditCard, UserCog, BarChart2, Receipt, Gauge, CalendarDays, Wallet, Banknote, Activity, Trash2, Send, Loader2, MessageCircle, Ticket, ShoppingBasket,
   type LucideIcon, Package } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import NotificationBell from "@/components/NotificationBell";
@@ -124,6 +124,7 @@ const MENU_GROUPS: { title: string; items: MenuItem[] }[] = [
   { title: "อื่นๆ", items: [
     { label: "สมาชิก", icon: CreditCard, href: "/admin/m/membership" },
     { label: "คูปอง", icon: Ticket, href: "/admin/m/coupons" },
+    { label: "ของที่ต้องเติม", icon: ShoppingBasket, href: "/admin/m/restock" },
     { label: "ความจุการจอง", icon: Gauge, href: "/admin/m/capacity" },
   ] },
 ];
