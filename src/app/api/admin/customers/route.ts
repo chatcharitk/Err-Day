@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { tidyCustomerName } from "@/lib/customer-name";
+import { customerSearchWhere, rankCustomers } from "@/lib/customer-search";
 
 // GET /api/admin/customers?q=search&limit=N — search customers by name, nickname, or phone
 export async function GET(request: Request) {
@@ -19,19 +20,14 @@ export async function GET(request: Request) {
   const now = new Date();
 
   const customers = await prisma.customer.findMany({
-    where: {
-      OR: [
-        { name:     { contains: q, mode: "insensitive" } },
-        { nickname: { contains: q, mode: "insensitive" } },
-        { phone:    { contains: q } },
-      ],
-    },
+    where: customerSearchWhere(q),
     orderBy: { name: "asc" },
-    take: limit,
+    take: 60, // wider pool, ranked below and cut to `limit`
     select: {
       id:       true,
       name:     true,
       nickname: true,
+      lineDisplayName: true,
       phone:    true,
       email:    true,
       membership: {
@@ -46,7 +42,7 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.json(customers.map(c => {
+  return NextResponse.json(rankCustomers(customers, q, limit).map(c => {
     const pendingPkg = c.packages.some(p => p.pendingActivation);
     const activePkg  = c.packages.some(p =>
       !p.pendingActivation && (p.usageLimit === 0 || p.usagesUsed < p.usageLimit)

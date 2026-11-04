@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Search, Sparkles, AlertCircle, Clock } from "lucide-react";
 import { customerLabel } from "@/lib/customer-name";
+import { matchesCustomer } from "@/lib/customer-search";
 
 const PRIMARY = "#8B1D24";
 const TEXT    = "#3B2A24";
@@ -52,12 +53,7 @@ export default function MembershipList({ memberships }: { memberships: Membershi
   const filtered = useMemo(() => {
     let list = memberships;
     if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(m =>
-        m.customer.name.toLowerCase().includes(q) ||
-        (m.customer.nickname?.toLowerCase().includes(q) ?? false) ||
-        m.customer.phone.includes(q)
-      );
+      list = list.filter(m => matchesCustomer(m.customer, query));
     }
     if (filter !== "all") {
       list = list.filter(m => {

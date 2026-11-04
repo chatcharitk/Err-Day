@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import LineLinkButton from "@/components/LineLinkButton";
 import { customerLabel } from "@/lib/customer-name";
+import { matchesCustomer } from "@/lib/customer-search";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1785,12 +1786,7 @@ export default function CustomersManager({ customers: initial }: Props) {
     }
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(c =>
-        c.name.toLowerCase().includes(q) ||
-        (c.nickname ?? "").toLowerCase().includes(q) ||   // many customers are known by nickname (name = LINE display name)
-        c.phone.includes(q) ||
-        (c.email ?? "").toLowerCase().includes(q),
-      );
+      list = list.filter(c => matchesCustomer(c, search) || (c.email ?? "").toLowerCase().includes(q));
     }
     return [...list].sort((a, b) => {
       if (sort === "newest")   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
