@@ -86,7 +86,7 @@ function addMinutes(time: string, minutes: number): string {
  * distinct Service.category) but stays INVISIBLE to customers until it is added
  * here. Adding a group is therefore not yet a pure data change.
  */
-const CATEGORY_ORDER = ["บริการทั่วไป", "PJOLI Treatment", "Davines Spa", "Keratin Treatment", "ย้อมผม NIGAO"];
+const CATEGORY_ORDER = ["บริการทั่วไป", "PJOLI Treatment", "Davines Spa", "Keratin Treatment", "ย้อมผม Milbon Ordeve", "ย้อมผม NIGAO"];
 
 /** Pinned to the top of the menu (in this order), above the rest of their category. */
 const FEATURED_FIRST = ["svc-rainy-detox-combo"];
@@ -103,6 +103,7 @@ const CAT_EN: Record<string, string> = {
   "Davines Spa":   "Davines Spa",
   "PJOLI Treatment": "PJOLI Treatment",
   "Keratin Treatment": "Keratin Treatment",
+  "ย้อมผม Milbon Ordeve": "Hair Color · Milbon Ordeve",
   "ย้อมผม NIGAO": "NIGAO Color",
 };
 
@@ -111,7 +112,7 @@ const CAT_EN: Record<string, string> = {
  * start collapsed: a wall of near-identical S/M/L/XL rows buries the handful of
  * genuinely different services above them.
  */
-const LENGTH_BASED_CATEGORIES = new Set(["Keratin Treatment", "ย้อมผม NIGAO"]);
+const LENGTH_BASED_CATEGORIES = new Set(["Keratin Treatment", "ย้อมผม Milbon Ordeve", "ย้อมผม NIGAO"]);
 
 /**
  * Add-ons carry no icon in the database, so match on their name and fall back
@@ -683,7 +684,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
 
                   {isOpen && (
                     <>
-                      {cat === "ย้อมผม NIGAO" && (
+                      {cat.startsWith("ย้อมผม") && (
                         <div className="flex items-start gap-2 p-3 rounded-lg mb-3 text-sm" style={{ backgroundColor: "#FFF3ED", borderLeft: "3px solid #B52F3A" }}>
                           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#B52F3A" }} />
                           <div style={{ color: "#5C4A42" }}>
@@ -695,7 +696,7 @@ export default function BookingFlow({ branch, branchServices, addons }: Props) {
                       <div className="grid gap-3 mb-4">
                         {visibleBranchServices
                           .filter((bs) => bs.service.category === cat)
-                          .sort((a, b) => featuredRank(a.serviceId) - featuredRank(b.serviceId))
+                          .sort((a, b) => featuredRank(a.serviceId) - featuredRank(b.serviceId) || (LENGTH_BASED_CATEGORIES.has(cat) ? a.price - b.price : 0))
                           .map((bs) => {
                             const isSelected = selectedService?.id === bs.id;
                             const svcName = lang === "th" ? bs.service.nameTh : (bs.service.name || bs.service.nameTh);
