@@ -98,7 +98,7 @@ async function alreadySent(kind: Kind, targetId: string): Promise<boolean> {
 
 // ── Staff alert on new booking (push to owner LINE accounts) ─────────────────
 
-const STAFF_LINE_IDS = [
+export const STAFF_LINE_IDS = [
   "U91a73dcc35c56adc217c8afc361265ce", // Looklipair
   "U2548106b79ded01779f134727dc373d3", // Chatcharit
 ];

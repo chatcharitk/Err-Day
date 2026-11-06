@@ -3,12 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/admin-auth";
 import { getCurrentStaff } from "@/lib/staff-auth";
 import { notifyAdmins } from "@/lib/notify-admin";
+import { STAFF_LINE_IDS } from "@/lib/notifications";
+import { multicastText } from "@/lib/line-messaging";
 import { RESTOCK_GROUPS, isRestockItem } from "@/lib/restock";
 import { shortBranchName } from "@/lib/stock";
 
 /**
  * POST  { branchId, items: (string | { item, note })[], extras?: string[], note? } — staff (or admin)
- *       sends the branch's restock checklist; every admin gets a push.
+ *       sends the branch's restock checklist; every admin gets a push and the
+ *       owners (Looklipair + Chatcharit) a LINE message.
  * PATCH { id, done: boolean } — admin marks a request brought / reopens it.
  */
 export async function POST(request: Request) {
@@ -42,13 +45,18 @@ export async function POST(request: Request) {
   });
 
   const all = [...items, ...extras];
-  await notifyAdmins({
-    type: "RESTOCK",
-    title: `🧺 ของที่ต้องเติม · ${shortBranchName(branch.name)} (${all.length})`,
-    body: `${all.join(", ")}${note ? `\nหมายเหตุ: ${note}` : ""}\n— ${requestedBy}`,
-    href: "/admin/m/restock",
-    branchId: branch.id,
-  });
+  const title = `🧺 ของที่ต้องเติม · ${shortBranchName(branch.name)} (${all.length})`;
+  await Promise.all([
+    notifyAdmins({
+      type: "RESTOCK",
+      title,
+      body: `${all.join(", ")}${note ? `\nหมายเหตุ: ${note}` : ""}\n— ${requestedBy}`,
+      href: "/admin/m/restock",
+      branchId: branch.id,
+    }),
+    multicastText(STAFF_LINE_IDS, `${title}\n\n${all.map(i => `• ${i}`).join("\n")}${note ? `\n\nหมายเหตุ: ${note}` : ""}\n\n— ${requestedBy}`)
+      .catch(e => console.error("[restock] LINE failed", e)),
+  ]);
   return NextResponse.json({ ok: true, id: r.id });
 }
 
