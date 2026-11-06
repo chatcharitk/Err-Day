@@ -7,7 +7,7 @@ import { RESTOCK_GROUPS, isRestockItem } from "@/lib/restock";
 import { shortBranchName } from "@/lib/stock";
 
 /**
- * POST  { branchId, items: string[], extras?: string[], note? } — staff (or admin)
+ * POST  { branchId, items: (string | { item, note })[], extras?: string[], note? } — staff (or admin)
  *       sends the branch's restock checklist; every admin gets a push.
  * PATCH { id, done: boolean } — admin marks a request brought / reopens it.
  */
@@ -22,8 +22,15 @@ export async function POST(request: Request) {
     : null;
   if (!branch) return NextResponse.json({ error: "กรุณาเลือกสาขา" }, { status: 400 });
 
-  const picked = new Set(Array.isArray(b?.items) ? b.items.filter((x): x is string => typeof x === "string" && isRestockItem(x)) : []);
-  const items = RESTOCK_GROUPS.flatMap(g => g.items).filter(i => picked.has(i)); // checklist order
+  // Each ticked item may carry a quantity note; stored as "แชมพู · 2 ขวด".
+  const picked = new Map<string, string>();
+  for (const x of Array.isArray(b?.items) ? b.items : []) {
+    const item = typeof x === "string" ? x : typeof x?.item === "string" ? x.item : "";
+    const n = typeof x === "object" && typeof x?.note === "string" ? x.note.trim().slice(0, 60) : "";
+    if (isRestockItem(item)) picked.set(item, n);
+  }
+  const items = RESTOCK_GROUPS.flatMap(g => g.items).filter(i => picked.has(i)) // checklist order
+    .map(i => (picked.get(i) ? `${i} · ${picked.get(i)}` : i));
   const extras = (Array.isArray(b?.extras) ? b.extras : [])
     .filter((x): x is string => typeof x === "string").map(x => x.trim().slice(0, 100)).filter(Boolean).slice(0, 10);
   const note = typeof b?.note === "string" ? b.note.trim().slice(0, 500) || null : null;

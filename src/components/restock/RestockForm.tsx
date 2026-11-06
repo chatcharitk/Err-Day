@@ -18,6 +18,8 @@ export default function RestockForm({ branches, defaultBranchId }: {
   const router = useRouter();
   const [branchId, setBranchId] = useState(defaultBranchId ?? branches[0]?.id ?? "");
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Per-item note — how much to bring ("2 ขวด", "ครึ่งแพ็ค").
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [extras, setExtras] = useState(["", ""]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,12 +32,12 @@ export default function RestockForm({ branches, defaultBranchId }: {
     setBusy(true); setMsg(null);
     const res = await fetch("/api/restock", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ branchId, items: [...picked], extras, note }),
+      body: JSON.stringify({ branchId, items: [...picked].map(i => ({ item: i, note: notes[i] ?? "" })), extras, note }),
     }).catch(() => null);
     const j = await res?.json().catch(() => ({})) as { error?: string } | undefined;
     setBusy(false);
     if (!res?.ok) { setMsg({ t: j?.error ?? "ส่งไม่สำเร็จ ลองอีกครั้ง", bad: true }); return; }
-    setPicked(new Set()); setExtras(["", ""]); setNote("");
+    setPicked(new Set()); setNotes({}); setExtras(["", ""]); setNote("");
     setMsg({ t: "ส่งให้เจ้าของร้านแล้ว ✓" });
     router.refresh();
   }
@@ -59,14 +61,20 @@ export default function RestockForm({ branches, defaultBranchId }: {
           {g.items.map(i => {
             const on = picked.has(i);
             return (
-              <button key={i} type="button" onClick={() => toggle(i)} className="w-full flex items-center gap-3 px-4 py-3 text-left"
-                style={{ borderTop: `1px solid ${BORDER}` }} aria-pressed={on}>
-                <span className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-                  style={on ? { background: PRIMARY } : { border: `1.5px solid ${BORDER}` }}>
-                  {on && <Check size={15} color="white" />}
-                </span>
-                <span className="text-[15px]" style={{ color: TEXT, fontWeight: on ? 600 : 400 }}>{i}</span>
-              </button>
+              <div key={i} className="flex items-center gap-2 pr-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+                <button type="button" onClick={() => toggle(i)} className="flex-1 min-w-0 flex items-center gap-3 pl-4 py-3 text-left" aria-pressed={on}>
+                  <span className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                    style={on ? { background: PRIMARY } : { border: `1.5px solid ${BORDER}` }}>
+                    {on && <Check size={15} color="white" />}
+                  </span>
+                  <span className="text-[15px]" style={{ color: TEXT, fontWeight: on ? 600 : 400 }}>{i}</span>
+                </button>
+                {on && (
+                  <input value={notes[i] ?? ""} onChange={e => setNotes(n => ({ ...n, [i]: e.target.value }))} maxLength={60}
+                    placeholder="จำนวน เช่น 2 ขวด" aria-label={`จำนวน ${i}`}
+                    className="w-36 px-2.5 py-1.5 rounded-lg text-sm outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+                )}
+              </div>
             );
           })}
         </section>

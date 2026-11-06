@@ -1442,7 +1442,7 @@ model PrintJob {
 model RestockRequest {
   id          String    @id @default(cuid())
   branchId    String
-  /// Ticked checklist labels, in checklist order.
+  /// Ticked checklist labels in checklist order, each optionally "label · quantity note".
   items       String[]  @default([])
   /// Free-text lines ("ของเพิ่มเติม").
   extras      String[]  @default([])
