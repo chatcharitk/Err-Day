@@ -626,7 +626,7 @@ export async function sendCheerDigest(
       where: { branchId, status: "COMPLETED", date: { gte: new Date(day.getTime() - 12 * 3600e3), lte: new Date(day.getTime() + 12 * 3600e3) }, serviceId: { notIn: SALE_ONLY_SKUS } },
       select: {
         customerId: true, date: true,
-        customer: { select: { name: true, nickname: true, phone: true } },
+        customer: { select: { name: true, nickname: true } }, // no phone: the digest goes to the staff LINE group
         service: { select: { name: true, nameTh: true, category: true } },
         staff: { select: { name: true } },
       },
@@ -642,7 +642,7 @@ export async function sendCheerDigest(
       });
       if (later.some(l => cheerKind(l.service) === kind)) continue;
       seen.add(v.customerId);
-      lines[kind].push(`• ${fmtCustomerName(v.customer)}${v.customer.phone ? ` ${v.customer.phone}` : ""} — ${v.service.nameTh || v.service.name}${v.staff ? ` (ช่าง${v.staff.name})` : ""}`);
+      lines[kind].push(`• ${fmtCustomerName(v.customer)} — ${v.service.nameTh || v.service.name}${v.staff ? ` (ช่าง${v.staff.name})` : ""}`);
     }
   }
 
