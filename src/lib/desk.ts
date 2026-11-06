@@ -44,11 +44,15 @@ function dayRange(ymd: string): { gte: Date; lt: Date } {
 
 // ── Walk-in detection ────────────────────────────────────────────────────────
 // Walk-ins booked without a phone get a synthetic phone `walkin-<ts>` and the
-// placeholder name "Walk-in" (see api/bookings). Treat either as a walk-in for
-// display so the board doesn't show a junk phone number.
+// placeholder name "Walk-in" (see api/bookings) — only those are anonymous.
+// Customers imported without a phone (`walkin-import-…`, `walkin-imp-…`) are
+// real people with names and sometimes memberships: show them normally and
+// just hide the synthetic phone.
 function isWalkinCustomer(name: string, phone: string): boolean {
-  return phone.startsWith("walkin-") || name.trim().toLowerCase() === "walk-in";
+  const n = name.trim().toLowerCase();
+  return n === "walk-in" || (phone.startsWith("walkin-") && !n);
 }
+const hasRealPhone = (phone: string) => !phone.startsWith("walkin-");
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -243,7 +247,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       paidAt:           b.paidAt ? b.paidAt.toISOString() : null,
       customerName:     walkin ? "ลูกค้าวอร์คอิน" : b.customer.name,
       customerNickname: walkin ? null : b.customer.nickname,
-      customerPhone:    walkin ? null : b.customer.phone,
+      customerPhone:    walkin || !hasRealPhone(b.customer.phone) ? null : b.customer.phone,
       isWalkin:         walkin,
       memberStatus:     walkin ? "none" : fiveVisitPackage ? "active" : membershipStatus,
       fiveVisitPackageUsesLeft: walkin ? null : fiveVisitPackageUsesLeft,
