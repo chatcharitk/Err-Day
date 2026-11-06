@@ -6,6 +6,7 @@ import { Camera, Check, Minus, PackageOpen, Plus, Search, Trash2, X } from "luci
 import { OPT, ZONES, ZONE_LABEL, developerGramsOf, type ColorZone } from "@/lib/color-options";
 import { resizeImageFile } from "@/lib/resize-image";
 import { C, Chips, Field, LevelPicker, Section } from "./ui";
+import PhotoViewer from "@/components/PhotoViewer";
 
 /** Quick gram buttons; any other amount is typed or stepped ±5 g. */
 const GRAM_STEPS = [10, 20, 30, 40, 60, 80] as const;
@@ -37,6 +38,7 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
+  const [viewing, setViewing] = useState<{ urls: string[]; i: number } | null>(null);
   const set = <K extends keyof EditableVisit>(k: K, val: EditableVisit[K]) => { setV(s => ({ ...s, [k]: val })); setDirty(true); };
 
   const zone = v.zones.find(z => z.zone === zoneTab) ?? emptyZone(zoneTab);
@@ -117,10 +119,12 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
   const photos = (kind: "referencePhotos" | "beforePhotos" | "afterPhotos", title: string) => (
     <Field label={title}>
       <div className="flex flex-wrap gap-2">
-        {v[kind].map(u => (
+        {v[kind].map((u, k) => (
           <div key={u} className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={u} alt="" className="w-20 h-20 rounded-xl object-cover" />
+            <button type="button" onClick={() => setViewing({ urls: v[kind], i: k })} className="block" aria-label="ดูรูป">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={u} alt="" className="w-20 h-20 rounded-xl object-cover" />
+            </button>
             <button type="button" onClick={() => set(kind, v[kind].filter(x => x !== u))} className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow" aria-label="ลบรูป"><X size={12} /></button>
           </div>
         ))}
@@ -272,6 +276,7 @@ export default function VisitEditor({ customerId, branchId, initial, shades, bac
         </div>
       </div>
 
+      {viewing && <PhotoViewer urls={viewing.urls} start={viewing.i} onClose={() => setViewing(null)} />}
       {picker && (
         <div className="fixed inset-0 z-40 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => setPicker(false)}>
           <div className="w-full max-w-md bg-white rounded-t-2xl p-4 pb-6 max-h-[80vh] flex flex-col gap-3" onClick={e => e.stopPropagation()}>

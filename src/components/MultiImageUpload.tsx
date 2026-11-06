@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2, X, Plus } from "lucide-react";
 import { resizeImageFile } from "@/lib/resize-image";
+import PhotoViewer from "@/components/PhotoViewer";
 
 interface Props {
   /** Storage path kind (same endpoint as ImageUpload). */
@@ -33,6 +34,7 @@ export default function MultiImageUpload({ kind, ref: refId, value, onChange, la
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
+  const [viewing, setViewing] = useState<number | null>(null);
 
   const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).slice(0, Math.max(0, max - value.length));
@@ -70,13 +72,14 @@ export default function MultiImageUpload({ kind, ref: refId, value, onChange, la
           {label}{value.length > 0 ? ` · ${value.length} รูป` : ""}
         </p>
       )}
+      {viewing != null && <PhotoViewer urls={value} start={viewing} onClose={() => setViewing(null)} />}
       <input ref={inputRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" />
 
       {value.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {value.map((url, i) => (
             <div key={url} className="relative aspect-square rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
-              <button type="button" onClick={() => window.open(url, "_blank")} className="block w-full h-full" aria-label={`เปิดรูปที่ ${i + 1}`}>
+              <button type="button" onClick={() => setViewing(i)} className="block w-full h-full" aria-label={`เปิดรูปที่ ${i + 1}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`รูปที่ ${i + 1}`} className="w-full h-full object-cover" />
               </button>
