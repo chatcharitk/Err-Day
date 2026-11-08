@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import DashMonthPicker from "@/components/DashMonthPicker";
+import { dashHref, type MonthOption } from "@/lib/dashboard-month";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PRIMARY = "#8B1D24";
@@ -50,6 +52,9 @@ export interface DashboardData {
   currentMonthLabel: string;
   lastMonthRangeLabel: string;    // e.g., "1–10 เม.ย."
   thisMonthRangeLabel: string;    // e.g., "1–10 พ.ค."
+  monthKey: string;              // YYYY-MM being shown
+  isCurrentMonth: boolean;
+  monthOptions: MonthOption[];   // newest first
 }
 
 // ── Donut chart ───────────────────────────────────────────────────────────────
@@ -237,16 +242,16 @@ function KpiCard({
 
 // ── Branch filter pills ───────────────────────────────────────────────────────
 function BranchPicker({
-  branches, activeBranchId,
+  branches, activeBranchId, monthKey, currentKey,
 }: {
   branches: { id: string; name: string }[];
   activeBranchId: string;
+  monthKey: string;
+  currentKey: string;
 }) {
   const router = useRouter();
   function select(id: string) {
-    const params = new URLSearchParams();
-    if (id !== "all") params.set("branchId", id);
-    router.push(`/admin${params.toString() ? `?${params}` : ""}`);
+    router.push(dashHref("/admin", id, monthKey, currentKey));
   }
   const options: { id: string; label: string }[] = [
     { id: "all", label: "ทุกสาขา" },
@@ -284,6 +289,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
     hourlyUsage,
     avgTicket,
     currentMonthLabel, lastMonthRangeLabel, thisMonthRangeLabel,
+    monthKey, isCurrentMonth, monthOptions,
   } = data;
 
   const activeBranchName = activeBranchId === "all"
@@ -323,7 +329,11 @@ export default function DashboardView({ data }: { data: DashboardData }) {
             <span className="ml-2 text-sm font-normal" style={{ color: MUTED }}>· {activeBranchName}</span>
           </h1>
         </div>
-        <BranchPicker branches={branches} activeBranchId={activeBranchId} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <DashMonthPicker base="/admin" branchId={activeBranchId} monthKey={monthKey} options={monthOptions} />
+          <BranchPicker branches={branches} activeBranchId={activeBranchId}
+            monthKey={monthKey} currentKey={monthOptions[0]?.key ?? monthKey} />
+        </div>
       </div>
 
       {/* ── KPI Row ────────────────────────────────────────────────────────── */}
@@ -335,13 +345,13 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           valueColor={PRIMARY}
         />
         <KpiCard
-          label={`รายได้เดือนนี้ · ${thisMonthRangeLabel}`}
+          label={`${isCurrentMonth ? "รายได้เดือนนี้" : "รายได้ทั้งเดือน"} · ${thisMonthRangeLabel}`}
           value={fmt(thisMonthRevenue)}
           sub={`${thisMonthCount} รายการ`}
         />
         <div className="rounded-2xl bg-white p-5" style={{ border: `1.5px solid ${BORDER}` }}>
           <p className="text-xs mb-2" style={{ color: MUTED }}>
-            เทียบช่วงเดียวกัน · {lastMonthRangeLabel}
+            {isCurrentMonth ? "เทียบช่วงเดียวกัน" : "เทียบเดือนก่อน"} · {lastMonthRangeLabel}
           </p>
           <p className="text-2xl font-bold mb-1 leading-tight" style={{ color: momUp ? "#166534" : "#991B1B" }}>
             {momUp ? "+" : ""}{fmt(momDiff)}
@@ -358,7 +368,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           </p>
           <p className="text-2xl font-bold mb-1 leading-tight" style={{ color: TEXT }}>{activeMembers}</p>
           <p className="text-xs" style={{ color: "#166534" }}>
-            {newMembersThisMonth > 0 ? `+${newMembersThisMonth} ใหม่เดือนนี้` : "ไม่มีสมาชิกใหม่เดือนนี้"}
+            {newMembersThisMonth > 0 ? `+${newMembersThisMonth} ใหม่${isCurrentMonth ? "เดือนนี้" : "ในเดือนนั้น"}` : `ไม่มีสมาชิกใหม่${isCurrentMonth ? "เดือนนี้" : "ในเดือนนั้น"}`}
           </p>
           <div className="flex items-center gap-1.5 mt-2 text-[11px]" style={{ color: MUTED }}>
             <span className="px-1.5 py-0.5 rounded font-medium" style={{ background: "#F0E4D8", color: PRIMARY }}>

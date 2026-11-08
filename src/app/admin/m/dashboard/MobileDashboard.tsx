@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import DashMonthPicker from "@/components/DashMonthPicker";
+import { dashHref, type MonthOption } from "@/lib/dashboard-month";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PRIMARY = "#8B1D24";
@@ -40,6 +42,9 @@ export interface MobileDashData {
   currentMonthLabel: string;
   thisMonthRangeLabel: string;
   lastMonthRangeLabel: string;
+  monthKey: string;              // YYYY-MM being shown
+  isCurrentMonth: boolean;
+  monthOptions: MonthOption[];   // newest first
 }
 
 // ── Donut chart (mobile size) ─────────────────────────────────────────────────
@@ -180,6 +185,7 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
     hourlyUsage,
     avgTicket,
     currentMonthLabel, thisMonthRangeLabel, lastMonthRangeLabel,
+    monthKey, isCurrentMonth, monthOptions,
   } = data;
 
   const isAllBranches = activeBranchId === "all";
@@ -188,9 +194,7 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
     ...branches.map(b => ({ id: b.id, label: b.name.replace(/^err\.day\s*/i, "") })),
   ];
   function selectBranch(id: string) {
-    const params = new URLSearchParams();
-    if (id !== "all") params.set("branchId", id);
-    router.push(`/admin/m/dashboard${params.toString() ? `?${params}` : ""}`);
+    router.push(dashHref("/admin/m/dashboard", id, monthKey, monthOptions[0]?.key ?? monthKey));
   }
 
   const momDiff = thisMonthRevenue - lastMonthRevenue;
@@ -236,6 +240,10 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
             <h1 className="text-base font-semibold leading-tight" style={{ color: TEXT }}>ภาพรวมธุรกิจ</h1>
           </div>
         </div>
+        {/* Month picker */}
+        <div className="px-4 pb-2">
+          <DashMonthPicker base="/admin/m/dashboard" branchId={activeBranchId} monthKey={monthKey} options={monthOptions} />
+        </div>
         {/* Branch picker — horizontal scroll if many branches */}
         <div className="px-4 pb-3 flex gap-1.5 overflow-x-auto">
           {branchOptions.map(o => {
@@ -267,7 +275,7 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
 
           {/* This month MTD */}
           <div className="rounded-2xl bg-white p-4" style={{ border: `1.5px solid ${BORDER}` }}>
-            <p className="text-[11px] mb-1.5" style={{ color: MUTED }}>{thisMonthRangeLabel}</p>
+            <p className="text-[11px] mb-1.5" style={{ color: MUTED }}>{isCurrentMonth ? thisMonthRangeLabel : `ทั้งเดือน · ${thisMonthRangeLabel}`}</p>
             <p className="text-xl font-bold leading-tight" style={{ color: TEXT }}>{fmt(thisMonthRevenue)}</p>
             <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{thisMonthCount} รายการ</p>
           </div>
@@ -275,7 +283,7 @@ export default function MobileDashboard({ data }: { data: MobileDashData }) {
           {/* MoM — same range of days */}
           <div className="rounded-2xl bg-white p-4 col-span-2" style={{ border: `1.5px solid ${BORDER}` }}>
             <p className="text-[11px] mb-2" style={{ color: MUTED }}>
-              เทียบช่วงเดียวกัน · {lastMonthRangeLabel}
+              {isCurrentMonth ? "เทียบช่วงเดียวกัน" : "เทียบเดือนก่อน"} · {lastMonthRangeLabel}
             </p>
             <div className="flex items-center gap-3">
               <div

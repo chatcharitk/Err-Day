@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { TIP_INCOME_FROM, tipIncomeSatang } from "@/lib/tip-income";
+import { dashPeriod, BI_HOUR_FROM, BI_HOUR_TO } from "@/lib/dashboard-month";
 import MobileDashboard, { MobileDashData } from "./MobileDashboard";
 
 export const revalidate = 30;
@@ -25,40 +26,32 @@ function partialMonthBounds(year: number, month: number, endDay: number) {
   };
 }
 
-const THAI_MONTHS = [
-  "มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
-  "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม",
-];
-const THAI_MONTHS_SHORT = [
-  "ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.",
-  "ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค.",
-];
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default async function MobileDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string }>;
+  searchParams: Promise<{ branchId?: string; month?: string }>;
 }) {
-  const { branchId: rawBranchId } = await searchParams;
+  const { branchId: rawBranchId, month: rawMonth } = await searchParams;
   const branchFilter   = rawBranchId && rawBranchId !== "all" ? { branchId: rawBranchId } : {};
   const activeBranchId = (rawBranchId && rawBranchId !== "all") ? rawBranchId : "all";
 
   const now           = bkkNow();
   const todayStr      = now.toISOString().slice(0, 10);
-  const thisYear      = Number(todayStr.slice(0, 4));
-  const thisMonthIdx  = Number(todayStr.slice(5, 7)) - 1;
-  const dayOfMonth    = Number(todayStr.slice(8, 10));
-  const lastMonthIdx  = thisMonthIdx === 0 ? 11 : thisMonthIdx - 1;
-  const lastMonthYear = thisMonthIdx === 0 ? thisYear - 1 : thisYear;
-
-  const lastMonthDays       = new Date(lastMonthYear, lastMonthIdx + 1, 0).getDate();
-  const lastMonthClampedDay = Math.min(dayOfMonth, lastMonthDays);
+  // Selected month (?month=YYYY-MM). Current month = month-to-date; a past
+  // month = the whole month vs the whole previous month.
+  const period        = dashPeriod(todayStr, rawMonth);
+  const thisYear      = period.year;
+  const thisMonthIdx  = period.monthIdx;
+  const dayOfMonth    = period.endDay;
+  const lastMonthIdx  = period.lastMonthIdx;
+  const lastMonthYear = period.lastYear;
+  const lastMonthClampedDay = period.lastEndDay;
 
   const todayB        = dayBounds(todayStr);
   const thisMonthMTDB = partialMonthBounds(thisYear, thisMonthIdx, dayOfMonth);
   const lastMonthMTDB = partialMonthBounds(lastMonthYear, lastMonthIdx, lastMonthClampedDay);
-  const fullMonthEnd  = new Date(thisYear, thisMonthIdx + 1, 0).getDate();
+  const fullMonthEnd  = period.fullMonthEnd;
   const thisMonthFullB = partialMonthBounds(thisYear, thisMonthIdx, fullMonthEnd);
 
   const [
@@ -171,14 +164,14 @@ export default async function MobileDashboardPage({
     .map((total, i) => ({ label: String(i + 1), total }))
     .filter((_, i) => i * 7 + 1 <= fullMonthEnd);
 
-  // Hourly usage (09–21)
+  // Hourly usage (07–22)
   const hourCounts = new Array(24).fill(0);
   for (const b of thisMonthCompleted) {
     const h = parseInt((b.startTime ?? "").split(":")[0] ?? "", 10);
     if (Number.isFinite(h) && h >= 0 && h < 24) hourCounts[h]++;
   }
   const hourlyUsage: { hour: number; count: number }[] = [];
-  for (let h = 9; h <= 21; h++) {
+  for (let h = BI_HOUR_FROM; h <= BI_HOUR_TO; h++) {
     hourlyUsage.push({ hour: h, count: hourCounts[h] });
   }
 
@@ -192,9 +185,12 @@ export default async function MobileDashboardPage({
     serviceBreakdown, topCustomers, staffRevenue, weeklyRevenue,
     hourlyUsage,
     avgTicket,
-    currentMonthLabel:    `${THAI_MONTHS[thisMonthIdx]} ${thisYear + 543}`,
-    thisMonthRangeLabel:  `1–${dayOfMonth} ${THAI_MONTHS_SHORT[thisMonthIdx]}`,
-    lastMonthRangeLabel:  `1–${lastMonthClampedDay} ${THAI_MONTHS_SHORT[lastMonthIdx]}`,
+    currentMonthLabel:    period.monthLabel,
+    thisMonthRangeLabel:  period.rangeLabel,
+    lastMonthRangeLabel:  period.lastRangeLabel,
+    monthKey:             period.monthKey,
+    isCurrentMonth:       period.isCurrent,
+    monthOptions:         period.options,
   };
 
   return <MobileDashboard data={dashData} />;
