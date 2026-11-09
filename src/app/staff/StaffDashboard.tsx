@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Calendar as CalendarIcon, CalendarRange, Clock, Sparkles } from "lucide-react";
+import { LogOut, Calendar as CalendarIcon, CalendarRange, Clock, Sparkles, Search } from "lucide-react";
 import StaffNav from "./StaffNav";
 import type { CurrentStaff } from "@/lib/staff-auth";
 import { customerLabel } from "@/lib/customer-name";
@@ -184,6 +184,13 @@ export default function StaffDashboard({ me, week: allWeek, branches, myBranchId
                 <p className="text-sm mt-1 italic" style={{ color: MUTED }}>วันหยุด · ไม่มีกะ</p>
               )}
             </div>
+
+            {/* Find a customer / take a walk-in */}
+            <Link href="/staff/walkin"
+              className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold text-white active:scale-[0.99] transition-transform"
+              style={{ background: PRIMARY }}>
+              <Search size={16} /> หาลูกค้า · รับวอร์คอิน
+            </Link>
 
             {/* Today's bookings */}
             <div>
