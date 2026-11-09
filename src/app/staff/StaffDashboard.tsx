@@ -31,6 +31,7 @@ interface Booking {
   customerNickname: string | null;
   branchId:         string;
   branchName:       string;
+  inService?:       boolean;  // checked in, not finished yet
 }
 interface Shift { date: string; startTime: string; endTime: string; branchName: string | null }
 interface WeekData {
@@ -285,7 +286,9 @@ function TabButton({ active, onClick, icon, children }: {
 }
 
 function BookingRow({ b, dim = false, compact = false, showBranch = false }: { b: Booking; dim?: boolean; compact?: boolean; showBranch?: boolean }) {
-  const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;
+  const meta = b.inService
+    ? { label: "กำลังทำ", bg: "#FEF3C7", fg: "#92400E" }
+    : STATUS_META[b.status] ?? STATUS_META.PENDING;
   return (
     <Link href={`/staff/bookings/${b.id}`}
       prefetch

@@ -50,6 +50,7 @@ export default async function StaffHome() {
         totalPrice: true,
         internalNotes: true,
         staffId:    true,
+        checkedInAt: true,
         service:    { select: { name: true, nameTh: true } },
         customer:   { select: { name: true, phone: true, nickname: true } },
         staff:      { select: { id: true, name: true } },
@@ -89,6 +90,7 @@ export default async function StaffHome() {
       customerNickname: b.customer.nickname,
       branchId:         b.branchId,
       branchName:       b.branch.name.replace("err.day ", ""),
+      inService:        !!b.checkedInAt && b.status !== "COMPLETED",
     })),
     shifts: visibleShifts.map(s => ({
       date:      ymd(s.date),

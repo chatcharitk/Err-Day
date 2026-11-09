@@ -5,6 +5,8 @@ import { maskPhone } from "@/lib/staff-person";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
 import { customerLabel } from "@/lib/customer-name";
+import { bangkokTodayYmd } from "@/lib/desk";
+import CheckinPanel, { type CheckinState } from "./CheckinPanel";
 
 export const dynamic  = "force-dynamic";
 export const metadata = { title: "รายละเอียดการจอง — err.day" };
@@ -49,6 +51,7 @@ export default async function StaffBookingDetailPage({
       internalNotes: true,
       staffId:    true,
       branchId:   true,
+      checkedInAt: true,
       service:    { select: { name: true, nameTh: true } },
       customer:   { select: { id: true, name: true, nickname: true, phone: true } },
       staff:      { select: { id: true, name: true } },
@@ -59,6 +62,15 @@ export default async function StaffBookingDetailPage({
   // Staff can open any booking at any branch (the list shows every branch).
   if (!b) notFound();
   const isMine = !!b.staffId && me.person.staffIds.includes(b.staffId);
+
+  // Check-in from the phone: today's bookings at a branch I work at.
+  const canCheckin = b.date.toISOString().slice(0, 10) === bangkokTodayYmd()
+    && me.person.branchIds.includes(b.branchId)
+    && b.status !== "CANCELLED" && b.status !== "NO_SHOW";
+  const checkinState: CheckinState = b.status === "COMPLETED" ? "done" : b.checkedInAt ? "inservice" : "waiting";
+  const checkedInHm = b.checkedInAt
+    ? new Date(b.checkedInAt.getTime() + 7 * 3600e3).toISOString().slice(11, 16)
+    : null;
 
   const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;
   const duration = timeToMins(b.endTime) - timeToMins(b.startTime);
@@ -81,6 +93,11 @@ export default async function StaffBookingDetailPage({
       </header>
 
       <div className="p-4 space-y-3 max-w-lg mx-auto">
+        {canCheckin && (
+          <CheckinPanel bookingId={b.id} state={checkinState} servedByMe={isMine}
+            servedByName={b.staff?.name ?? null} checkedInAt={checkedInHm} />
+        )}
+
         {/* Customer card */}
         <section className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${BORDER}` }}>
           <div className="flex items-start justify-between gap-2">
@@ -185,7 +202,7 @@ export default async function StaffBookingDetailPage({
         )}
 
         <p className="text-xs text-center pt-2" style={{ color: MUTED }}>
-          ดูได้เท่านั้น · หากต้องการเปลี่ยนแปลง กรุณาแจ้งผู้จัดการ
+          {canCheckin ? "เปลี่ยนเวลา/บริการ กรุณาแจ้งผู้จัดการ" : "ดูได้เท่านั้น · หากต้องการเปลี่ยนแปลง กรุณาแจ้งผู้จัดการ"}
         </p>
       </div>
     </main>
