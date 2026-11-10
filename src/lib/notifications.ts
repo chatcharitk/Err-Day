@@ -24,7 +24,8 @@ import { notifyAdmins } from "@/lib/notify-admin";
 import { PACKAGE_SPECS } from "@/lib/packages";
 import { startOfTodayUTC } from "@/lib/utils";
 import { customerLabel as fmtCustomerName } from "@/lib/customer-name";
-import { cheerKind, CHEER_AFTER_DAYS, CHEER_LABEL, type CheerKind } from "@/lib/cheer-due";
+import { CHEER_AFTER_DAYS } from "@/lib/cheer-due";
+import { loadCheerDue } from "@/lib/cheer-due-list";
 
 type Kind =
   | "BOOKING_CREATED"
@@ -609,56 +610,32 @@ export async function sendStaffShiftSummary(): Promise<{ status: string; count: 
 /**
  * Daily digest of customers whose last COMPLETED treatment was 7 days ago or
  * last colouring 56 days ago (see cheer-due.ts), so staff can cheer them to come
- * back. Goes to the branch's LINE group (if configured) and every admin's
- * in-app inbox. Customers who already booked or had the same kind of service
+ * back. Admin in-app inbox only; each stylist sees their own list in the
+ * staff app. Customers who already booked or had the same kind of service
  * since are left off. Nothing is sent when nobody is due.
  */
 export async function sendCheerDigest(
   branchId: string,
 ): Promise<{ branchId: string; status: string; count: number; reason?: string }> {
-  const bkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const dayNoon = (back: number) => new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate() - back, 12, 0, 0));
+  // Stylists see their own due customers in the staff app ("ของฉัน"), so the
+  // digest no longer goes to the branch LINE group — only to admins, grouped
+  // by the stylist who did the visit.
+  const items = await loadCheerDue({ branchId });
+  if (items.length === 0) return { branchId, status: "SKIPPED", count: 0, reason: "nobody_due" };
 
-  const lines: Record<CheerKind, string[]> = { treatment: [], color: [] };
-  for (const kind of ["treatment", "color"] as const) {
-    const day = dayNoon(CHEER_AFTER_DAYS[kind]);
-    const visits = await prisma.booking.findMany({
-      where: { branchId, status: "COMPLETED", date: { gte: new Date(day.getTime() - 12 * 3600e3), lte: new Date(day.getTime() + 12 * 3600e3) }, serviceId: { notIn: SALE_ONLY_SKUS } },
-      select: {
-        customerId: true, date: true,
-        customer: { select: { name: true, nickname: true } }, // no phone: the digest goes to the staff LINE group
-        service: { select: { name: true, nameTh: true, category: true } },
-        staff: { select: { name: true } },
-      },
-      orderBy: { startTime: "asc" },
-    });
-    const seen = new Set<string>();
-    for (const v of visits) {
-      if (cheerKind(v.service) !== kind || seen.has(v.customerId)) continue;
-      // Already came back (or is booked) for the same kind of service since.
-      const later = await prisma.booking.findMany({
-        where: { customerId: v.customerId, date: { gt: v.date }, status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] } },
-        select: { service: { select: { name: true, nameTh: true, category: true } } },
-      });
-      if (later.some(l => cheerKind(l.service) === kind)) continue;
-      seen.add(v.customerId);
-      lines[kind].push(`• ${fmtCustomerName(v.customer)} — ${v.service.nameTh || v.service.name}${v.staff ? ` (ช่าง${v.staff.name})` : ""}`);
-    }
+  const byStaff = new Map<string, typeof items>();
+  for (const it of items) {
+    const k = it.staffName ? `ช่าง${it.staffName}` : "ไม่ระบุช่าง";
+    byStaff.set(k, [...(byStaff.get(k) ?? []), it]);
   }
+  const body = [...byStaff.entries()].map(([who, list]) =>
+    `${who} (${list.length})\n` + list.map(it =>
+      `• ${it.customerName} — ${it.kind === "treatment" ? "💆" : "🎨"} ${it.serviceName} · ครบ ${CHEER_AFTER_DAYS[it.kind] === 7 ? "1 สัปดาห์" : "8 สัปดาห์"}`,
+    ).join("\n"),
+  ).join("\n\n");
 
-  const count = lines.treatment.length + lines.color.length;
-  if (count === 0) return { branchId, status: "SKIPPED", count: 0, reason: "nobody_due" };
-
-  const sections = (["treatment", "color"] as const)
-    .filter(k => lines[k].length)
-    .map(k => `${k === "treatment" ? "💆" : "🎨"} ครบ ${CHEER_AFTER_DAYS[k] === 7 ? "1 สัปดาห์" : "8 สัปดาห์"} หลัง${CHEER_LABEL[k]} (${lines[k].length})\n${lines[k].join("\n")}`);
-  const text = `📣 ลูกค้าที่ควรเชียร์วันนี้\n\n${sections.join("\n\n")}`;
-
-  await notifyAdmins({ type: "CHEER", title: `📣 ลูกค้าที่ควรเชียร์วันนี้ (${count})`, body: sections.join("\n\n"), href: "/admin/m", branchId });
-  const groupId = branchGroupId(branchId);
-  if (!groupId) return { branchId, status: "SENT", count, reason: "no_group" };
-  const r = await pushLine(groupId, [{ type: "text", text }]);
-  return { branchId, status: r.ok ? "SENT" : "FAILED", count, reason: r.error };
+  await notifyAdmins({ type: "CHEER", title: `📣 ลูกค้าที่ควรเชียร์วันนี้ (${items.length})`, body, href: "/admin/m", branchId });
+  return { branchId, status: "SENT", count: items.length };
 }
 
 // ── Booking confirmation (sent immediately on creation) ────────────────────

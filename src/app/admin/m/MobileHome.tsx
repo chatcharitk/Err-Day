@@ -46,6 +46,8 @@ interface BookingRow {
   customerName:      string;
   customerPhone:     string;
   staffName:         string | null;
+  /** Staff credited with ค่าเชียร์ on this booking (desk เชียร์ button). */
+  cheeredBy:         string[];
   addonCount:        number;
   memberStatus:      "active" | "pending" | "expired" | null;
   memberExpiresAt:   string | null;
@@ -511,6 +513,11 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 inline-flex items-center gap-0.5" style={{ background: "#F0FDF4", color: "#166534" }}>
                               <Sparkles size={8} />
                               {b.memberExpiresAt ? new Date(b.memberExpiresAt).toLocaleDateString("th-TH", { day: "numeric", month: "short" }) : "สมาชิก"}
+                            </span>
+                          )}
+                          {b.cheeredBy.length > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#FDF2F8", color: "#9D174D" }}>
+                              📣 เชียร์ · {b.cheeredBy.join(", ")}
                             </span>
                           )}
                           {b.memberStatus === "pending" && (

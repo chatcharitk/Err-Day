@@ -52,6 +52,7 @@ export default async function StaffBookingDetailPage({
       staffId:    true,
       branchId:   true,
       checkedInAt: true,
+      cheers:     { select: { staff: { select: { name: true } }, service: { select: { name: true, nameTh: true } } } },
       service:    { select: { name: true, nameTh: true } },
       customer:   { select: { id: true, name: true, nickname: true, phone: true } },
       staff:      { select: { id: true, name: true } },
@@ -185,6 +186,15 @@ export default async function StaffBookingDetailPage({
             </div>
           </div>
         </section>
+
+        {b.cheers.length > 0 && (
+          <section className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FDF2F8", border: "1px solid #FBCFE8", color: "#9D174D" }}>
+            <p className="text-[10px] uppercase tracking-wider font-semibold">ค่าเชียร์</p>
+            {b.cheers.map((c, i) => (
+              <p key={i} className="font-semibold mt-0.5">📣 {c.staff.name} · {c.service.nameTh || c.service.name}</p>
+            ))}
+          </section>
+        )}
 
         {/* Notes (if any) */}
         {b.internalNotes && (

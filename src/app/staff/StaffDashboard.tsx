@@ -32,8 +32,13 @@ interface Booking {
   branchId:         string;
   branchName:       string;
   inService?:       boolean;  // checked in, not finished yet
+  cheeredBy?:       string[]; // ค่าเชียร์ credited on this booking
 }
 interface Shift { date: string; startTime: string; endTime: string; branchName: string | null }
+interface CheerDue {
+  customerId: string; customerName: string; serviceName: string;
+  kind: "treatment" | "color"; visitYmd: string; dueYmd: string;
+}
 interface WeekData {
   todayStr: string;
   bookings: Booking[];
@@ -72,8 +77,9 @@ function thaiDayShort(d: Date): string {
   return DOW_TH_SHORT[di];
 }
 
-export default function StaffDashboard({ me, week: allWeek, branches, myBranchIds }: {
+export default function StaffDashboard({ me, week: allWeek, branches, myBranchIds, cheerDue = [] }: {
   me: CurrentStaff; week: WeekData; branches: { id: string; name: string }[]; myBranchIds: string[];
+  cheerDue?: CheerDue[];
 }) {
   // Bookings from every branch are loaded; this picks which ones to show.
   // "mine" = the branch(es) this person works at (the default).
@@ -191,6 +197,9 @@ export default function StaffDashboard({ me, week: allWeek, branches, myBranchId
               style={{ background: PRIMARY }}>
               <Search size={16} /> หาลูกค้า · รับวอร์คอิน
             </Link>
+
+            {/* My customers due a cheer (only visits I did) */}
+            {cheerDue.length > 0 && <CheerDueCard items={cheerDue} todayStr={week.todayStr} />}
 
             {/* Today's bookings */}
             <div>
@@ -318,6 +327,12 @@ function BookingRow({ b, dim = false, compact = false, showBranch = false }: { b
               ของฉัน
             </span>
           )}
+          {!!b.cheeredBy?.length && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+              style={{ background: "#FDF2F8", color: "#9D174D" }}>
+              📣 {b.cheeredBy.join(", ")}
+            </span>
+          )}
         </p>
         <p className="text-xs truncate" style={{ color: MUTED }}>
           {b.serviceName}
@@ -331,5 +346,32 @@ function BookingRow({ b, dim = false, compact = false, showBranch = false }: { b
         {meta.label}
       </span>
     </Link>
+  );
+}
+
+function CheerDueCard({ items, todayStr }: { items: CheerDue[]; todayStr: string }) {
+  const short = (ymd: string) => new Date(ymd + "T12:00:00Z").toLocaleDateString("th-TH", { day: "numeric", month: "short", timeZone: "UTC" });
+  return (
+    <div className="bg-white rounded-2xl p-4" style={{ border: "1.5px solid #FBCFE8" }}>
+      <p className="text-sm font-bold" style={{ color: "#9D174D" }}>📣 ลูกค้าของคุณที่ควรเชียร์ ({items.length})</p>
+      <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>ลูกค้าที่คุณทำให้ · ทรีตเมนต์ครบ 1 สัปดาห์ / ทำสีครบ 8 สัปดาห์ และยังไม่ได้กลับมา</p>
+      <ul className="mt-2 divide-y" style={{ borderColor: "#F5EFE9" }}>
+        {items.map(it => (
+          <li key={it.customerId + it.kind}>
+            <Link href={`/staff/customers/${it.customerId}`} className="flex items-center gap-2 py-2">
+              <span className="text-base">{it.kind === "treatment" ? "💆" : "🎨"}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color: TEXT }}>{it.customerName}</p>
+                <p className="text-[11px] truncate" style={{ color: MUTED }}>{it.serviceName} · ทำเมื่อ {short(it.visitYmd)}</p>
+              </div>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+                style={it.dueYmd === todayStr ? { background: "#9D174D", color: "white" } : { background: "#FDF2F8", color: "#9D174D" }}>
+                {it.dueYmd === todayStr ? "ครบวันนี้" : `ครบ ${short(it.dueYmd)}`}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

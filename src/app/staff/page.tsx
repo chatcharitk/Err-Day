@@ -4,6 +4,7 @@ import { getCurrentStaffPerson } from "@/lib/staff-auth";
 import { maskPhone } from "@/lib/staff-person";
 import StaffDashboard from "./StaffDashboard";
 import { hiddenWeeks, mondayKey } from "@/lib/shift-visibility";
+import { loadCheerDue } from "@/lib/cheer-due-list";
 
 export const dynamic  = "force-dynamic"; // cookie-dependent
 export const metadata = { title: "ตารางงานของฉัน — err.day" };
@@ -51,6 +52,7 @@ export default async function StaffHome() {
         internalNotes: true,
         staffId:    true,
         checkedInAt: true,
+        cheers:     { select: { staff: { select: { name: true } } } },
         service:    { select: { name: true, nameTh: true } },
         customer:   { select: { name: true, phone: true, nickname: true } },
         staff:      { select: { id: true, name: true } },
@@ -91,6 +93,7 @@ export default async function StaffHome() {
       branchId:         b.branchId,
       branchName:       b.branch.name.replace("err.day ", ""),
       inService:        !!b.checkedInAt && b.status !== "COMPLETED",
+      cheeredBy:        [...new Set(b.cheers.map(c => c.staff.name))],
     })),
     shifts: visibleShifts.map(s => ({
       date:      ymd(s.date),
@@ -100,13 +103,18 @@ export default async function StaffHome() {
     })),
   };
 
-  const branches = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const [branches, cheerDue] = await Promise.all([
+    prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    // Only customers this stylist did — due in the last 7 days, not back yet.
+    loadCheerDue({ staffIds: me.person.staffIds, graceDays: 6 }),
+  ]);
   return (
     <StaffDashboard
       me={me}
       week={weekData}
       branches={branches.map(b => ({ id: b.id, name: b.name.replace("err.day ", "") }))}
       myBranchIds={me.person.branchIds}
+      cheerDue={cheerDue.map(c => ({ customerId: c.customerId, customerName: c.customerName, serviceName: c.serviceName, kind: c.kind, visitYmd: c.visitYmd, dueYmd: c.dueYmd }))}
     />
   );
 }
