@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { PACKAGE_SPECS } from "@/lib/packages";
+import { packageExpiresAt, PACKAGE_SPECS } from "@/lib/packages";
 
 // POST /api/admin/customers/[id]/packages — create a package for a customer (manual entry)
 export async function POST(
@@ -24,11 +24,10 @@ export async function POST(
     const start  = startedAt ? new Date(startedAt) : new Date();
     const expiry = expiresAt
       ? new Date(expiresAt)
-      // Inclusive expiry: start day counts as day 1, add (validityDays - 1) more days
-      : new Date(start.getTime() + (spec.validityDays - 1) * 24 * 60 * 60 * 1000);
+      : packageExpiresAt(spec, start);
 
     // Close any open package of the same SKU when activating a new one
-    if (!pendingActivation) {
+    if (!pendingActivation && !spec.voucher) {
       await prisma.customerPackage.updateMany({
         where: { customerId, packageSku: sku, closedAt: null, pendingActivation: false },
         data:  { closedAt: new Date() },

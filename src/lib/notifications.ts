@@ -980,6 +980,7 @@ export async function sendMembershipExpiryWarning1d(membershipId: string): Promi
 const PACKAGE_NAME_TH: Record<string, string> = {
   "svc-buffet":   "Buffet 30 วัน",
   "svc-pkg5":     "แพ็กเกจ 5 ครั้ง",
+  "svc-voucher-pjoli-1111": "บัตร PJOLI Treatment 11.11",
 };
 
 export async function sendPackageActivated(packageId: string): Promise<SendResult> {

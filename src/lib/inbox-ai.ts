@@ -163,6 +163,7 @@ export async function shopFacts(today: string): Promise<string> {
   lines.push("\n## Membership & packages");
   lines.push(`- สมาชิก err·day ${baht(MEMBERSHIP_PRICE_SATANG)} ใช้ได้ ${MEMBERSHIP_VALIDITY_DAYS} วัน ได้ราคาสมาชิกทุกบริการ; นับวันแรกจากวันที่เข้ามาใช้บริการครั้งแรกหลังสมัคร; สมัครในไลน์: ${link("/liff/membership/signup", "/liff/membership/signup")} (หน้าเว็บ: ${APP_HOST}/liff/membership/signup)`);
   for (const spec of Object.values(PACKAGE_SPECS)) {
+    if (spec.voucher) continue; // one-off event vouchers are sold at the counter only
     lines.push(`- ${spec.nameTh} ${baht(spec.priceSatang)} — ${spec.shortDescTh} (ใช้ได้ ${spec.validityDays} วัน)`);
   }
   const addons = await prisma.serviceAddon.findMany({ where: { isActive: true }, orderBy: { price: "asc" }, select: { nameTh: true, price: true, availableUntil: true } });

@@ -7,6 +7,8 @@ import { startOfTodayUTC } from "@/lib/utils";
  */
 export const BUFFET_SKU    = "svc-buffet";
 export const FIVE_PACK_SKU = "svc-pkg5";
+/** 11.11 (2026) prepaid PJOLI Treatment voucher — sold only on 11 Nov, used by 30 Nov. */
+export const PJOLI_1111_SKU = "svc-voucher-pjoli-1111";
 
 export interface PackageSpec {
   sku:              string;
@@ -19,6 +21,14 @@ export interface PackageSpec {
   /** Service IDs whose visits this package redeems for free */
   coversServiceIds: string[];
   shortDescTh:      string;
+  /** Fixed last day (Bangkok "YYYY-MM-DD", inclusive) instead of validityDays. */
+  expiresOn?:       string;
+  /**
+   * Prepaid voucher: buying one never closes another of the same SKU (two
+   * bought = two separate vouchers) and the purchase itself never counts as a
+   * use — the customer comes back to redeem it.
+   */
+  voucher?:         boolean;
 }
 
 /**
@@ -47,7 +57,28 @@ export const PACKAGE_SPECS: Record<string, PackageSpec> = {
     coversServiceIds: ["svc-walkin"],
     shortDescTh:      "สระไดร์ 5 ครั้ง ใน 90 วัน",
   },
+  [PJOLI_1111_SKU]: {
+    sku:              PJOLI_1111_SKU,
+    nameTh:           "บัตร PJOLI Treatment 11.11",
+    nameEn:           "PJOLI Treatment 11.11 voucher",
+    priceSatang:      81100,                   // ฿811 (member ฿711 via Service.memberPrice)
+    validityDays:     20,
+    expiresOn:        "2026-11-30",
+    usageLimit:       1,
+    coversServiceIds: ["svc-pjoli-treatment"],
+    shortDescTh:      "PJOLI Treatment 1 ครั้ง ใช้ได้ถึง 30 พ.ย. 2569",
+    voucher:          true,
+  },
 };
+
+/** Expiry timestamp for a package started at `start`. */
+export function packageExpiresAt(spec: PackageSpec, start: Date): Date {
+  // Fixed end date: the end of that Bangkok day (23:59:59 +07:00).
+  if (spec.expiresOn) return new Date(`${spec.expiresOn}T23:59:59.999+07:00`);
+  // 30-day package started today → expires day 30 (inclusive). Count today as
+  // day 1 and add (validityDays - 1) more days.
+  return new Date(start.getTime() + (spec.validityDays - 1) * 24 * 60 * 60 * 1000);
+}
 
 export const PACKAGE_SKUS = Object.keys(PACKAGE_SPECS);
 
@@ -91,12 +122,10 @@ export async function activatePackage(opts: ActivateOpts) {
   } = opts;
 
   // Only meaningful for capped packages (5-pack). Buffet (usageLimit 0) ignores it.
-  const initialUsed = countFirstUse && spec.usageLimit > 0 ? 1 : 0;
+  const initialUsed = countFirstUse && spec.usageLimit > 0 && !spec.voucher ? 1 : 0;
 
   const now       = new Date();
-  // 30-day package activated today → expires day 30 (inclusive). So count today
-  // as day 1 and add (validityDays - 1) more days.
-  const expiresAt = new Date(now.getTime() + (spec.validityDays - 1) * 24 * 60 * 60 * 1000);
+  const expiresAt = packageExpiresAt(spec, now);
 
   return prisma.$transaction(async (tx) => {
     // If the customer self-registered via LIFF, a *pending* package of this SKU
@@ -125,11 +154,13 @@ export async function activatePackage(opts: ActivateOpts) {
     }
 
     // Otherwise (normal POS sale): close any open package of the same SKU and
-    // create a fresh active one.
-    await tx.customerPackage.updateMany({
-      where: { customerId, packageSku, closedAt: null },
-      data:  { closedAt: now },
-    });
+    // create a fresh active one. Vouchers stack instead.
+    if (!spec.voucher) {
+      await tx.customerPackage.updateMany({
+        where: { customerId, packageSku, closedAt: null },
+        data:  { closedAt: now },
+      });
+    }
 
     return tx.customerPackage.create({
       data: {

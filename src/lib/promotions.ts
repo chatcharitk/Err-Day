@@ -37,8 +37,21 @@ export const DAVINES_SPA_PROMOTION = {
 /** Regular price ฿990 / member ฿890 (launch promo ฿790/฿690 ended 31 Oct 2026) — set per branch in the services admin. */
 export const PJOLI_TREATMENT_SERVICE_ID = "svc-pjoli-treatment";
 
+/** 11.11 one-day price for treatments done on the day itself. Customers who
+ *  want it later buy the prepaid voucher (svc-voucher-pjoli-1111, packages.ts). */
+export const PJOLI_1111_PROMOTION = {
+  serviceId: PJOLI_TREATMENT_SERVICE_ID,
+  startsOn: "2026-11-11",
+  endsOn: "2026-11-11",
+  regularPrice: 81_100,
+  memberPrice: 71_100,
+  labelTh: "โปร 11.11",
+  labelEn: "11.11 promo",
+} as const satisfies ServicePromotion;
+
 export const PROMOTIONS: readonly ServicePromotion[] = [
   DAVINES_SPA_PROMOTION,
+  PJOLI_1111_PROMOTION,
 ];
 
 function toDateKey(value: Date | string): string {
