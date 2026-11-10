@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches, getCachedBranchStaff, getCachedBranchServices, getCachedAddons } from "@/lib/branches-cache";
+import { loadHeldMemberships } from "@/lib/membership-held";
 import CalendarView from "./CalendarView";
 
 export const revalidate = 30;
@@ -77,6 +78,9 @@ export default async function CalendarPage({
     getCachedAddons(),
   ]);
 
+  // Customers who paid a membership in advance that still has to be switched on.
+  const held = await loadHeldMemberships(bookings.map(b => b.customer.id));
+
   const weekBookings = bookings.map((b) => ({
     id: b.id,
     date: b.date.toISOString(),
@@ -90,6 +94,7 @@ export default async function CalendarPage({
     internalNotes: b.internalNotes,
     paidAt: b.paidAt ? b.paidAt.toISOString() : null,
     activatesMembership: b.activatesMembership,
+    heldMembership: held.get(b.customer.id) ?? null,
     serviceId: b.serviceId,
     service: { name: b.service.name, nameTh: b.service.nameTh, category: b.service.category },
     customer: { id: b.customer.id, name: b.customer.name, nickname: b.customer.nickname, phone: b.customer.phone },

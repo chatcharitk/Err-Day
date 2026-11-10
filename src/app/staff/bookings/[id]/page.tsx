@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import { loadHeldMemberships } from "@/lib/membership-held";
 import Link from "next/link";
 import { ArrowLeft, Phone, Clock, Sparkles, FileText, ChevronRight } from "lucide-react";
 import { maskPhone } from "@/lib/staff-person";
@@ -72,6 +73,8 @@ export default async function StaffBookingDetailPage({
   const checkedInHm = b.checkedInAt
     ? new Date(b.checkedInAt.getTime() + 7 * 3600e3).toISOString().slice(11, 16)
     : null;
+
+  const held = b.status === "CANCELLED" ? undefined : (await loadHeldMemberships([b.customer.id])).get(b.customer.id);
 
   const meta = STATUS_META[b.status] ?? STATUS_META.PENDING;
   const duration = timeToMins(b.endTime) - timeToMins(b.startTime);
@@ -186,6 +189,15 @@ export default async function StaffBookingDetailPage({
             </div>
           </div>
         </section>
+
+        {held && (
+          <section className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FEF3C7", border: "1.5px solid #F59E0B", color: "#92400E" }}>
+            <p className="font-semibold">🎟 ลูกค้าจ่ายค่าสมาชิกล่วงหน้าแล้ว — ยังไม่ได้เปิดใช้งาน</p>
+            <p className="text-xs mt-0.5">
+              {held.currentExpiresAt ? "รอบถัดไปจ่ายแล้ว รอเปิด · " : ""}แจ้งเคาน์เตอร์ / แอดมินให้เปิดใช้งานก่อนคิดเงิน
+            </p>
+          </section>
+        )}
 
         {b.cheers.length > 0 && (
           <section className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FDF2F8", border: "1px solid #FBCFE8", color: "#9D174D" }}>

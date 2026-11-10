@@ -1,5 +1,6 @@
 "use client";
 
+import type { HeldMembership } from "@/lib/membership-held";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -15,6 +16,8 @@ export interface BookingAddon {
 }
 export interface BookingItem {
   id: string;
+  /** Paid-in-advance membership waiting to be switched on. */
+  heldMembership?: HeldMembership | null;
   date: string;
   startTime: string;
   endTime: string;

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCachedBranchServices, getCachedBranchStaff, getCachedAddons } from "@/lib/branches-cache";
 import { bangkokYmdOf, hasMemberPricingOnDate, serviceMemberRate } from "@/lib/member-pricing";
 import { resolveServicePrice } from "@/lib/promotions";
+import { loadHeldMemberships } from "@/lib/membership-held";
 import BookingDetail from "./BookingDetail";
 
 export const revalidate = 30;
@@ -71,11 +72,12 @@ export default async function MobileBookingDetailPage({
   const bookingYmd = bangkokYmdOf(booking.date);
   const isMember = await hasMemberPricingOnDate(prisma, booking.customerId, bookingYmd);
 
-  const [branchServices, branchStaff, allAddons, branches] = await Promise.all([
+  const [branchServices, branchStaff, allAddons, branches, held] = await Promise.all([
     getCachedBranchServices(booking.branchId),
     getCachedBranchStaff(booking.branchId),
     getCachedAddons(),
     prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    booking.status === "CANCELLED" ? Promise.resolve(new Map()) : loadHeldMemberships([booking.customerId]),
   ]);
 
   // Keep the saved price in step with the customer's status ON the booking date,
@@ -137,6 +139,7 @@ export default async function MobileBookingDetailPage({
     createdAt:    booking.createdAt.toISOString(),
     completedAt:  booking.completedAt ? booking.completedAt.toISOString() : null,
     activatesMembership: booking.activatesMembership,
+    heldMembership: held.get(booking.customerId) ?? null,
     receipt: booking.receipts[0]
       ? { number: booking.receipts[0].number, publicToken: booking.receipts[0].publicToken }
       : null,

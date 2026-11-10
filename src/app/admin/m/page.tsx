@@ -3,6 +3,7 @@ import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
 import { PACKAGE_SPECS } from "@/lib/packages";
 import MobileHome from "./MobileHome";
+import { loadHeldMemberships } from "@/lib/membership-held";
 import { customerLabel } from "@/lib/customer-name";
 
 export const revalidate = 30;
@@ -72,6 +73,7 @@ export default async function MobileHomePage({
             paidAt:      true,
             checkedInAt: true,
             serviceId:   true,
+            customerId:  true,
             service:    {
               select: {
                 nameTh:                true,
@@ -155,6 +157,9 @@ export default async function MobileHomePage({
     branchServiceList.map(bs => [bs.serviceId, bs.price]),
   );
 
+  // Paid-in-advance memberships still waiting to be switched on.
+  const held = await loadHeldMemberships(bookings.map(b => b.customerId));
+
   const data = bookings.map((b) => {
     // Compute member status (inclusive expiry — valid through expiresAt day)
     let memberStatus: "active" | "pending" | "expired" | null = null;
@@ -225,6 +230,7 @@ export default async function MobileHomePage({
       customerPhone:b.customer.phone,
       staffName:    b.staff?.name ?? null,
       cheeredBy:    [...new Set(b.cheers.map(c => c.staff.name))],
+      heldMembership: held.has(b.customerId),
       addonCount:   b._count.addons,
       memberStatus,
       memberExpiresAt,

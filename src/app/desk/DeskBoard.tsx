@@ -394,6 +394,12 @@ function CustomerLine({ b }: { b: DeskBooking }) {
           </span>
         )}
       </p>
+      {b.heldMembership && (
+        <p className="mt-1.5 text-sm font-bold px-2.5 py-1.5 rounded-lg"
+          style={{ background: "#FEF3C7", color: "#92400E", border: "1.5px solid #F59E0B" }}>
+          🎟 จ่ายค่าสมาชิกล่วงหน้าแล้ว — ต้องเปิดใช้งานก่อนคิดเงิน
+        </p>
+      )}
       {b.fiveVisitPackageUsesLeft !== null && (
         <p className="mt-2">
           <span className="text-sm font-extrabold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"

@@ -33,6 +33,7 @@ interface Booking {
   branchName:       string;
   inService?:       boolean;  // checked in, not finished yet
   cheeredBy?:       string[]; // ค่าเชียร์ credited on this booking
+  heldMembership?:  boolean;  // paid a membership in advance, not switched on yet
 }
 interface Shift { date: string; startTime: string; endTime: string; branchName: string | null }
 interface CheerDue {
@@ -331,6 +332,12 @@ function BookingRow({ b, dim = false, compact = false, showBranch = false }: { b
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
               style={{ background: "#FDF2F8", color: "#9D174D" }}>
               📣 {b.cheeredBy.join(", ")}
+            </span>
+          )}
+          {b.heldMembership && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+              style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #F59E0B" }}>
+              🎟 สมาชิกรอเปิด
             </span>
           )}
         </p>

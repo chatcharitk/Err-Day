@@ -1,5 +1,7 @@
 "use client";
 
+import HeldMembershipBanner from "@/components/admin/HeldMembershipBanner";
+import type { HeldMembership } from "@/lib/membership-held";
 import { useAdminHref } from "@/lib/use-admin-href";
 import Link from "next/link";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
@@ -51,6 +53,8 @@ interface Booking {
   completedAt:   string | null;
   isMember:      boolean;
   activatesMembership: boolean;
+  /** Paid-in-advance membership waiting to be switched on (see lib/membership-held). */
+  heldMembership: HeldMembership | null;
   /** The issued sales receipt (Receipt model) — distinct from receiptUrl
    *  above, which is a customer-uploaded payment slip image. */
   receipt:       { number: string; publicToken: string } | null;
@@ -434,7 +438,14 @@ export default function BookingDetail({ booking: initial, branchServices, branch
         </div>
       )}
 
-      {b.activatesMembership && (
+      {b.heldMembership && (
+        <div className="mx-4 mt-3">
+          <HeldMembershipBanner customerId={b.customerId} held={b.heldMembership}
+            onActivated={() => setB(x => ({ ...x, heldMembership: null, isMember: true }))} />
+        </div>
+      )}
+
+      {b.activatesMembership && !b.heldMembership && (
         <div className="mx-4 mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-xs font-medium" style={{ background: "#ECFDF5", color: "#047857" }}>
           <Sparkles size={14} /> เริ่มใช้งานสมาชิกวันนี้ (จ่ายล่วงหน้าแล้ว)
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import type { HeldMembership } from "@/lib/membership-held";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
@@ -38,6 +39,8 @@ interface BookingItem {
   paidAt: string | null;
   /** True when creating this booking auto-activated a held (pre-paid) membership. */
   activatesMembership: boolean;
+  /** Paid-in-advance membership waiting to be switched on. */
+  heldMembership?: HeldMembership | null;
   serviceId: string;
   service: { name: string; nameTh: string; category: string };
   customer: { id: string; name: string; nickname: string | null; phone: string };
@@ -559,7 +562,12 @@ function ListView({ weekBookings, onClickBooking }: {
                           + {b.addons.map(a => a.nameTh || a.name).join(", ")}
                         </div>
                       )}
-                      {b.activatesMembership && (
+                      {b.heldMembership && (
+                        <div className="text-xs truncate mt-0.5 font-semibold" style={{ color: "#B45309" }}>
+                          🎟 มีสมาชิกจ่ายล่วงหน้า — รอเปิดใช้งาน
+                        </div>
+                      )}
+                      {b.activatesMembership && !b.heldMembership && (
                         <div className="text-xs truncate mt-0.5 font-medium" style={{ color: "#047857" }}>
                           เริ่มใช้งานสมาชิกวันนี้
                         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { HeldMembershipCheck } from "@/components/admin/HeldMembershipBanner";
 import CheerPicker, { cheersPayload, type CheerLine } from "@/components/CheerPicker";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
 import CouponPicker, { couponDiscount, couponSaleLine, type PosCoupon } from "@/components/CouponPicker";
@@ -139,6 +140,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     return { id: null, name: "", phone: "" };
   });
   const [memberInfo,     setMemberInfo]     = useState<MemberInfo | null>(null);
+  const [memberRefresh, setMemberRefresh] = useState(0);
   const [activePackages, setActivePackages] = useState<ActivePackage[]>(() => initialActivePackages ?? []);
   const [hasMemberPricing, setHasMemberPricing] = useState(
     () => (prefillBooking?.isMember ?? false) || (initialActivePackages?.length ?? 0) > 0,
@@ -265,7 +267,8 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
         setActivePackages(Array.isArray(data?.packages) ? data.packages : []);
       })
       .catch(() => { setMemberInfo(null); setActivePackages([]); setHasMemberPricing(false); });
-  }, [customer.id, customer.phone]);
+  // memberRefresh: re-read membership after a held one is activated here.
+  }, [customer.id, customer.phone, memberRefresh]);
 
   // When packages load (after customer selection), retroactively apply package
   // redemption to any matching cart items that were added before packages loaded.
@@ -644,6 +647,11 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
       <section className="px-4 py-3">
         <p className="text-xs mb-2 font-medium" style={{ color: MUTED }}>ลูกค้า</p>
         <CustomerSearch value={customer} onChange={c => { if (c.phone !== customer.phone) setCoupon(null); setCustomer(c); }} />
+            {customer.id && (
+              <div className="mt-2">
+                <HeldMembershipCheck customerId={customer.id} onActivated={() => setMemberRefresh(n => n + 1)} />
+              </div>
+            )}
         {/* Existing-member badge */}
         {memberInfo && (
           <div

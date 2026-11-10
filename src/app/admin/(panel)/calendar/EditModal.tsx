@@ -1,5 +1,6 @@
 "use client";
 
+import HeldMembershipBanner from "@/components/admin/HeldMembershipBanner";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -9,6 +10,7 @@ import {
   parseLocal, dayIndex, addMinutes, formatPrice,
   type BookingItem, type StaffItem, type ServiceOption,
 } from "./_shared";
+import BookingSlips from "@/components/admin/BookingSlips";
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import { resolveServicePrice } from "@/lib/promotions";
 
@@ -254,6 +256,9 @@ export default function EditModal({
           </div>
         </div>
         <div className="p-5 space-y-4 overflow-y-auto">
+          {booking.heldMembership && (
+            <HeldMembershipBanner customerId={booking.customer.id} held={booking.heldMembership} onActivated={onSaved} />
+          )}
           {/* Everything the phone booking screen has that this quick editor
               doesn't — slips, receipt, add-ons, discount. */}
           <Link href={`/admin/bookings/${booking.id}`}
@@ -333,6 +338,8 @@ export default function EditModal({
               )}
             </div>
           )}
+          {/* Payment slip — attach right here; saving one marks the booking paid. */}
+          <BookingSlips bookingId={booking.id} onPaid={iso => { if (!paidAt) { setPaidAt(iso); onSaved(); } }} />
           {!checkedOut && (
             <div>
               <p className="text-xs text-gray-400 mb-2">เปลี่ยนสถานะ</p>

@@ -48,6 +48,8 @@ interface BookingRow {
   staffName:         string | null;
   /** Staff credited with ค่าเชียร์ on this booking (desk เชียร์ button). */
   cheeredBy:         string[];
+  /** Paid a membership in advance that still has to be switched on. */
+  heldMembership:    boolean;
   addonCount:        number;
   memberStatus:      "active" | "pending" | "expired" | null;
   memberExpiresAt:   string | null;
@@ -520,7 +522,10 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                               📣 เชียร์ · {b.cheeredBy.join(", ")}
                             </span>
                           )}
-                          {b.memberStatus === "pending" && (
+                          {b.heldMembership && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #F59E0B" }}>🎟 สมาชิกจ่ายแล้ว · รอเปิด</span>
+                          )}
+                          {b.memberStatus === "pending" && !b.heldMembership && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#FFF7ED", color: "#9A3412" }}>รอเปิด</span>
                           )}
                           {b.packages.filter(p => !p.isPending).map(p => (

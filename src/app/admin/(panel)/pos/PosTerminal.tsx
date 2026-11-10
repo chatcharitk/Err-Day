@@ -1,5 +1,6 @@
 "use client";
 
+import { HeldMembershipCheck } from "@/components/admin/HeldMembershipBanner";
 import CheerPicker, { cheersPayload, type CheerLine } from "@/components/CheerPicker";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
 import CouponPicker, { couponDiscount, couponSaleLine, type PosCoupon } from "@/components/CouponPicker";
@@ -150,6 +151,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
 
   const [fromBookingId] = useState<string | null>(prefillBooking?.id ?? null);
   const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null);
+  const [memberRefresh, setMemberRefresh] = useState(0);
   const [activePackages, setActivePackages] = useState<ActivePackage[]>([]);
   const [hasMemberPricing, setHasMemberPricing] = useState(false);
 
@@ -218,7 +220,8 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
         setActivePackages(Array.isArray(data?.packages) ? data.packages : []);
       })
       .catch(() => { setMemberInfo(null); setActivePackages([]); setHasMemberPricing(false); });
-  }, [customer.id, customer.phone]);
+  // memberRefresh: re-read membership after a held one is activated here.
+  }, [customer.id, customer.phone, memberRefresh]);
 
   // ── Auto-add a service by SKU (used when navigating from pending membership tab) ──
   const [autoAdded, setAutoAdded] = useState(false);
@@ -626,6 +629,11 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
           <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid #F0E4D8" }}>
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#8B1D24" }}>ลูกค้า</p>
             <CustomerSearch value={customer} onChange={c => { if (c.phone !== customer.phone) setCoupon(null); setCustomer(c); if (!c.id) setMemberInfo(null); }} />
+            {customer.id && (
+              <div className="mt-2">
+                <HeldMembershipCheck customerId={customer.id} onActivated={() => setMemberRefresh(n => n + 1)} />
+              </div>
+            )}
 
             {/* Member badge */}
             {memberInfo && (

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { loadHeldMemberships } from "@/lib/membership-held";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStaffPerson } from "@/lib/staff-auth";
 import { maskPhone } from "@/lib/staff-person";
@@ -52,6 +53,7 @@ export default async function StaffHome() {
         internalNotes: true,
         staffId:    true,
         checkedInAt: true,
+        customerId: true,
         cheers:     { select: { staff: { select: { name: true } } } },
         service:    { select: { name: true, nameTh: true } },
         customer:   { select: { name: true, phone: true, nickname: true } },
@@ -73,6 +75,8 @@ export default async function StaffHome() {
   const visibleShifts = shifts.filter(sh => !hidden.has(mondayKey(sh.date.toISOString().slice(0, 10))));
 
   const todayStr = ymd(now);
+  // Only today's and later — the reminder matters when the customer comes in.
+  const held = await loadHeldMemberships(weekBookings.filter(b => ymd(b.date) >= todayStr).map(b => b.customerId));
   const weekData = {
     todayStr,
     bookings: weekBookings.map(b => ({
@@ -94,6 +98,7 @@ export default async function StaffHome() {
       branchName:       b.branch.name.replace("err.day ", ""),
       inService:        !!b.checkedInAt && b.status !== "COMPLETED",
       cheeredBy:        [...new Set(b.cheers.map(c => c.staff.name))],
+      heldMembership:   held.has(b.customerId),
     })),
     shifts: visibleShifts.map(s => ({
       date:      ymd(s.date),

@@ -9,6 +9,7 @@
  * the noon-stored value regardless of the runtime timezone.
  */
 
+import { loadHeldMemberships } from "@/lib/membership-held";
 import { prisma } from "@/lib/prisma";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
 
@@ -82,6 +83,9 @@ export interface DeskBooking {
   /** Remaining uses on the customer's active 5-visit package, or null when
    *  they do not currently have one. Displayed prominently on the desk. */
   fiveVisitPackageUsesLeft: number | null;
+  /** Paid a membership in advance that has not been switched on yet — the
+   *  desk tells staff to get it activated before the customer pays. */
+  heldMembership:   boolean;
   serviceName:      string;
   serviceId:        string;
   notes:            string | null;
@@ -197,7 +201,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       orderBy: [{ startTime: "asc" }, { createdAt: "asc" }],
       select: {
         id: true, startTime: true, endTime: true, status: true,
-        staffId: true, checkedInAt: true, paidAt: true, internalNotes: true,
+        staffId: true, checkedInAt: true, paidAt: true, internalNotes: true, customerId: true,
         service:  { select: { name: true, nameTh: true } },
         customer: {
           select: {
@@ -228,6 +232,8 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
     }),
   ]);
 
+  const held = await loadHeldMemberships(rows.map(b => b.customerId));
+
   const bookings: DeskBooking[] = rows.map(b => {
     const walkin = isWalkinCustomer(b.customer.name, b.customer.phone);
     const fiveVisitPackage = b.customer.packages.find(p => p.usagesUsed < p.usageLimit);
@@ -250,6 +256,7 @@ export async function loadDeskBoard(branchId: string): Promise<DeskBoardData> {
       customerPhone:    walkin || !hasRealPhone(b.customer.phone) ? null : b.customer.phone,
       isWalkin:         walkin,
       memberStatus:     walkin ? "none" : fiveVisitPackage ? "active" : membershipStatus,
+      heldMembership:   !walkin && held.has(b.customerId),
       fiveVisitPackageUsesLeft: walkin ? null : fiveVisitPackageUsesLeft,
       serviceName:      b.service.nameTh || b.service.name,
       serviceId:        b.serviceId,

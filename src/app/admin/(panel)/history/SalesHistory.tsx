@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import BookingSlips from "@/components/admin/BookingSlips";
 import { createPortal } from "react-dom";
 import { Pencil, Trash2, X, Save, Search, ChevronDown, ExternalLink, Calendar, Download, ReceiptText } from "lucide-react";
 
@@ -249,6 +250,18 @@ function EditModal({ sale, allStaff, allServices, onClose, onSaved }: EditModalP
               <p style={{ color: MUTED }}>{dateLabel}</p>
               <p style={{ color: TEXT }}>{sale.branch.name} · {sale.customer.phone}</p>
             </div>
+
+            {/* Payment slip — saving one marks the sale paid server-side. Keep
+                the paidAt field and the list row in step so Save doesn't
+                send a stale paidAt back. */}
+            <BookingSlips bookingId={sale.id} onPaid={iso => {
+              if (sale.paidAt) return;
+              setPaidAt(utcToBkkInput(iso));
+              onSaved({ ...sale, paidAt: iso });
+            }} />
+            <Link href={`/admin/bookings/${sale.id}`} className="block text-xs underline" style={{ color: MUTED }}>
+              เปิดหน้าการจองเต็ม (ใบเสร็จ · บริการเสริม · ส่วนลด) →
+            </Link>
 
             {/* Status */}
             <div>
