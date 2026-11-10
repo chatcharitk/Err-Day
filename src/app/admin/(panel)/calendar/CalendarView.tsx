@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { customerLabel } from "@/lib/customer-name";
+import LinePushButton from "@/components/admin/LinePushButton";
 
 // Modals are lazy-loaded — only fetched when the user actually opens one.
 // Cuts ~700 lines (~30-40 KB) from the initial calendar bundle.
@@ -659,6 +660,23 @@ export default function CalendarView({
 
   const selDayIndex = dayIndex(selectedDate);
 
+  // Same "ยืนยันทั้งหมด" the phone home screen has: PENDING → CONFIRMED for
+  // every booking on the selected day at this branch.
+  const pendingForDay = dayBookings.filter(b => b.status === "PENDING").length;
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  async function confirmAllPending() {
+    if (confirmingAll || pendingForDay === 0) return;
+    if (!window.confirm(`ยืนยันการจองที่รอยืนยันทั้งหมด ${pendingForDay} คิวของวันนี้?`)) return;
+    setConfirmingAll(true);
+    try {
+      const res = await fetch("/api/admin/bookings/confirm-day", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: activeBranchId, date: selectedDate }),
+      });
+      if (res.ok) router.refresh();
+    } finally { setConfirmingAll(false); }
+  }
+
   return (
     <div className="flex flex-col gap-4 p-6 bg-[#FDF8F3] min-h-screen">
 
@@ -675,6 +693,14 @@ export default function CalendarView({
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8B1D24]/30">
             {branches.map(br => <option key={br.id} value={br.id}>{br.name}</option>)}
           </select>
+          {pendingForDay > 0 && (
+            <button onClick={confirmAllPending} disabled={confirmingAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border disabled:opacity-50"
+              style={{ background: "#FFF8E8", color: "#B45309", borderColor: "#FCD34D" }}>
+              {confirmingAll ? "กำลังยืนยัน…" : `✓ ยืนยันทั้งหมด (${pendingForDay})`}
+            </button>
+          )}
+          {activeBranchId && <LinePushButton branchId={activeBranchId} kind="bookings" />}
           <button onClick={() => setBlockOpen(true)}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"
             style={{ background: "#374151", color: "white" }}>

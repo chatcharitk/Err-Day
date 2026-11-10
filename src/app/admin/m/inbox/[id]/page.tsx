@@ -1,4 +1,4 @@
-import Link from "next/link";
+import AdminLink from "@/components/admin/AdminLink";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -42,14 +42,14 @@ export default async function MobileInboxThreadPage({ params }: { params: Promis
     <div className="flex flex-col min-h-screen">
       <LiveRefresh threadId={thread.id} />
       <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 bg-white" style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <Link href="/admin/m/inbox" className="p-1" style={{ color: MUTED }}><ArrowLeft size={18} /></Link>
+        <AdminLink href="/admin/m/inbox" className="p-1" style={{ color: MUTED }}><ArrowLeft size={18} /></AdminLink>
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate" style={{ color: TEXT }}>{name}</p>
           <p className="text-[11px] truncate" style={{ color: MUTED }}>
             {thread.customer ? thread.customer.phone : "ยังไม่ผูกกับลูกค้าในระบบ"} · <span style={{ color: ch.color }}>{ch.label}</span>{thread.displayName ? ` · ${thread.displayName}` : ""}
           </p>
         </div>
-        {thread.customer && <Link href={`/admin/m/customers?q=${encodeURIComponent(thread.customer.phone)}`} className="text-xs px-2 py-1 rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>ลูกค้า</Link>}
+        {thread.customer && <AdminLink href={`/admin/m/customers?q=${encodeURIComponent(thread.customer.phone)}`} className="text-xs px-2 py-1 rounded-lg" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>ลูกค้า</AdminLink>}
       </div>
 
       <div className="flex-1 px-3 py-3 space-y-1.5" style={{ background: "#FBF6F2" }}>

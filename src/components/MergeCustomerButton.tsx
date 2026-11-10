@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminHref } from "@/lib/use-admin-href";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Merge, Search, X } from "lucide-react";
@@ -14,6 +15,7 @@ const TEXT = "#3B2A24", MUTED = "#A08070", BORDER = "#E8D8CC", PRIMARY = "#8B1D2
  */
 export default function MergeCustomerButton({ customerId }: { customerId: string }) {
   const router = useRouter();
+  const ah = useAdminHref();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<{ id: string; name: string; nickname: string | null; phone: string }[]>([]);
@@ -45,7 +47,7 @@ export default function MergeCustomerButton({ customerId }: { customerId: string
     setBusy(false);
     if (!res?.ok) { setErr(j?.error ?? "รวมบัญชีไม่สำเร็จ"); return; }
     setOpen(false);
-    router.push(`/admin/m/customers/${keep.id}`);
+    router.push(ah(`/admin/m/customers/${keep.id}`));
     router.refresh();
   }
 

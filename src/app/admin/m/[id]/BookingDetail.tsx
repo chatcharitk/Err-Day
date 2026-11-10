@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminHref } from "@/lib/use-admin-href";
 import Link from "next/link";
 import DiscountAmountInput from "@/components/DiscountAmountInput";
 import { useState, useTransition } from "react";
@@ -115,6 +116,7 @@ function addMinutes(time: string, minutes: number): string {
 
 export default function BookingDetail({ booking: initial, branchServices, branchStaff, allAddons, branches }: Props) {
   const router = useRouter();
+  const ah = useAdminHref();
   const [b, setB] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");
@@ -387,7 +389,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
   };
 
   const goToPos = () => {
-    router.push(`/admin/m/pos?bookingId=${b.id}`);
+    router.push(ah(`/admin/m/pos?bookingId=${b.id}`));
   };
 
   return (
@@ -404,7 +406,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
               {customerLabel({ name: b.customerName, nickname: b.customerNickname })}
             </p>
           </div>
-          <Link href={`/admin/m/customers/${b.customerId}/color?booking=${b.id}`} className="text-xs font-semibold px-2.5 py-1.5 rounded-full"
+          <Link href={ah(`/admin/m/customers/${b.customerId}/color?booking=${b.id}`)} className="text-xs font-semibold px-2.5 py-1.5 rounded-full"
             style={{ color: PRIMARY, border: `1px solid ${PRIMARY}` }}>
             การ์ดสีผม
           </Link>
@@ -489,7 +491,7 @@ export default function BookingDetail({ booking: initial, branchServices, branch
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => router.push(`/admin/m/customers/${b.customerId}`)}
+                  onClick={() => router.push(ah(`/admin/m/customers/${b.customerId}`))}
                   className="text-sm font-medium text-left inline-flex items-center gap-0.5"
                   style={{ color: PRIMARY }}
                 >

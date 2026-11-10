@@ -1,4 +1,4 @@
-import Link from "next/link";
+import AdminLink from "@/components/admin/AdminLink";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -39,7 +39,7 @@ export default async function MobileInboxPage() {
     <div>
       <LiveRefresh />
       <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 bg-white" style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <Link href="/admin/m" className="p-1" style={{ color: MUTED }}><ArrowLeft size={18} /></Link>
+        <AdminLink href="/admin/m" className="p-1" style={{ color: MUTED }}><ArrowLeft size={18} /></AdminLink>
         <p className="font-medium flex-1" style={{ color: TEXT }}>แชทลูกค้า · AI ช่วยร่าง</p>
         <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>ทดลอง</span>
       </div>
@@ -74,7 +74,7 @@ export default async function MobileInboxPage() {
           const draft = t.drafts[0]?.status;
           return (
             <li key={t.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-              <Link href={`/admin/m/inbox/${t.id}`} className="flex items-center gap-3 px-4 py-3">
+              <AdminLink href={`/admin/m/inbox/${t.id}`} className="flex items-center gap-3 px-4 py-3">
                 {t.pictureUrl
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={t.pictureUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
@@ -93,7 +93,7 @@ export default async function MobileInboxPage() {
                   {draft === "READY" && t.unread > 0 && <span className="text-[10px]" style={{ color: "#166534" }}>✨ ร่างพร้อม</span>}
                   {draft === "PENDING" && <span className="text-[10px]" style={{ color: MUTED }}>กำลังร่าง…</span>}
                 </div>
-              </Link>
+              </AdminLink>
             </li>
           );
         })}

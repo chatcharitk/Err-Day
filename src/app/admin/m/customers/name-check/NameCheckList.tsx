@@ -1,7 +1,7 @@
 "use client";
 
+import AdminLink from "@/components/admin/AdminLink";
 import { useState } from "react";
-import Link from "next/link";
 import { ArrowLeft, Check, Phone } from "lucide-react";
 import type { NameCheckItem } from "@/lib/customer-name-check";
 
@@ -22,7 +22,7 @@ export default function NameCheckList({ items }: { items: NameCheckItem[] }) {
   return (
     <main className="pb-16" style={{ background: "#FDF8F3", minHeight: "100vh" }}>
       <header className="sticky top-0 z-20 bg-white px-4 py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <Link href="/admin/m/customers" className="p-1" style={{ color: MUTED }} aria-label="กลับ"><ArrowLeft size={18} /></Link>
+        <AdminLink href="/admin/m/customers" className="p-1" style={{ color: MUTED }} aria-label="กลับ"><ArrowLeft size={18} /></AdminLink>
         <h1 className="text-base font-medium flex-1" style={{ color: TEXT }}>ตรวจชื่อลูกค้า</h1>
         <span className="text-sm" style={{ color: left ? PRIMARY : OK }}>{left ? `เหลือ ${left}` : "ครบแล้ว ✓"}</span>
       </header>

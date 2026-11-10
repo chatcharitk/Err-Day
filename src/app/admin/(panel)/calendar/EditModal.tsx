@@ -254,6 +254,14 @@ export default function EditModal({
           </div>
         </div>
         <div className="p-5 space-y-4 overflow-y-auto">
+          {/* Everything the phone booking screen has that this quick editor
+              doesn't — slips, receipt, add-ons, discount. */}
+          <Link href={`/admin/bookings/${booking.id}`}
+            className="block px-3 py-2.5 rounded-xl transition-colors hover:bg-[#F5E8E8]"
+            style={{ background: "#FBF3F0", border: "1px solid #EAD3CC" }}>
+            <span className="block text-sm font-semibold" style={{ color: "#8B1D24" }}>เปิดหน้าการจองเต็ม →</span>
+            <span className="block text-xs" style={{ color: "#A08070" }}>อัปโหลดสลิป · ใบเสร็จ · บริการเสริม · ส่วนลด</span>
+          </Link>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-1.5 flex-1">
               <span className="text-sm text-gray-400">฿</span>

@@ -7,9 +7,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!me) redirect("/admin/login");
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: "#FDF8F3" }}>
+    // Sidebar and content scroll separately (content in <main>), so sticky
+    // headers and the chat composer on shared phone screens stay pinned.
+    <div className="h-screen flex overflow-hidden print:block print:h-auto print:overflow-visible" style={{ backgroundColor: "#FDF8F3" }}>
       <AdminSidebar role={me.role} name={me.name} />
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto print:overflow-visible">{children}</main>
     </div>
   );
 }

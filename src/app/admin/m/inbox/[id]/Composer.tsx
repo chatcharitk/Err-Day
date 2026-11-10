@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminHref } from "@/lib/use-admin-href";
 import { useState } from "react";
 import { DRAFT_FEEDBACK_REASONS, sameReply } from "@/lib/inbox-feedback";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,7 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
   const isLine = channel === "LINE";
   const via = channel === "FACEBOOK" ? "Facebook" : channel === "INSTAGRAM" ? "Instagram" : "LINE";
   const router = useRouter();
+  const ah = useAdminHref();
   const ready = draft && (draft.status === "READY" || draft.status === "EDITED" || draft.status === "USED") ? draft : null;
   const [text, setText] = useState("");
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -176,7 +178,7 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
           <p className="font-semibold">{thaiDay(draft.booking.date)} {draft.booking.startTime}–{draft.booking.endTime}</p>
           <p>{draft.booking.customer.name} · {draft.booking.customer.phone}</p>
           {draft.booking.notifiedOnLine && <p className="text-[10px]" style={{ color: MUTED }}>ลูกค้าจะได้ข้อความแจ้งยกเลิกของร้านทาง LINE ด้วย</p>}
-          <Link href={`/admin/m/${draft.booking.bookingId}`} className="text-[11px] underline" style={{ color: MUTED }}>ดูการจอง</Link>
+          <Link href={ah(`/admin/m/${draft.booking.bookingId}`)} className="text-[11px] underline" style={{ color: MUTED }}>ดูการจอง</Link>
         </div>
       )}
 
@@ -189,7 +191,7 @@ export default function Composer({ threadId, customerName, channel, draft }: { t
           <p className="font-semibold">{thaiDay(draft.booking.date)} {draft.booking.startTime}–{draft.booking.endTime} · ฿{(draft.booking.priceSatang / 100).toLocaleString("th-TH")}</p>
           <p>{draft.booking.customer.name} · {draft.booking.customer.phone}</p>
           <p className="text-[10px]" style={{ color: MUTED }}>{KIND_LABEL[draft.booking.customer.kind]}{draft.booking.cardOnLine ? " · ลูกค้าจะได้การ์ดยืนยันการจองทาง LINE" : ""}</p>
-          {draft.bookingId && <Link href={`/admin/m/${draft.bookingId}`} className="text-[11px] underline" style={{ color: "#166534" }}>ดูการจอง</Link>}
+          {draft.bookingId && <Link href={ah(`/admin/m/${draft.bookingId}`)} className="text-[11px] underline" style={{ color: "#166534" }}>ดูการจอง</Link>}
         </div>
       )}
 

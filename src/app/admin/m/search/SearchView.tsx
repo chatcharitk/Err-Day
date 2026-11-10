@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminHref } from "@/lib/use-admin-href";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -40,6 +41,7 @@ const STATUS_META: Record<Status, { label: string; bg: string; fg: string }> = {
 
 export default function SearchView() {
   const router = useRouter();
+  const ah = useAdminHref();
   const [q, setQ] = useState("");
   const [customers, setCustomers] = useState<CustomerHit[]>([]);
   const [loading,   setLoading]   = useState(false);
@@ -134,7 +136,7 @@ export default function SearchView() {
                         return (
                           <Link
                             key={b.id}
-                            href={`/admin/m/${b.id}`}
+                            href={ah(`/admin/m/${b.id}`)}
                             className="flex items-center gap-2 px-4 py-2.5 hover:bg-stone-50"
                             style={{ color: TEXT }}
                           >

@@ -26,7 +26,7 @@ import {
   Wallet,
   Activity,
   Ticket,
-  FileText, Package, Printer } from "lucide-react";
+  FileText, Package, Printer, MessageCircle, Search, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const MENU = [
@@ -34,12 +34,15 @@ const MENU = [
   { href: "/admin/live",       labelTh: "หน้าร้านสด",     label: "Live",         icon: Activity,                                  ownerOnly: false },
   { href: "/admin/pos",        labelTh: "POS",            label: "POS",          icon: ShoppingCart,                              ownerOnly: false },
   { href: "/admin/calendar",   labelTh: "ปฏิทิน",        label: "Calendar",     icon: Calendar,                                   ownerOnly: false },
+  { href: "/admin/search",     labelTh: "ค้นหา",          label: "Search",       icon: Search,                                     ownerOnly: false },
+  { href: "/admin/inbox",      labelTh: "แชทลูกค้า",      label: "Inbox",        icon: MessageCircle,                              ownerOnly: false },
   { href: "/admin/customers",  labelTh: "ลูกค้า",         label: "Customers",    icon: Users,                                     ownerOnly: false },
   { href: "/admin/history",    labelTh: "ประวัติการขาย",  label: "Sales History", icon: History,                                  ownerOnly: false },
   { href: "/admin/payroll",    labelTh: "ค่าตอบแทน",       label: "Payroll",       icon: Wallet,                                    ownerOnly: true  },
   { href: "/admin/payslips",   labelTh: "สลิปเงินเดือน",    label: "Pay Slips",     icon: FileText,                                  ownerOnly: true  },
   { href: "/admin/expenses",   labelTh: "บันทึกรายจ่าย",    label: "Expenses",     icon: Receipt,                                    ownerOnly: false },
   { href: "/admin/stock",      labelTh: "สต็อก",          label: "Inventory",    icon: Package,                                    ownerOnly: false },
+  { href: "/admin/restock",    labelTh: "ของที่ต้องเติม",   label: "Restock",      icon: ClipboardList,                              ownerOnly: false },
   { href: "/admin/membership", labelTh: "ระดับสมาชิก",   label: "Membership",   icon: CreditCard,                                 ownerOnly: false },
   { href: "/admin/staff",      labelTh: "พนักงาน",        label: "Staff Mgmt.",  icon: UserCog,                                    ownerOnly: false },
   { href: "/admin/shifts",     labelTh: "ตารางงาน",       label: "Shifts",       icon: CalendarClock,                              ownerOnly: false },
@@ -71,7 +74,7 @@ export default function AdminSidebar({ role = "ADMIN", name }: AdminSidebarProps
 
   return (
     <aside
-      className="w-56 min-h-screen flex-shrink-0 flex flex-col"
+      className="w-56 h-screen overflow-y-auto flex-shrink-0 flex flex-col print:hidden"
       style={{ backgroundColor: "#3B2A24" }}
     >
       {/* Branding */}

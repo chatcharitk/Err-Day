@@ -1,5 +1,6 @@
 "use client";
 
+import LinePushButton from "@/components/admin/LinePushButton";
 import StaffVisibilityToggle from "@/components/StaffVisibilityToggle";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { defaultBranchId } from "@/lib/utils";
@@ -156,6 +157,8 @@ export default function ShiftsManager({ branches }: { branches: Branch[] }) {
               ))}
             </select>
           </div>
+
+          {branchId && <LinePushButton branchId={branchId} kind="shifts" />}
 
           {/* Week navigation */}
           <div className="flex items-center gap-1 ml-auto">

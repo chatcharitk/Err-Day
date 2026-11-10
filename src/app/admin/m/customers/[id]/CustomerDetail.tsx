@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminHref } from "@/lib/use-admin-href";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -132,6 +133,7 @@ function paymentLabel(method: string | null): string {
 
 export default function CustomerDetail({ customer: initial }: { customer: Customer }) {
   const router = useRouter();
+  const ah = useAdminHref();
   const [c, setC] = useState(initial);
   const [editing, setEditing] = useState(false);
 
@@ -270,7 +272,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
     try {
       const res = await fetch(`/api/admin/customers/${c.id}`, { method: "DELETE" });
       if (!res.ok) { setBusyError("ลบไม่สำเร็จ"); return; }
-      router.push("/admin/m/customers");
+      router.push(ah("/admin/m/customers"));
     } finally { setBusy(false); }
   };
 
@@ -517,7 +519,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
 
       {/* Hair-colour record */}
       <section className="px-4 pb-4">
-        <Link href={`/admin/m/customers/${c.id}/color`} className="flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold bg-white"
+        <Link href={ah(`/admin/m/customers/${c.id}/color`)} className="flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold bg-white"
           style={{ color: PRIMARY, border: `1px solid ${PRIMARY}` }}>
           การ์ดสีผม · ประวัติสูตรสี
           <span>›</span>
@@ -826,7 +828,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
           <p className="text-xs mb-2 font-medium uppercase tracking-widest" style={{ color: MUTED }}>ประวัติการจองและการขาย</p>
           <div className="space-y-2">
             {c.recentBookings.map(b => (
-              <Link key={b.id} href={`/admin/m/${b.id}`}
+              <Link key={b.id} href={ah(`/admin/m/${b.id}`)}
                 className="block rounded-xl p-3 active:opacity-70"
                 style={{ border: `1px solid ${BORDER}`, background: "white" }}>
                 <div className="flex items-center justify-between mb-1">

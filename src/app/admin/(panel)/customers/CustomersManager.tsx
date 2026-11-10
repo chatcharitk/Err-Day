@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import {
   UserPlus, Pencil, Search, ChevronDown, X, Save, Phone, Mail, Calendar,
   User as UserIcon, CreditCard, Clock, MapPin, Plus, Zap, Trash2,
@@ -1318,6 +1319,13 @@ function CustomerDetailModal({ customer: initial, onClose, onSaved, onDeleted }:
                 <span className="text-xs" style={{ color: MUTED }}>
                   สมาชิกตั้งแต่ {joinDate}
                 </span>
+                {/* Full customer screen (shared with the phone app): photos,
+                    hair-colour record, merge duplicates. */}
+                <a href={`/admin/customers/${customer.id}`}
+                  className="text-xs px-2 py-0.5 rounded-full font-medium hover:underline"
+                  style={{ color: "#2563EB", border: "1px solid #BFDBFE", background: "#EFF6FF" }}>
+                  หน้าลูกค้าเต็ม · สีผม · รวมชื่อซ้ำ →
+                </a>
               </div>
             </div>
 
@@ -1608,8 +1616,10 @@ function BookingRow({ booking, highlight }: { booking: BookingRecord; highlight?
     .toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
 
   return (
-    <div
-      className="rounded-xl border p-3 flex items-center justify-between gap-3"
+    <a
+      href={`/admin/bookings/${booking.id}`}
+      title="เปิดหน้าการจอง (สลิป · ใบเสร็จ)"
+      className="rounded-xl border p-3 flex items-center justify-between gap-3 hover:shadow-sm transition-shadow"
       style={{
         borderColor: highlight ? "#BFDBFE" : BORDER,
         background:  highlight ? "#EFF6FF" : "white",
@@ -1632,7 +1642,7 @@ function BookingRow({ booking, highlight }: { booking: BookingRecord; highlight?
         </span>
         <span className="text-sm font-semibold" style={{ color: PRIMARY }}>{fmt(booking.totalPrice)}</span>
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -1826,6 +1836,12 @@ export default function CustomersManager({ customers: initial }: Props) {
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>CRM</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>ลูกค้า</h1>
         </div>
+        <div className="flex items-center gap-2">
+        <Link href="/admin/customers/name-check"
+          className="px-3 py-2 rounded-xl text-sm font-medium border"
+          style={{ borderColor: BORDER, color: TEXT, background: "white" }}>
+          ตรวจชื่อลูกค้า
+        </Link>
         <button
           onClick={() => setShowAdd(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
@@ -1834,6 +1850,7 @@ export default function CustomersManager({ customers: initial }: Props) {
           <UserPlus size={16} />
           เพิ่มลูกค้า
         </button>
+        </div>
       </div>
 
       <SummaryBar customers={customers} />
