@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     // even when the selected service is not redeemed from the package.
     hasMemberPricing: priceDate
       ? await hasMemberPricingOnDate(prisma, customer.id, priceDate)
-      : hasActiveMembership || activePackages.length > 0,
+      : hasActiveMembership || activePackages.some(p => !p.spec.voucher),
     packages: activePackages.map(p => ({
       id:               p.id,
       sku:              p.packageSku,

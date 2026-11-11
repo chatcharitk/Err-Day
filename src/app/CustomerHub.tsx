@@ -26,7 +26,7 @@ type Booking = ReschedulableBooking & {
 };
 type MembershipData = {
   membership?: { label?: string | null; expiresAt?: string | null; isExpired?: boolean } | null;
-  packages?: Array<{ id: string; nameTh: string; expiresAt: string; usagesUsed: number; usagesLeft: number | null; usageLimit: number }>;
+  packages?: Array<{ id: string; nameTh: string; memberPricing?: boolean; expiresAt: string; usagesUsed: number; usagesLeft: number | null; usageLimit: number }>;
 };
 type Customer = { name: string; nickname?: string | null; phone: string; dateOfBirth?: string | null };
 type Reading = { love: string; career: string; finance: string };
@@ -340,7 +340,7 @@ export default function CustomerHub({ branches, tarotEnabled }: { branches: Bran
               <span className="foil" /><div className="card-top"><div><small>ERR.DAY MEMBER</small><h2>{membership.membership.label || u.member}</h2></div><b>{membership.membership.isExpired ? u.expired : u.active}</b></div>
               <div className="card-stats"><div><small>{u.daysLeft}</small><strong>{daysUntil(membership.membership.expiresAt)}<em> {u.days}</em></strong></div><div><small>{u.expires}</small><span>{membership.membership.expiresAt ? displayDate(membership.membership.expiresAt, lang) : u.noExpiry}</span></div></div>
             </div>}
-            {activePackage && <div className="package-card"><small>ERR.DAY PACKAGE · {u.memberPricing}</small><h2>{activePackage.nameTh}</h2><div className="card-stats"><div>{activePackage.usagesLeft !== null ? <><small>{u.usesRemaining}</small><strong>{activePackage.usagesLeft}<em> {u.uses}</em></strong><small>{u.totalUses} {activePackage.usageLimit} {u.uses} · {u.usedUses} {activePackage.usagesUsed} {u.uses}</small></> : <><small>{u.unlimitedUses}</small><strong>{activePackage.usagesUsed}<em> {u.uses}</em></strong><small>{u.usedUses}</small></>}</div><span>{u.expires} {displayDate(activePackage.expiresAt, lang)}</span></div></div>}
+            {activePackage && <div className="package-card"><small>ERR.DAY PACKAGE{activePackage.memberPricing !== false && <> · {u.memberPricing}</>}</small><h2>{activePackage.nameTh}</h2><div className="card-stats"><div>{activePackage.usagesLeft !== null ? <><small>{u.usesRemaining}</small><strong>{activePackage.usagesLeft}<em> {u.uses}</em></strong><small>{u.totalUses} {activePackage.usageLimit} {u.uses} · {u.usedUses} {activePackage.usagesUsed} {u.uses}</small></> : <><small>{u.unlimitedUses}</small><strong>{activePackage.usagesUsed}<em> {u.uses}</em></strong><small>{u.usedUses}</small></>}</div><span>{u.expires} {displayDate(activePackage.expiresAt, lang)}</span></div></div>}
             {!membership?.membership && !activePackage && <div className="empty-card"><small>ERR.DAY MEMBER</small><h2>{u.noPlan}</h2><p>{u.noPlanText}</p><Link href="/liff/membership/signup">{u.viewPlans}</Link></div>}
           </section>
 

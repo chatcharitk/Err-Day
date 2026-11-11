@@ -14,6 +14,7 @@ import {
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import ShopPrintButton from "@/components/ShopPrintButton";
 import { getPromotionServicePrice } from "@/lib/promotions";
+import { isVoucherSku } from "@/lib/voucher-skus";
 
 interface Branch { id: string; name: string; }
 
@@ -686,7 +687,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
               <div key={p.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                 <Sparkles size={14} style={{ color: "#1D4ED8" }} />
                 <p className="text-xs font-semibold flex-1" style={{ color: "#1D4ED8" }}>
-                  {p.nameTh}{p.usagesLeft != null && ` — ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง`} · ได้ราคาสมาชิก
+                  {p.nameTh}{p.usagesLeft != null && ` — ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง`}{isVoucherSku(p.sku) ? " · ซื้อไว้แล้ว ใช้ฟรี" : " · ได้ราคาสมาชิก"}
                 </p>
               </div>
             ))}

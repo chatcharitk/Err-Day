@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isVoucherSku } from "@/lib/voucher-skus";
 import { prisma } from "@/lib/prisma";
 import { getKioskBranch } from "@/lib/kiosk-auth";
 
@@ -99,7 +100,7 @@ export async function GET(request: Request) {
   const results = customers.map((c) => {
     const mem = c.membership;
     const usablePackages = c.packages.filter(p =>
-      p.usageLimit === 0 || p.usagesUsed < p.usageLimit
+      (p.usageLimit === 0 || p.usagesUsed < p.usageLimit) && !isVoucherSku(p.packageSku)
     );
     // Three states for the counter: active member / used to be a member
     // (expired or used up) / never a member. A pending (not yet activated)

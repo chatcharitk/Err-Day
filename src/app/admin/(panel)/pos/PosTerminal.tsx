@@ -11,6 +11,7 @@ import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/p
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import ShopPrintButton from "@/components/ShopPrintButton";
 import { getPromotionServicePrice } from "@/lib/promotions";
+import { isVoucherSku } from "@/lib/voucher-skus";
 
 type BS = BranchService & { service: Service };
 
@@ -222,6 +223,27 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
       .catch(() => { setMemberInfo(null); setActivePackages([]); setHasMemberPricing(false); });
   // memberRefresh: re-read membership after a held one is activated here.
   }, [customer.id, customer.phone, memberRefresh]);
+
+  // When the customer's packages load, use them on matching items already in
+  // the cart — e.g. a booking opened from the calendar for "คิดเงิน", where
+  // the service is in the cart before the customer's vouchers are known.
+  useEffect(() => {
+    if (activePackages.length === 0) return;
+    setCart(prev => {
+      let changed = false;
+      const next = prev.map((item, idx) => {
+        if (item.redeemPackageId || item.isCustom || item.qty !== 1 || item.id.startsWith("addon-")) return item;
+        const bs = branchServices.find(s => s.id === item.id);
+        if (!bs) return item;
+        const pkg = pickPackageFor(bs, prev);
+        if (!pkg) return item;
+        changed = true;
+        return { ...item, id: `${bs.id}__pkg-${pkg.id}-${idx}`, price: 0, redeemPackageId: pkg.id, redeemPackageName: pkg.nameTh };
+      });
+      return changed ? next : prev;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePackages]);
 
   // ── Auto-add a service by SKU (used when navigating from pending membership tab) ──
   const [autoAdded, setAutoAdded] = useState(false);
@@ -657,7 +679,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                 <PackageIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#2563EB" }} />
                 <p className="text-xs font-semibold flex-1" style={{ color: "#1E40AF" }}>
-                  {p.nameTh} {p.usagesLeft !== null ? `· ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง` : "· ไม่จำกัด"} · ได้ราคาสมาชิก
+                  {p.nameTh} {p.usagesLeft !== null ? `· ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง` : "· ไม่จำกัด"}{isVoucherSku(p.sku) ? " · ซื้อไว้แล้ว ใช้ฟรี" : " · ได้ราคาสมาชิก"}
                 </p>
               </div>
             ))}

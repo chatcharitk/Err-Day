@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -99,7 +100,8 @@ export async function hasMemberPricingOnDate(
       },
     }),
     db.customerPackage.findMany({
-      where: { customerId },
+      // Prepaid vouchers pay for one service only — no member pricing.
+      where: { customerId, packageSku: { notIn: VOUCHER_SKUS } },
       select: {
         startedAt: true, expiresAt: true, closedAt: true,
         pendingActivation: true, usageLimit: true, usagesUsed: true,

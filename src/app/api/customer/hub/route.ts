@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     packages: activePackages.map(item => ({
       id: item.id,
       nameTh: item.spec.nameTh,
+      memberPricing: !item.spec.voucher,
       expiresAt: item.expiresAt.toISOString(),
       usagesUsed: item.usagesUsed,
       usagesLeft: item.usagesLeft,
