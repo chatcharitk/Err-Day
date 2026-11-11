@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { PACKAGE_SPECS, VOUCHER_USED_PREFIX } from "@/lib/packages";
 import { VOUCHER_SKUS } from "@/lib/voucher-skus";
+import VoucherNotifyButton from "./VoucherNotifyButton";
 
 const TEXT = "#3B2A24", MUTED = "#A08070", BORDER = "#E8D8CC";
 
@@ -21,7 +22,7 @@ export default async function VoucherHolders({ compact }: { compact?: boolean })
   const rows = await prisma.customerPackage.findMany({
     where: { packageSku: { in: VOUCHER_SKUS } },
     orderBy: { startedAt: "desc" },
-    include: { customer: { select: { id: true, name: true, nickname: true, phone: true } } },
+    include: { customer: { select: { id: true, name: true, nickname: true, phone: true, lineUserId: true } } },
   });
   if (rows.length === 0 && !VOUCHER_SKUS.some(s => PACKAGE_SPECS[s]?.expiresOn && PACKAGE_SPECS[s].expiresOn! >= new Date().toISOString().slice(0, 10))) {
     return null;
@@ -36,6 +37,11 @@ export default async function VoucherHolders({ compact }: { compact?: boolean })
       select: { id: true, date: true, paidAt: true, branch: { select: { name: true } } },
     })).map(b => [b.id, b]),
   );
+
+  const sentIds = new Set((await prisma.notificationLog.findMany({
+    where: { kind: "PACKAGE_ACTIVATED", status: "SENT", targetId: { in: rows.map(r => r.id) } },
+    select: { targetId: true },
+  })).map(l => l.targetId));
 
   const now = new Date();
   const items = rows.map(r => {
@@ -95,6 +101,7 @@ export default async function VoucherHolders({ compact }: { compact?: boolean })
                   ซื้อ {day(r.startedAt)} {branchShort(bought?.branch.name)} · {baht(r.paidAmount)}
                   {r.bookingId && <> · <Link href={bookingHref(r.bookingId)} className="underline">บิลซื้อ</Link></>}
                 </p>
+                <div className="mt-1.5"><VoucherNotifyButton pkgId={r.id} sent={sentIds.has(r.id)} linked={!!r.customer.lineUserId} /></div>
                 <p className="text-xs" style={{ color: MUTED }}>
                   {status === "used"
                     ? <>ใช้ {used ? `${day(used.date)} ${branchShort(used.branch.name)}` : ""}{usedId && <> · <Link href={bookingHref(usedId)} className="underline">บิลที่ใช้</Link></>}</>
@@ -108,7 +115,7 @@ export default async function VoucherHolders({ compact }: { compact?: boolean })
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs" style={{ color: MUTED }}>
-                  {["ลูกค้า", "เบอร์", "ซื้อเมื่อ", "สาขา", "จ่าย", "สถานะ", "ใช้เมื่อ / ใช้ได้ถึง", ""].map(h => (
+                  {["ลูกค้า", "เบอร์", "ซื้อเมื่อ", "สาขา", "จ่าย", "สถานะ", "ใช้เมื่อ / ใช้ได้ถึง", "ไลน์", ""].map(h => (
                     <th key={h} className="py-2 pr-3 font-medium">{h}</th>
                   ))}
                 </tr>
@@ -131,6 +138,7 @@ export default async function VoucherHolders({ compact }: { compact?: boolean })
                         ? <>{used ? `${day(used.date)} ${branchShort(used.branch.name)}` : "ใช้แล้ว"}{usedId && <> · <Link href={bookingHref(usedId)} className="underline text-xs">บิลที่ใช้</Link></>}</>
                         : <span style={{ color: MUTED }}>ถึง {day(r.expiresAt)}</span>}
                     </td>
+                    <td className="py-2 pr-3"><VoucherNotifyButton pkgId={r.id} sent={sentIds.has(r.id)} linked={!!r.customer.lineUserId} /></td>
                     <td className="py-2 text-xs">
                       {r.bookingId && <Link href={bookingHref(r.bookingId)} className="underline" style={{ color: MUTED }}>บิลซื้อ</Link>}
                     </td>
