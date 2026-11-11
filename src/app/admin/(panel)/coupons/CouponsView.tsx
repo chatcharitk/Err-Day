@@ -3,6 +3,7 @@ import { bangkokTodayKey } from "@/lib/member-pricing";
 import { couponStatus } from "@/lib/coupons";
 import { campaignPhase, ymdOf } from "@/lib/coupon-rules";
 import CouponsManager from "./CouponsManager";
+import VoucherHolders from "./VoucherHolders";
 
 /** Server view shared by the desktop page and the mobile page. */
 export default async function CouponsView({ selectedId, basePath, compact }: { selectedId?: string; basePath: string; compact?: boolean }) {
@@ -49,6 +50,7 @@ export default async function CouponsView({ selectedId, basePath, compact }: { s
   }
 
   return (
+    <>
     <CouponsManager
       basePath={basePath}
       compact={compact}
@@ -80,5 +82,7 @@ export default async function CouponsView({ selectedId, basePath, compact }: { s
         })),
       } : null}
     />
+    <VoucherHolders compact={compact} />
+    </>
   );
 }

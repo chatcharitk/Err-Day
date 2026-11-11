@@ -367,7 +367,7 @@ export async function POST(request: Request) {
 
       // Apply any package redemptions flagged by the cart
       for (const rid of redemptionIds) {
-        await redeemPackage(rid);
+        await redeemPackage(rid, booking.id);
       }
 
       await recordCoupon(booking.id);
@@ -484,7 +484,7 @@ export async function POST(request: Request) {
     }
 
     for (const rid of redemptionIds) {
-      await redeemPackage(rid);
+      await redeemPackage(rid, booking.id);
     }
 
     await recordCoupon(booking.id);

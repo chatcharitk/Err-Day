@@ -295,9 +295,21 @@ export function pickRedemption(
  * Increment usagesUsed atomically for a package. Caller is responsible for
  * having checked the package is still valid right before redemption.
  */
-export async function redeemPackage(packageId: string) {
-  return prisma.customerPackage.update({
+export async function redeemPackage(packageId: string, bookingId?: string) {
+  const row = await prisma.customerPackage.update({
     where: { id: packageId },
     data:  { usagesUsed: { increment: 1 } },
   });
+  // Vouchers are single-use: remember which bill used it, for the admin list
+  // under คูปอง (see VOUCHER_USED_PREFIX).
+  if (bookingId && PACKAGE_SPECS[row.packageSku]?.voucher) {
+    await prisma.customerPackage.update({
+      where: { id: packageId },
+      data:  { notes: `${VOUCHER_USED_PREFIX}${bookingId}` },
+    });
+  }
+  return row;
 }
+
+/** `notes` on a voucher row once used: prefix + the booking id of that bill. */
+export const VOUCHER_USED_PREFIX = "used-on-booking:";
