@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { pushText, pushLine, multicastText } from "@/lib/line-messaging";
 import { buildCouponReceivedFlex } from "@/lib/flex/coupon";
 import { buildBookingFlex } from "@/lib/flex/booking";
-import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, promoHeroUrl } from "@/lib/flex/membership";
+import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, buildVoucherPurchasedFlex, promoHeroUrl, VOUCHER_HERO } from "@/lib/flex/membership";
 import { branchGroupId } from "@/lib/line-groups";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import { notifyAdmins } from "@/lib/notify-admin";
@@ -998,6 +998,35 @@ export async function sendPackageActivated(packageId: string): Promise<SendResul
   }
 
   const productName = PACKAGE_NAME_TH[p.packageSku] ?? p.packageSku;
+
+  // Prepaid voucher: one "you've got it" card per bill, however many were bought.
+  const spec = PACKAGE_SPECS[p.packageSku];
+  if (spec?.voucher) {
+    const sameBill = p.bookingId
+      ? await prisma.customerPackage.findMany({
+          where: { bookingId: p.bookingId, packageSku: p.packageSku, customerId: p.customerId },
+          select: { id: true }, orderBy: { id: "asc" },
+        })
+      : [{ id: p.id }];
+    if (sameBill[0]?.id !== p.id) {
+      await recordLog({ kind, targetId: packageId, status: "SKIPPED", error: "batched_with_bill" });
+      return { kind, targetId: packageId, status: "SKIPPED", reason: "batched_with_bill" };
+    }
+    const r = await pushLine(p.customer.lineUserId, [buildVoucherPurchasedFlex({
+      greetName:   p.customer.nickname || p.customer.name,
+      voucherName: spec.nameTh,
+      serviceName: "PJOLI Treatment",
+      count:       sameBill.length,
+      expiresAt:   p.expiresAt,
+      heroUrl:     VOUCHER_HERO[p.packageSku],
+    })]);
+    if (r.ok) {
+      await recordLog({ kind, targetId: packageId, status: "SENT", recipient: p.customer.lineUserId });
+      return { kind, targetId: packageId, status: "SENT" };
+    }
+    await recordLog({ kind, targetId: packageId, status: "FAILED", recipient: p.customer.lineUserId, error: r.error });
+    return { kind, targetId: packageId, status: "FAILED", reason: r.error };
+  }
 
   const flex = buildEntitlementActivatedFlex({
     greetName:   p.customer.nickname || p.customer.name,

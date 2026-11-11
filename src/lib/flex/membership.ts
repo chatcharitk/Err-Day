@@ -154,3 +154,61 @@ export function buildEntitlementActivatedFlex(args: {
     },
   };
 }
+
+/**
+ * "You've got your voucher" card for a prepaid event voucher (e.g. 11.11
+ * PJOLI Treatment) — sent once per bill, right after the POS sale.
+ */
+export function buildVoucherPurchasedFlex(args: {
+  greetName:   string;
+  voucherName: string;
+  serviceName: string;
+  count:       number;   // vouchers bought on this bill
+  expiresAt:   Date;
+  heroUrl?:    string;
+}): LineMessage {
+  const until = args.expiresAt.toLocaleDateString("th-TH", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok",
+  });
+  return {
+    type: "flex",
+    altText: `ได้รับ${args.voucherName}แล้ว ${args.count > 1 ? `${args.count} ใบ ` : ""}ใช้ได้ถึง ${until} 🎫`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      ...(args.heroUrl ? { hero: { type: "image", url: args.heroUrl, size: "full", aspectRatio: "4:5", aspectMode: "cover" } } : {}),
+      header: {
+        type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: PRIMARY,
+        contents: [
+          { type: "text", text: "🎫 ได้รับบัตรเรียบร้อยแล้ว", color: "#FFFFFF", weight: "bold", size: "md", wrap: true },
+          { type: "text", text: args.voucherName, color: "#FFFFFF", size: "xs", margin: "xs", wrap: true },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", backgroundColor: BG_BEIGE,
+        contents: [
+          { type: "text", text: `ขอบคุณที่ซื้อโปรค่ะ คุณ${args.greetName} 💕`, weight: "bold", size: "sm", color: TEXT, wrap: true },
+          { type: "separator", margin: "md", color: "#EADBCF" },
+          { type: "box", layout: "vertical", spacing: "sm", margin: "md", contents: [
+            row("สิทธิ์", `${args.serviceName} ${args.count} ครั้ง`, true),
+            row("ใช้ได้ถึง", until, true),
+          ] },
+          { type: "text", wrap: true, size: "xs", color: MUTED, margin: "md",
+            text: "จองคิวหรือ walk-in ได้ตามสะดวก แจ้งชื่อที่เคาน์เตอร์ ระบบจะตัดสิทธิ์ให้อัตโนมัติ ไม่ต้องจ่ายเพิ่มค่ะ" },
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", backgroundColor: BG_BEIGE,
+        contents: [
+          { type: "button", style: "primary", color: PRIMARY, height: "sm",
+            action: { type: "uri", label: "📅 จองคิวใช้สิทธิ์", uri: BOOK_URL } },
+        ],
+      },
+    },
+  };
+}
+
+/** Hero images for voucher SKUs (public/promos/). */
+export const VOUCHER_HERO: Record<string, string> = {
+  "svc-voucher-pjoli-1111": `${APP_HOST}/promos/pjoli-1111.jpg`,
+};
