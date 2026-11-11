@@ -6,11 +6,12 @@ import { maskPhone } from "@/lib/staff-person";
 import StaffDashboard from "./StaffDashboard";
 import { hiddenWeeks, mondayKey } from "@/lib/shift-visibility";
 import { loadCheerDue } from "@/lib/cheer-due-list";
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 export const dynamic  = "force-dynamic"; // cookie-dependent
 export const metadata = { title: "ตารางงานของฉัน — err.day" };
 
-const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-retail"];
+const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-retail", ...VOUCHER_SKUS];
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

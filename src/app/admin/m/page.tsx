@@ -5,6 +5,7 @@ import { PACKAGE_SPECS } from "@/lib/packages";
 import MobileHome from "./MobileHome";
 import { loadHeldMemberships } from "@/lib/membership-held";
 import { customerLabel } from "@/lib/customer-name";
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 export const revalidate = 30;
 
@@ -52,7 +53,7 @@ export default async function MobileHomePage({
   const todayUTC = new Date(); todayUTC.setUTCHours(0, 0, 0, 0);
   // Sale-only SKUs (membership/package purchases) are stored as bookings so
   // they appear in sales history, but excluded from booking lists.
-  const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-retail"];
+  const SALE_ONLY_SKUS = ["svc-membership-30d", "svc-buffet", "svc-pkg5", "svc-retail", ...VOUCHER_SKUS];
 
   const weekDays = stripDates(selectedDate);
 

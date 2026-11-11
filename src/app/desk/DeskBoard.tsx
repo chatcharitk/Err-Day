@@ -728,7 +728,7 @@ interface MemberLookup {
   price:        number; // satang — member price when the membership is valid
 }
 
-const PKG_LABEL: Record<string, string> = { "svc-buffet": "บุฟเฟ่ต์", "svc-pkg5": "แพ็กเกจ 5 ครั้ง" };
+const PKG_LABEL: Record<string, string> = { "svc-buffet": "บุฟเฟ่ต์", "svc-pkg5": "แพ็กเกจ 5 ครั้ง", "svc-voucher-pjoli-1111": "บัตร PJOLI 11.11" };
 
 function thShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" });

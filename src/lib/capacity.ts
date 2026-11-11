@@ -24,6 +24,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { BUFFET_SKU, FIVE_PACK_SKU } from "@/lib/packages";
 import { MEMBERSHIP_SKU } from "@/lib/membership";
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 /** A Prisma client or an interactive-transaction client — so capacity reads can
  *  run inside the same transaction (and advisory lock) as the booking insert. */
@@ -35,7 +36,7 @@ type Db = Prisma.TransactionClient;
  * stylist. They shouldn't consume a chair / staff slot — exclude them from
  * the capacity snapshot.
  */
-export const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU, "svc-retail"];
+export const SALE_ONLY_SKUS = [MEMBERSHIP_SKU, BUFFET_SKU, FIVE_PACK_SKU, "svc-retail", ...VOUCHER_SKUS];
 
 /**
  * Retail products (shampoo, treatment, cookies…) are Services in this category,

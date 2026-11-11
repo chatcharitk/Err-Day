@@ -8,6 +8,7 @@ import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert
 import { issueReceiptForBooking, receiptUrl, type ReceiptLineInput } from "@/lib/receipts";
 import { couponStatus } from "@/lib/coupons";
 import { quoteCoupon, couponValueLabel, APP_USE_WINDOW_MS } from "@/lib/coupon-rules";
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 /**
  * Issue the receipt for a completed sale.
@@ -401,7 +402,7 @@ export async function POST(request: Request) {
     // These are recorded as bookings (so they show in sales history) BUT their
     // serviceId points to the membership/package SKU itself — booking lists
     // filter these out so the mobile/desktop calendar doesn't get cluttered.
-    const SALE_ONLY_SKUS = new Set([MEMBERSHIP_SKU, "svc-buffet", "svc-pkg5"]);
+    const SALE_ONLY_SKUS = new Set([MEMBERSHIP_SKU, "svc-buffet", "svc-pkg5", ...VOUCHER_SKUS]);
     const hasMembershipOrPackage = !!membershipItem || packageItems.length > 0;
     const hasRetail = items.some(it => {
       const svcId = it.branchServiceId ? bsMap.get(it.branchServiceId) : null;

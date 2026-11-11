@@ -530,7 +530,7 @@ export default function MobileHome({ branches, activeBranchId, selectedDate, boo
                           )}
                           {b.packages.filter(p => !p.isPending).map(p => (
                             <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>
-                              {p.sku === "svc-buffet" ? "Buffet" : p.sku === "svc-pkg5" ? "5 ครั้ง" : p.sku}
+                              {p.sku === "svc-buffet" ? "Buffet" : p.sku === "svc-pkg5" ? "5 ครั้ง" : p.sku === "svc-voucher-pjoli-1111" ? "บัตร PJOLI" : p.sku}
                               {p.usagesLeft != null && ` ·${p.usagesLeft}`}
                             </span>
                           ))}

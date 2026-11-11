@@ -1,3 +1,4 @@
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 /**
  * Coupon rules shared by the POS (preview) and the server (authoritative).
  * Pure — no Prisma — so client components can import it.
@@ -13,7 +14,7 @@ export const CLAIM_MODE_LABEL: Record<ClaimMode, string> = {
 };
 
 /** Membership / package purchases are entitlements, never coupon-discounted. */
-export const COUPON_EXCLUDED_SKUS = new Set(["svc-membership-30d", "svc-buffet", "svc-pkg5"]);
+export const COUPON_EXCLUDED_SKUS = new Set(["svc-membership-30d", "svc-buffet", "svc-pkg5", ...VOUCHER_SKUS]);
 
 export interface CampaignTerms {
   discountType:      string;

@@ -12,14 +12,14 @@ import TimeSlotPicker from "@/components/TimeSlotPicker";
 import { onlineStartTimes } from "@/lib/slots";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import { useLang, type Lang } from "@/components/LanguageProvider";
-import { isVoucherSku } from "@/lib/voucher-skus";
+import { isVoucherSku, VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 // Fallback only — the availability API returns the branch's real start times
 // for the chosen day (`slots`), which is what the picker shows.
 const ALL_SLOTS: string[] = onlineStartTimes("08:00", "21:00");
 
 const NON_APPOINTMENT_SERVICE_IDS = new Set([
-  "svc-membership-30d", "svc-member-monthly", "svc-member-pkg", "svc-buffet", "svc-pkg5",
+  "svc-membership-30d", "svc-member-monthly", "svc-member-pkg", "svc-buffet", "svc-pkg5", ...VOUCHER_SKUS,
 ]);
 
 type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";

@@ -3,6 +3,7 @@ import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches, getCachedBranchStaff, getCachedBranchServices, getCachedAddons } from "@/lib/branches-cache";
 import { loadHeldMemberships } from "@/lib/membership-held";
 import CalendarView from "./CalendarView";
+import { VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 export const revalidate = 30;
 
@@ -49,7 +50,7 @@ export default async function CalendarPage({
         branchId: activeBranchId,
         date: { gte: monday, lte: sunday },
         status: { notIn: ["CANCELLED"] },
-        serviceId: { notIn: ["svc-membership-30d", "svc-buffet", "svc-pkg5"] },
+        serviceId: { notIn: ["svc-membership-30d", "svc-buffet", "svc-pkg5", ...VOUCHER_SKUS] },
       },
       // Slim select: only the fields rendered by the calendar.
       select: {
