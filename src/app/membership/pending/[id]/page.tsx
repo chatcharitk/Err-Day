@@ -14,7 +14,7 @@ const BG      = "#FDF7F2";
 const PRODUCT_INFO: Record<string, { name: string; priceTh: string; validityTh: string; perkTh: string }> = {
   membership: {
     name:       "สมาชิกรายเดือน",
-    priceTh:    "฿990",
+    priceTh:    "฿1,090",
     validityTh: "30 วัน",
     perkTh:     "ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100",
   },

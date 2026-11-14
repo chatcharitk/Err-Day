@@ -29,7 +29,7 @@ const PRODUCTS: Product[] = [
     key:        "membership",
     nameTh:     "สมาชิกรายเดือน",
     nameEn:     "Monthly membership",
-    priceTh:    "฿990",
+    priceTh:    "฿1,090",
     validityTh: "30 วัน",
     validityEn: "30 days",
     perkTh:     "ราคาพิเศษทุกบริการ — สระไดร์เริ่ม ฿100",

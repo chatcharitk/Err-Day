@@ -110,7 +110,7 @@ export default function SignupForm() {
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: MUTED }}>Membership Signup</p>
           <h1 className="text-2xl font-medium" style={{ color: TEXT }}>สมัครสมาชิก</h1>
           <p className="text-sm mt-1" style={{ color: MUTED }}>
-            กรอกข้อมูลด้านล่าง — ชำระเงิน ฿990 ที่ร้านเมื่อมาถึง
+            กรอกข้อมูลด้านล่าง — ชำระเงิน ฿1,090 ที่ร้านเมื่อมาถึง
           </p>
         </header>
 
@@ -251,7 +251,7 @@ export default function SignupForm() {
             style={{ background: PRIMARY }}
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
-            {loading ? "กำลังลงทะเบียน..." : "ลงทะเบียน — ชำระที่ร้าน ฿990"}
+            {loading ? "กำลังลงทะเบียน..." : "ลงทะเบียน — ชำระที่ร้าน ฿1,090"}
           </button>
 
           <p className="text-xs text-center" style={{ color: MUTED }}>

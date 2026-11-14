@@ -85,8 +85,8 @@ async function main() {
       name: "Member Subscription",
       nameTh: "สมาชิกรายเดือน ⭐ ยอดนิยม",
       category: "แพ็กเกจ",
-      description: "Monthly fee ฿990. Then ฿100/session for 30 days. Most popular!",
-      descriptionTh: "ค่าสมาชิก 990 บาท/เดือน แล้วใช้บริการเพียง 100 บาท/ครั้ง ตลอด 30 วัน",
+      description: "Monthly fee ฿1,090. Then ฿100/session for 30 days. Most popular!",
+      descriptionTh: "ค่าสมาชิก 1,090 บาท/เดือน แล้วใช้บริการเพียง 100 บาท/ครั้ง ตลอด 30 วัน",
     },
     // ── Davines Spa ──
     {
@@ -96,7 +96,7 @@ async function main() {
       category: "Davines Spa",
       description: "6-step premium spa: scalp scrub, shampoo, intensive mask, nano mist steam, relaxing massage, Dyson styling.",
       descriptionTh: "สปาผมพรีเมียม 6 ขั้นตอน: สครับหนังศีรษะ, สระผม, มาส์กเข้มข้น, นาโนมิสต์, นวดผ่อนคลาย, จัดทรงด้วย Dyson",
-      memberPrice: 79000, // ฿790
+      memberPrice: 107100, // ฿1,071 (10% off)
     },
     // ── Hair Color (NIGAO) ──
     {
@@ -196,13 +196,13 @@ async function main() {
   // ─── Branch services (price in satang = THB × 100) ───────────────────────
   const branchServiceData = [
     // Walk-in
-    { serviceId: "svc-walkin",          price: 35000,  duration: 60  },
+    { serviceId: "svc-walkin",          price: 38000,  duration: 60  },
     // Packages
     { serviceId: "svc-pkg5",            price: 160000, duration: 60  },
     { serviceId: "svc-buffet",          price: 350000, duration: 60  },
-    { serviceId: "svc-member-monthly",  price: 99000,  duration: 60  },
+    { serviceId: "svc-member-monthly",  price: 109000,  duration: 60  },
     // Davines Spa
-    { serviceId: "svc-davines-spa",     price: 89000,  duration: 90  },
+    { serviceId: "svc-davines-spa",     price: 119000,  duration: 90  },
     // NIGAO Color
     { serviceId: "svc-color-root-s",    price: 120000, duration: 90  },
     { serviceId: "svc-color-root-l",    price: 150000, duration: 90  },

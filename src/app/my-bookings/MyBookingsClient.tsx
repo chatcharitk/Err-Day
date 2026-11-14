@@ -416,7 +416,7 @@ function EntitlementCards({ data }: { data: EntitlementsPayload | "none" }) {
         <CardIcon className="w-8 h-8 flex-shrink-0" style={{ color: "#D8B4A3" }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium" style={{ color: "#45352F" }}>ยังไม่มีสมาชิกหรือแพ็กเกจ</p>
-          <p className="text-xs mt-0.5" style={{ color: "#977A6F" }}>สมัครเพื่อรับสิทธิประโยชน์ — เริ่มต้น ฿990</p>
+          <p className="text-xs mt-0.5" style={{ color: "#977A6F" }}>สมัครเพื่อรับสิทธิประโยชน์ — เริ่มต้น ฿1,090</p>
         </div>
         <a
           href="/liff/membership/signup"

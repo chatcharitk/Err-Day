@@ -9,8 +9,8 @@ export const MEMBERSHIP_SKU = "svc-membership-30d";
 /** Days a 30-day membership lasts. Single source of truth. */
 export const MEMBERSHIP_VALIDITY_DAYS = 30;
 
-/** Default amount in satang for the 30-day membership (฿990). */
-export const MEMBERSHIP_PRICE_SATANG = 99000;
+/** Default amount in satang for the 30-day membership (฿1,090 from 15 Nov 2026; was ฿990). */
+export const MEMBERSHIP_PRICE_SATANG = 109000;
 
 interface ActivateOpts {
   customerId:    string;
