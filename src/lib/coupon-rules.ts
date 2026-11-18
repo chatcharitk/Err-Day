@@ -98,6 +98,17 @@ export function couponDate(value: Date | string): string {
   });
 }
 
+/** Campaigns ending in this year or later are shown as "never expires". */
+export const NO_EXPIRY_YEAR = 2099;
+export function isNoExpiry(validUntil: Date | string): boolean {
+  return Number(ymdOf(validUntil).slice(0, 4)) >= NO_EXPIRY_YEAR;
+}
+
+/** "ใช้ได้ถึง 30 พ.ย. 69" — or "ไม่มีวันหมดอายุ" for a no-expiry campaign. */
+export function couponUntilLabel(validUntil: Date | string): string {
+  return isNoExpiry(validUntil) ? "ไม่มีวันหมดอายุ" : `ใช้ได้ถึง ${couponDate(validUntil)}`;
+}
+
 /** A coupon torn in the app waits this long for the cashier to apply it to the bill. */
 export const APP_USE_WINDOW_MS = 3 * 60 * 60 * 1000;
 

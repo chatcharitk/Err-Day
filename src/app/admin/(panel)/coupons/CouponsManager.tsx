@@ -87,7 +87,7 @@ export default function CouponsManager({ today, categories, campaigns, selected,
                 </div>
                 <p className="text-lg font-bold mt-1" style={{ color: ORANGE }}>{couponValueLabel(c)}</p>
                 <p className="text-xs mt-1" style={{ color: MUTED }}>
-                  โค้ด <b style={{ color: TEXT }}>{c.code}</b> · {fmtDay(c.validFrom)} – {fmtDay(c.validUntil)}
+                  โค้ด <b style={{ color: TEXT }}>{c.code}</b> · {fmtDay(c.validFrom)} – {Number(c.validUntil.slice(0, 4)) >= 2099 ? "ไม่มีวันหมดอายุ" : fmtDay(c.validUntil)}
                 </p>
                 <p className="text-xs" style={{ color: MUTED }}>{CLAIM_MODE_LABEL[c.claimMode as ClaimMode] ?? c.claimMode}</p>
                 <div className="flex gap-4 mt-3 pt-3 text-xs" style={{ borderTop: `1px solid ${BORDER}`, color: MUTED }}>

@@ -4,7 +4,7 @@
  * "คูปองของฉัน" with the show-to-staff screen). Style mirrors flex/membership.ts.
  */
 import type { LineMessage } from "@/lib/line-messaging";
-import { couponDate, couponValueLabel } from "@/lib/coupon-rules";
+import { couponUntilLabel, couponValueLabel } from "@/lib/coupon-rules";
 
 const PRIMARY  = "#8B1D24";
 const TEXT     = "#3B2A24";
@@ -24,7 +24,7 @@ export function buildCouponReceivedFlex(args: {
   terms: string | null;
 }): LineMessage {
   const value = couponValueLabel(args);
-  const until = couponDate(args.validUntil);
+  const until = couponUntilLabel(args.validUntil);
   const conds = [
     args.minSpendSatang > 0 ? `ยอดขั้นต่ำ ฿${(args.minSpendSatang / 100).toLocaleString("th-TH")}` : null,
     args.categories.length ? `เฉพาะ ${args.categories.join(", ")}` : null,
@@ -32,7 +32,7 @@ export function buildCouponReceivedFlex(args: {
   const termsLines = (args.terms ?? "").split("\n").map(l => l.trim()).filter(Boolean).slice(0, 4);
   return {
     type: "flex",
-    altText: `🎟 คุณได้รับคูปอง ${args.name} (${value}) ใช้ได้ถึง ${until}`,
+    altText: `🎟 คุณได้รับคูปอง ${args.name} (${value}) ${until}`,
     contents: {
       type: "bubble",
       size: "kilo",
@@ -48,7 +48,7 @@ export function buildCouponReceivedFlex(args: {
         contents: [
           { type: "text", text: args.name, weight: "bold", size: "md", color: TEXT, wrap: true },
           { type: "text", text: value, weight: "bold", size: "xxl", color: "#C2410C", wrap: true },
-          { type: "text", text: `ใช้ได้ถึง ${until}`, size: "sm", color: TEXT, margin: "sm" },
+          { type: "text", text: until, size: "sm", color: TEXT, margin: "sm" },
           ...(conds.length ? [{ type: "text", text: conds.join(" · "), size: "xs", color: MUTED, wrap: true }] : []),
           { type: "separator", margin: "md", color: "#EADBCF" },
           { type: "text", text: "กดปุ่มด้านล่างเพื่อเปิดแอป แล้วแสดงคูปองให้พนักงานตอนชำระเงินได้เลยค่ะ", size: "xs", color: MUTED, wrap: true, margin: "md" },

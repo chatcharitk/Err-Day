@@ -199,7 +199,7 @@ export async function customerProfile(customerId: string | null, today: string):
     out.push(`- แพ็กเกจ: ${p.spec.nameTh} ถึง ${bangkokYmdOf(p.expiresAt)}${p.usagesLeft != null ? ` เหลือ ${p.usagesLeft} ครั้ง` : ""}`);
   }
   for (const cp of (await customerCoupons(customerId)).filter(x => x.status === "usable")) {
-    out.push(`- คูปอง: ${cp.campaign.name} ${couponValueLabel(cp.campaign)} ใช้ได้ถึง ${cp.campaign.validUntil.slice(0, 10)}`);
+    out.push(`- คูปอง: ${cp.campaign.name} ${couponValueLabel(cp.campaign)} ${Number(cp.campaign.validUntil.slice(0, 4)) >= 2099 ? "ไม่มีวันหมดอายุ" : `ใช้ได้ถึง ${cp.campaign.validUntil.slice(0, 10)}`}`);
   }
   // Visit history per branch (decides whether to assume the branch or ask).
   const past = await prisma.booking.findMany({

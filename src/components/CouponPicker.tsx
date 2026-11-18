@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Ticket, X, Loader2 } from "lucide-react";
-import { couponDate, couponValueLabel, quoteCoupon, type CouponLine } from "@/lib/coupon-rules";
+import { couponUntilLabel, couponValueLabel, quoteCoupon, type CouponLine } from "@/lib/coupon-rules";
 
 export interface PosCoupon {
   id:     string;
@@ -112,7 +112,7 @@ export default function CouponPicker({ phone, lines, value, onChange }: {
               style={{ background: "white", border: "1.5px dashed #FB923C", color: "#9A3412" }}>
               🎟 {c.campaign.name} · {couponValueLabel(c.campaign)}
               <span className="block text-[10px] font-normal" style={{ color: c.appUse ? "#B91C1C" : "#A08070" }}>
-                {c.appUse ? `✂ ลูกค้าฉีกในแอปแล้ว ${new Date(c.appUse.at).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })} · กดเพื่อใส่ในบิลนี้` : `ใช้ได้ถึง ${couponDate(c.campaign.validUntil)}`}
+                {c.appUse ? `✂ ลูกค้าฉีกในแอปแล้ว ${new Date(c.appUse.at).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })} · กดเพื่อใส่ในบิลนี้` : couponUntilLabel(c.campaign.validUntil)}
               </span>
             </button>
           ))}
