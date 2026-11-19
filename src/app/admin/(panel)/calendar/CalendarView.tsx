@@ -37,6 +37,8 @@ interface BookingItem {
   internalNotes: string | null;
   /** ISO — payment received. null on a COMPLETED booking = ยังไม่ชำระ. */
   paidAt: string | null;
+  /** ISO — desk check-in (customer is in the chair). */
+  checkedInAt?: string | null;
   /** True when creating this booking auto-activated a held (pre-paid) membership. */
   activatesMembership: boolean;
   /** Paid-in-advance membership waiting to be switched on. */
@@ -110,10 +112,20 @@ const STATUS_COLOR: Record<string, { bg: string; text: string; border: string; d
   COMPLETED: { bg:"bg-green-50",  text:"text-green-800",  border:"border-green-300",  dot:"bg-green-500"  },
   CANCELLED: { bg:"bg-red-50",    text:"text-red-800",    border:"border-red-200",    dot:"bg-red-400"    },
   NO_SHOW:   { bg:"bg-gray-100",  text:"text-gray-500",   border:"border-gray-200",   dot:"bg-gray-400"   },
+  IN_CHAIR:  { bg:"bg-orange-50", text:"text-orange-800", border:"border-orange-300", dot:"bg-orange-500" },
+  UNPAID:    { bg:"bg-yellow-50", text:"text-yellow-800", border:"border-yellow-400", dot:"bg-yellow-500" },
 };
+// Same wording as the mobile schedule (admin/m/MobileHome).
 const STATUS_LABEL: Record<string,string> = {
-  PENDING:"รอยืนยัน", CONFIRMED:"ยืนยันแล้ว", COMPLETED:"เสร็จแล้ว", CANCELLED:"ยกเลิก", NO_SHOW:"ไม่มา",
+  PENDING:"รอยืนยัน", CONFIRMED:"ยืนยันแล้ว", COMPLETED:"เสร็จสิ้น", CANCELLED:"ยกเลิก", NO_SHOW:"ไม่มา",
+  IN_CHAIR:"กำลังทำ", UNPAID:"เสร็จ · ยังไม่ชำระ",
 };
+/** Status as the mobile schedule shows it: checked-in = กำลังทำ, completed without payment = ยังไม่ชำระ. */
+function viewStatus(b: { status: string; paidAt: string | null; checkedInAt?: string | null }): string {
+  if (b.status === "COMPLETED") return b.paidAt ? "COMPLETED" : "UNPAID";
+  if (b.checkedInAt && (b.status === "PENDING" || b.status === "CONFIRMED")) return "IN_CHAIR";
+  return b.status;
+}
 
 /* ─── Date helpers (timezone-safe) ──────────────────────── */
 /**
@@ -348,7 +360,7 @@ function VerticalGantt({
               {colBkgs.map(b => {
                 const top    = ((timeToMins(b.startTime) - DAY_START * 60) / 60) * HOUR_PX;
                 const height = Math.max(((timeToMins(b.endTime) - timeToMins(b.startTime)) / 60) * HOUR_PX, 22);
-                const c = STATUS_COLOR[b.status] ?? STATUS_COLOR.PENDING;
+                const c = STATUS_COLOR[viewStatus(b)] ?? STATUS_COLOR.PENDING;
                 return (
                   <div key={b.id}
                     className={`absolute left-1 right-1 rounded-lg border cursor-pointer select-none transition-shadow hover:shadow-md hover:z-20 ${c.bg} ${c.border}`}
@@ -479,7 +491,7 @@ function HorizontalGantt({
                   const endMins   = timeToMins(b.endTime)   - DAY_START * 60;
                   const left  = (startMins / 60) * HOUR_PX_H;
                   const width = Math.max(((endMins - startMins) / 60) * HOUR_PX_H - 4, 24);
-                  const c = STATUS_COLOR[b.status] ?? STATUS_COLOR.PENDING;
+                  const c = STATUS_COLOR[viewStatus(b)] ?? STATUS_COLOR.PENDING;
                   return (
                     <div key={b.id}
                       className={`absolute rounded-lg border cursor-pointer select-none transition-shadow hover:shadow-md ${c.bg} ${c.border}`}
@@ -542,7 +554,7 @@ function ListView({ weekBookings, onClickBooking }: {
             </div>
             <div className="space-y-2">
               {grouped[day].map(b => {
-                const c = STATUS_COLOR[b.status] ?? STATUS_COLOR.PENDING;
+                const c = STATUS_COLOR[viewStatus(b)] ?? STATUS_COLOR.PENDING;
                 return (
                   <div key={b.id} onClick={() => onClickBooking(b)}
                     className={`flex items-center gap-4 rounded-xl border px-4 py-3 cursor-pointer hover:shadow-sm transition-shadow ${c.bg} ${c.border}`}>
@@ -579,7 +591,7 @@ function ListView({ weekBookings, onClickBooking }: {
                     <div className="flex-shrink-0">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${c.bg} ${c.text} ${c.border}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                        {STATUS_LABEL[b.status] ?? b.status}
+                        {STATUS_LABEL[viewStatus(b)] ?? b.status}
                       </span>
                     </div>
                     <div className={`flex-shrink-0 text-sm font-semibold ${c.text} hidden sm:block`}>

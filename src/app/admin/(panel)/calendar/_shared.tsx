@@ -81,7 +81,7 @@ export const STATUS_COLOR: Record<string, { bg: string; text: string; border: st
   NO_SHOW:   { bg:"bg-gray-100",  text:"text-gray-500",   border:"border-gray-200",   dot:"bg-gray-400"   },
 };
 export const STATUS_LABEL: Record<string,string> = {
-  PENDING:"รอยืนยัน", CONFIRMED:"ยืนยันแล้ว", COMPLETED:"เสร็จแล้ว", CANCELLED:"ยกเลิก", NO_SHOW:"ไม่มา",
+  PENDING:"รอยืนยัน", CONFIRMED:"ยืนยันแล้ว", COMPLETED:"เสร็จสิ้น", CANCELLED:"ยกเลิก", NO_SHOW:"ไม่มา",
 };
 
 /* ─── Date / time helpers ─────────────────────────────────── */
