@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import MembershipNotifyButton from "@/components/MembershipNotifyButton";
 import { RefreshCw, Users, CheckCircle, XCircle, Clock, Hourglass, History as HistoryIcon, Search, ShoppingCart, Pencil, Trash2, Save, X } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
@@ -347,6 +348,8 @@ function MemberTableRow({
 
       {/* Actions */}
       <td className="px-3 py-3 text-right">
+        <div className="inline-flex items-center gap-1.5">
+        {m.isValid && <MembershipNotifyButton customerId={row.id} />}
         <button
           onClick={(e) => { e.stopPropagation(); onRenew(row.id); }}
           disabled={renewing}
@@ -361,6 +364,7 @@ function MemberTableRow({
           <RefreshCw size={11} className={renewing ? "animate-spin" : ""} />
           {renewing ? "กำลัง..." : "ต่ออายุ"}
         </button>
+        </div>
       </td>
     </tr>
   );

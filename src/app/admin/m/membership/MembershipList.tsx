@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import MembershipNotifyButton from "@/components/MembershipNotifyButton";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Search, Sparkles, AlertCircle, Clock } from "lucide-react";
 import { customerLabel } from "@/lib/customer-name";
@@ -154,10 +155,10 @@ export default function MembershipList({ memberships }: { memberships: Membershi
                 s === "pending" ? "#9A3412" :
                 "#6B7280";
               return (
-                <li key={m.id}>
+                <li key={m.id} className="relative">
                   <Link
                     href={`/admin/m/customers/${m.customer.id}`}
-                    className="block rounded-xl p-3"
+                    className={`block rounded-xl p-3 ${s === "active" ? "pr-24" : ""}`}
                     style={{ background: colorBg, border: `1px solid ${colorBorder}` }}
                   >
                     <div className="flex items-center gap-3">
@@ -187,6 +188,11 @@ export default function MembershipList({ memberships }: { memberships: Membershi
                       {s === "expired" && <AlertCircle size={14} style={{ color: "#991B1B" }} />}
                     </div>
                   </Link>
+                  {s === "active" && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <MembershipNotifyButton customerId={m.customer.id} small />
+                    </div>
+                  )}
                 </li>
               );
             })}
