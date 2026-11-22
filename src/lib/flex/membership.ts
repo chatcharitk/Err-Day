@@ -23,7 +23,7 @@ const BOOK_URL = LIFF_ID ? `https://liff.line.me/${LIFF_ID}` : `${APP_HOST}/book
 // product key ("membership"|"5pack"|"buffet") and the package SKU so either
 // caller can resolve it. Returns undefined when there's no image (→ no hero).
 const PROMO_HERO: Record<string, string> = {
-  membership:   `${APP_HOST}/membership/membership-1090.jpg`,
+  membership:   `${APP_HOST}/membership/membership-1090-v2.jpg`,
   "5pack":      `${APP_HOST}/membership/pack5.jpg`,
   "svc-pkg5":   `${APP_HOST}/membership/pack5.jpg`,
 };
