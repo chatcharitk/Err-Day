@@ -439,7 +439,7 @@ function EntitlementCards({ data }: { data: EntitlementsPayload | "none" }) {
 
 // Promo artwork (served from public/membership/). Same images used on the
 // LINE Flex cards — buffet has none yet, so it falls back to the plain layout.
-const MEMBERSHIP_IMG = "/membership/membership.jpg";
+const MEMBERSHIP_IMG = "/membership/membership-1090.jpg";
 const PACKAGE_IMG: Record<string, string> = {
   "svc-pkg5": "/membership/pack5.jpg",
   // "svc-buffet": "/membership/buffet.jpg",  // add when the artwork is ready
