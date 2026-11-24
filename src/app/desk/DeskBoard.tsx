@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserPlus, RefreshCw, Settings, Check, Clock, Undo2, X, Loader2, CircleAlert,
-  Sparkles, ArrowLeft, Search, PartyPopper,
+  Sparkles, ArrowLeft, Search, PartyPopper, Fingerprint,
 } from "lucide-react";
+import ClockPanel from "./ClockPanel";
 import type { DeskBooking } from "@/lib/desk";
 import { customerLabel } from "@/lib/customer-name";
 
@@ -52,6 +53,7 @@ export default function DeskBoard({
   const [now, setNow]       = useState(() => Date.now());
   const [walkinOpen, setWalkinOpen] = useState(false);
   const [memberOpen, setMemberOpen] = useState(false);
+  const [clockOpen, setClockOpen]   = useState(false);
   const [cheerForId, setCheerForId] = useState<string | null>(null);
   const [busy, setBusy]     = useState<Set<string>>(new Set());
   const [error, setError]   = useState<string | null>(null);
@@ -222,6 +224,11 @@ export default function DeskBoard({
             <div className="text-right mr-1 hidden sm:block">
               <p className="text-white text-2xl font-bold leading-none tabular-nums">{timeStr}</p>
             </div>
+            <button onClick={() => setClockOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-3 rounded-2xl text-white font-semibold active:scale-95 transition-transform"
+              style={{ background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.35)" }}>
+              <Fingerprint size={18} /> ลงเวลา
+            </button>
             <button onClick={() => refresh({ force: true })} title="รีเฟรช"
               className="p-3 rounded-2xl text-white/90 active:scale-95 transition-transform"
               style={{ border: "1px solid rgba(255,255,255,0.3)" }}>
@@ -330,6 +337,8 @@ export default function DeskBoard({
           onRemove={cheerId => cheerAct(cheerFor.id, "DELETE", { cheerId })}
           onClose={() => setCheerForId(null)} />
       )}
+
+      {clockOpen && <ClockPanel onClose={() => setClockOpen(false)} />}
 
       {memberOpen && (
         <MemberWalkinModal staff={board.staff}

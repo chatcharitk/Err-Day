@@ -162,7 +162,7 @@ export async function computeBranchDailyPayout(
   db: DB = prisma,
 ): Promise<StaffPayoutRow[]> {
   const { start, end } = bangkokDayRange(dateStr);
-  const [staff, bookings, payouts, attendance, shifts] = await Promise.all([
+  const [staff, bookings, payouts, attendance, shifts, punches] = await Promise.all([
     db.staff.findMany({
       where: {
         OR: [
@@ -228,6 +228,11 @@ export async function computeBranchDailyPayout(
       },
       orderBy: { startTime: "asc" },
     }),
+    // QR clock-in punches (desk "ลงเวลา") — an IN with no attendance row yet = ลืมลงเวลาออก.
+    db.clockPunch.findMany({
+      where: { branchId, kind: "IN", date: { gte: start, lte: end } },
+      orderBy: { at: "asc" },
+    }),
   ]);
   const expenseIds = payouts.flatMap((p) => (p.expenseId ? [p.expenseId] : []));
   const linkedExpenses = expenseIds.length
@@ -239,6 +244,7 @@ export async function computeBranchDailyPayout(
   return staff.map((s) => {
     const payout = payouts.find((p) => p.staffId === s.id);
     const att = attendance.find((a) => a.staffId === s.id);
+    const openIn = att ? undefined : punches.find((p) => p.staffId === s.id);
     const details: PayrollBooking[] = bookings
       .filter(
         (b) =>
@@ -289,7 +295,7 @@ export async function computeBranchDailyPayout(
       bookings: details,
       normalWorkMinutes: s.normalWorkMinutes,
       workedMinutes: minutes,
-      clockIn: att?.clockIn.toISOString() ?? null,
+      clockIn: (att?.clockIn ?? openIn?.at)?.toISOString() ?? null,
       clockOut: att?.clockOut.toISOString() ?? null,
       breakMinutes: att?.breakMinutes ?? 0,
       attendanceNotes: att?.notes ?? "",
@@ -352,7 +358,11 @@ export async function computeBranchDailyPayout(
       warnings.push(
         "รายจ่ายที่เชื่อมถูกยกเลิกแล้ว กรุณาตรวจประวัติและเปิดแก้ค่าตอบแทน",
       );
-    if (!att && !paid) warnings.push("ยังไม่ยืนยันเวลาเข้า–ออกจริง");
+    if (!att && !paid && openIn)
+      warnings.push(
+        `ลืมลงเวลาออก — สแกนเข้า ${openIn.at.toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })} แต่ยังไม่สแกนออก กรุณากรอกเวลาออก`,
+      );
+    else if (!att && !paid) warnings.push("ยังไม่ยืนยันเวลาเข้า–ออกจริง");
     if (hours > 0 && live.otRateSatang === 0)
       warnings.push("ยังไม่มีเรต OT — ตั้งค่าก่อนยืนยันจ่าย");
     if (

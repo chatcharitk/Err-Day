@@ -211,6 +211,24 @@ model StaffAttendance {
   @@index([date])
 }
 
+/// One QR scan at the desk ("ลงเวลา"): IN or OUT. Raw log + audit trail. The
+/// matching StaffAttendance row is written on the OUT scan (clockIn = the IN
+/// punch), so payroll keeps reading complete in/out pairs only; an IN with no
+/// OUT shows in payroll as "ลืมลงเวลาออก".
+model ClockPunch {
+  id       String   @id @default(cuid())
+  staffId  String
+  branchId String
+  /// Bangkok calendar day, stored at UTC noon (same as StaffAttendance.date).
+  date     DateTime
+  /// "IN" | "OUT"
+  kind     String
+  at       DateTime @default(now())
+
+  @@index([staffId, date])
+  @@index([branchId, date])
+}
+
 model FinanceAudit {
   id String @id @default(cuid())
   entity String

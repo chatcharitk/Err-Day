@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, FileText, Package, Users, Wallet } from "lucide-react";
+import { CalendarDays, FileText, Fingerprint, Package, Users, Wallet } from "lucide-react";
 
 const PRIMARY = "#8B1D24";
 const MUTED   = "#A08070";
@@ -7,6 +7,7 @@ const BORDER  = "#E8D8CC";
 
 const ITEMS = [
   { key: "schedule", href: "/staff",          label: "ของฉัน",            icon: CalendarDays },
+  { key: "clock",    href: "/staff/clock",    label: "ลงเวลา",           icon: Fingerprint },
   { key: "team",     href: "/staff/team",     label: "ตารางทีม",          icon: Users },
   { key: "stock",    href: "/staff/stock",    label: "สต็อก",            icon: Package },
   { key: "pay",      href: "/staff/pay",      label: "ค่าตอบแทน",        icon: Wallet },
@@ -17,7 +18,7 @@ const ITEMS = [
 export default function StaffNav({ active }: { active: (typeof ITEMS)[number]["key"] }) {
   return (
     <nav className="bg-white" style={{ borderBottom: `1px solid ${BORDER}` }}>
-      <div className="max-w-2xl mx-auto grid grid-cols-5">
+      <div className="max-w-2xl mx-auto grid grid-cols-6">
         {ITEMS.map(({ key, href, label, icon: Icon }) => {
           const on = key === active;
           return (
