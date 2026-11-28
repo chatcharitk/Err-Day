@@ -3,7 +3,7 @@ import { RETAIL_CATEGORY, RETAIL_SKU } from "@/lib/capacity";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { MEMBERSHIP_SKU, activateOrRenewMembership, holdMembershipPrepaid } from "@/lib/membership";
-import { isPackageSku, activatePackage, redeemPackage } from "@/lib/packages";
+import { isPackageSku, activatePackage, redeemPackage, activatePrepaid, PREPAID_SKU } from "@/lib/packages";
 import { sendMembershipActivated, sendPackageActivated, sendStaffMembershipAlert } from "@/lib/notifications";
 import { issueReceiptForBooking, receiptUrl, type ReceiptLineInput } from "@/lib/receipts";
 import { couponStatus } from "@/lib/coupons";
@@ -50,6 +50,9 @@ interface SaleItem {
   redeemPackageId?: string;
   /** Coupon discount line. Its price is recomputed here, never trusted. */
   couponId?:        string;
+  /** "ซื้อไว้ใช้ภายหลัง": paid now, becomes a prepaid ticket instead of a visit.
+   *  days = validity (null = no expiry). */
+  prepaid?:         { days: number | null };
 }
 
 /**
@@ -215,6 +218,46 @@ export async function POST(request: Request) {
     }
     claimedCoupon = couponClaim;
 
+    // ── Prepaid ("ซื้อไว้ใช้ภายหลัง") lines ─────────────────────────────
+    // Validated before anything is written. The ticket belongs to a real
+    // customer, so a nameless walk-in (no phone, no booking) can't buy one.
+    const prepaidLines: { item: SaleItem; serviceId: string; label: string; qty: number; days: number | null }[] = [];
+    const prepaidItems = items.filter(i => i.prepaid && i.branchServiceId && !i.redeemPackageId);
+    if (prepaidItems.length > 0) {
+      if (!fromBookingId && !customerPhone?.trim()) {
+        await releaseCoupon();
+        return NextResponse.json({ error: "ซื้อไว้ใช้ภายหลังต้องเลือกลูกค้า (มีเบอร์) ก่อน" }, { status: 400 });
+      }
+      const rows = await prisma.branchService.findMany({
+        where:  { id: { in: prepaidItems.map(i => i.branchServiceId!) } },
+        select: { id: true, serviceId: true, service: { select: { nameTh: true, category: true } } },
+      });
+      for (const it of prepaidItems) {
+        const bs = rows.find(r => r.id === it.branchServiceId);
+        const bad = !bs || bs.serviceId === MEMBERSHIP_SKU || isPackageSku(bs.serviceId)
+          || bs.serviceId === PREPAID_SKU || bs.service.category === RETAIL_CATEGORY;
+        if (bad) {
+          await releaseCoupon();
+          return NextResponse.json({ error: `"${it.name}" ซื้อไว้ใช้ภายหลังไม่ได้` }, { status: 400 });
+        }
+        const d = it.prepaid!.days;
+        const days = d == null ? null : Math.max(1, Math.min(3650, Math.round(Number(d))));
+        prepaidLines.push({ item: it, serviceId: bs!.serviceId, label: bs!.service.nameTh, qty: unitsOf(it), days });
+        // Say so on the receipt / sales history.
+        it.name = `${bs!.service.nameTh} (ซื้อไว้ใช้ภายหลัง${days == null ? "" : ` ${days} วัน`})`;
+      }
+    }
+    const prepaidSet = new Set(prepaidLines.map(p => p.item));
+    const issuePrepaid = async (customerId: string, bookingId: string) => {
+      for (const p of prepaidLines) {
+        const cp = await activatePrepaid({
+          customerId, serviceId: p.serviceId, label: p.label, qty: p.qty,
+          paidAmount: p.item.price * p.qty, days: p.days, bookingId,
+        });
+        after(() => sendPackageActivated(cp.id).catch((e) => console.error("[notify] prepaid activated failed", e)));
+      }
+    };
+
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -370,6 +413,7 @@ export async function POST(request: Request) {
       for (const rid of redemptionIds) {
         await redeemPackage(rid, booking.id);
       }
+      await issuePrepaid(booking.customerId, booking.id);
 
       await recordCoupon(booking.id);
       await recordCheers(booking.id, cheers);
@@ -403,7 +447,7 @@ export async function POST(request: Request) {
     // serviceId points to the membership/package SKU itself — booking lists
     // filter these out so the mobile/desktop calendar doesn't get cluttered.
     const SALE_ONLY_SKUS = new Set([MEMBERSHIP_SKU, "svc-buffet", "svc-pkg5", ...VOUCHER_SKUS]);
-    const hasMembershipOrPackage = !!membershipItem || packageItems.length > 0;
+    const hasMembershipOrPackage = !!membershipItem || packageItems.length > 0 || prepaidLines.length > 0;
     const hasRetail = items.some(it => {
       const svcId = it.branchServiceId ? bsMap.get(it.branchServiceId) : null;
       return !!svcId && retailServiceIds.has(svcId);
@@ -413,6 +457,7 @@ export async function POST(request: Request) {
     let nonSaleOnlyCount = 0;
     if (branchServiceIds.length > 0) {
       for (const it of items) {
+        if (prepaidSet.has(it)) continue; // bought for later — not a visit today
         const svcId = it.branchServiceId ? bsMap.get(it.branchServiceId) : null;
         if (!svcId || (!SALE_ONLY_SKUS.has(svcId) && !retailServiceIds.has(svcId))) nonSaleOnlyCount++;
       }
@@ -427,6 +472,7 @@ export async function POST(request: Request) {
     if (saleOnly) {
       if (membershipItem) saleServiceId = MEMBERSHIP_SKU;
       else if (packageItems.length > 0) saleServiceId = packageItems[0].serviceId;
+      else if (prepaidLines.length > 0) saleServiceId = PREPAID_SKU;
       else saleServiceId = RETAIL_SKU; // products only — a counter sale, not a visit
     }
 
@@ -487,6 +533,7 @@ export async function POST(request: Request) {
     for (const rid of redemptionIds) {
       await redeemPackage(rid, booking.id);
     }
+    await issuePrepaid(customer.id, booking.id);
 
     await recordCoupon(booking.id);
     await recordCheers(booking.id, cheers);

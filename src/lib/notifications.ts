@@ -21,7 +21,7 @@ import { buildEntitlementReceivedFlex, buildEntitlementActivatedFlex, buildVouch
 import { branchGroupId } from "@/lib/line-groups";
 import { SALE_ONLY_SKUS } from "@/lib/capacity";
 import { notifyAdmins } from "@/lib/notify-admin";
-import { PACKAGE_SPECS } from "@/lib/packages";
+import { PACKAGE_SPECS, PREPAID_SKU, specOf, isNoExpiryDate } from "@/lib/packages";
 import { startOfTodayUTC } from "@/lib/utils";
 import { customerLabel as fmtCustomerName } from "@/lib/customer-name";
 import { CHEER_AFTER_DAYS } from "@/lib/cheer-due";
@@ -327,6 +327,7 @@ type GroupBooking = {
     nickname: string | null;
     packages: {
       packageSku:        string;
+      serviceId:         string | null;
       usageLimit:        number;
       usagesUsed:        number;
       pendingActivation: boolean;
@@ -364,6 +365,7 @@ const groupBookingSelect = () => ({
         where:  { closedAt: null, pendingActivation: false, expiresAt: { gte: startOfTodayUTC() } },
         select: {
           packageSku:        true,
+          serviceId:         true,
           usageLimit:        true,
           usagesUsed:        true,
           pendingActivation: true,
@@ -399,7 +401,7 @@ function fmtGroupBookingLine(b: GroupBooking): string {
 
   const coveredByPackage = b.customer.packages.some(p =>
     !p.pendingActivation
-    && (PACKAGE_SPECS[p.packageSku]?.coversServiceIds.includes(b.serviceId) ?? false)
+    && (specOf(p)?.coversServiceIds.includes(b.serviceId) ?? false)
     && (p.usageLimit === 0 || p.usageLimit - p.usagesUsed > 0)
   );
   const addonsTotal = b.addons.reduce((s, a) => s + a.price, 0);
@@ -997,7 +999,28 @@ export async function sendPackageActivated(packageId: string): Promise<SendResul
     return { kind, targetId: packageId, status: "SKIPPED", reason: "no_line_link" };
   }
 
-  const productName = PACKAGE_NAME_TH[p.packageSku] ?? p.packageSku;
+  const productName = PACKAGE_NAME_TH[p.packageSku] ?? specOf(p)?.nameTh ?? p.packageSku;
+
+  // Prepaid service ticket: one card per ticket (each cart line is its own row).
+  if (p.packageSku === PREPAID_SKU) {
+    const r = await pushLine(p.customer.lineUserId, [buildVoucherPurchasedFlex({
+      greetName:   p.customer.nickname || p.customer.name,
+      voucherName: "บัตรบริการล่วงหน้า",
+      serviceName: p.label ?? "บริการ",
+      count:       p.usageLimit,
+      expiresAt:   p.expiresAt,
+      noExpiry:    isNoExpiryDate(p.expiresAt),
+      unit:        "ครั้ง",
+      thanksText:  `ขอบคุณที่ซื้อบริการล่วงหน้าค่ะ คุณ${p.customer.nickname || p.customer.name} 💕`,
+      footNote:    "ใช้ได้ทุกสาขา เฉพาะเจ้าของบัตร แจ้งชื่อที่เคาน์เตอร์ ระบบจะตัดสิทธิ์ให้อัตโนมัติ ไม่ต้องจ่ายเพิ่มค่ะ",
+    })]);
+    if (r.ok) {
+      await recordLog({ kind, targetId: packageId, status: "SENT", recipient: p.customer.lineUserId });
+      return { kind, targetId: packageId, status: "SENT" };
+    }
+    await recordLog({ kind, targetId: packageId, status: "FAILED", recipient: p.customer.lineUserId, error: r.error });
+    return { kind, targetId: packageId, status: "FAILED", reason: r.error };
+  }
 
   // Prepaid voucher: one "you've got it" card per bill, however many were bought.
   const spec = PACKAGE_SPECS[p.packageSku];
@@ -1086,7 +1109,12 @@ export async function sendPackageExpiryWarning1d(packageId: string): Promise<Sen
     return { kind, targetId: packageId, status: "SKIPPED", reason: "no_line_link" };
   }
 
-  const productName = PACKAGE_NAME_TH[p.packageSku] ?? p.packageSku;
+  if (isNoExpiryDate(p.expiresAt)) {
+    await recordLog({ kind, targetId: packageId, status: "SKIPPED", error: "no_expiry" });
+    return { kind, targetId: packageId, status: "SKIPPED", reason: "no_expiry" };
+  }
+  const isPrepaid   = p.packageSku === PREPAID_SKU;
+  const productName = PACKAGE_NAME_TH[p.packageSku] ?? specOf(p)?.nameTh ?? p.packageSku;
   const usagesLeft  = p.usageLimit > 0 ? Math.max(0, p.usageLimit - p.usagesUsed) : null;
   const usagesNote  = usagesLeft !== null ? `🎟 เหลือใช้ได้ ${usagesLeft} ครั้ง\n` : "";
 
@@ -1096,7 +1124,7 @@ export async function sendPackageExpiryWarning1d(packageId: string): Promise<Sen
 คุณ${p.customer.nickname || p.customer.name} ${productName} ของคุณจะหมดอายุในอีก 1 วันนะคะ
 
 📅 หมดอายุ: ${formatDateTh(p.expiresAt)}
-${usagesNote}🔄 ต่ออายุได้ที่หน้าร้านทุกสาขา
+${usagesNote}${isPrepaid ? "📅 จองคิวมาใช้สิทธิ์ได้ทุกสาขาค่ะ" : "🔄 ต่ออายุได้ที่หน้าร้านทุกสาขา"}
 
 ขอบคุณที่ใช้บริการกับเรานะคะ 🌸`;
 

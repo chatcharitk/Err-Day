@@ -14,7 +14,8 @@ import {
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import ShopPrintButton from "@/components/ShopPrintButton";
 import { getPromotionServicePrice } from "@/lib/promotions";
-import { isVoucherSku } from "@/lib/voucher-skus";
+import { isVoucherSku, canSellForLater, expiryLabelTh, PREPAID_SKU } from "@/lib/voucher-skus";
+import PrepaidToggle, { type PrepaidChoice } from "@/components/PrepaidToggle";
 
 interface Branch { id: string; name: string; }
 
@@ -56,6 +57,8 @@ interface CartItem {
   redeemPackageName?: string;
   /** Per-item manual discount in baht (not satang). */
   itemDiscountBaht?:  number;
+  /** "ซื้อไว้ใช้ภายหลัง" — sold now as a prepaid ticket, not used today. */
+  prepaid?:           PrepaidChoice;
 }
 
 interface ActivePackage {
@@ -473,6 +476,8 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
   const discountSatang = Math.min(subtotal, Math.round(discountBaht * 100));
   // Cart lines whose service pays ค่าเชียร์ (Davines Spa, PJOLI…).
   const cheerLines: CheerLine[] = cart.flatMap(i => {
+    // Cheer for a prepaid ticket was earned when it was sold, not when it's used.
+    if (i.redeemPackageId && activePackages.find(p => p.id === i.redeemPackageId)?.sku === PREPAID_SKU) return [];
     const bs = branchServices.find(b => b.id === i.id.split("__")[0]);
     const rate = bs?.service.cheerSatang ?? 0;
     return bs && rate > 0 ? [{ key: i.id, branchServiceId: bs.id, name: i.name, qty: i.qty, cheerSatang: rate }] : [];
@@ -492,6 +497,25 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
     router.refresh();
   };
 
+  /** Switch a cart row to / from "ซื้อไว้ใช้ภายหลัง" (merging with a matching row). */
+  const setPrepaid = (id: string, v: PrepaidChoice | undefined) => {
+    setCart(prev => {
+      const row = prev.find(i => i.id === id);
+      if (!row) return prev;
+      const baseId = id.split("__")[0];
+      if (row.prepaid && v) return prev.map(i => i.id === id ? { ...i, prepaid: v } : i); // expiry change
+      const newId = v ? `${baseId}__prepaid` : baseId;
+      const updated: CartItem = {
+        ...row, id: newId, prepaid: v,
+        price: memberActive ? row.memberPrice : row.basePrice,
+        redeemPackageId: undefined, redeemPackageName: undefined,
+      };
+      const rest = prev.filter(i => i.id !== id);
+      const twin = rest.find(i => i.id === newId);
+      return twin ? rest.map(i => i.id === newId ? { ...i, qty: i.qty + row.qty } : i) : [...rest, updated];
+    });
+  };
+
   const checkout = async () => {
     if (cart.length === 0) return;
     if (!customer.name.trim()) {
@@ -509,8 +533,9 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
           name:            i.name,
           price:           i.price,
           qty:             i.qty,
-          branchServiceId: isService ? (i.redeemPackageId ? i.id.split("__")[0] : i.id) : undefined,
+          branchServiceId: isService ? i.id.split("__")[0] : undefined,
           redeemPackageId: i.redeemPackageId,
+          ...(i.prepaid ? { prepaid: i.prepaid } : {}),
         };
       });
       // Per-item discounts as negative line items
@@ -687,7 +712,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
               <div key={p.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                 <Sparkles size={14} style={{ color: "#1D4ED8" }} />
                 <p className="text-xs font-semibold flex-1" style={{ color: "#1D4ED8" }}>
-                  {p.nameTh}{p.usagesLeft != null && ` — ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง`}{isVoucherSku(p.sku) ? " · ซื้อไว้แล้ว ใช้ฟรี" : " · ได้ราคาสมาชิก"}
+                  {p.nameTh}{p.usagesLeft != null && ` — ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง`}{isVoucherSku(p.sku) ? " · ซื้อไว้แล้ว ใช้ฟรี" : " · ได้ราคาสมาชิก"}{p.sku === PREPAID_SKU ? ` · ${expiryLabelTh(p.expiresAt)}` : ""}
                 </p>
               </div>
             ))}
@@ -862,7 +887,7 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
                     <li
                       key={item.id}
                       className="rounded-xl p-3"
-                      style={{ background: item.redeemPackageId ? "#EFF6FF" : "#FAF5F0" }}
+                      style={{ background: item.redeemPackageId ? "#EFF6FF" : item.prepaid ? "#FFFBEB" : "#FAF5F0" }}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -877,6 +902,14 @@ export default function MobilePos({ branches, activeBranchId, branchServices, ad
                               ราคาสมาชิก (ปกติ {formatPrice(item.basePrice)})
                             </p>
                           )}
+                          {(() => {
+                            const bs = branchServices.find(b => b.id === item.id.split("__")[0]);
+                            if (!bs || item.isCustom || !canSellForLater(bs.serviceId, bs.service.category)) return null;
+                            return (
+                              <PrepaidToggle value={item.prepaid} onChange={v => setPrepaid(item.id, v)}
+                                blockedReason={!item.prepaid && !customer.phone.trim() ? "เลือกลูกค้าก่อน" : undefined} />
+                            );
+                          })()}
                         </div>
                         <button onClick={() => removeItem(item.id)} className="p-1" style={{ color: MUTED }}>
                           <X size={14} />

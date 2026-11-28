@@ -11,7 +11,8 @@ import type { Branch, BranchService, Service, ServiceAddon } from "@/generated/p
 import CustomerSearch, { type CustomerValue } from "@/components/CustomerSearch";
 import ShopPrintButton from "@/components/ShopPrintButton";
 import { getPromotionServicePrice } from "@/lib/promotions";
-import { isVoucherSku } from "@/lib/voucher-skus";
+import { isVoucherSku, canSellForLater, expiryLabelTh, PREPAID_SKU } from "@/lib/voucher-skus";
+import PrepaidToggle, { type PrepaidChoice } from "@/components/PrepaidToggle";
 
 type BS = BranchService & { service: Service };
 
@@ -28,6 +29,8 @@ interface CartItem {
   redeemPackageId?: string;
   /** When redeemed, label of the package (e.g. "Buffet 30 วัน"). Shown in cart row. */
   redeemPackageName?: string;
+  /** "ซื้อไว้ใช้ภายหลัง" — sold now as a prepaid ticket, not used today. */
+  prepaid?: PrepaidChoice;
 }
 
 interface ActivePackage {
@@ -287,6 +290,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   // Cart lines whose service pays ค่าเชียร์ (Davines Spa, PJOLI…).
   const cheerLines: CheerLine[] = cart.flatMap(i => {
+    if (i.redeemPackageId && activePackages.find(p => p.id === i.redeemPackageId)?.sku === PREPAID_SKU) return [];
     const bs = branchServices.find(b => b.id === i.id.split("__")[0]);
     return bs && bs.service.cheerSatang > 0
       ? [{ key: i.id, branchServiceId: bs.id, name: i.name, qty: i.qty, cheerSatang: bs.service.cheerSatang }]
@@ -395,6 +399,25 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
     }));
   };
 
+  /** Switch a cart row to / from "ซื้อไว้ใช้ภายหลัง" (merging with a matching row). */
+  const setPrepaid = (id: string, v: PrepaidChoice | undefined) => {
+    setCart(prev => {
+      const row = prev.find(i => i.id === id);
+      if (!row) return prev;
+      const baseId = id.split("__")[0];
+      if (row.prepaid && v) return prev.map(i => i.id === id ? { ...i, prepaid: v } : i); // expiry change
+      const newId = v ? `${baseId}__prepaid` : baseId;
+      const updated: CartItem = {
+        ...row, id: newId, prepaid: v,
+        price: memberActive ? row.memberPrice : row.basePrice,
+        redeemPackageId: undefined, redeemPackageName: undefined,
+      };
+      const rest = prev.filter(i => i.id !== id);
+      const twin = rest.find(i => i.id === newId);
+      return twin ? rest.map(i => i.id === newId ? { ...i, qty: i.qty + row.qty } : i) : [...rest, updated];
+    });
+  };
+
   const checkout = async () => {
     if (cart.length === 0 || !customerName.trim()) return;
     setLoading(true);
@@ -425,6 +448,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 qty:             i.qty,
                 branchServiceId: isService ? baseId : undefined,
                 redeemPackageId: i.redeemPackageId,
+                ...(i.prepaid ? { prepaid: i.prepaid } : {}),
               };
             }),
             ...(discountSatang > 0 ? [{ name: "ส่วนลด", price: -discountSatang, qty: 1, branchServiceId: undefined, redeemPackageId: undefined }] : []),
@@ -679,7 +703,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                 style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
                 <PackageIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#2563EB" }} />
                 <p className="text-xs font-semibold flex-1" style={{ color: "#1E40AF" }}>
-                  {p.nameTh} {p.usagesLeft !== null ? `· ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง` : "· ไม่จำกัด"}{isVoucherSku(p.sku) ? " · ซื้อไว้แล้ว ใช้ฟรี" : " · ได้ราคาสมาชิก"}
+                  {p.nameTh} {p.usagesLeft !== null ? `· ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง` : "· ไม่จำกัด"}{isVoucherSku(p.sku) ? " · ซื้อไว้แล้ว ใช้ฟรี" : " · ได้ราคาสมาชิก"}{p.sku === PREPAID_SKU ? ` · ${expiryLabelTh(p.expiresAt)}` : ""}
                 </p>
               </div>
             ))}
@@ -698,7 +722,7 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
             ) : (
               <div className="space-y-2">
                 {cart.map(item => (
-                  <div key={item.id} className="p-3 rounded-xl" style={{ backgroundColor: item.redeemPackageId ? "#EFF6FF" : "#F9F4F0" }}>
+                  <div key={item.id} className="p-3 rounded-xl" style={{ backgroundColor: item.redeemPackageId ? "#EFF6FF" : item.prepaid ? "#FFFBEB" : "#F9F4F0" }}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium leading-tight" style={{ color: "#3B2A24" }}>{item.name}</p>
@@ -718,6 +742,14 @@ export default function PosTerminal({ branches, activeBranchId, branchServices, 
                             </button>
                           </div>
                         )}
+                        {(() => {
+                          const bs = branchServices.find(b => b.id === item.id.split("__")[0]);
+                          if (!bs || item.isCustom || !canSellForLater(bs.serviceId, bs.service.category)) return null;
+                          return (
+                            <PrepaidToggle value={item.prepaid} onChange={v => setPrepaid(item.id, v)}
+                              blockedReason={!item.prepaid && !customerPhone.trim() ? "เลือกลูกค้าก่อน" : undefined} />
+                          );
+                        })()}
                       </div>
                       <button onClick={() => removeItem(item.id)} style={{ color: "#C4B0A4" }}>
                         <Trash2 className="w-3.5 h-3.5" />

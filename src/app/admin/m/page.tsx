@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { defaultBranchId } from "@/lib/utils";
 import { getCachedBranches } from "@/lib/branches-cache";
-import { PACKAGE_SPECS } from "@/lib/packages";
+import { specOf } from "@/lib/packages";
 import MobileHome from "./MobileHome";
 import { loadHeldMemberships } from "@/lib/membership-held";
 import { customerLabel } from "@/lib/customer-name";
@@ -106,6 +106,8 @@ export default async function MobileHomePage({
                   select: {
                     id:                true,
                     packageSku:        true,
+                    serviceId:         true,
+                    label:             true,
                     expiresAt:         true,
                     usagesUsed:        true,
                     usageLimit:        true,
@@ -196,7 +198,7 @@ export default async function MobileHomePage({
     // member rate. Mirrors the POS redemption in pickRedemption/packages.ts.
     const coveredByPackage = isOpenBooking && b.customer.packages.some(p =>
       !p.pendingActivation
-      && (PACKAGE_SPECS[p.packageSku]?.coversServiceIds.includes(b.serviceId) ?? false)
+      && (specOf(p)?.coversServiceIds.includes(b.serviceId) ?? false)
       && (p.usageLimit === 0 || p.usageLimit - p.usagesUsed > 0)
     );
 

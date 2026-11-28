@@ -57,7 +57,8 @@ export async function createWalkin(opts: {
     if (customerId) {
       bookingCustomerId = customerId;
       const isActiveMember = await hasActiveMembershipForBooking(tx, customerId);
-      const hasActivePackage = (await findActivePackages(customerId)).length > 0;
+      // Vouchers / prepaid tickets pay for one service only — no member pricing.
+      const hasActivePackage = (await findActivePackages(customerId)).some(p => !p.spec.voucher);
       isMemberPricing = isActiveMember || hasActivePackage;
     } else {
       const customer = await tx.customer.create({

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import LineLinkButton from "@/components/LineLinkButton";
 import MergeCustomerButton from "@/components/MergeCustomerButton";
+import { isNoExpiryDate } from "@/lib/voucher-skus";
 
 const PACKAGE_OPTIONS: { sku: string; nameTh: string; price: number }[] = [
   { sku: "svc-buffet", nameTh: "Buffet 30 วัน",   price: 3500 },
@@ -792,7 +793,7 @@ export default function CustomerDetail({ customer: initial }: { customer: Custom
                     </button>
                   </div>
                   <p className="text-xs" style={{ color: TEXT }}>
-                    หมดอายุ: {fmtDate(p.expiresAt)}
+                    {isNoExpiryDate(p.expiresAt) ? "ไม่มีวันหมดอายุ" : `หมดอายุ: ${fmtDate(p.expiresAt)}`}
                     {p.usagesLeft != null && ` · ยังใช้ได้อีก ${p.usagesLeft} ครั้ง จากทั้งหมด ${p.usageLimit} ครั้ง (ใช้ไปแล้ว ${p.usagesUsed})`}
                   </p>
                   <div className="flex gap-2 mt-2">

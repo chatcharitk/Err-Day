@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { startOfTodayUTC } from "@/lib/utils";
+import { PREPAID_SKU, isNoExpiryDate, PREPAID_EXPIRY_OPTIONS } from "@/lib/voucher-skus";
 
 /**
  * Package SKUs — these are the service IDs that, when sold at POS, activate
@@ -81,6 +82,53 @@ export function packageExpiresAt(spec: PackageSpec, start: Date): Date {
 }
 
 export const PACKAGE_SKUS = Object.keys(PACKAGE_SPECS);
+
+// ── Prepaid service tickets ("บัตรบริการล่วงหน้า") ──────────────────────────
+// Any service sold at POS with "ซื้อไว้ใช้ภายหลัง": paid now, redeemed later
+// (any branch, this customer only). One CustomerPackage row per cart line with
+// packageSku PREPAID_SKU, the service in `serviceId`, usageLimit = qty.
+export { PREPAID_SKU };
+
+/** "No expiry" is stored as the end of 2099 (same convention as coupons). */
+export const PREPAID_NO_EXPIRY = new Date("2099-12-31T23:59:59.999+07:00");
+export { isNoExpiryDate, PREPAID_EXPIRY_OPTIONS };
+
+/** Spec for any CustomerPackage row — fixed PACKAGE_SPECS or a prepaid ticket. */
+export function specOf(row: { packageSku: string; serviceId?: string | null; label?: string | null; usageLimit?: number }): PackageSpec | null {
+  if (row.packageSku !== PREPAID_SKU) return PACKAGE_SPECS[row.packageSku] ?? null;
+  if (!row.serviceId) return null;
+  const label = row.label || row.serviceId;
+  return {
+    sku:              PREPAID_SKU,
+    nameTh:           `บัตร ${label}`,
+    nameEn:           `Prepaid ${label}`,
+    priceSatang:      0,
+    validityDays:     0,
+    usageLimit:       row.usageLimit ?? 1,
+    coversServiceIds: [row.serviceId],
+    shortDescTh:      `${label} ${row.usageLimit ?? 1} ครั้ง (ซื้อไว้ล่วงหน้า)`,
+    voucher:          true,
+  };
+}
+
+/** Create the ticket for one prepaid cart line. */
+export async function activatePrepaid(opts: {
+  customerId: string; serviceId: string; label: string; qty: number;
+  paidAmount: number; days: number | null; bookingId: string | null;
+}) {
+  const now = new Date();
+  const expiresAt = opts.days == null
+    ? PREPAID_NO_EXPIRY
+    // Same inclusive rule as packages: today is day 1, ends that Bangkok night.
+    : new Date(`${new Date(now.getTime() + 7 * 3600_000 + (opts.days - 1) * 86400_000).toISOString().slice(0, 10)}T23:59:59.999+07:00`);
+  return prisma.customerPackage.create({
+    data: {
+      customerId: opts.customerId, packageSku: PREPAID_SKU, serviceId: opts.serviceId, label: opts.label,
+      startedAt: now, expiresAt, usagesUsed: 0, usageLimit: Math.max(1, Math.round(opts.qty)),
+      paidAmount: opts.paidAmount, paymentMethod: "POS", bookingId: opts.bookingId,
+    },
+  });
+}
 
 export function isPackageSku(sku: string | null | undefined): sku is string {
   return !!sku && sku in PACKAGE_SPECS;
@@ -209,7 +257,7 @@ export async function findActivePackages(customerId: string): Promise<ActivePack
 
   const out: ActivePackage[] = [];
   for (const r of rows) {
-    const spec = PACKAGE_SPECS[r.packageSku];
+    const spec = specOf(r);
     if (!spec) continue;
     const usagesLeft = r.usageLimit > 0 ? Math.max(0, r.usageLimit - r.usagesUsed) : null;
     if (usagesLeft === 0) continue;  // used up
@@ -255,7 +303,7 @@ export async function findCustomerPackagesForAdmin(customerId: string): Promise<
 
   const out: AdminPackage[] = [];
   for (const r of rows) {
-    const spec = PACKAGE_SPECS[r.packageSku];
+    const spec = specOf(r);
     if (!spec) continue;
     const usagesLeft = r.usageLimit > 0 ? Math.max(0, r.usageLimit - r.usagesUsed) : null;
     if (!r.pendingActivation && usagesLeft === 0) continue;
@@ -302,6 +350,7 @@ export async function redeemPackage(packageId: string, bookingId?: string) {
   });
   // Vouchers are single-use: remember which bill used it, for the admin list
   // under คูปอง (see VOUCHER_USED_PREFIX).
+  // Prepaid tickets can hold several uses, so only single-use vouchers do this.
   if (bookingId && PACKAGE_SPECS[row.packageSku]?.voucher) {
     await prisma.customerPackage.update({
       where: { id: packageId },

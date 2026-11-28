@@ -12,7 +12,7 @@ import TimeSlotPicker from "@/components/TimeSlotPicker";
 import { onlineStartTimes } from "@/lib/slots";
 import { LangSwitcher } from "@/components/LangSwitcher";
 import { useLang, type Lang } from "@/components/LanguageProvider";
-import { isVoucherSku, VOUCHER_SKUS } from "@/lib/voucher-skus";
+import { isVoucherSku, isNoExpiryDate, PREPAID_SKU, VOUCHER_SKUS } from "@/lib/voucher-skus";
 
 // Fallback only — the availability API returns the branch's real start times
 // for the chosen day (`slots`), which is what the picker shows.
@@ -497,7 +497,7 @@ function PackageCard({ pkg }: { pkg: ActivePackage }) {
 
   const details = (
     <div className="flex items-center gap-3 mt-0.5 text-xs flex-wrap" style={{ color: "#2563EB" }}>
-      <span>เหลือ {daysLeft} วัน · หมดอายุ {expiresDate}</span>
+      <span>{isNoExpiryDate(pkg.expiresAt) ? "ไม่มีวันหมดอายุ" : `เหลือ ${daysLeft} วัน · หมดอายุ ${expiresDate}`}{pkg.sku === PREPAID_SKU && " · ใช้ได้ทุกสาขา"}</span>
       {pkg.usagesLeft !== null ? (
         <span>· ยังใช้ได้อีก {pkg.usagesLeft} ครั้ง จากทั้งหมด {pkg.usageLimit} ครั้ง (ใช้ไปแล้ว {pkg.usagesUsed}){!isVoucherSku(pkg.sku) && " · ได้ราคาสมาชิก"}</span>
       ) : (

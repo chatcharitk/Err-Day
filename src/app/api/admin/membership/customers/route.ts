@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { PACKAGE_SPECS } from "@/lib/packages";
+import { specOf } from "@/lib/packages";
 import { startOfTodayUTC } from "@/lib/utils";
 
 /** GET /api/admin/membership/customers
@@ -101,8 +101,8 @@ export async function GET() {
     },
   });
 
-  function buildPackageInfo(pkg: { id: string; packageSku: string; startedAt: Date; expiresAt: Date; usagesUsed: number; usageLimit: number }) {
-    const spec = PACKAGE_SPECS[pkg.packageSku];
+  function buildPackageInfo(pkg: { id: string; packageSku: string; serviceId: string | null; label: string | null; startedAt: Date; expiresAt: Date; usagesUsed: number; usageLimit: number }) {
+    const spec = specOf(pkg);
     const usagesLeft = pkg.usageLimit > 0 ? Math.max(0, pkg.usageLimit - pkg.usagesUsed) : null;
     return {
       id:         pkg.id,

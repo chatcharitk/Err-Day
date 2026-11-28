@@ -166,13 +166,17 @@ export function buildVoucherPurchasedFlex(args: {
   count:       number;   // vouchers bought on this bill
   expiresAt:   Date;
   heroUrl?:    string;
+  noExpiry?:   boolean;
+  thanksText?: string;
+  footNote?:   string;
+  unit?:       string;
 }): LineMessage {
-  const until = args.expiresAt.toLocaleDateString("th-TH", {
+  const until = args.noExpiry ? "ไม่มีวันหมดอายุ" : args.expiresAt.toLocaleDateString("th-TH", {
     day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok",
   });
   return {
     type: "flex",
-    altText: `ได้รับ${args.voucherName}แล้ว ${args.count > 1 ? `${args.count} ใบ ` : ""}ใช้ได้ถึง ${until} 🎫`,
+    altText: `ได้รับ${args.voucherName}แล้ว ${args.count > 1 ? `${args.count} ${args.unit ?? "ใบ"} ` : ""}${args.noExpiry ? "ไม่มีวันหมดอายุ" : `ใช้ได้ถึง ${until}`} 🎫`,
     contents: {
       type: "bubble",
       size: "kilo",
@@ -187,14 +191,14 @@ export function buildVoucherPurchasedFlex(args: {
       body: {
         type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", backgroundColor: BG_BEIGE,
         contents: [
-          { type: "text", text: `ขอบคุณที่ซื้อโปรค่ะ คุณ${args.greetName} 💕`, weight: "bold", size: "sm", color: TEXT, wrap: true },
+          { type: "text", text: args.thanksText ?? `ขอบคุณที่ซื้อโปรค่ะ คุณ${args.greetName} 💕`, weight: "bold", size: "sm", color: TEXT, wrap: true },
           { type: "separator", margin: "md", color: "#EADBCF" },
           { type: "box", layout: "vertical", spacing: "sm", margin: "md", contents: [
             row("สิทธิ์", `${args.serviceName} ${args.count} ครั้ง`, true),
             row("ใช้ได้ถึง", until, true),
           ] },
           { type: "text", wrap: true, size: "xs", color: MUTED, margin: "md",
-            text: "จองคิวหรือ walk-in ได้ตามสะดวก แจ้งชื่อที่เคาน์เตอร์ ระบบจะตัดสิทธิ์ให้อัตโนมัติ ไม่ต้องจ่ายเพิ่มค่ะ" },
+            text: args.footNote ?? "จองคิวหรือ walk-in ได้ตามสะดวก แจ้งชื่อที่เคาน์เตอร์ ระบบจะตัดสิทธิ์ให้อัตโนมัติ ไม่ต้องจ่ายเพิ่มค่ะ" },
         ],
       },
       footer: {

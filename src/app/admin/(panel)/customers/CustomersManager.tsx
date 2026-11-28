@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import LineLinkButton from "@/components/LineLinkButton";
 import { customerLabel } from "@/lib/customer-name";
+import { isNoExpiryDate } from "@/lib/voucher-skus";
 import { matchesCustomer } from "@/lib/customer-search";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -927,7 +928,9 @@ function PackageRow({
       {!editing ? (
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs" style={{ color: isPending ? "#92400E" : "#3B5998" }}>
           <span>เริ่ม <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{startedLabel}</strong></span>
-          <span>หมดอายุ <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{expiresLabel}</strong>{!isPending && ` (${daysLeft} วัน)`}</span>
+          {isNoExpiryDate(p.expiresAt)
+            ? <span><strong style={{ color: "#1E3A8A" }}>ไม่มีวันหมดอายุ</strong></span>
+            : <span>หมดอายุ <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{expiresLabel}</strong>{!isPending && ` (${daysLeft} วัน)`}</span>}
           <span>
             {p.usagesLeft !== null
               ? <>ยังใช้ได้อีก <strong style={{ color: isPending ? "#78350F" : "#1E3A8A" }}>{p.usagesLeft}</strong> ครั้ง จากทั้งหมด {p.usageLimit} ครั้ง (ใช้ไปแล้ว {p.usagesUsed})</>

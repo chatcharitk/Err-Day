@@ -399,6 +399,10 @@ model CustomerPackage {
   /// the counter, where the terms are agreed in person.
   termsAcceptedAt   DateTime?
   termsVersion      String?
+  /// Prepaid service ticket (packageSku "svc-prepaid"): the one service this
+  /// row pays for, and its name when sold. null on the fixed PACKAGE_SPECS rows.
+  serviceId         String?
+  label             String?
   customer          Customer  @relation(fields: [customerId], references: [id])
 
   @@index([customerId, packageSku])
